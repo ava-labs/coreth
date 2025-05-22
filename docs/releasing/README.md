@@ -21,7 +21,7 @@ export VERSION=v0.15.0
     git checkout -b "releases/$VERSION_RC"
     ```
 
-1. Update the [RELEASES.md](../../RELEASES.md) file with the new release version `$VERSION`.
+1. Update the [RELEASES.md](../../RELEASES.md) file by renaming the "Pending" section to the new release version `$VERSION` and creating a new "Pending" section at the top.
 1. Modify the [plugin/evm/version.go](../../plugin/evm/version.go) `Version` global string variable and set it to the desired `$VERSION`.
 1. Because AvalancheGo and coreth depend on each other, and that we create releases of AvalancheGo before coreth, you can use a recent commit hash or recent release candidate of AvalancheGo in your `go.mod` file.
 1. Commit your changes and push the branch
