@@ -23,14 +23,7 @@ export VERSION=v0.15.0
 
 1. Update the [RELEASES.md](../../RELEASES.md) file with the new release version `$VERSION`.
 1. Modify the [plugin/evm/version.go](../../plugin/evm/version.go) `Version` global string variable and set it to the desired `$VERSION`.
-1. Ensure the AvalancheGo version used in [go.mod](../../go.mod) is [its last release](https://github.com/ava-labs/avalanchego/releases). If not, upgrade it with, for example:
-
-    ```bash
-    go get github.com/ava-labs/avalanchego@v1.13.0
-    go mod tidy
-    ```
-
-    And fix any errors that may arise from the upgrade. If it requires significant changes, you may want to create a separate PR for the upgrade and wait for it to be merged before continuing with this procedure.
+1. Because AvalancheGo and coreth depend on each other, and that we create releases of AvalancheGo before coreth, you can use a recent commit hash or recent release candidate of AvalancheGo in your `go.mod` file.
 1. Commit your changes and push the branch
 
     ```bash
@@ -69,11 +62,11 @@ export VERSION=v0.15.0
     git push origin "$VERSION_RC"
     ```
 
-1. Once the release candidate tag is created, create a pull request on the AvalancheGo repository, bumping the coreth dependency to use this release candidate. Once proven stable, you can create a release.
+1. Once the release candidate tag is created, create a pull request on the AvalancheGo repository, bumping the coreth dependency to use this release candidate. Once proven stable, an AvalancheGo release should be created, after which you can create a coreth release.
 
 ### Release
 
-If a successful release candidate was created, you can now create a release.
+If a successful release candidate was created and integrated in a release of AvalancheGo, you can now create a release.
 
 Following the previous example in the [Release candidate section](#release-candidate) we will create a release `v0.15.0` indicated by the `$VERSION` variable.
 
@@ -129,4 +122,4 @@ Following the previous example in the [Release candidate section](#release-candi
         gh release create "$VERSION" --notes-start-tag "$PREVIOUS_VERSION" --notes-from-tag "$VERSION" --title "$VERSION" --notes "$NOTES" --verify-tag
         ```
 
-1. Create a pull request upgrading the coreth dependency on [AvalancheGo](https://github.com/ava-labs/avalanchego).
+Note this release will likely never be used in AvalancheGo, which should always be using release candidates to accelerate the development process. However it is still useful to have a release to indicate the last stable version of coreth.
