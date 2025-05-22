@@ -1,3 +1,4 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -509,9 +510,11 @@ func TestReceiveWarpMessage(t *testing.T) {
 	// Note each test corresponds to a block, the tests must be ordered by block
 	// time and cannot, eg be run in parallel or a separate golang test.
 	for _, test := range tests {
-		testReceiveWarpMessage(
-			t, tvm.toEngine, tvm.vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
-		)
+		t.Run(test.name, func(t *testing.T) {
+			testReceiveWarpMessage(
+				t, tvm.toEngine, tvm.vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
+			)
+		})
 	}
 }
 
@@ -539,20 +542,18 @@ func testReceiveWarpMessage(
 	require.NoError(err)
 
 	type signer struct {
-		networkID ids.ID
 		nodeID    ids.NodeID
 		secret    bls.Signer
 		signature *bls.Signature
 		weight    uint64
 	}
-	newSigner := func(networkID ids.ID, weight uint64) signer {
+	newSigner := func(weight uint64) signer {
 		secret, err := localsigner.New()
 		require.NoError(err)
 		sig, err := secret.Sign(unsignedMessage.Bytes())
 		require.NoError(err)
 
 		return signer{
-			networkID: networkID,
 			nodeID:    ids.GenerateTestNodeID(),
 			secret:    secret,
 			signature: sig,
@@ -561,12 +562,12 @@ func testReceiveWarpMessage(
 	}
 
 	primarySigners := []signer{
-		newSigner(constants.PrimaryNetworkID, 50),
-		newSigner(constants.PrimaryNetworkID, 50),
+		newSigner(50),
+		newSigner(50),
 	}
 	subnetSigners := []signer{
-		newSigner(vm.ctx.SubnetID, 50),
-		newSigner(vm.ctx.SubnetID, 50),
+		newSigner(50),
+		newSigner(50),
 	}
 	signers := subnetSigners
 	if useSigners == signersPrimary {
@@ -741,8 +742,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 		fork: &fork,
 	})
 	defer func() {
-		err := tvm.vm.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, tvm.vm.Shutdown(context.Background()))
 	}()
 
 	// Generate a new warp unsigned message and add to warp backend
@@ -750,8 +750,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add the known message and get its signature to confirm.
-	err = tvm.vm.warpBackend.AddMessage(warpMessage)
-	require.NoError(t, err)
+	require.NoError(t, tvm.vm.warpBackend.AddMessage(warpMessage))
 	signature, err := tvm.vm.warpBackend.GetMessageSignature(context.TODO(), warpMessage)
 	require.NoError(t, err)
 	var knownSignature [bls.SignatureLen]byte
@@ -792,8 +791,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 
 			// Send the app request and make sure we called SendAppResponseFn
 			deadline := time.Now().Add(60 * time.Second)
-			err = tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes)
-			require.NoError(t, err)
+			require.NoError(t, tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes))
 			require.True(t, calledSendAppResponseFn)
 		})
 	}
@@ -805,8 +803,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 		fork: &fork,
 	})
 	defer func() {
-		err := tvm.vm.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, tvm.vm.Shutdown(context.Background()))
 	}()
 
 	lastAcceptedID, err := tvm.vm.LastAccepted(context.Background())
@@ -852,8 +849,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 
 			// Send the app request and make sure we called SendAppResponseFn
 			deadline := time.Now().Add(60 * time.Second)
-			err = tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes)
-			require.NoError(t, err)
+			require.NoError(t, tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes))
 			require.True(t, calledSendAppResponseFn)
 		})
 	}
@@ -862,8 +858,16 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 func TestClearWarpDB(t *testing.T) {
 	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, upgradetest.Latest)
 	vm := &VM{}
-	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
-	require.NoError(t, err)
+	require.NoError(t, vm.Initialize(
+		context.Background(),
+		ctx,
+		db,
+		genesisBytes,
+		[]byte{},
+		[]byte{},
+		issuer,
+		[]*commonEng.Fx{},
+		&enginetest.Sender{}))
 
 	// use multiple messages to test that all messages get cleared
 	payloads := [][]byte{[]byte("test1"), []byte("test2"), []byte("test3"), []byte("test4"), []byte("test5")}
@@ -873,8 +877,7 @@ func TestClearWarpDB(t *testing.T) {
 	for _, payload := range payloads {
 		unsignedMsg, err := avalancheWarp.NewUnsignedMessage(vm.ctx.NetworkID, vm.ctx.ChainID, payload)
 		require.NoError(t, err)
-		err = vm.warpBackend.AddMessage(unsignedMsg)
-		require.NoError(t, err)
+		require.NoError(t, vm.warpBackend.AddMessage(unsignedMsg))
 		// ensure that the message was added
 		_, err = vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMsg)
 		require.NoError(t, err)
@@ -887,8 +890,16 @@ func TestClearWarpDB(t *testing.T) {
 	vm = &VM{}
 	// we need new context since the previous one has registered metrics.
 	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
-	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
-	require.NoError(t, err)
+	require.NoError(t, vm.Initialize(
+		context.Background(),
+		ctx,
+		db,
+		genesisBytes,
+		[]byte{},
+		[]byte{},
+		issuer,
+		[]*commonEng.Fx{},
+		&enginetest.Sender{}))
 
 	// check messages are still present
 	for _, message := range messages {
@@ -903,8 +914,16 @@ func TestClearWarpDB(t *testing.T) {
 	vm = &VM{}
 	config := `{"prune-warp-db-enabled": true}`
 	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
-	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})
-	require.NoError(t, err)
+	require.NoError(t, vm.Initialize(
+		context.Background(),
+		ctx,
+		db,
+		genesisBytes,
+		[]byte{},
+		[]byte(config),
+		issuer,
+		[]*commonEng.Fx{},
+		&enginetest.Sender{}))
 
 	it := vm.warpDB.NewIterator()
 	require.False(t, it.Next())

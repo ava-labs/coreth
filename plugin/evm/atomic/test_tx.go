@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomic
@@ -19,7 +19,13 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 )
 
-var TestTxCodec codec.Manager
+const testCodecVersion = 0
+
+// TODO: Remove this and use actual codec and transactions (export, import)
+var (
+	_           UnsignedAtomicTx = (*TestUnsignedTx)(nil)
+	TestTxCodec codec.Manager
+)
 
 func init() {
 	TestTxCodec = codec.NewDefaultManager()
@@ -28,7 +34,7 @@ func init() {
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		TestTxCodec.RegisterCodec(CodecVersion, c),
+		TestTxCodec.RegisterCodec(testCodecVersion, c),
 	)
 
 	if errs.Errored() {
@@ -49,8 +55,6 @@ type TestUnsignedTx struct {
 	SemanticVerifyV             error
 	EVMStateTransferV           error
 }
-
-var _ UnsignedAtomicTx = &TestUnsignedTx{}
 
 // GasUsed implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) GasUsed(fixedFee bool) (uint64, error) { return t.GasUsedV, nil }

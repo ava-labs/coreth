@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -191,7 +191,7 @@ func (b *Block) Accept(context.Context) error {
 
 	// Apply any shared memory changes atomically with other pending changes to
 	// the vm's versionDB.
-	return atomicState.Accept(vdbBatch, nil)
+	return atomicState.Accept(vdbBatch)
 }
 
 // handlePrecompileAccept calls Accept on any logs generated with an active precompile address that implements
