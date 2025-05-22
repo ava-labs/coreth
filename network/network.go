@@ -465,7 +465,7 @@ func (n *network) SendSyncedAppRequestAny(ctx context.Context, minVersion *versi
 	return response, nodeID, err
 }
 
-// SendSycnedAppRequest synchronously sends request to the specified nodeID
+// SendSyncedAppRequest synchronously sends request to the specified nodeID
 // Returns response bytes and ErrRequestFailed if the request should be retried.
 func (n *network) SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeID, request []byte) ([]byte, error) {
 	waitingHandler := newWaitingResponseHandler()
