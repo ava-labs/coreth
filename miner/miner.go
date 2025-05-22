@@ -37,7 +37,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"
@@ -86,8 +85,8 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	isLocalBlock := (func(*types.Header) bool)(nil)
 	miner := &Miner{
 		worker: newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, false),
+		clock:  clock,
 	}
-	miner.clock = clock
 	return miner
 }
 
@@ -111,17 +110,4 @@ func (miner *Miner) SetEtherbase(addr common.Address) {
 // to the given channel.
 func (miner *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return miner.worker.pendingLogsFeed.Subscribe(ch)
-}
-
-func (miner *Miner) GenerateBlock(predicateContext *precompileconfig.PredicateContext) (*types.Block, error) {
-	result := miner.worker.generateWork(&generateParams{
-		timestamp:  miner.clock.Unix(),
-		parentHash: miner.worker.chain.CurrentBlock().Hash(),
-		coinbase:   miner.worker.etherbase(),
-		beaconRoot: &common.Hash{},
-		hooks: &generateParamsHooks{
-			predicateContext: predicateContext,
-		},
-	})
-	return result.block, result.err
 }
