@@ -1,4 +1,4 @@
-// (c) 2019-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package sync
@@ -14,7 +14,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
@@ -28,8 +28,8 @@ const (
 )
 
 var (
-	_ Syncer                  = &atomicSyncer{}
-	_ syncclient.LeafSyncTask = &atomicSyncerLeafTask{}
+	_ Syncer                  = (*atomicSyncer)(nil)
+	_ syncclient.LeafSyncTask = (*atomicSyncerLeafTask)(nil)
 )
 
 // AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
@@ -75,7 +75,7 @@ type Syncer interface {
 // the state of progress and writing the actual atomic trie to the trieDB.
 type atomicSyncer struct {
 	db           *versiondb.Database
-	atomicTrie   AtomicTrie
+	atomicTrie   *atomicstate.AtomicTrie
 	trie         *trie.Trie // used to update the atomic trie
 	targetRoot   common.Hash
 	targetHeight uint64
@@ -90,13 +90,13 @@ type atomicSyncer struct {
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
 func addZeroes(height uint64) []byte {
-	packer := wrappers.Packer{Bytes: make([]byte, state.AtomicTrieKeyLength)}
+	packer := wrappers.Packer{Bytes: make([]byte, atomicstate.TrieKeyLength)}
 	packer.PackLong(height)
 	packer.PackFixedBytes(bytes.Repeat([]byte{0x00}, common.HashLength))
 	return packer.Bytes
 }
 
-func NewAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16) (*atomicSyncer, error) {
+func newAtomicSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie *atomicstate.AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16) (*atomicSyncer, error) {
 	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
 	trie, err := atomicTrie.OpenTrie(lastCommittedRoot)
 	if err != nil {
@@ -127,7 +127,7 @@ func (s *atomicSyncer) Start(ctx context.Context) error {
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
 func (s *atomicSyncer) onLeafs(keys [][]byte, values [][]byte) error {
 	for i, key := range keys {
-		if len(key) != state.AtomicTrieKeyLength {
+		if len(key) != atomicstate.TrieKeyLength {
 			return fmt.Errorf("unexpected key len (%d) in atomic trie sync", len(key))
 		}
 		// key = height + blockchainID

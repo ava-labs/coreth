@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomic
@@ -14,18 +14,15 @@ import (
 func TestGossipAtomicTxMarshaller(t *testing.T) {
 	require := require.New(t)
 
-	want := &GossipAtomicTx{
-		Tx: &Tx{
-			UnsignedAtomicTx: &UnsignedImportTx{},
-			Creds:            []verify.Verifiable{},
-		},
+	want := &Tx{
+		UnsignedAtomicTx: &UnsignedImportTx{},
+		Creds:            []verify.Verifiable{},
 	}
-	marshaller := GossipAtomicTxMarshaller{}
+	marshaller := TxMarshaller{}
 
 	key0, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
-	err = want.Tx.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}})
-	require.NoError(err)
+	require.NoError(want.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}}))
 
 	bytes, err := marshaller.MarshalGossip(want)
 	require.NoError(err)

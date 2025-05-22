@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package state
@@ -31,7 +31,7 @@ func (a *atomicState) Root() common.Hash {
 
 // Accept writes the atomic operations to the database and
 // updates the last accepted block in the atomic backend.
-// It also commits the [commitBatch] to the shared memory.
+// It also commits the `commitBatch` to the shared memory.
 func (a *atomicState) Accept(commitBatch database.Batch) error {
 	isBonus := a.backend.IsBonus(a.blockHeight, a.blockHash)
 	// Update the atomic tx repository. Note it is necessary to invoke

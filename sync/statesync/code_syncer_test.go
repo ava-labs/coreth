@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesync
@@ -44,7 +44,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 
 	// Set up mockClient
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, networkCodec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewMockClient(networkCodec, nil, codeRequestHandler, nil)
+	mockClient := statesyncclient.NewTestClient(networkCodec, nil, codeRequestHandler, nil)
 	mockClient.GetCodeIntercept = test.getCodeIntercept
 
 	clientDB := rawdb.NewMemoryDatabase()

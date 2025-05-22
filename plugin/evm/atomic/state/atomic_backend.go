@@ -1,4 +1,4 @@
-// (c) 2020-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package state
@@ -49,9 +49,6 @@ func NewAtomicBackend(
 	atomicTrie, err := newAtomicTrie(repo.atomicTrieDB, repo.metadataDB, codec, lastAcceptedHeight, commitInterval)
 	if err != nil {
 		return nil, err
-	}
-	if bonusBlocks == nil {
-		bonusBlocks = make(map[uint64]ids.ID) // Ensure it's always non-nil
 	}
 	atomicBackend := &AtomicBackend{
 		codec:            codec,
@@ -439,5 +436,8 @@ func mergeAtomicOpsToMap(output map[ids.ID]*avalancheatomic.Requests, chainID id
 
 // AddBonusBlock adds a bonus block to the atomic backend
 func (a *AtomicBackend) AddBonusBlock(height uint64, blockID ids.ID) {
+	if a.bonusBlocks == nil {
+		a.bonusBlocks = make(map[uint64]ids.ID)
+	}
 	a.bonusBlocks[height] = blockID
 }
