@@ -20,7 +20,7 @@ func NewAtomicSyncSummaryParser() *atomicSyncSummaryParser {
 
 func (a *atomicSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
 	summary := AtomicSyncSummary{}
-	if codecVersion, err := codecWithAtomicSync.Unmarshal(summaryBytes, &summary); err != nil {
+	if codecVersion, err := Codec.Unmarshal(summaryBytes, &summary); err != nil {
 		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
 	} else if codecVersion != message.Version {
 		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (got %d, expected %d)", codecVersion, message.Version)

@@ -19,7 +19,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	messagetest "github.com/ava-labs/coreth/plugin/evm/message/messagetest"
 	clientstats "github.com/ava-labs/coreth/sync/client/stats"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -30,8 +29,6 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/triedb"
 )
-
-var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestGetCode(t *testing.T) {
 	testNetClient := &testNetwork{}
@@ -89,7 +86,7 @@ func TestGetCode(t *testing.T) {
 
 	stateSyncClient := NewClient(&ClientConfig{
 		NetworkClient:    testNetClient,
-		Codec:            networkCodec,
+		Codec:            message.Codec,
 		Stats:            clientstats.NewNoOpStats(),
 		StateSyncNodeIDs: nil,
 		BlockParser:      newTestBlockParser(),
@@ -101,7 +98,7 @@ func TestGetCode(t *testing.T) {
 			defer cancel()
 			codeHashes, res, expectedCode := test.setupRequest()
 
-			responseBytes, err := networkCodec.Marshal(message.Version, res)
+			responseBytes, err := message.Codec.Marshal(message.Version, res)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -160,13 +157,13 @@ func TestGetBlocks(t *testing.T) {
 	testNetClient := &testNetwork{}
 	stateSyncClient := NewClient(&ClientConfig{
 		NetworkClient:    testNetClient,
-		Codec:            networkCodec,
+		Codec:            message.Codec,
 		Stats:            clientstats.NewNoOpStats(),
 		StateSyncNodeIDs: nil,
 		BlockParser:      newTestBlockParser(),
 	})
 
-	blocksRequestHandler := handlers.NewBlockRequestHandler(buildGetter(blocks), networkCodec, handlerstats.NewNoopHandlerStats())
+	blocksRequestHandler := handlers.NewBlockRequestHandler(buildGetter(blocks), message.Codec, handlerstats.NewNoopHandlerStats())
 
 	// encodeBlockSlice takes a slice of blocks that are ordered in increasing height order
 	// and returns a slice of byte slices with those blocks encoded in reverse order
@@ -257,12 +254,12 @@ func TestGetBlocks(t *testing.T) {
 					t.Fatalf("failed to get block response: %s", err)
 				}
 				var blockResponse message.BlockResponse
-				if _, err = networkCodec.Unmarshal(response, &blockResponse); err != nil {
+				if _, err = message.Codec.Unmarshal(response, &blockResponse); err != nil {
 					t.Fatalf("failed to marshal block response: %s", err)
 				}
 				// Replace middle value with garbage data
 				blockResponse.Blocks[10] = []byte("invalid value replacing block bytes")
-				responseBytes, err := networkCodec.Marshal(message.Version, blockResponse)
+				responseBytes, err := message.Codec.Marshal(message.Version, blockResponse)
 				if err != nil {
 					t.Fatalf("failed to marshal block response: %s", err)
 				}
@@ -311,7 +308,7 @@ func TestGetBlocks(t *testing.T) {
 				blockResponse := message.BlockResponse{
 					Blocks: blockBytes,
 				}
-				responseBytes, err := networkCodec.Marshal(message.Version, blockResponse)
+				responseBytes, err := message.Codec.Marshal(message.Version, blockResponse)
 				if err != nil {
 					t.Fatalf("failed to marshal block response: %s", err)
 				}
@@ -330,7 +327,7 @@ func TestGetBlocks(t *testing.T) {
 				blockResponse := message.BlockResponse{
 					Blocks: nil,
 				}
-				responseBytes, err := networkCodec.Marshal(message.Version, blockResponse)
+				responseBytes, err := message.Codec.Marshal(message.Version, blockResponse)
 				if err != nil {
 					t.Fatalf("failed to marshal block response: %s", err)
 				}
@@ -351,7 +348,7 @@ func TestGetBlocks(t *testing.T) {
 				blockResponse := message.BlockResponse{
 					Blocks: blockBytes,
 				}
-				responseBytes, err := networkCodec.Marshal(message.Version, blockResponse)
+				responseBytes, err := message.Codec.Marshal(message.Version, blockResponse)
 				if err != nil {
 					t.Fatalf("failed to marshal block response: %s", err)
 				}
@@ -418,10 +415,10 @@ func TestGetLeafs(t *testing.T) {
 	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, leafsLimit, common.HashLength)
 
-	handler := handlers.NewLeafsRequestHandler(trieDB, message.StateTrieKeyLength, nil, networkCodec, handlerstats.NewNoopHandlerStats())
+	handler := handlers.NewLeafsRequestHandler(trieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
 	client := NewClient(&ClientConfig{
 		NetworkClient:    &testNetwork{},
-		Codec:            networkCodec,
+		Codec:            message.Codec,
 		Stats:            clientstats.NewNoOpStats(),
 		StateSyncNodeIDs: nil,
 		BlockParser:      newTestBlockParser(),
@@ -597,13 +594,13 @@ func TestGetLeafs(t *testing.T) {
 					t.Fatal("Failed to create valid response")
 				}
 				var leafResponse message.LeafsResponse
-				if _, err := networkCodec.Unmarshal(response, &leafResponse); err != nil {
+				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
 				leafResponse.Keys = leafResponse.Keys[1:]
 				leafResponse.Vals = leafResponse.Vals[1:]
 
-				modifiedResponse, err := networkCodec.Marshal(message.Version, leafResponse)
+				modifiedResponse, err := message.Codec.Marshal(message.Version, leafResponse)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -628,7 +625,7 @@ func TestGetLeafs(t *testing.T) {
 					t.Fatal("Failed to create valid response")
 				}
 				var leafResponse message.LeafsResponse
-				if _, err := networkCodec.Unmarshal(response, &leafResponse); err != nil {
+				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
 				modifiedRequest := request
@@ -658,13 +655,13 @@ func TestGetLeafs(t *testing.T) {
 					t.Fatal("Failed to create valid response")
 				}
 				var leafResponse message.LeafsResponse
-				if _, err := networkCodec.Unmarshal(response, &leafResponse); err != nil {
+				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
 				leafResponse.Keys = leafResponse.Keys[:len(leafResponse.Keys)-2]
 				leafResponse.Vals = leafResponse.Vals[:len(leafResponse.Vals)-2]
 
-				modifiedResponse, err := networkCodec.Marshal(message.Version, leafResponse)
+				modifiedResponse, err := message.Codec.Marshal(message.Version, leafResponse)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -689,14 +686,14 @@ func TestGetLeafs(t *testing.T) {
 					t.Fatal("Failed to create valid response")
 				}
 				var leafResponse message.LeafsResponse
-				if _, err := networkCodec.Unmarshal(response, &leafResponse); err != nil {
+				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
 				// Remove middle key-value pair response
 				leafResponse.Keys = append(leafResponse.Keys[:100], leafResponse.Keys[101:]...)
 				leafResponse.Vals = append(leafResponse.Vals[:100], leafResponse.Vals[101:]...)
 
-				modifiedResponse, err := networkCodec.Marshal(message.Version, leafResponse)
+				modifiedResponse, err := message.Codec.Marshal(message.Version, leafResponse)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -721,13 +718,13 @@ func TestGetLeafs(t *testing.T) {
 					t.Fatal("Failed to create valid response")
 				}
 				var leafResponse message.LeafsResponse
-				if _, err := networkCodec.Unmarshal(response, &leafResponse); err != nil {
+				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
 				// Remove middle key-value pair response
 				leafResponse.Vals[100] = []byte("garbage value data")
 
-				modifiedResponse, err := networkCodec.Marshal(message.Version, leafResponse)
+				modifiedResponse, err := message.Codec.Marshal(message.Version, leafResponse)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -753,13 +750,13 @@ func TestGetLeafs(t *testing.T) {
 				}
 
 				var leafResponse message.LeafsResponse
-				if _, err := networkCodec.Unmarshal(response, &leafResponse); err != nil {
+				if _, err := message.Codec.Unmarshal(response, &leafResponse); err != nil {
 					t.Fatal(err)
 				}
 				// Remove the proof
 				leafResponse.ProofVals = nil
 
-				modifiedResponse, err := networkCodec.Marshal(message.Version, leafResponse)
+				modifiedResponse, err := message.Codec.Marshal(message.Version, leafResponse)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -800,13 +797,13 @@ func TestGetLeafsRetries(t *testing.T) {
 	trieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	root, _, _ := statesynctest.GenerateTrie(t, trieDB, 100_000, common.HashLength)
 
-	handler := handlers.NewLeafsRequestHandler(trieDB, message.StateTrieKeyLength, nil, networkCodec, handlerstats.NewNoopHandlerStats())
+	handler := handlers.NewLeafsRequestHandler(trieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
 	testNetClient := &testNetwork{}
 
 	const maxAttempts = 8
 	client := NewClient(&ClientConfig{
 		NetworkClient:    testNetClient,
-		Codec:            networkCodec,
+		Codec:            message.Codec,
 		Stats:            clientstats.NewNoOpStats(),
 		StateSyncNodeIDs: nil,
 		BlockParser:      newTestBlockParser(),
@@ -868,7 +865,7 @@ func TestStateSyncNodes(t *testing.T) {
 	}
 	client := NewClient(&ClientConfig{
 		NetworkClient:    testNetClient,
-		Codec:            networkCodec,
+		Codec:            message.Codec,
 		Stats:            clientstats.NewNoOpStats(),
 		StateSyncNodeIDs: stateSyncNodes,
 		BlockParser:      newTestBlockParser(),

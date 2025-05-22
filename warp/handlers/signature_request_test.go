@@ -16,14 +16,11 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/message/messagetest"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
 
 	"github.com/stretchr/testify/require"
 )
-
-var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestMessageSignatureHandler(t *testing.T) {
 	metricstest.WithMetrics(t)
@@ -106,7 +103,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			handler := NewSignatureRequestHandler(backend, networkCodec)
+			handler := NewSignatureRequestHandler(backend, message.Codec)
 
 			request, expectedResponse := test.setup()
 			responseBytes, err := handler.OnMessageSignatureRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -120,7 +117,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 				return
 			}
 			var response message.SignatureResponse
-			_, err = networkCodec.Unmarshal(responseBytes, &response)
+			_, err = message.Codec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err, "error unmarshalling SignatureResponse")
 
 			require.Equal(t, expectedResponse, response.Signature[:])
@@ -192,7 +189,7 @@ func TestBlockSignatureHandler(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			handler := NewSignatureRequestHandler(backend, networkCodec)
+			handler := NewSignatureRequestHandler(backend, message.Codec)
 
 			request, expectedResponse := test.setup()
 			responseBytes, err := handler.OnBlockSignatureRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -206,7 +203,7 @@ func TestBlockSignatureHandler(t *testing.T) {
 				return
 			}
 			var response message.SignatureResponse
-			_, err = networkCodec.Unmarshal(responseBytes, &response)
+			_, err = message.Codec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err, "error unmarshalling SignatureResponse")
 
 			require.Equal(t, expectedResponse, response.Signature[:])

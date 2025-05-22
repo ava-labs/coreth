@@ -34,7 +34,6 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	messagetest "github.com/ava-labs/coreth/plugin/evm/message/messagetest"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/precompile/contract"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -68,8 +67,6 @@ const (
 	signersSubnet useWarpMsgSigners = iota
 	signersPrimary
 )
-
-var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
@@ -773,7 +770,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 		tvm.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			calledSendAppResponseFn = true
 			var response message.SignatureResponse
-			_, err := networkCodec.Unmarshal(responseBytes, &response)
+			_, err := message.Codec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedResponse, response.Signature)
 
@@ -784,7 +781,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 				MessageID: test.messageID,
 			}
 
-			requestBytes, err := networkCodec.Marshal(message.Version, &signatureRequest)
+			requestBytes, err := message.Codec.Marshal(message.Version, &signatureRequest)
 			require.NoError(t, err)
 
 			// Send the app request and make sure we called SendAppResponseFn
@@ -831,7 +828,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 		tvm.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			calledSendAppResponseFn = true
 			var response message.SignatureResponse
-			_, err := networkCodec.Unmarshal(responseBytes, &response)
+			_, err := message.Codec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err)
 			require.Equal(t, test.expectedResponse, response.Signature)
 
@@ -842,7 +839,7 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 				BlockID: test.blockID,
 			}
 
-			requestBytes, err := networkCodec.Marshal(message.Version, &signatureRequest)
+			requestBytes, err := message.Codec.Marshal(message.Version, &signatureRequest)
 			require.NoError(t, err)
 
 			// Send the app request and make sure we called SendAppResponseFn

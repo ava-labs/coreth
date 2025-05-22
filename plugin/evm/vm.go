@@ -510,11 +510,8 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
 	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	networkCodec, err := message.NewCodec(atomicsync.AtomicSyncSummary{})
-	if err != nil {
-		return fmt.Errorf("failed to create codec manager: %w", err)
-	}
-	vm.networkCodec = networkCodec
+
+	vm.networkCodec = atomicsync.Codec
 
 	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.networkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
 	vm.client = peer.NewNetworkClient(vm.Network)

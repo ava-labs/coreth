@@ -17,14 +17,14 @@ import (
 
 var _ Syncable = (*BlockSyncSummary)(nil)
 
-// codecWithBlockSync is the codec manager that contains the codec for BlockSyncSummary and
+// Codec is the codec manager that contains the codec for BlockSyncSummary and
 // other message types that are used in the network protocol. This is to ensure that the codec
 // version is consistent across all message types and includes the codec for BlockSyncSummary.
-var codecWithBlockSync codec.Manager
+var Codec codec.Manager
 
 func init() {
 	var err error
-	codecWithBlockSync, err = NewCodec(BlockSyncSummary{})
+	Codec, err = NewCodec(BlockSyncSummary{})
 	if err != nil {
 		panic(fmt.Errorf("failed to create codec manager: %w", err))
 	}
@@ -50,7 +50,7 @@ func NewBlockSyncSummaryParser() *BlockSyncSummaryParser {
 
 func (b *BlockSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl AcceptImplFn) (Syncable, error) {
 	summary := BlockSyncSummary{}
-	if codecVersion, err := codecWithBlockSync.Unmarshal(summaryBytes, &summary); err != nil {
+	if codecVersion, err := Codec.Unmarshal(summaryBytes, &summary); err != nil {
 		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
 	} else if codecVersion != Version {
 		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (%d != %d)", codecVersion, Version)
@@ -72,7 +72,7 @@ func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot co
 		BlockHash:   blockHash,
 		BlockRoot:   blockRoot,
 	}
-	bytes, err := codecWithBlockSync.Marshal(Version, &summary)
+	bytes, err := Codec.Marshal(Version, &summary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal syncable summary: %w", err)
 	}

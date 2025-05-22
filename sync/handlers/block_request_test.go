@@ -56,7 +56,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 			return blk
 		},
 	}
-	blockRequestHandler := NewBlockRequestHandler(blockProvider, networkCodec, testHandlerStats)
+	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, testHandlerStats)
 
 	var blockRequest message.BlockRequest
 	if test.startBlockHash != (common.Hash{}) {
@@ -85,7 +85,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = networkCodec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling", err)
 	}
 	assert.Len(t, response.Blocks, test.expectedBlocks)
@@ -253,7 +253,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 			return blk
 		},
 	}
-	blockRequestHandler := NewBlockRequestHandler(blockProvider, networkCodec, stats.NewNoopHandlerStats())
+	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, stats.NewNoopHandlerStats())
 
 	responseBytes, err := blockRequestHandler.OnBlockRequest(ctx, ids.GenerateTestNodeID(), 1, message.BlockRequest{
 		Hash:    blocks[10].Hash(),
@@ -266,7 +266,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = networkCodec.Unmarshal(responseBytes, &response); err != nil {
+	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
 		t.Fatal("error unmarshalling", err)
 	}
 	// requested 8 blocks, received cancelAfterNumRequests because of timeout

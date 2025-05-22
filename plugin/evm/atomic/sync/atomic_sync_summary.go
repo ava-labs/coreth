@@ -19,14 +19,14 @@ import (
 
 var _ message.Syncable = (*AtomicSyncSummary)(nil)
 
-// codecWithAtomicSync is the codec manager that contains the codec for AtomicBlockSyncSummary and
+// Codec is the codec manager that contains the codec for AtomicBlockSyncSummary and
 // other message types that are used in the network protocol. This is to ensure that the codec
 // version is consistent across all message types and includes the codec for AtomicBlockSyncSummary.
-var codecWithAtomicSync codec.Manager
+var Codec codec.Manager
 
 func init() {
 	var err error
-	codecWithAtomicSync, err = message.NewCodec(AtomicSyncSummary{})
+	Codec, err = message.NewCodec(AtomicSyncSummary{})
 	if err != nil {
 		panic(fmt.Errorf("failed to create codec manager: %w", err))
 	}
@@ -52,7 +52,7 @@ func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot c
 		BlockRoot:   blockRoot,
 		AtomicRoot:  atomicRoot,
 	}
-	bytes, err := codecWithAtomicSync.Marshal(message.Version, &summary)
+	bytes, err := Codec.Marshal(message.Version, &summary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal syncable summary: %w", err)
 	}
