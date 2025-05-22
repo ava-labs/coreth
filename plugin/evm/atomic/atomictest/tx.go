@@ -19,9 +19,9 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
+// TODO: Remove this and use actual codec and transactions (export, import)
 var (
-	_ atomic.UnsignedAtomicTx = (*TestUnsignedTx)(nil)
-
+	_           atomic.UnsignedAtomicTx = (*TestUnsignedTx)(nil)
 	TestTxCodec codec.Manager
 )
 
