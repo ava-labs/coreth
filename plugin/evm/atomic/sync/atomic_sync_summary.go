@@ -19,9 +19,9 @@ import (
 
 var _ message.Syncable = (*AtomicSyncSummary)(nil)
 
-// Codec is the codec manager that contains the codec for AtomicBlockSyncSummary and
+// Codec is the codec manager that contains the codec for AtomicSyncSummary and
 // other message types that are used in the network protocol. This is to ensure that the codec
-// version is consistent across all message types and includes the codec for AtomicBlockSyncSummary.
+// version is consistent across all message types and includes the codec for AtomicSyncSummary.
 var Codec codec.Manager
 
 func init() {
@@ -88,7 +88,7 @@ func (a *AtomicSyncSummary) ID() ids.ID {
 }
 
 func (a *AtomicSyncSummary) String() string {
-	return fmt.Sprintf("AtomicBlockSyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", a.BlockHash, a.BlockNumber, a.BlockRoot, a.AtomicRoot)
+	return fmt.Sprintf("AtomicSyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", a.BlockHash, a.BlockNumber, a.BlockRoot, a.AtomicRoot)
 }
 
 func (a *AtomicSyncSummary) Accept(context.Context) (block.StateSyncMode, error) {

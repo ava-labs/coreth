@@ -36,7 +36,7 @@ func NewAtomicSyncExtender(backend *state.AtomicBackend, atomicTrie *state.Atomi
 func (a *atomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {
 	atomicSyncSummary, ok := syncSummary.(*AtomicSyncSummary)
 	if !ok {
-		return fmt.Errorf("expected *AtomicBlockSyncSummary, got %T", syncSummary)
+		return fmt.Errorf("expected *AtomicSyncSummary, got %T", syncSummary)
 	}
 	log.Info("atomic tx: sync starting", "root", atomicSyncSummary)
 	atomicSyncer, err := newAtomicSyncer(
