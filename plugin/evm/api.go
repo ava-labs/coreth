@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -185,7 +185,7 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	if err := service.vm.mempool.AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: tx})
+	service.vm.atomicTxPushGossiper.Add(tx)
 	return nil
 }
 

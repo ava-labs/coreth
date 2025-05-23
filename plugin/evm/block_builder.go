@@ -1,4 +1,4 @@
-// (c) 2019-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -10,8 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/timer"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/avalanchego/snow"
@@ -26,11 +25,10 @@ const (
 )
 
 type blockBuilder struct {
-	ctx         *snow.Context
-	chainConfig *params.ChainConfig
+	ctx *snow.Context
 
 	txPool  *txpool.TxPool
-	mempool *atomic.Mempool
+	mempool *atomictxpool.Mempool
 
 	shutdownChan <-chan struct{}
 	shutdownWg   *sync.WaitGroup
@@ -56,7 +54,6 @@ type blockBuilder struct {
 func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message) *blockBuilder {
 	b := &blockBuilder{
 		ctx:                  vm.ctx,
-		chainConfig:          vm.chainConfig,
 		txPool:               vm.txPool,
 		mempool:              vm.mempool,
 		shutdownChan:         vm.shutdownChan,
@@ -159,7 +156,7 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 			case <-txSubmitChan:
 				log.Trace("New tx detected, trying to generate a block")
 				b.signalTxsReady()
-			case <-b.mempool.Pending:
+			case <-b.mempool.SubscribePendingTxs():
 				log.Trace("New atomic Tx detected, trying to generate a block")
 				b.signalTxsReady()
 			case <-b.shutdownChan:
