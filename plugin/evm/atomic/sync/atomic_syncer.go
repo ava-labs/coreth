@@ -22,10 +22,8 @@ import (
 	"github.com/ava-labs/libevm/trie/trienode"
 )
 
-const (
-	// AtomicTrieNode represents a leaf node that belongs to the atomic trie.
-	AtomicTrieNode message.NodeType = 2
-)
+// AtomicTrieNode represents a leaf node that belongs to the atomic trie.
+const AtomicTrieNode message.NodeType = 2
 
 var (
 	_ Syncer                  = (*atomicSyncer)(nil)

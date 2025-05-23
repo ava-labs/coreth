@@ -35,10 +35,8 @@ func init() {
 // AtomicSyncSummary provides the information necessary to sync a node starting
 // at the given block.
 type AtomicSyncSummary struct {
-	BlockNumber uint64      `serialize:"true"`
-	BlockHash   common.Hash `serialize:"true"`
-	BlockRoot   common.Hash `serialize:"true"`
-	AtomicRoot  common.Hash `serialize:"true"`
+	*message.BlockSyncSummary `serialize:"true"`
+	AtomicRoot                common.Hash `serialize:"true"`
 
 	summaryID  ids.ID
 	bytes      []byte
@@ -47,10 +45,12 @@ type AtomicSyncSummary struct {
 
 func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (*AtomicSyncSummary, error) {
 	summary := AtomicSyncSummary{
-		BlockNumber: blockNumber,
-		BlockHash:   blockHash,
-		BlockRoot:   blockRoot,
-		AtomicRoot:  atomicRoot,
+		BlockSyncSummary: &message.BlockSyncSummary{
+			BlockNumber: blockNumber,
+			BlockHash:   blockHash,
+			BlockRoot:   blockRoot,
+		},
+		AtomicRoot: atomicRoot,
 	}
 	bytes, err := Codec.Marshal(message.Version, &summary)
 	if err != nil {
