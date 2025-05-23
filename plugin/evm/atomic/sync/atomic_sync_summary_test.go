@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/libevm/common"
@@ -24,6 +25,8 @@ func TestMarshalAtomicSyncSummary(t *testing.T) {
 
 	expectedBase64Bytes := "AAAAAAAAAAAAAgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
 	require.Equal(t, expectedBase64Bytes, base64.StdEncoding.EncodeToString(atomicSyncSummary.Bytes()))
+	expectedID := ids.FromStringOrPanic("256pj4a3SBG5kervhxKfeKpNRcVR1xk5BzTpkTkybkM8uMPu6Q")
+	require.Equal(t, expectedID, atomicSyncSummary.ID())
 
 	parser := NewAtomicSyncSummaryParser()
 	called := false
