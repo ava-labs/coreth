@@ -232,6 +232,9 @@ type VM struct {
 	chainConfig *params.ChainConfig
 	ethConfig   ethconfig.Config
 
+	// Extension Points
+	extensionConfig *extension.Config
+
 	// pointers to eth constructs
 	eth        *eth.Ethereum
 	txPool     *txpool.TxPool
@@ -259,8 +262,6 @@ type VM struct {
 	warpDB database.Database
 
 	toEngine chan<- commonEng.Message
-
-	syntacticBlockValidator BlockValidator
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
@@ -336,6 +337,7 @@ func (vm *VM) Initialize(
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
+	vm.extensionConfig = &extension.Config{}
 	vm.config.SetDefaults(defaultTxPoolConfig)
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
@@ -410,7 +412,8 @@ func (vm *VM) Initialize(
 	case avalanchegoConstants.FujiID:
 		extDataHashes = fujiExtDataHashes
 	}
-	vm.syntacticBlockValidator = NewBlockValidator(extDataHashes)
+	blockExtender := newBlockExtender(extDataHashes, vm)
+	vm.extensionConfig.BlockExtender = blockExtender
 
 	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
 	// config, free fuji)
@@ -773,7 +776,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 }
 
 func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
-	block, err := vm.newBlock(lastAcceptedBlock)
+	block, err := wrapBlock(lastAcceptedBlock, vm)
 	if err != nil {
 		return fmt.Errorf("failed to create block wrapper for the last accepted block: %w", err)
 	}
@@ -1314,7 +1317,7 @@ func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	}
 
 	// Note: the status of block is set by ChainState
-	blk, err := vm.newBlock(block)
+	blk, err := wrapBlock(block, vm)
 	if err != nil {
 		log.Debug("discarding txs due to error making new block", "err", err)
 		vm.mempool.DiscardCurrentTxs()
@@ -1355,7 +1358,7 @@ func (vm *VM) parseBlock(_ context.Context, b []byte) (snowman.Block, error) {
 	}
 
 	// Note: the status of block is set by ChainState
-	block, err := vm.newBlock(ethBlock)
+	block, err := wrapBlock(ethBlock, vm)
 	if err != nil {
 		return nil, err
 	}
@@ -1373,7 +1376,7 @@ func (vm *VM) ParseEthBlock(b []byte) (*types.Block, error) {
 		return nil, err
 	}
 
-	return block.(*Block).ethBlock, nil
+	return block.(*wrappedBlock).ethBlock, nil
 }
 
 // getBlock attempts to retrieve block [id] from the VM to be wrapped
@@ -1386,7 +1389,7 @@ func (vm *VM) getBlock(_ context.Context, id ids.ID) (snowman.Block, error) {
 		return nil, database.ErrNotFound
 	}
 	// Note: the status of block is set by ChainState
-	return vm.newBlock(ethBlock)
+	return wrapBlock(ethBlock, vm)
 }
 
 // GetAcceptedBlock attempts to retrieve block [blkID] from the VM. This method
@@ -1413,14 +1416,14 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 // SetPreference sets what the current tail of the chain is
 func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	// Since each internal handler used by [vm.State] always returns a block
-	// with non-nil ethBlock value, GetBlockInternal should never return a
+	// with non-nil ethBlock value, GetVMBlock should never return a
 	// (*Block) with a nil ethBlock value.
-	block, err := vm.GetBlockInternal(ctx, blkID)
+	block, err := vm.GetVMBlock(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
 
-	return vm.blockChain.SetPreference(block.(*Block).ethBlock)
+	return vm.blockChain.SetPreference(block.GetEthBlock())
 }
 
 // GetBlockIDAtHeight returns the canonical block at [height].
@@ -1609,13 +1612,14 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
 func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
-	parentIntf, err := vm.GetBlockInternal(context.TODO(), ids.ID(parentHash))
+	parent, err := vm.GetVMBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
 	}
-	parent, ok := parentIntf.(*Block)
+	parentIntf := parent.GetBlockExtension()
+	atomicBlockIntf, ok := parentIntf.(atomic.AtomicBlockContext)
 	if !ok {
-		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
+		return fmt.Errorf("expected parent block %s, to be atomic.AtomicBlockContext but is %T", parent.ID(), parentIntf)
 	}
 	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
@@ -1628,7 +1632,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
 		Backend: atomicBackend,
 		Tx:      tx,
-		Parent:  parent,
+		Parent:  atomicBlockIntf,
 		BaseFee: baseFee,
 	}); err != nil {
 		return err
@@ -1649,13 +1653,14 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// it was called.
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
-	ancestorInf, err := vm.GetBlockInternal(context.TODO(), ancestorID)
+	ancestor, err := vm.GetVMBlock(context.TODO(), ancestorID)
 	if err != nil {
 		return errRejectedParent
 	}
-	ancestor, ok := ancestorInf.(*Block)
+	ancestorIntf := ancestor.GetBlockExtension()
+	atomicBlockIntf, ok := ancestorIntf.(atomic.AtomicBlockContext)
 	if !ok {
-		return fmt.Errorf("expected parent block %s, to be *Block but is %T", ancestor.ID(), ancestorInf)
+		return fmt.Errorf("expected ancestor block %s, to be atomic.AtomicBlockContext but is %T", ancestor.ID(), ancestorIntf)
 	}
 
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
@@ -1674,7 +1679,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		if err := utx.Visit(&atomic.SemanticVerifier{
 			Backend: atomicBackend,
 			Tx:      atomicTx,
-			Parent:  ancestor,
+			Parent:  atomicBlockIntf,
 			BaseFee: baseFee,
 		}); err != nil {
 			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)

@@ -113,7 +113,9 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		baseFee = initialBaseFee
 	}
 
-	lastAcceptedBlock := tvm.vm.LastAcceptedBlockInternal().(*Block)
+	lastAcceptedBlock := tvm.vm.LastAcceptedVMBlock()
+	atomicBlockContext, ok := lastAcceptedBlock.(atomic.AtomicBlockContext)
+	require.True(t, ok, "last accepted block is not an atomic block")
 	backend := &atomic.VerifierBackend{
 		Ctx:          tvm.vm.ctx,
 		Fx:           &tvm.vm.fx,
@@ -125,7 +127,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
 		Backend: backend,
 		Tx:      tx,
-		Parent:  lastAcceptedBlock,
+		Parent:  atomicBlockContext,
 		BaseFee: baseFee,
 	}); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
@@ -141,7 +143,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
