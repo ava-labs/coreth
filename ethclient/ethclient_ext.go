@@ -109,3 +109,7 @@ func (ec *Client) EstimateBaseFee(ctx context.Context) (*big.Int, error) {
 	}
 	return (*big.Int)(&hex), nil
 }
+
+func ToBlockNumArg(number *big.Int) string {
+	return toBlockNumArg(number)
+}
