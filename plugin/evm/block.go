@@ -38,7 +38,7 @@ import (
 var (
 	_ snowman.Block           = (*wrappedBlock)(nil)
 	_ block.WithVerifyContext = (*wrappedBlock)(nil)
-	_ extension.VMBlock       = (*wrappedBlock)(nil)
+	_ extension.ExtendedBlock = (*wrappedBlock)(nil)
 )
 
 var (

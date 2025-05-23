@@ -113,9 +113,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		baseFee = initialBaseFee
 	}
 
-	lastAcceptedBlock := tvm.vm.LastAcceptedVMBlock()
-	atomicBlockContext, ok := lastAcceptedBlock.(atomic.AtomicBlockContext)
-	require.True(t, ok, "last accepted block is not an atomic block")
+	lastAcceptedBlock := tvm.vm.LastAcceptedExtendedBlock()
 	backend := &atomic.VerifierBackend{
 		Ctx:          tvm.vm.ctx,
 		Fx:           &tvm.vm.fx,
@@ -127,7 +125,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
 		Backend: backend,
 		Tx:      tx,
-		Parent:  atomicBlockContext,
+		Parent:  lastAcceptedBlock,
 		BaseFee: baseFee,
 	}); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)

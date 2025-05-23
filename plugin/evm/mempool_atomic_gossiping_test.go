@@ -70,7 +70,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
-			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
+			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
 			assert.True(ok, "unknown block type")
 
 			blockExtension, ok := wrappedBlock.GetBlockExtension().(atomic.AtomicBlockContext)

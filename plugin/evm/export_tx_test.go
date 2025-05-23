@@ -25,7 +25,6 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
 )
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
@@ -458,8 +457,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		}
 	}()
 
-	parent, ok := vm.LastAcceptedVMBlock().GetBlockExtension().(atomic.AtomicBlockContext)
-	require.True(t, ok)
+	parent := vm.LastAcceptedExtendedBlock()
 
 	key := testKeys[0]
 	addr := key.Address()
@@ -1710,7 +1708,7 @@ func TestNewExportTx(t *testing.T) {
 				}
 			}()
 
-			parent := tvm.vm.LastAcceptedVMBlock()
+			parent := tvm.vm.LastAcceptedExtendedBlock()
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1770,9 +1768,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = tvm.vm.LastAcceptedVMBlock()
-			atomicContextIntf, ok := parent.GetBlockExtension().(atomic.AtomicBlockContext)
-			require.True(t, ok)
+			parent = tvm.vm.LastAcceptedExtendedBlock()
 			exportAmount := uint64(5000000)
 
 			state, err := tvm.vm.blockChain.State()
@@ -1799,7 +1795,7 @@ func TestNewExportTx(t *testing.T) {
 			if err := exportTx.Visit(&atomic.SemanticVerifier{
 				Backend: backend,
 				Tx:      tx,
-				Parent:  atomicContextIntf,
+				Parent:  parent,
 				BaseFee: parent.GetEthBlock().BaseFee(),
 			}); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
@@ -1881,7 +1877,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				}
 			}()
 
-			parent := tvm.vm.LastAcceptedVMBlock()
+			parent := tvm.vm.LastAcceptedExtendedBlock()
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1971,9 +1967,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = tvm.vm.LastAcceptedVMBlock()
-			atomicContextIntf, ok := parent.GetBlockExtension().(atomic.AtomicBlockContext)
-			require.True(t, ok)
+			parent = tvm.vm.LastAcceptedExtendedBlock()
 			exportAmount := uint64(5000000)
 
 			testKeys0Addr := testKeys[0].EthAddress()
@@ -2005,7 +1999,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			if err := exportTx.Visit(&atomic.SemanticVerifier{
 				Backend: backend,
 				Tx:      tx,
-				Parent:  atomicContextIntf,
+				Parent:  parent,
 				BaseFee: parent.GetEthBlock().BaseFee(),
 			}); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
