@@ -4,7 +4,6 @@
 package evm
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -119,16 +118,15 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		return fmt.Errorf("invalid txs hash %v does not match calculated txs hash %v", ethHeader.TxHash, txsHash)
 	}
 	// Check that the uncle hash in the header matches the body
-	uncleHash := types.CalcUncleHash(b.ethBlock.Uncles())
-	if uncleHash != ethHeader.UncleHash {
-		return fmt.Errorf("invalid uncle hash %v does not match calculated uncle hash %v", ethHeader.UncleHash, uncleHash)
+	if ethHeader.UncleHash != types.EmptyUncleHash {
+		return fmt.Errorf("invalid uncle hash %v does not match calculated uncle hash %v", ethHeader.UncleHash, types.EmptyUncleHash)
 	}
 	// Coinbase must match the BlackholeAddr on C-Chain
 	if ethHeader.Coinbase != constants.BlackholeAddr {
 		return fmt.Errorf("invalid coinbase %v does not match required blackhole address %v", ethHeader.Coinbase, constants.BlackholeAddr)
 	}
 	// Block must not have any uncles
-	if len(b.ethBlock.Uncles()) > 0 {
+	if len(b.ethBlock.Uncles()) != 0 {
 		return errUnclesUnsupported
 	}
 
@@ -211,36 +209,25 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	// Verify the existence / non-existence of excessBlobGas
-	cancun := rules.IsCancun
-	if !cancun && ethHeader.ExcessBlobGas != nil {
-		return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", *ethHeader.ExcessBlobGas)
-	}
-	if !cancun && ethHeader.BlobGasUsed != nil {
-		return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *ethHeader.BlobGasUsed)
-	}
-	if cancun && ethHeader.ExcessBlobGas == nil {
-		return errors.New("header is missing excessBlobGas")
-	}
-	if cancun && ethHeader.BlobGasUsed == nil {
-		return errors.New("header is missing blobGasUsed")
-	}
-	if !cancun && ethHeader.ParentBeaconRoot != nil {
-		return fmt.Errorf("invalid parentBeaconRoot: have %x, expected nil", *ethHeader.ParentBeaconRoot)
-	}
-	// TODO: decide what to do after Cancun
-	// currently we are enforcing it to be empty hash
-	if cancun {
+	if !rules.IsCancun {
+		// Verify the cancun fields aren't populated
 		switch {
-		case ethHeader.ParentBeaconRoot == nil:
-			return errors.New("header is missing parentBeaconRoot")
-		case *ethHeader.ParentBeaconRoot != (common.Hash{}):
-			return fmt.Errorf("invalid parentBeaconRoot: have %x, expected empty hash", ethHeader.ParentBeaconRoot)
+		case ethHeader.BlobGasUsed != nil:
+			return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *ethHeader.BlobGasUsed)
+		case ethHeader.ExcessBlobGas != nil:
+			return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", *ethHeader.ExcessBlobGas)
+		case ethHeader.ParentBeaconRoot != nil:
+			return fmt.Errorf("invalid parentBeaconRoot: have %x, expected nil", *ethHeader.ParentBeaconRoot)
 		}
-		if ethHeader.BlobGasUsed == nil {
-			return fmt.Errorf("blob gas used must not be nil in Cancun")
-		} else if *ethHeader.BlobGasUsed > 0 {
-			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
+	} else {
+		// Verify the cancun fields are populated with zero values
+		switch {
+		case utils.PointerEqualsValue(ethHeader.BlobGasUsed, 0):
+			return fmt.Errorf("invalid BlobGasUsed: expected 0 got %v -> %d", ethHeader.BlobGasUsed, ethHeader.BlobGasUsed)
+		case utils.PointerEqualsValue(ethHeader.ExcessBlobGas, 0):
+			return fmt.Errorf("invalid ExcessBlobGas: expected 0 got %v -> %d", ethHeader.ExcessBlobGas, ethHeader.ExcessBlobGas)
+		case utils.PointerEqualsValue(ethHeader.ParentBeaconRoot, common.Hash{}):
+			return fmt.Errorf("invalid ExcessBlobGas: expected empty hash got %x", ethHeader.ParentBeaconRoot)
 		}
 	}
 	return nil
