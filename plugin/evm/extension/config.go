@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ava-labs/libevm/core/types"
@@ -54,7 +54,7 @@ type BlockExtender interface {
 type BlockExtension interface {
 	// SyntacticVerify verifies the block syntactically
 	// it can be implemented to extend inner block verification
-	SyntacticVerify(rules params.Rules) error
+	SyntacticVerify(rules extras.Rules) error
 	// SemanticVerify verifies the block semantically
 	// it can be implemented to extend inner block verification
 	SemanticVerify() error

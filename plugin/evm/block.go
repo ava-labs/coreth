@@ -420,7 +420,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	if b.extension != nil {
-		if err := b.extension.SyntacticVerify(rules); err != nil {
+		if err := b.extension.SyntacticVerify(*rulesExtra); err != nil {
 			return err
 		}
 	}
