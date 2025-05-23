@@ -115,11 +115,11 @@ func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 }
 
 // PeerCount returns the number of p2p peers as reported by the net_peerCount method.
-func (ec *Client) PeerCount(ctx context.Context) (uint64, error) {
-	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "net_peerCount")
-	return uint64(result), err
-}
+// func (ec *Client) PeerCount(ctx context.Context) (uint64, error) {
+// 	var result hexutil.Uint64
+// 	err := ec.c.CallContext(ctx, &result, "net_peerCount")
+// 	return uint64(result), err
+// }
 
 // BlockReceipts returns the receipts of a given block number or hash.
 func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
@@ -493,40 +493,40 @@ func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 // Pending State
 
 // PendingBalanceAt returns the wei balance of the given account in the pending state.
-func (ec *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
-	var result hexutil.Big
-	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, "pending")
-	return (*big.Int)(&result), err
-}
+// func (ec *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
+// 	var result hexutil.Big
+// 	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, "pending")
+// 	return (*big.Int)(&result), err
+// }
 
 // PendingStorageAt returns the value of key in the contract storage of the given account in the pending state.
-func (ec *Client) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
-	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, "pending")
-	return result, err
-}
+// func (ec *Client) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
+// 	var result hexutil.Bytes
+// 	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, "pending")
+// 	return result, err
+// }
 
 // PendingCodeAt returns the contract code of the given account in the pending state.
-func (ec *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
-	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, "pending")
-	return result, err
-}
+// func (ec *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
+// 	var result hexutil.Bytes
+// 	err := ec.c.CallContext(ctx, &result, "eth_getCode", account, "pending")
+// 	return result, err
+// }
 
 // PendingNonceAt returns the account nonce of the given account in the pending state.
 // This is the nonce that should be used for the next transaction.
-func (ec *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
-	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, "pending")
-	return uint64(result), err
-}
+// func (ec *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+// 	var result hexutil.Uint64
+// 	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, "pending")
+// 	return uint64(result), err
+// }
 
 // PendingTransactionCount returns the total number of transactions in the pending state.
-func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
-	var num hexutil.Uint
-	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
-	return uint(num), err
-}
+// func (ec *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
+// 	var num hexutil.Uint
+// 	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByNumber", "pending")
+// 	return uint(num), err
+// }
 
 // Contract Calling
 
@@ -558,14 +558,14 @@ func (ec *Client) CallContractAtHash(ctx context.Context, msg ethereum.CallMsg, 
 
 // PendingCallContract executes a message call transaction using the EVM.
 // The state seen by the contract call is the pending state.
-func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
-	var hex hexutil.Bytes
-	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
-	if err != nil {
-		return nil, err
-	}
-	return hex, nil
-}
+// func (ec *Client) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
+// 	var hex hexutil.Bytes
+// 	err := ec.c.CallContext(ctx, &hex, "eth_call", toCallArg(msg), "pending")
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return hex, nil
+// }
 
 // SuggestGasPrice retrieves the currently suggested gas price to allow a timely
 // execution of a transaction.
