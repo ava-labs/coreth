@@ -42,30 +42,6 @@ type BlockSyncSummary struct {
 	acceptImpl AcceptImplFn
 }
 
-type BlockSyncSummaryParser struct{}
-
-func NewBlockSyncSummaryParser() *BlockSyncSummaryParser {
-	return &BlockSyncSummaryParser{}
-}
-
-func (b *BlockSyncSummaryParser) ParseFromBytes(summaryBytes []byte, acceptImpl AcceptImplFn) (Syncable, error) {
-	summary := BlockSyncSummary{}
-	if codecVersion, err := Codec.Unmarshal(summaryBytes, &summary); err != nil {
-		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)
-	} else if codecVersion != Version {
-		return nil, fmt.Errorf("failed to parse syncable summary due to unexpected codec version (%d != %d)", codecVersion, Version)
-	}
-
-	summary.bytes = summaryBytes
-	summaryID, err := ids.ToID(crypto.Keccak256(summaryBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to compute summary ID: %w", err)
-	}
-	summary.summaryID = summaryID
-	summary.acceptImpl = acceptImpl
-	return &summary, nil
-}
-
 func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash) (*BlockSyncSummary, error) {
 	summary := BlockSyncSummary{
 		BlockNumber: blockNumber,

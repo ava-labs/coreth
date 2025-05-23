@@ -7,6 +7,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -16,10 +17,10 @@ import (
 var _ sync.SummaryProvider = (*atomicSummaryProvider)(nil)
 
 type atomicSummaryProvider struct {
-	atomicTrie AtomicTrie
+	atomicTrie *state.AtomicTrie
 }
 
-func NewAtomicSyncSummaryProvider(atomicTrie AtomicTrie) *atomicSummaryProvider {
+func NewAtomicSyncSummaryProvider(atomicTrie *state.AtomicTrie) *atomicSummaryProvider {
 	return &atomicSummaryProvider{
 		atomicTrie: atomicTrie,
 	}
