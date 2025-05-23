@@ -10,7 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -78,7 +78,7 @@ func (be *blockExtender) NewBlockExtension(b extension.ExtendedBlock) (extension
 
 // SyntacticVerify checks the syntactic validity of the block. This is called by the wrapper
 // block manager's SyntacticVerify method.
-func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
+func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	b := be.block
 	ethBlock := b.GetEthBlock()
 	blockExtender := be.blockExtender
@@ -90,8 +90,7 @@ func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
 	blockHash := ethBlock.Hash()
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 
-	rulesExtra := params.GetRulesExtra(rules)
-	if !rulesExtra.IsApricotPhase1 {
+	if !rules.IsApricotPhase1 {
 		if blockExtender.extDataHashes != nil {
 			extData := customtypes.BlockExtData(ethBlock)
 			extDataHash := customtypes.CalcExtDataHash(extData)
@@ -113,7 +112,7 @@ func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
 	}
 
 	// Verify the ExtDataHash field
-	if rulesExtra.IsApricotPhase1 {
+	if rules.IsApricotPhase1 {
 		extraData := customtypes.BlockExtData(ethBlock)
 		hash := customtypes.CalcExtDataHash(extraData)
 		if headerExtra.ExtDataHash != hash {
@@ -136,10 +135,10 @@ func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
 	}
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
-	if rulesExtra.IsApricotPhase4 {
+	if rules.IsApricotPhase4 {
 		// After the F upgrade, the extDataGasUsed field is validated by
 		// [header.VerifyGasUsed].
-		if !rulesExtra.IsFortuna && rulesExtra.IsApricotPhase5 {
+		if !rules.IsFortuna && rules.IsApricotPhase5 {
 			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
 				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
 			}
@@ -148,7 +147,7 @@ func (be *blockExtension) SyntacticVerify(rules params.Rules) error {
 		for _, atomicTx := range atomicTxs {
 			// We perform this check manually here to avoid the overhead of having to
 			// reparse the atomicTx in `CalcExtDataGasUsed`.
-			fixedFee := rulesExtra.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
+			fixedFee := rules.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
 			gasUsed, err := atomicTx.GasUsed(fixedFee)
 			if err != nil {
 				return err
