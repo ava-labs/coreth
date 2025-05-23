@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	_ extension.BlockExtension = (*blockExtension)(nil)
-	_ extension.BlockExtender  = (*blockExtender)(nil)
+	_ extension.BlockExtension  = (*blockExtension)(nil)
+	_ extension.BlockExtender   = (*blockExtender)(nil)
+	_ atomic.AtomicBlockContext = (*blockExtension)(nil)
 )
 
 var (
@@ -39,7 +40,7 @@ type blockExtender struct {
 type blockExtension struct {
 	atomicTxs     []*atomic.Tx
 	blockExtender *blockExtender
-	block         extension.VMBlock
+	block         extension.ExtendedBlock
 }
 
 // newBlockExtender returns a new block extender.
@@ -56,7 +57,7 @@ func newBlockExtender(
 }
 
 // NewBlockExtension returns a new block extension.
-func (be *blockExtender) NewBlockExtension(b extension.VMBlock) (extension.BlockExtension, error) {
+func (be *blockExtender) NewBlockExtension(b extension.ExtendedBlock) (extension.BlockExtension, error) {
 	ethBlock := b.GetEthBlock()
 	if ethBlock == nil {
 		return nil, errNilEthBlock
@@ -232,6 +233,11 @@ func (be *blockExtension) CleanupVerified() {
 	if atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
+}
+
+// AtomicTxs returns the atomic transactions in this block.
+func (be *blockExtension) AtomicTxs() []*atomic.Tx {
+	return be.atomicTxs
 }
 
 // verifyUTXOsPresent verifies all atomic UTXOs consumed by the block are

@@ -471,7 +471,7 @@ func TestNewImportTx(t *testing.T) {
 		return tx
 	}
 	checkState := func(t *testing.T, vm *VM) {
-		txs := vm.LastAcceptedVMBlock().GetBlockExtension().(atomic.AtomicBlockContext).AtomicTxs()
+		txs := vm.LastAcceptedExtendedBlock().GetBlockExtension().(atomic.AtomicBlockContext).AtomicTxs()
 		if len(txs) != 1 {
 			t.Fatalf("Expected one import tx to be in the last accepted block, but found %d", len(txs))
 		}
@@ -1223,7 +1223,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				return tx
 			},
 			checkState: func(t *testing.T, vm *VM) {
-				lastAcceptedBlock := vm.LastAcceptedVMBlock()
+				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
 				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
@@ -1268,7 +1268,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				return tx
 			},
 			checkState: func(t *testing.T, vm *VM) {
-				lastAcceptedBlock := vm.LastAcceptedVMBlock()
+				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
 				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {

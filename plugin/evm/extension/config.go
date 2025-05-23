@@ -20,10 +20,10 @@ import (
 type ExtensibleVM interface {
 	// SetLastAcceptedBlock sets the last accepted block
 	SetLastAcceptedBlock(lastAcceptedBlock snowman.Block) error
-	// GetVMBlock returns the VMBlock for the given ID or an error if the block is not found
-	GetVMBlock(context.Context, ids.ID) (VMBlock, error)
-	// LastAcceptedVMBlock returns the last accepted VM block
-	LastAcceptedVMBlock() VMBlock
+	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
+	GetExtendedBlock(context.Context, ids.ID) (ExtendedBlock, error)
+	// LastAcceptedExtendedBlock returns the last accepted VM block
+	LastAcceptedExtendedBlock() ExtendedBlock
 	// IsBootstrapped returns true if the VM is bootstrapped
 	IsBootstrapped() bool
 }
@@ -38,8 +38,8 @@ type InnerVM interface {
 	block.StateSyncableVM
 }
 
-// VMBlock is a block that can be used by the extension
-type VMBlock interface {
+// ExtendedBlock is a block that can be used by the extension
+type ExtendedBlock interface {
 	snowman.Block
 	GetEthBlock() *types.Block
 	GetBlockExtension() BlockExtension
@@ -47,7 +47,7 @@ type VMBlock interface {
 
 type BlockExtender interface {
 	// NewBlockExtension is called when a new block is created
-	NewBlockExtension(b VMBlock) (BlockExtension, error)
+	NewBlockExtension(b ExtendedBlock) (BlockExtension, error)
 }
 
 // BlockExtension allows the VM extension to handle block processing events.

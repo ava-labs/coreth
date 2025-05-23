@@ -31,7 +31,7 @@ func (vm *VM) SetExtensionConfig(config *extension.Config) error {
 
 // All these methods below assumes that VM is already initialized
 
-func (vm *VM) GetVMBlock(ctx context.Context, blkID ids.ID) (extension.VMBlock, error) {
+func (vm *VM) GetExtendedBlock(ctx context.Context, blkID ids.ID) (extension.ExtendedBlock, error) {
 	// Since each internal handler used by [vm.State] always returns a block
 	// with non-nil ethBlock value, GetBlockInternal should never return a
 	// (*Block) with a nil ethBlock value.
@@ -43,7 +43,7 @@ func (vm *VM) GetVMBlock(ctx context.Context, blkID ids.ID) (extension.VMBlock, 
 	return blk.(*wrappedBlock), nil
 }
 
-func (vm *VM) LastAcceptedVMBlock() extension.VMBlock {
+func (vm *VM) LastAcceptedExtendedBlock() extension.ExtendedBlock {
 	lastAcceptedBlock := vm.LastAcceptedBlockInternal()
 	if lastAcceptedBlock == nil {
 		return nil

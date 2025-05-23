@@ -1420,9 +1420,9 @@ func (vm *VM) GetAcceptedBlock(ctx context.Context, blkID ids.ID) (snowman.Block
 // SetPreference sets what the current tail of the chain is
 func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	// Since each internal handler used by [vm.State] always returns a block
-	// with non-nil ethBlock value, GetVMBlock should never return a
+	// with non-nil ethBlock value, GetExtendedBlock should never return a
 	// (*Block) with a nil ethBlock value.
-	block, err := vm.GetVMBlock(ctx, blkID)
+	block, err := vm.GetExtendedBlock(ctx, blkID)
 	if err != nil {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
@@ -1616,14 +1616,9 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
 func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
-	parent, err := vm.GetVMBlock(context.TODO(), ids.ID(parentHash))
+	parent, err := vm.GetExtendedBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
-	}
-	parentIntf := parent.GetBlockExtension()
-	atomicBlockIntf, ok := parentIntf.(atomic.AtomicBlockContext)
-	if !ok {
-		return fmt.Errorf("expected parent block %s, to be atomic.AtomicBlockContext but is %T", parent.ID(), parentIntf)
 	}
 	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
@@ -1636,7 +1631,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
 		Backend: atomicBackend,
 		Tx:      tx,
-		Parent:  atomicBlockIntf,
+		Parent:  parent,
 		BaseFee: baseFee,
 	}); err != nil {
 		return err
@@ -1657,14 +1652,9 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// it was called.
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
-	ancestor, err := vm.GetVMBlock(context.TODO(), ancestorID)
+	ancestor, err := vm.GetExtendedBlock(context.TODO(), ancestorID)
 	if err != nil {
 		return errRejectedParent
-	}
-	ancestorIntf := ancestor.GetBlockExtension()
-	atomicBlockIntf, ok := ancestorIntf.(atomic.AtomicBlockContext)
-	if !ok {
-		return fmt.Errorf("expected ancestor block %s, to be atomic.AtomicBlockContext but is %T", ancestor.ID(), ancestorIntf)
 	}
 
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
@@ -1683,7 +1673,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		if err := utx.Visit(&atomic.SemanticVerifier{
 			Backend: atomicBackend,
 			Tx:      atomicTx,
-			Parent:  atomicBlockIntf,
+			Parent:  ancestor,
 			BaseFee: baseFee,
 		}); err != nil {
 			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
