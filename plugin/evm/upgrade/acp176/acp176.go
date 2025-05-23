@@ -19,8 +19,20 @@ import (
 	"github.com/holiman/uint256"
 )
 
+var (
+	// MinTargetPerSecond is a variable so that it can be changed by external Go code, notably
+	// for load testing in the avalanchego repository. You might want to also update the
+	// following variables value since they depend on MinMaxPerSecond:
+	// - MinTargetPerSecond
+	// - MinMaxPerSecond
+	// - MinMaxCapacity
+	// - eth/gasprice.DefaultMinGasUsed
+	MinTargetPerSecond = gas.Price(1_000_000) // P
+	MinMaxPerSecond    = MinTargetPerSecond * TargetToMax
+	MinMaxCapacity     = MinMaxPerSecond * TimeToFillCapacity
+)
+
 const (
-	MinTargetPerSecond  = 1_000_000                                 // P
 	TargetConversion    = MaxTargetChangeRate * MaxTargetExcessDiff // D
 	MaxTargetExcessDiff = 1 << 15                                   // Q
 	MinGasPrice         = 1                                         // M
@@ -31,8 +43,6 @@ const (
 	MaxTargetChangeRate           = 1024 // Controls the rate that the target can change per block.
 
 	TargetToMaxCapacity = TargetToMax * TimeToFillCapacity
-	MinMaxPerSecond     = MinTargetPerSecond * TargetToMax
-	MinMaxCapacity      = MinMaxPerSecond * TimeToFillCapacity
 
 	StateSize = 3 * wrappers.LongLen
 
