@@ -715,7 +715,7 @@ func BenchmarkAtomicTrieIterate(b *testing.B) {
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
-	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), map[uint64]ids.ID{}, repo, lastAcceptedHeight, common.Hash{}, 5000)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 5000)
 	assert.NoError(b, err)
 	atomicTrie := atomicBackend.AtomicTrie()
 
@@ -825,7 +825,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 	fromBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(fromBytes, from)
 	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
-	require.NoError(t, err, "creating iterator")
+	require.NoError(t, err)
 
 	// Generate map of the marshalled atomic operations on the interval [from, to]
 	// based on `operationsMap`.
@@ -836,7 +836,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 		}
 		for blockchainID, atomicRequests := range blockRequests {
 			b, err := codec.Marshal(0, atomicRequests)
-			require.NoError(t, err, "marshaling atomic requests")
+			require.NoError(t, err)
 			if requestsMap, exists := marshalledOperationsMap[height]; exists {
 				requestsMap[blockchainID] = b
 			} else {
@@ -861,7 +861,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 
 		blockchainID := iter.BlockchainID()
 		b, err := codec.Marshal(0, iter.AtomicOps())
-		require.NoError(t, err, "marshaling atomic operations")
+		require.NoError(t, err)
 		if requestsMap, exists := iteratorMarshalledOperationsMap[height]; exists {
 			requestsMap[blockchainID] = b
 		} else {
@@ -870,7 +870,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 			iteratorMarshalledOperationsMap[height] = requestsMap
 		}
 	}
-	require.NoError(t, iter.Error(), "iterator error")
+	require.NoError(t, iter.Error())
 
 	assert.Equal(t, marshalledOperationsMap, iteratorMarshalledOperationsMap)
 }
