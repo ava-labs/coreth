@@ -19,7 +19,6 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
 	"github.com/ava-labs/libevm/trie"
-	"github.com/ava-labs/libevm/trie/trienode"
 )
 
 const (
@@ -31,35 +30,6 @@ var (
 	_ Syncer                  = (*atomicSyncer)(nil)
 	_ syncclient.LeafSyncTask = (*atomicSyncerLeafTask)(nil)
 )
-
-// AtomicTrie maintains an index of atomic operations by blockchainIDs for every block
-// height containing atomic transactions. The backing data structure for this index is
-// a Trie. The keys of the trie are block heights and the values (leaf nodes)
-// are the atomic operations applied to shared memory while processing the block accepted
-// at the corresponding height.
-type AtomicTrie interface {
-	// OpenTrie returns a modifiable instance of the atomic trie backed by trieDB
-	// opened at hash.
-	OpenTrie(hash common.Hash) (*trie.Trie, error)
-
-	// LastCommitted returns the last committed hash and corresponding block height
-	LastCommitted() (common.Hash, uint64)
-
-	// Root returns hash if it exists at specified height
-	// if trie was not committed at provided height, it returns
-	// common.Hash{} instead
-	Root(height uint64) (common.Hash, error)
-
-	// InsertTrie updates the trieDB with the provided node set and adds a reference
-	// to root in the trieDB. Once InsertTrie is called, it is expected either
-	// AcceptTrie or RejectTrie be called for the same root.
-	InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
-
-	// AcceptTrie marks root as the last accepted atomic trie root, and
-	// commits the trie to persistent storage if height is divisible by
-	// the commit interval. Returns true if the trie was committed.
-	AcceptTrie(height uint64, root common.Hash) (bool, error)
-}
 
 // Syncer represents a step in state sync,
 // along with Start/Done methods to control
