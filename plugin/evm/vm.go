@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -39,6 +39,8 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
@@ -108,11 +110,11 @@ import (
 )
 
 var (
-	_ block.ChainVM                      = &VM{}
-	_ block.BuildBlockWithContextChainVM = &VM{}
-	_ block.StateSyncableVM              = &VM{}
-	_ statesyncclient.EthBlockParser     = &VM{}
-	_ secp256k1fx.VM                     = &VM{}
+	_ block.ChainVM                      = (*VM)(nil)
+	_ block.BuildBlockWithContextChainVM = (*VM)(nil)
+	_ block.StateSyncableVM              = (*VM)(nil)
+	_ statesyncclient.EthBlockParser     = (*VM)(nil)
+	_ secp256k1fx.VM                     = (*VM)(nil)
 )
 
 const (
@@ -168,10 +170,6 @@ var (
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
-
-	// Prefixes for atomic trie
-	atomicTrieDBPrefix     = []byte("atomicTrieDB")
-	atomicTrieMetaDBPrefix = []byte("atomicTrieMetaDB")
 )
 
 var (
@@ -226,7 +224,6 @@ type VM struct {
 	config config.Config
 
 	chainID     *big.Int
-	networkID   uint64
 	genesisHash common.Hash
 	chainConfig *params.ChainConfig
 	ethConfig   ethconfig.Config
@@ -264,17 +261,15 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	atomicTxRepository AtomicTxRepository
-	// [atomicTrie] maintains a merkle forest of [height]=>[atomic txs].
-	atomicTrie AtomicTrie
+	atomicTxRepository *atomicstate.AtomicRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	atomicBackend AtomicBackend
+	atomicBackend *atomicstate.AtomicBackend
 
 	builder *blockBuilder
 
 	baseCodec codec.Registry
 	clock     mockable.Clock
-	mempool   *atomic.Mempool
+	mempool   *atomictxpool.Mempool
 
 	shutdownChan chan struct{}
 	shutdownWg   sync.WaitGroup
@@ -312,7 +307,7 @@ type VM struct {
 	ethTxPushGossiper     avalancheUtils.Atomic[*gossip.PushGossiper[*GossipEthTx]]
 	ethTxPullGossiper     gossip.Gossiper
 	atomicTxGossipHandler p2p.Handler
-	atomicTxPushGossiper  *gossip.PushGossiper[*atomic.GossipAtomicTx]
+	atomicTxPushGossiper  *gossip.PushGossiper[*atomic.Tx]
 	atomicTxPullGossiper  gossip.Gossiper
 
 	chainAlias string
@@ -491,11 +486,10 @@ func (vm *VM) Initialize(
 	}
 
 	vm.chainConfig = g.Config
-	vm.networkID = vm.ethConfig.NetworkId
 	vm.secpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
 	// TODO: read size from settings
-	vm.mempool, err = atomic.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
+	vm.mempool, err = atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -560,19 +554,18 @@ func (vm *VM) Initialize(
 	}
 
 	// initialize atomic repository
-	vm.atomicTxRepository, err = NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(vm.versiondb, atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.atomicBackend, err = NewAtomicBackend(
-		vm.versiondb, vm.ctx.SharedMemory, bonusBlockHeights,
+	vm.atomicBackend, err = atomicstate.NewAtomicBackend(
+		vm.ctx.SharedMemory, bonusBlockHeights,
 		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.config.CommitInterval,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic backend: %w", err)
 	}
-	vm.atomicTrie = vm.atomicBackend.AtomicTrie()
 
 	go vm.ctx.Log.RecoverAndPanic(vm.startContinuousProfiler)
 
@@ -593,7 +586,7 @@ func (vm *VM) Initialize(
 
 	vm.StateSyncServer = NewStateSyncServer(&stateSyncServerConfig{
 		Chain:            vm.blockChain,
-		AtomicTrie:       vm.atomicTrie,
+		AtomicTrie:       vm.atomicBackend.AtomicTrie(),
 		SyncableInterval: vm.config.StateSyncCommitInterval,
 	})
 	return vm.initializeStateSyncClient(lastAcceptedHeight)
@@ -1089,7 +1082,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	atomicTxGossipMarshaller := atomic.GossipAtomicTxMarshaller{}
+	atomicTxGossipMarshaller := &atomic.TxMarshaller{}
 	atomicTxGossipClient := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.p2pValidators))
 	atomicTxGossipMetrics, err := gossip.NewMetrics(vm.sdkMetrics, atomicTxGossipNamespace)
 	if err != nil {
@@ -1127,7 +1120,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.GossipAtomicTx](
+		vm.atomicTxPushGossiper, err = gossip.NewPushGossiper[*atomic.Tx](
 			atomicTxGossipMarshaller,
 			vm.mempool,
 			vm.p2pValidators,
@@ -1166,7 +1159,7 @@ func (vm *VM) initBlockBuilding() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler = newTxGossipHandler[*atomic.GossipAtomicTx](
+		vm.atomicTxGossipHandler = newTxGossipHandler[*atomic.Tx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1211,7 +1204,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	if vm.atomicTxPullGossiper == nil {
-		atomicTxPullGossiper := gossip.NewPullGossiper[*atomic.GossipAtomicTx](
+		atomicTxPullGossiper := gossip.NewPullGossiper[*atomic.Tx](
 			vm.ctx.Log,
 			atomicTxGossipMarshaller,
 			vm.mempool,
@@ -1259,7 +1252,7 @@ func (vm *VM) setAppRequestHandlers() {
 		vm.blockChain,
 		vm.chaindb,
 		evmTrieDB,
-		vm.atomicTrie.TrieDB(),
+		vm.atomicBackend.AtomicTrie().TrieDB(),
 		vm.warpBackend,
 		vm.networkCodec,
 	)
@@ -1615,7 +1608,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if !ok {
 		return fmt.Errorf("parent block %s had unexpected type %T", parentIntf.ID(), parentIntf)
 	}
-	atomicBackend := &atomic.Backend{
+	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
@@ -1623,7 +1616,12 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 		BlockFetcher: vm,
 		SecpCache:    vm.secpCache,
 	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(atomicBackend, tx, parent, baseFee); err != nil {
+	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
+		Backend: atomicBackend,
+		Tx:      tx,
+		Parent:  parent,
+		BaseFee: baseFee,
+	}); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
@@ -1654,7 +1652,7 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := &atomic.Backend{
+	atomicBackend := &atomic.VerifierBackend{
 		Ctx:          vm.ctx,
 		Fx:           &vm.fx,
 		Rules:        rules,
@@ -1664,7 +1662,12 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	}
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.SemanticVerify(atomicBackend, atomicTx, ancestor, baseFee); err != nil {
+		if err := utx.Visit(&atomic.SemanticVerifier{
+			Backend: atomicBackend,
+			Tx:      atomicTx,
+			Parent:  ancestor,
+			BaseFee: baseFee,
+		}); err != nil {
 			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()

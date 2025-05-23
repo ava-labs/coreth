@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -18,7 +18,7 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
-var _ message.RequestHandler = &networkHandler{}
+var _ message.RequestHandler = (*networkHandler)(nil)
 
 type networkHandler struct {
 	stateTrieLeafsRequestHandler  *syncHandlers.LeafsRequestHandler

@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package message
@@ -12,9 +12,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 )
 
-var (
-	_ Request = BlockRequest{}
-)
+var _ Request = (*BlockRequest)(nil)
 
 // BlockRequest is a request to retrieve Parents number of blocks starting from Hash from newest-oldest manner
 type BlockRequest struct {
