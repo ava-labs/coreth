@@ -41,13 +41,7 @@ func newBlockValidator(extDataHashes map[common.Hash]common.Hash) *blockValidato
 
 func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	rulesExtra := params.GetRulesExtra(rules)
-	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
-	}
-
-	ethHeader := b.ethBlock.Header()
 	blockHash := b.ethBlock.Hash()
-
 	if !rulesExtra.IsApricotPhase1 {
 		if v.extDataHashes != nil {
 			extData := customtypes.BlockExtData(b.ethBlock)
@@ -75,6 +69,7 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 	}
 
 	// Verify the ExtDataHash field
+	ethHeader := b.ethBlock.Header()
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase1 {
 		extraData := customtypes.BlockExtData(b.ethBlock)
