@@ -84,6 +84,8 @@ func (wp *workerPool) Done() {
 	wp.BoundedWorkers.Wait()
 }
 
+type PrefetcherOption = ethstate.PrefetcherOption
+
 func WithConcurrentWorkers(prefetchers int) ethstate.PrefetcherOption {
 	pool := &workerPool{
 		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),

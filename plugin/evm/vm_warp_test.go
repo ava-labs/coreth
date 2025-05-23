@@ -14,6 +14,7 @@ import (
 	_ "embed"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
@@ -417,7 +418,8 @@ func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		fork: &fork,
+		fork:      &fork,
+		isSyncing: true,
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -446,6 +448,9 @@ func TestReceiveWarpMessage(t *testing.T) {
 			{Config: reEnableConfig},
 		},
 	}
+	// Bootstrapping after changing the upgrade config to avoid a data race in the miner
+	require.NoError(tvm.vm.SetState(context.Background(), snow.Bootstrapping))
+	require.NoError(tvm.vm.SetState(context.Background(), snow.NormalOp))
 
 	type test struct {
 		name          string
