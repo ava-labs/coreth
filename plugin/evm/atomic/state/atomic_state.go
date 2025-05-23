@@ -29,7 +29,9 @@ func (a *atomicState) Root() common.Hash {
 	return a.atomicRoot
 }
 
-// Accept applies the state change to VM's persistent storage.
+// Accept writes the atomic operations to the database and
+// updates the last accepted block in the atomic backend.
+// It also commits the `commitBatch` to the shared memory.
 func (a *atomicState) Accept(commitBatch database.Batch) error {
 	isBonus := a.backend.IsBonus(a.blockHeight, a.blockHash)
 	// Update the atomic tx repository. Note it is necessary to invoke

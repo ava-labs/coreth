@@ -30,13 +30,14 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	messagetest "github.com/ava-labs/coreth/plugin/evm/message/testutils"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/message/messagetest"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/precompile/contract"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/predicate"
@@ -75,7 +76,7 @@ var networkCodec = messagetest.BlockSyncSummaryCodec
 func TestSendWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
@@ -91,7 +92,7 @@ func TestSendWarpMessage(t *testing.T) {
 	warpSendMessageInput, err := warpcontract.PackSendWarpMessage(payloadData)
 	require.NoError(err)
 	addressedPayload, err := payload.NewAddressedCall(
-		testutils.TestEthAddrs[0].Bytes(),
+		vmtest.TestEthAddrs[0].Bytes(),
 		payloadData,
 	)
 	require.NoError(err)
@@ -104,7 +105,7 @@ func TestSendWarpMessage(t *testing.T) {
 
 	// Submit a transaction to trigger sending a warp message
 	tx0 := types.NewTransaction(uint64(0), warpcontract.ContractAddress, big.NewInt(1), 100_000, big.NewInt(ap0.MinGasPrice), warpSendMessageInput)
-	signedTx0, err := types.SignTx(tx0, types.LatestSignerForChainID(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	signedTx0, err := types.SignTx(tx0, types.LatestSignerForChainID(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	require.NoError(err)
 
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{signedTx0})
@@ -125,7 +126,7 @@ func TestSendWarpMessage(t *testing.T) {
 	require.Len(receipts[0].Logs, 1)
 	expectedTopics := []common.Hash{
 		warpcontract.WarpABI.Events["SendWarpMessage"].ID,
-		common.BytesToHash(testutils.TestEthAddrs[0].Bytes()),
+		common.BytesToHash(vmtest.TestEthAddrs[0].Bytes()),
 		common.Hash(expectedUnsignedMessage.ID()),
 	}
 	require.Equal(expectedTopics, receipts[0].Logs[0].Topics)
@@ -267,7 +268,7 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
@@ -342,10 +343,10 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 	createTx, err := types.SignTx(
 		types.NewContractCreation(0, common.Big0, 7_000_000, big.NewInt(225*utils.GWei), common.Hex2Bytes(exampleWarpBin)),
 		types.LatestSignerForChainID(vm.chainConfig.ChainID),
-		testutils.TestKeys[0].ToECDSA(),
+		vmtest.TestKeys[0].ToECDSA(),
 	)
 	require.NoError(err)
-	exampleWarpAddress := crypto.CreateAddress(testutils.TestEthAddrs[0], 0)
+	exampleWarpAddress := crypto.CreateAddress(vmtest.TestEthAddrs[0], 0)
 
 	tx, err := types.SignTx(
 		predicate.NewPredicateTx(
@@ -362,7 +363,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 			signedMessage.Bytes(),
 		),
 		types.LatestSignerForChainID(vm.chainConfig.ChainID),
-		testutils.TestKeys[0].ToECDSA(),
+		vmtest.TestKeys[0].ToECDSA(),
 	)
 	require.NoError(err)
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{createTx, tx})
@@ -420,7 +421,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 func TestReceiveWarpMessage(t *testing.T) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
@@ -526,7 +527,7 @@ func testReceiveWarpMessage(
 	require := require.New(t)
 	payloadData := avagoUtils.RandomBytes(100)
 	addressedPayload, err := payload.NewAddressedCall(
-		testutils.TestEthAddrs[0].Bytes(),
+		vmtest.TestEthAddrs[0].Bytes(),
 		payloadData,
 	)
 	require.NoError(err)
@@ -634,7 +635,7 @@ func testReceiveWarpMessage(
 	getVerifiedWarpMessageTx, err := types.SignTx(
 		predicate.NewPredicateTx(
 			vm.chainConfig.ChainID,
-			vm.txPool.Nonce(testutils.TestEthAddrs[0]),
+			vm.txPool.Nonce(vmtest.TestEthAddrs[0]),
 			&warpcontract.Module.Address,
 			1_000_000,
 			big.NewInt(225*utils.GWei),
@@ -646,7 +647,7 @@ func testReceiveWarpMessage(
 			signedMessage.Bytes(),
 		),
 		types.LatestSignerForChainID(vm.chainConfig.ChainID),
-		testutils.TestKeys[0].ToECDSA(),
+		vmtest.TestKeys[0].ToECDSA(),
 	)
 	require.NoError(err)
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{getVerifiedWarpMessageTx})
@@ -711,7 +712,7 @@ func testReceiveWarpMessage(
 	expectedOutput, err := warpcontract.PackGetVerifiedWarpMessageOutput(warpcontract.GetVerifiedWarpMessageOutput{
 		Message: warpcontract.WarpMessage{
 			SourceChainID:       common.Hash(sourceChainID),
-			OriginSenderAddress: testutils.TestEthAddrs[0],
+			OriginSenderAddress: vmtest.TestEthAddrs[0],
 			Payload:             payloadData,
 		},
 		Valid: true,
@@ -737,12 +738,11 @@ func testReceiveWarpMessage(
 
 func TestMessageSignatureRequestsToVM(t *testing.T) {
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
-		err := vm.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, vm.Shutdown(context.Background()))
 	}()
 
 	// Generate a new warp unsigned message and add to warp backend
@@ -750,8 +750,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add the known message and get its signature to confirm.
-	err = vm.warpBackend.AddMessage(warpMessage)
-	require.NoError(t, err)
+	require.NoError(t, vm.warpBackend.AddMessage(warpMessage))
 	signature, err := vm.warpBackend.GetMessageSignature(context.TODO(), warpMessage)
 	require.NoError(t, err)
 	var knownSignature [bls.SignatureLen]byte
@@ -792,8 +791,7 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 
 			// Send the app request and make sure we called SendAppResponseFn
 			deadline := time.Now().Add(60 * time.Second)
-			err = vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes)
-			require.NoError(t, err)
+			require.NoError(t, vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes))
 			require.True(t, calledSendAppResponseFn)
 		})
 	}
@@ -801,12 +799,11 @@ func TestMessageSignatureRequestsToVM(t *testing.T) {
 
 func TestBlockSignatureRequestsToVM(t *testing.T) {
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
-		err := vm.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, vm.Shutdown(context.Background()))
 	}()
 
 	lastAcceptedID, err := vm.LastAccepted(context.Background())
@@ -852,18 +849,16 @@ func TestBlockSignatureRequestsToVM(t *testing.T) {
 
 			// Send the app request and make sure we called SendAppResponseFn
 			deadline := time.Now().Add(60 * time.Second)
-			err = vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes)
-			require.NoError(t, err)
+			require.NoError(t, vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes))
 			require.True(t, calledSendAppResponseFn)
 		})
 	}
 }
 
 func TestClearWarpDB(t *testing.T) {
-	ctx, db, genesisBytes, issuer, _ := testutils.SetupGenesis(t, upgradetest.Latest)
+	ctx, db, genesisBytes, issuer, _ := vmtest.SetupGenesis(t, upgradetest.Latest)
 	vm := newDefaultTestVM()
-	err := vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
-	require.NoError(t, err)
+	require.NoError(t, vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{}))
 
 	// use multiple messages to test that all messages get cleared
 	payloads := [][]byte{[]byte("test1"), []byte("test2"), []byte("test3"), []byte("test4"), []byte("test5")}
@@ -873,8 +868,7 @@ func TestClearWarpDB(t *testing.T) {
 	for _, payload := range payloads {
 		unsignedMsg, err := avalancheWarp.NewUnsignedMessage(vm.ctx.NetworkID, vm.ctx.ChainID, payload)
 		require.NoError(t, err)
-		err = vm.warpBackend.AddMessage(unsignedMsg)
-		require.NoError(t, err)
+		require.NoError(t, vm.warpBackend.AddMessage(unsignedMsg))
 		// ensure that the message was added
 		_, err = vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMsg)
 		require.NoError(t, err)
@@ -886,9 +880,8 @@ func TestClearWarpDB(t *testing.T) {
 	// Restart VM with the same database default should not prune the warp db
 	vm = newDefaultTestVM()
 	// we need to reset context since the previous one has registered metrics.
-	testutils.ResetMetrics(ctx)
-	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{})
-	require.NoError(t, err)
+	metricstest.ResetMetrics(ctx)
+	require.NoError(t, vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, issuer, []*commonEng.Fx{}, &enginetest.Sender{}))
 
 	// check messages are still present
 	for _, message := range messages {
@@ -902,9 +895,8 @@ func TestClearWarpDB(t *testing.T) {
 	// restart the VM with pruning enabled
 	vm = newDefaultTestVM()
 	config := `{"prune-warp-db-enabled": true}`
-	testutils.ResetMetrics(ctx)
-	err = vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{})
-	require.NoError(t, err)
+	metricstest.ResetMetrics(ctx)
+	require.NoError(t, vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), issuer, []*commonEng.Fx{}, &enginetest.Sender{}))
 
 	it := vm.warpDB.NewIterator()
 	require.False(t, it.Next())

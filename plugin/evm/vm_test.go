@@ -20,11 +20,12 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/trie"
 
@@ -48,7 +49,7 @@ import (
 )
 
 var (
-	genesisJSONCancun = testutils.GenesisJSON(activateCancun(params.TestChainConfig))
+	genesisJSONCancun = vmtest.GenesisJSON(activateCancun(params.TestChainConfig))
 
 	activateCancun = func(cfg *params.ChainConfig) *params.ChainConfig {
 		cpy := *cfg
@@ -92,9 +93,9 @@ func newDefaultTestVM() *VM {
 	return vm
 }
 
-func setupDefaultTestVM(t *testing.T, cfg testutils.TestVMConfig) (*VM, *testutils.TestVMSuite) {
+func setupDefaultTestVM(t *testing.T, cfg vmtest.TestVMConfig) (*VM, *vmtest.TestVMSuite) {
 	vm := newDefaultTestVM()
-	tvm := testutils.SetupTestVM(t, vm, cfg)
+	tvm := vmtest.SetupTestVM(t, vm, cfg)
 	return vm, tvm
 }
 
@@ -103,7 +104,7 @@ func TestVMContinuousProfiler(t *testing.T) {
 	profilerFrequency := 500 * time.Millisecond
 	configJSON := fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir)
 	fork := upgradetest.Latest
-	vm, _ := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: configJSON,
 	})
@@ -166,7 +167,7 @@ func TestVMUpgrades(t *testing.T) {
 	for _, test := range genesisTests {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			require := require.New(t)
-			vm, _ := setupDefaultTestVM(t, testutils.TestVMConfig{
+			vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
 				Fork: &test.fork,
 			})
 
@@ -193,7 +194,7 @@ func TestVMUpgrades(t *testing.T) {
 
 func TestBuildEthTxBlock(t *testing.T) {
 	fork := upgradetest.ApricotPhase2
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: `{"pruning-enabled":true}`,
 	})
@@ -207,8 +208,8 @@ func TestBuildEthTxBlock(t *testing.T) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,8 +246,8 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[0], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), testutils.TestKeys[1].ToECDSA())
+		tx := types.NewTransaction(uint64(i), vmtest.TestEthAddrs[0], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), vmtest.TestKeys[1].ToECDSA())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -316,7 +317,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		context.Background(),
 		newCTX,
 		tvm.DB,
-		[]byte(testutils.GenesisJSON(testutils.ForkToChainConfig[fork])),
+		[]byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(`{"pruning-enabled":true}`),
 		tvm.ToEngine,
@@ -352,7 +353,7 @@ func TestSetPreferenceRace(t *testing.T) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
 	fork := upgradetest.NoUpgrades
-	conf := testutils.TestVMConfig{
+	conf := vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: `{"pruning-enabled":true}`,
 	}
@@ -374,8 +375,8 @@ func TestSetPreferenceRace(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,8 +433,8 @@ func TestSetPreferenceRace(t *testing.T) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		tx := types.NewTransaction(uint64(i), testutils.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), testutils.TestKeys[1].ToECDSA())
+		tx := types.NewTransaction(uint64(i), vmtest.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainID), vmtest.TestKeys[1].ToECDSA())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -586,7 +587,7 @@ func TestSetPreferenceRace(t *testing.T) {
 // get rejected.
 func TestReorgProtection(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	conf := testutils.TestVMConfig{
+	conf := vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: `{"pruning-enabled":true}`,
 	}
@@ -608,11 +609,11 @@ func TestReorgProtection(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[1].ToECDSA()
-	address := testutils.TestEthAddrs[1]
+	key := vmtest.TestKeys[1].ToECDSA()
+	address := vmtest.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -755,7 +756,7 @@ func TestReorgProtection(t *testing.T) {
 //	B   C
 func TestNonCanonicalAccept(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	conf := testutils.TestVMConfig{
+	conf := vmtest.TestVMConfig{
 		Fork: &fork,
 	}
 	vm1, tvm1 := setupDefaultTestVM(t, conf)
@@ -776,11 +777,11 @@ func TestNonCanonicalAccept(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[1].ToECDSA()
-	address := testutils.TestEthAddrs[1]
+	key := vmtest.TestKeys[1].ToECDSA()
+	address := vmtest.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -950,7 +951,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 //	    D
 func TestStickyPreference(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	conf := testutils.TestVMConfig{
+	conf := vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: `{"pruning-enabled":true}`,
 	}
@@ -972,11 +973,11 @@ func TestStickyPreference(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[1].ToECDSA()
-	address := testutils.TestEthAddrs[1]
+	key := vmtest.TestKeys[1].ToECDSA()
+	address := vmtest.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1209,7 +1210,7 @@ func TestStickyPreference(t *testing.T) {
 //	    D
 func TestUncleBlock(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	conf := testutils.TestVMConfig{
+	conf := vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: `{"pruning-enabled":true}`,
 	}
@@ -1230,11 +1231,11 @@ func TestUncleBlock(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[1].ToECDSA()
-	address := testutils.TestEthAddrs[1]
+	key := vmtest.TestKeys[1].ToECDSA()
+	address := vmtest.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1396,7 +1397,7 @@ func TestUncleBlock(t *testing.T) {
 //	    D
 func TestAcceptReorg(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	conf := testutils.TestVMConfig{
+	conf := vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: `{"pruning-enabled":true}`,
 	}
@@ -1418,11 +1419,11 @@ func TestAcceptReorg(t *testing.T) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	key := testutils.TestKeys[1].ToECDSA()
-	address := testutils.TestEthAddrs[1]
+	key := vmtest.TestKeys[1].ToECDSA()
+	address := vmtest.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm1.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1598,7 +1599,7 @@ func TestAcceptReorg(t *testing.T) {
 
 func TestFutureBlock(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 
@@ -1608,8 +1609,8 @@ func TestFutureBlock(t *testing.T) {
 		}
 	}()
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1657,7 +1658,7 @@ func TestFutureBlock(t *testing.T) {
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
@@ -1669,11 +1670,11 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	key := testutils.TestKeys[1].ToECDSA()
-	address := testutils.TestEthAddrs[1]
+	key := vmtest.TestKeys[1].ToECDSA()
+	address := vmtest.TestEthAddrs[1]
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1769,7 +1770,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 
@@ -1779,8 +1780,8 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		}
 	}()
 
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1838,14 +1839,14 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 
 	// Since rewinding is permitted for last accepted height of 0, we must
 	// accept one block to test the SkipUpgradeCheck functionality.
-	tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1872,16 +1873,15 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
-	genesis := []byte(testutils.GenesisJSON(testutils.ForkToChainConfig[fork]))
+	genesis := []byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork]))
 	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, []byte{}, tvm.ToEngine, []*commonEng.Fx{}, tvm.AppSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
 	// try again with skip-upgrade-check
 	reinitVM = newDefaultTestVM()
-	testutils.ResetMetrics(newCTX)
+	metricstest.ResetMetrics(newCTX)
 	config := []byte(`{"skip-upgrade-check": true}`)
-	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, config, tvm.ToEngine, []*commonEng.Fx{}, tvm.AppSender)
-	require.NoError(t, err)
+	require.NoError(t, reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, config, tvm.ToEngine, []*commonEng.Fx{}, tvm.AppSender))
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
 
@@ -1937,7 +1937,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fork := test.fork
-			vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+			vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 				Fork: &fork,
 			})
 
@@ -1947,8 +1947,8 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				}
 			}()
 
-			tx := types.NewTransaction(uint64(0), testutils.TestEthAddrs[1], big.NewInt(1), 21000, testutils.InitialBaseFee, nil)
-			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), testutils.TestKeys[0].ToECDSA())
+			tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2000,8 +2000,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require := require.New(t)
 
 	gspec := new(core.Genesis)
-	err := json.Unmarshal([]byte(genesisJSONCancun), gspec)
-	require.NoError(err)
+	require.NoError(json.Unmarshal([]byte(genesisJSONCancun), gspec))
 
 	// Make one block with a single blob tx
 	signer := types.NewCancunSigner(gspec.Config.ChainID)
@@ -2014,11 +2013,11 @@ func TestNoBlobsAllowed(t *testing.T) {
 			GasTipCap:  uint256.NewInt(1),
 			GasFeeCap:  uint256.MustFromBig(fee),
 			Gas:        params.TxGas,
-			To:         testutils.TestEthAddrs[0],
+			To:         vmtest.TestEthAddrs[0],
 			BlobFeeCap: uint256.NewInt(1),
 			BlobHashes: []common.Hash{{1}}, // This blob is expected to cause verification to fail
 			Value:      new(uint256.Int),
-		}), signer, testutils.TestKeys[0].ToECDSA())
+		}), signer, vmtest.TestKeys[0].ToECDSA())
 		require.NoError(err)
 		b.AddTx(tx)
 	}
@@ -2027,7 +2026,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.NoError(err)
 
 	// Create a VM with the genesis (will use header verification)
-	vm, _ := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		GenesisJSON: genesisJSONCancun,
 	})
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()

@@ -10,7 +10,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/predicate"
 
 	"github.com/ava-labs/libevm/common"
@@ -20,7 +20,7 @@ import (
 )
 
 func TestEVMSyncerVM(t *testing.T) {
-	for _, test := range testutils.SyncerVMTests {
+	for _, test := range vmtest.SyncerVMTests {
 		t.Run(test.Name, func(t *testing.T) {
 			genFn := func(i int, vm extension.InnerVM, gen *core.BlockGen) {
 				b, err := predicate.NewResults().Bytes()
@@ -29,8 +29,8 @@ func TestEVMSyncerVM(t *testing.T) {
 				}
 				gen.AppendExtra(b)
 
-				tx := types.NewTransaction(gen.TxNonce(testutils.TestEthAddrs[0]), testutils.TestEthAddrs[1], common.Big1, params.TxGas, testutils.InitialBaseFee, nil)
-				signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), testutils.TestKeys[0].ToECDSA())
+				tx := types.NewTransaction(gen.TxNonce(vmtest.TestEthAddrs[0]), vmtest.TestEthAddrs[1], common.Big1, params.TxGas, vmtest.InitialBaseFee, nil)
+				signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), vmtest.TestKeys[0].ToECDSA())
 				require.NoError(t, err)
 				gen.AddTx(signedTx)
 			}
@@ -39,7 +39,7 @@ func TestEVMSyncerVM(t *testing.T) {
 				return vm, vm.extensionConfig.ConsensusCallbacks
 			}
 
-			testSetup := &testutils.SyncTestSetup{
+			testSetup := &vmtest.SyncTestSetup{
 				NewVM:             newVMFn,
 				GenFn:             genFn,
 				ExtraSyncerVMTest: nil,

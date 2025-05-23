@@ -18,7 +18,9 @@ import (
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/set"
@@ -26,6 +28,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 )
+
+var _ gossip.Gossipable = (*Tx)(nil)
 
 const (
 	X2CRateUint64       uint64 = 1_000_000_000
@@ -112,6 +116,11 @@ func (in *EVMInput) Verify() error {
 		return errEmptyAssetID
 	}
 	return nil
+}
+
+type AtomicBlockContext interface {
+	AtomicTxs() []*Tx
+	snowman.Block
 }
 
 // Visitor allows executing custom logic against the underlying transaction types.
@@ -249,6 +258,10 @@ func (tx *Tx) BlockFeeContribution(fixedFee bool, avaxAssetID ids.ID, baseFee *b
 	// in C-Chain native 18 decimal places
 	blockFeeContribution := new(big.Int).Mul(new(big.Int).SetUint64(excessBurned), X2CRate.ToBig())
 	return blockFeeContribution, new(big.Int).SetUint64(gasUsed), nil
+}
+
+func (tx *Tx) GossipID() ids.ID {
+	return tx.ID()
 }
 
 // innerSortInputsAndSigners implements sort.Interface for EVMInput

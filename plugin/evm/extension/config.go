@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package extension
@@ -56,8 +56,8 @@ type ExtensibleVM interface {
 	// IsBootstrapped returns true if the VM is bootstrapped
 	IsBootstrapped() bool
 
-	// Validators returns the validators for the network
-	Validators() *p2p.Validators
+	// P2PValidators returns the validators for the network
+	P2PValidators() *p2p.Validators
 	// Ethereum returns the Ethereum client
 	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM

@@ -25,7 +25,7 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/libevm/core/types"
 )
 
@@ -84,7 +84,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
 	assert.NoError(err)
 
-	vm, tvm := setupDefaultTestVM(t, testutils.TestVMConfig{
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
 		GenesisJSON: genesisJSON,
 	})
 

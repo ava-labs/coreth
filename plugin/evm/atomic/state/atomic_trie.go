@@ -28,14 +28,14 @@ import (
 )
 
 const (
-	AtomicTrieKeyLength = wrappers.LongLen + common.HashLength
+	TrieKeyLength = wrappers.LongLen + common.HashLength
 
 	atomicTrieMemoryCap = 64 * units.MiB
 )
 
 var lastCommittedKey = []byte("atomicTrieLastCommittedBlock")
 
-// AtomicTrie implements the AtomicTrie interface
+// AtomicTrie is a trie that is used to store atomic operations.
 type AtomicTrie struct {
 	commitInterval      uint64                     // commit interval, same as commitHeightInterval by default
 	metadataDB          avalanchedatabase.Database // Underlying database containing the atomic trie metadata
@@ -150,7 +150,7 @@ func (a *AtomicTrie) UpdateTrie(trie *trie.Trie, height uint64, atomicOps map[id
 		}
 
 		// key is [height]+[blockchainID]
-		keyPacker := wrappers.Packer{Bytes: make([]byte, AtomicTrieKeyLength)}
+		keyPacker := wrappers.Packer{Bytes: make([]byte, TrieKeyLength)}
 		keyPacker.PackLong(height)
 		keyPacker.PackFixedBytes(blockchainID[:])
 		if err := trie.Update(keyPacker.Bytes, valueBytes); err != nil {
@@ -186,7 +186,7 @@ func (a *AtomicTrie) updateLastCommitted(root common.Hash, height uint64) error 
 	return nil
 }
 
-// Iterator returns an atomicTrieIterator that iterates the trie from the given
+// Iterator returns an [atomicTrieIterator] that iterates the trie from the given
 // atomic trie root, starting at the specified [cursor].
 func (a *AtomicTrie) Iterator(root common.Hash, cursor []byte) (*atomicTrieIterator, error) {
 	t, err := trie.New(trie.TrieID(root), a.trieDB)

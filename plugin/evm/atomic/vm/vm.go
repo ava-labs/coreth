@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package vm
@@ -54,10 +54,10 @@ import (
 )
 
 var (
-	_ secp256k1fx.VM                     = &VM{}
-	_ block.ChainVM                      = &VM{}
-	_ block.BuildBlockWithContextChainVM = &VM{}
-	_ block.StateSyncableVM              = &VM{}
+	_ secp256k1fx.VM                     = (*VM)(nil)
+	_ block.ChainVM                      = (*VM)(nil)
+	_ block.BuildBlockWithContextChainVM = (*VM)(nil)
+	_ block.StateSyncableVM              = (*VM)(nil)
 )
 
 const (
@@ -92,7 +92,7 @@ type VM struct {
 	atomicBackend *atomicstate.AtomicBackend
 
 	atomicTxGossipHandler p2p.Handler
-	atomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.GossipAtomicTx]
+	atomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
 	atomicTxPullGossiper  avalanchegossip.Gossiper
 
 	// [cancel] may be nil until [snow.NormalOp] starts
@@ -220,7 +220,7 @@ func (vm *VM) Initialize(
 	// Atomic backend is available now, we can initialize structs that depend on it
 	syncProvider.Initialize(vm.atomicBackend.AtomicTrie())
 	syncExtender.Initialize(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.Config().StateSyncRequestSize)
-	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.AtomicTrieKeyLength, networkCodec)
+	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, networkCodec)
 	vm.secpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
@@ -259,8 +259,8 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
-	atomicTxGossipMarshaller := atomic.GossipAtomicTxMarshaller{}
-	atomicTxGossipClient := vm.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.Validators()))
+	atomicTxGossipMarshaller := atomic.TxMarshaller{}
+	atomicTxGossipClient := vm.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.P2PValidators()))
 	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.MetricRegistry(), atomicTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
@@ -277,10 +277,10 @@ func (vm *VM) onNormalOperationsStarted() error {
 	}
 
 	if vm.atomicTxPushGossiper == nil {
-		vm.atomicTxPushGossiper, err = avalanchegossip.NewPushGossiper[*atomic.GossipAtomicTx](
-			atomicTxGossipMarshaller,
+		vm.atomicTxPushGossiper, err = avalanchegossip.NewPushGossiper[*atomic.Tx](
+			&atomicTxGossipMarshaller,
 			vm.mempool,
-			vm.Validators(),
+			vm.P2PValidators(),
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
 			pushGossipParams,
@@ -295,15 +295,15 @@ func (vm *VM) onNormalOperationsStarted() error {
 	}
 
 	if vm.atomicTxGossipHandler == nil {
-		vm.atomicTxGossipHandler = gossip.NewTxGossipHandler[*atomic.GossipAtomicTx](
+		vm.atomicTxGossipHandler = gossip.NewTxGossipHandler[*atomic.Tx](
 			vm.ctx.Log,
-			atomicTxGossipMarshaller,
+			&atomicTxGossipMarshaller,
 			vm.mempool,
 			atomicTxGossipMetrics,
 			config.TxGossipTargetMessageSize,
 			config.TxGossipThrottlingPeriod,
 			config.TxGossipThrottlingLimit,
-			vm.Validators(),
+			vm.P2PValidators(),
 		)
 	}
 
@@ -312,9 +312,9 @@ func (vm *VM) onNormalOperationsStarted() error {
 	}
 
 	if vm.atomicTxPullGossiper == nil {
-		atomicTxPullGossiper := avalanchegossip.NewPullGossiper[*atomic.GossipAtomicTx](
+		atomicTxPullGossiper := avalanchegossip.NewPullGossiper[*atomic.Tx](
 			vm.ctx.Log,
-			atomicTxGossipMarshaller,
+			&atomicTxGossipMarshaller,
 			vm.mempool,
 			atomicTxGossipClient,
 			atomicTxGossipMetrics,
@@ -324,7 +324,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		vm.atomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
 			Gossiper:   atomicTxPullGossiper,
 			NodeID:     vm.ctx.NodeID,
-			Validators: vm.Validators(),
+			Validators: vm.P2PValidators(),
 		}
 	}
 

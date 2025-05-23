@@ -27,10 +27,10 @@ import (
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
+	"github.com/ava-labs/coreth/network"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
@@ -93,12 +93,11 @@ import (
 )
 
 var (
-	_ block.ChainVM                      = &VM{}
-	_ block.BuildBlockWithContextChainVM = &VM{}
-	_ block.StateSyncableVM              = &VM{}
-	_ statesyncclient.EthBlockParser     = &VM{}
-	_ vmsync.BlockAcceptor               = &VM{}
-	_ extension.InnerVM                  = &VM{}
+	_ block.ChainVM                      = (*VM)(nil)
+	_ block.BuildBlockWithContextChainVM = (*VM)(nil)
+	_ block.StateSyncableVM              = (*VM)(nil)
+	_ statesyncclient.EthBlockParser     = (*VM)(nil)
+	_ vmsync.BlockAcceptor               = (*VM)(nil)
 )
 
 const (
@@ -116,9 +115,6 @@ const (
 	ethMetricsPrefix        = "eth"
 	sdkMetricsPrefix        = "sdk"
 	chainStateMetricsPrefix = "chain_state"
-
-	// gossip constants
-	maxValidatorSetStaleness = time.Minute
 )
 
 // Define the API endpoints for the VM
@@ -232,10 +228,7 @@ type VM struct {
 	// Continuous Profiler
 	profiler profiler.ContinuousProfiler
 
-	peer.Network
-	client peer.NetworkClient
-
-	p2pValidators *p2p.Validators
+	network.Network
 
 	// Metrics
 	sdkMetrics *prometheus.Registry
@@ -419,13 +412,10 @@ func (vm *VM) Initialize(
 
 	vm.chainConfig = g.Config
 
-	p2pNetwork, err := p2p.NewNetwork(vm.ctx.Log, appSender, vm.sdkMetrics, "p2p")
+	vm.Network, err = network.NewNetwork(vm.ctx, appSender, vm.extensionConfig.NetworkCodec, vm.config.MaxOutboundActiveRequests, vm.sdkMetrics)
 	if err != nil {
-		return fmt.Errorf("failed to initialize p2p network: %w", err)
+		return fmt.Errorf("failed to create network: %w", err)
 	}
-	vm.p2pValidators = p2p.NewValidators(p2pNetwork.Peers, vm.ctx.Log, vm.ctx.SubnetID, vm.ctx.ValidatorState, maxValidatorSetStaleness)
-	vm.Network = peer.NewNetwork(p2pNetwork, appSender, vm.extensionConfig.NetworkCodec, chainCtx.NodeID, vm.config.MaxOutboundActiveRequests)
-	vm.client = peer.NewNetworkClient(vm.Network)
 
 	// Initialize warp backend
 	offchainWarpMessages := make([][]byte, len(vm.config.WarpOffChainMessages))
@@ -637,7 +627,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		State: vm.State,
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
-				NetworkClient:    vm.client,
+				NetworkClient:    vm.Network,
 				Codec:            vm.extensionConfig.NetworkCodec,
 				Stats:            stats.NewClientSyncerStats(leafMetricsNames),
 				StateSyncNodeIDs: stateSyncIDs,
@@ -747,7 +737,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.p2pValidators))
+	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.P2PValidators()))
 	ethTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -776,7 +766,7 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxPushGossiper, err = avalanchegossip.NewPushGossiper[*GossipEthTx](
 			ethTxGossipMarshaller,
 			ethTxPool,
-			vm.p2pValidators,
+			vm.P2PValidators(),
 			ethTxGossipClient,
 			ethTxGossipMetrics,
 			pushGossipParams,
@@ -804,7 +794,7 @@ func (vm *VM) initBlockBuilding() error {
 			config.TxGossipTargetMessageSize,
 			config.TxGossipThrottlingPeriod,
 			config.TxGossipThrottlingLimit,
-			vm.p2pValidators,
+			vm.P2PValidators(),
 		)
 	}
 
@@ -825,7 +815,7 @@ func (vm *VM) initBlockBuilding() error {
 		vm.ethTxPullGossiper = avalanchegossip.ValidatorGossiper{
 			Gossiper:   ethTxPullGossiper,
 			NodeID:     vm.ctx.NodeID,
-			Validators: vm.p2pValidators,
+			Validators: vm.P2PValidators(),
 		}
 	}
 
@@ -840,11 +830,12 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
-	vm.shutdownWg.Add(2)
+	vm.shutdownWg.Add(1)
 	go func() {
 		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
+	vm.shutdownWg.Add(1)
 	go func() {
 		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
@@ -1046,7 +1037,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	}
 
 	if vm.config.WarpAPIEnabled {
-		warpAPI := warp.NewAPI(vm.ctx, vm.extensionConfig.NetworkCodec, vm.warpBackend, vm.client, vm.requirePrimaryNetworkSigners)
+		warpAPI := warp.NewAPI(vm.ctx, vm.extensionConfig.NetworkCodec, vm.warpBackend, vm.Network, vm.requirePrimaryNetworkSigners)
 		if err := handler.RegisterName("warp", warpAPI); err != nil {
 			return nil, err
 		}

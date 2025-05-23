@@ -20,7 +20,7 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 )
 
 // show that a txID discovered from gossip is requested to the same node only if
@@ -29,7 +29,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
 	vm := newAtomicTestVM()
-	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{})
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{})
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -59,11 +59,8 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	tx, conflictingTx := importTxs[0], importTxs[1]
 
 	// gossip tx and check it is accepted and gossiped
-	msg := atomic.GossipAtomicTx{
-		Tx: tx,
-	}
-	marshaller := atomic.GossipAtomicTxMarshaller{}
-	txBytes, err := marshaller.MarshalGossip(&msg)
+	marshaller := atomic.TxMarshaller{}
+	txBytes, err := marshaller.MarshalGossip(tx)
 	assert.NoError(err)
 	vm.ctx.Lock.Unlock()
 
@@ -94,11 +91,8 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txGossipedLock.Unlock()
 
 	// show that conflicting tx is not added to mempool
-	msg = atomic.GossipAtomicTx{
-		Tx: conflictingTx,
-	}
-	marshaller = atomic.GossipAtomicTxMarshaller{}
-	txBytes, err = marshaller.MarshalGossip(&msg)
+	marshaller = atomic.TxMarshaller{}
+	txBytes, err = marshaller.MarshalGossip(conflictingTx)
 	assert.NoError(err)
 
 	vm.ctx.Lock.Unlock()
@@ -121,7 +115,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
 	vm := newAtomicTestVM()
-	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{})
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{})
 	defer func() {
 		assert.NoError(vm.Shutdown(context.Background()))
 	}()
@@ -160,11 +154,8 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// Gossip the transaction to the VM and ensure that it is not added to the mempool
 	// and is not re-gossipped.
 	nodeID := ids.GenerateTestNodeID()
-	msg := atomic.GossipAtomicTx{
-		Tx: tx,
-	}
-	marshaller := atomic.GossipAtomicTxMarshaller{}
-	txBytes, err := marshaller.MarshalGossip(&msg)
+	marshaller := atomic.TxMarshaller{}
+	txBytes, err := marshaller.MarshalGossip(tx)
 	assert.NoError(err)
 
 	vm.ctx.Lock.Unlock()
@@ -188,7 +179,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// (i.e., txs received via p2p are not included in push gossip)
 	// This test adds it directly to the mempool + gossiper to simulate that.
 	vm.mempool.AddRemoteTx(conflictingTx)
-	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: conflictingTx})
+	vm.atomicTxPushGossiper.Add(conflictingTx)
 	time.Sleep(500 * time.Millisecond)
 
 	vm.ctx.Lock.Lock()

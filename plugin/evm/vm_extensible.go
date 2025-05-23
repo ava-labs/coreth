@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -18,6 +18,8 @@ import (
 
 	"github.com/ava-labs/libevm/ethdb"
 )
+
+var _ extension.InnerVM = (*VM)(nil)
 
 var (
 	errVMAlreadyInitialized      = errors.New("vm already initialized")
@@ -75,7 +77,7 @@ func (vm *VM) MetricRegistry() *prometheus.Registry {
 }
 
 func (vm *VM) Validators() *p2p.Validators {
-	return vm.p2pValidators
+	return vm.P2PValidators()
 }
 
 func (vm *VM) VersionDB() *versiondb.Database {

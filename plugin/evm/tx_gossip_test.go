@@ -31,8 +31,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ava-labs/coreth/plugin/evm/config"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/types"
 )
@@ -47,7 +47,7 @@ func TestEthTxGossip(t *testing.T) {
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
 	address := pk.EthAddress()
-	genesis := testutils.NewPrefundedGenesis(100_000_000_000_000_000, address)
+	genesis := vmtest.NewPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
 
@@ -178,7 +178,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
 	address := pk.EthAddress()
-	genesis := testutils.NewPrefundedGenesis(100_000_000_000_000_000, address)
+	genesis := vmtest.NewPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
 
@@ -235,7 +235,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
 	address := pk.EthAddress()
-	genesis := testutils.NewPrefundedGenesis(100_000_000_000_000_000, address)
+	genesis := vmtest.NewPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
 

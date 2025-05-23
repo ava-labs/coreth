@@ -15,7 +15,7 @@ import (
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -100,7 +100,7 @@ type atomicTxTest struct {
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
 	vm := newAtomicTestVM()
-	tvm := testutils.SetupTestVM(t, vm, testutils.TestVMConfig{
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		IsSyncing: test.bootstrapping,
 		Fork:      &test.fork,
 	})
@@ -112,7 +112,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
 	switch {
 	case rules.IsApricotPhase3:
-		baseFee = testutils.InitialBaseFee
+		baseFee = vmtest.InitialBaseFee
 	}
 
 	lastAcceptedBlock := vm.LastAcceptedVMBlock()

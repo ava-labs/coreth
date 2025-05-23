@@ -1,4 +1,4 @@
-// (c) 2021-2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 package sync
 
@@ -7,6 +7,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -16,10 +17,10 @@ import (
 var _ sync.SummaryProvider = (*AtomicSummaryProvider)(nil)
 
 type AtomicSummaryProvider struct {
-	atomicTrie AtomicTrie
+	atomicTrie *state.AtomicTrie
 }
 
-func (a *AtomicSummaryProvider) Initialize(atomicTrie AtomicTrie) {
+func (a *AtomicSummaryProvider) Initialize(atomicTrie *state.AtomicTrie) {
 	a.atomicTrie = atomicTrie
 }
 

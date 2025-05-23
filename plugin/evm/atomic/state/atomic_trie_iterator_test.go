@@ -10,11 +10,12 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 )
 
 func TestIteratorCanIterate(t *testing.T) {
@@ -76,7 +77,6 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	atomicTrie := atomicBackend.AtomicTrie()
 
 	lastCommittedHash, lastCommittedHeight := atomicTrie.LastCommitted()
-	require.NoError(err)
 	require.NotEqual(common.Hash{}, lastCommittedHash)
 	require.EqualValues(1000, lastCommittedHeight)
 
@@ -86,12 +86,11 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	// handles an error when it runs into an unexpected key-value pair in the trie.
 	atomicTrieSnapshot, err := atomicTrie.OpenTrie(lastCommittedHash)
 	require.NoError(err)
-	require.NoError(atomicTrieSnapshot.Update(avalancheutils.RandomBytes(50), avalancheutils.RandomBytes(50)))
+	require.NoError(atomicTrieSnapshot.Update(utils.RandomBytes(50), utils.RandomBytes(50)))
 
 	nextRoot, nodes, err := atomicTrieSnapshot.Commit(false)
 	require.NoError(err)
-	err = atomicTrie.InsertTrie(nodes, nextRoot)
-	require.NoError(err)
+	require.NoError(atomicTrie.InsertTrie(nodes, nextRoot))
 	isCommit, err := atomicTrie.AcceptTrie(lastCommittedHeight+commitInterval, nextRoot)
 	require.NoError(err)
 	require.True(isCommit)

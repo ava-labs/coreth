@@ -19,9 +19,11 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
-const testCodecVersion = 0
-
-var TestTxCodec codec.Manager
+// TODO: Remove this and use actual codec and transactions (export, import)
+var (
+	_           atomic.UnsignedAtomicTx = (*TestUnsignedTx)(nil)
+	TestTxCodec codec.Manager
+)
 
 func init() {
 	TestTxCodec = codec.NewDefaultManager()
@@ -30,7 +32,7 @@ func init() {
 	errs := wrappers.Errs{}
 	errs.Add(
 		c.RegisterType(&TestUnsignedTx{}),
-		TestTxCodec.RegisterCodec(testCodecVersion, c),
+		TestTxCodec.RegisterCodec(0, c),
 	)
 
 	if errs.Errored() {
@@ -51,8 +53,6 @@ type TestUnsignedTx struct {
 	VisitV                      error
 	EVMStateTransferV           error
 }
-
-var _ atomic.UnsignedAtomicTx = &TestUnsignedTx{}
 
 // GasUsed implements the UnsignedAtomicTx interface
 func (t *TestUnsignedTx) GasUsed(fixedFee bool) (uint64, error) { return t.GasUsedV, nil }

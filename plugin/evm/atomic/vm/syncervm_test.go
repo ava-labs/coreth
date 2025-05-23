@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package vm
@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/predicate"
 
 	"github.com/ava-labs/libevm/common"
@@ -26,7 +26,7 @@ import (
 
 func TestAtomicSyncerVM(t *testing.T) {
 	importAmount := 2000000 * units.Avax // 2M avax
-	for _, test := range testutils.SyncerVMTests {
+	for _, test := range vmtest.SyncerVMTests {
 		includedAtomicTxs := make([]*atomic.Tx, 0)
 
 		t.Run(test.Name, func(t *testing.T) {
@@ -41,7 +41,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 				switch i {
 				case 0:
 					// spend the UTXOs from shared memory
-					importTx, err := atomicVM.newImportTx(atomicVM.ctx.XChainID, testutils.TestEthAddrs[0], testutils.InitialBaseFee, testutils.TestKeys[0:1])
+					importTx, err := atomicVM.newImportTx(atomicVM.ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
 					require.NoError(t, err)
 					require.NoError(t, atomicVM.mempool.AddLocalTx(importTx))
 					includedAtomicTxs = append(includedAtomicTxs, importTx)
@@ -58,16 +58,16 @@ func TestAtomicSyncerVM(t *testing.T) {
 						atomicVM.ctx.AVAXAssetID,
 						importAmount/2,
 						atomicVM.ctx.XChainID,
-						testutils.TestShortIDAddrs[0],
-						testutils.InitialBaseFee,
-						testutils.TestKeys[0:1],
+						vmtest.TestShortIDAddrs[0],
+						vmtest.InitialBaseFee,
+						vmtest.TestKeys[0:1],
 					)
 					require.NoError(t, err)
 					require.NoError(t, atomicVM.mempool.AddLocalTx(exportTx))
 					includedAtomicTxs = append(includedAtomicTxs, exportTx)
 				default: // Generate simple transfer transactions.
-					pk := testutils.TestKeys[0].ToECDSA()
-					tx := types.NewTransaction(gen.TxNonce(testutils.TestEthAddrs[0]), testutils.TestEthAddrs[1], common.Big1, params.TxGas, testutils.InitialBaseFee, nil)
+					pk := vmtest.TestKeys[0].ToECDSA()
+					tx := types.NewTransaction(gen.TxNonce(vmtest.TestEthAddrs[0]), vmtest.TestEthAddrs[1], common.Big1, params.TxGas, vmtest.InitialBaseFee, nil)
 					signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), pk)
 					require.NoError(t, err)
 					gen.AddTx(signedTx)
@@ -78,12 +78,12 @@ func TestAtomicSyncerVM(t *testing.T) {
 				return vm, vm.createConsensusCallbacks()
 			}
 
-			afterInit := func(t *testing.T, params testutils.SyncTestParams, vmSetup testutils.SyncVMSetup, isServer bool) {
+			afterInit := func(t *testing.T, params vmtest.SyncTestParams, vmSetup vmtest.SyncVMSetup, isServer bool) {
 				atomicVM, ok := vmSetup.VM.(*VM)
 				require.True(t, ok)
 
 				alloc := map[ids.ShortID]uint64{
-					testutils.TestShortIDAddrs[0]: importAmount,
+					vmtest.TestShortIDAddrs[0]: importAmount,
 				}
 
 				for addr, avaxAmount := range alloc {
@@ -105,11 +105,11 @@ func TestAtomicSyncerVM(t *testing.T) {
 				}
 			}
 
-			testSetup := &testutils.SyncTestSetup{
+			testSetup := &vmtest.SyncTestSetup{
 				NewVM:     newVMFn,
 				GenFn:     genFn,
 				AfterInit: afterInit,
-				ExtraSyncerVMTest: func(t *testing.T, syncerVMSetup testutils.SyncVMSetup) {
+				ExtraSyncerVMTest: func(t *testing.T, syncerVMSetup vmtest.SyncVMSetup) {
 					// check atomic memory was synced properly
 					syncerVM := syncerVMSetup.VM
 					atomicVM, ok := syncerVM.(*VM)

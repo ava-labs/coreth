@@ -482,36 +482,28 @@ func TestApplyToSharedMemory(t *testing.T) {
 			assert.NoError(t, db.Commit())
 			assert.NoError(t, backend.ApplyToSharedMemory(test.lastAcceptedHeight))
 
-			// assert ops were applied as expected
-			for height, ops := range operationsMap {
-				if test.expectOpsApplied(height) {
-					sharedMemories.AssertOpsApplied(t, ops)
-				} else {
-					sharedMemories.AssertOpsNotApplied(t, ops)
+			testOps := func() {
+				// assert ops were applied as expected
+				for height, ops := range operationsMap {
+					if test.expectOpsApplied(height) {
+						sharedMemories.AssertOpsApplied(t, ops)
+					} else {
+						sharedMemories.AssertOpsNotApplied(t, ops)
+					}
 				}
+
+				hasMarker, err := atomicTrie.metadataDB.Has(appliedSharedMemoryCursorKey)
+				assert.NoError(t, err)
+				assert.False(t, hasMarker)
 			}
 
 			// marker should be removed after ApplyToSharedMemory is complete
-			hasMarker, err := atomicTrie.metadataDB.Has(appliedSharedMemoryCursorKey)
-			assert.NoError(t, err)
-			assert.False(t, hasMarker)
+			testOps()
 			// reinitialize the atomic trie
-			backend, err = NewAtomicBackend(sharedMemories.ThisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
+			_, err = NewAtomicBackend(sharedMemories.ThisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
 			assert.NoError(t, err)
-			// no further changes should have occurred in shared memory
-			// assert they are as they were prior to reinitializing
-			for height, ops := range operationsMap {
-				if test.expectOpsApplied(height) {
-					sharedMemories.AssertOpsApplied(t, ops)
-				} else {
-					sharedMemories.AssertOpsNotApplied(t, ops)
-				}
-			}
-
-			// marker should be removed after ApplyToSharedMemory is complete
-			hasMarker, err = atomicTrie.metadataDB.Has(appliedSharedMemoryCursorKey)
-			assert.NoError(t, err)
-			assert.False(t, hasMarker)
+			// assert ops were applied as expected
+			testOps()
 		})
 	}
 }
@@ -644,13 +636,11 @@ func TestAtomicTrie_AcceptTrie(t *testing.T) {
 				encoder.WriteBytes(make([]byte, 32)) // value
 				encoder.ListEnd(offset)
 				testBlob := encoder.ToBytes()
-				err := encoder.Flush()
-				require.NoError(t, err)
+				require.NoError(t, encoder.Flush())
 
 				nodeSet := trienode.NewNodeSet(testCase.lastAcceptedRoot)
 				nodeSet.AddNode([]byte("any"), trienode.New(testCase.lastAcceptedRoot, testBlob)) // dirty node
-				err = atomicTrie.InsertTrie(nodeSet, testCase.lastAcceptedRoot)
-				require.NoError(t, err)
+				require.NoError(t, atomicTrie.InsertTrie(nodeSet, testCase.lastAcceptedRoot))
 
 				_, storageSize, _ := atomicTrie.trieDB.Size()
 				require.NotZero(t, storageSize, "there should be a dirty node taking up storage space")
@@ -725,7 +715,7 @@ func BenchmarkAtomicTrieIterate(b *testing.B) {
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
-	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 5000)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), map[uint64]ids.ID{}, repo, lastAcceptedHeight, common.Hash{}, 5000)
 	assert.NoError(b, err)
 	atomicTrie := atomicBackend.AtomicTrie()
 
@@ -831,16 +821,14 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
 	t.Helper()
 
-	// Start the iterator at [from]
+	// Start the iterator at `from`
 	fromBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(fromBytes, from)
 	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err, "creating iterator")
 
 	// Generate map of the marshalled atomic operations on the interval [from, to]
-	// based on [operationsMap].
+	// based on `operationsMap`.
 	marshalledOperationsMap := make(map[uint64]map[ids.ID][]byte)
 	for height, blockRequests := range operationsMap {
 		if height < from || height > to {
@@ -848,9 +836,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 		}
 		for blockchainID, atomicRequests := range blockRequests {
 			b, err := codec.Marshal(0, atomicRequests)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err, "marshaling atomic requests")
 			if requestsMap, exists := marshalledOperationsMap[height]; exists {
 				requestsMap[blockchainID] = b
 			} else {
@@ -875,9 +861,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 
 		blockchainID := iter.BlockchainID()
 		b, err := codec.Marshal(0, iter.AtomicOps())
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err, "marshaling atomic operations")
 		if requestsMap, exists := iteratorMarshalledOperationsMap[height]; exists {
 			requestsMap[blockchainID] = b
 		} else {
@@ -886,9 +870,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 			iteratorMarshalledOperationsMap[height] = requestsMap
 		}
 	}
-	if err := iter.Error(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, iter.Error(), "iterator error")
 
 	assert.Equal(t, marshalledOperationsMap, iteratorMarshalledOperationsMap)
 }

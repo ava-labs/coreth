@@ -1,14 +1,20 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package atomictest
 
 import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+var removeValue = []byte{0x1}
 
 type SharedMemories struct {
 	ThisChain   atomic.SharedMemory
@@ -22,8 +28,7 @@ func (s *SharedMemories) AddItemsToBeRemovedToPeerChain(ops map[ids.ID]*atomic.R
 		puts := make(map[ids.ID]*atomic.Requests)
 		puts[s.thisChainID] = &atomic.Requests{}
 		for _, key := range reqs.RemoveRequests {
-			val := []byte{0x1}
-			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: val})
+			puts[s.thisChainID].PutRequests = append(puts[s.thisChainID].PutRequests, &atomic.Element{Key: key, Value: removeValue})
 		}
 		if err := s.PeerChain.Apply(puts); err != nil {
 			return err
@@ -38,16 +43,14 @@ func (s *SharedMemories) AssertOpsApplied(t *testing.T, ops map[ids.ID]*atomic.R
 		// should be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			val, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			if err != nil {
-				t.Fatalf("error finding puts in peerChainMemory: %s", err)
-			}
-			assert.Equal(t, elem.Value, val[0])
+			require.NoError(t, err)
+			require.Equal(t, [][]byte{elem.Value}, val)
 		}
 
 		// should not be able to get remove requests
 		for _, key := range reqs.RemoveRequests {
 			_, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
-			assert.EqualError(t, err, "not found")
+			require.ErrorIs(t, err, database.ErrNotFound)
 		}
 	}
 }
@@ -58,14 +61,14 @@ func (s *SharedMemories) AssertOpsNotApplied(t *testing.T, ops map[ids.ID]*atomi
 		// should not be able to get put requests
 		for _, elem := range reqs.PutRequests {
 			_, err := s.PeerChain.Get(s.thisChainID, [][]byte{elem.Key})
-			assert.EqualError(t, err, "not found")
+			require.ErrorIs(t, err, database.ErrNotFound)
 		}
 
 		// should be able to get remove requests (these were previously added as puts on peerChain)
 		for _, key := range reqs.RemoveRequests {
 			val, err := s.ThisChain.Get(s.peerChainID, [][]byte{key})
-			assert.NoError(t, err)
-			assert.Equal(t, []byte{0x1}, val[0])
+			require.NoError(t, err)
+			require.Equal(t, [][]byte{removeValue}, val)
 		}
 	}
 }
