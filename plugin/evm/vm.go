@@ -888,14 +888,14 @@ func (vm *VM) onFinalizeAndAssemble(
 	return nil, nil, 0, nil
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, uint64, error) {
 	var (
 		header = block.Header()
 		rules  = vm.rules(header.Number, header.Time)
 	)
 	txs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(block), rules.IsApricotPhase5, atomic.Codec)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
@@ -905,7 +905,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
 			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules); err != nil {
-				return nil, nil, err
+				return nil, 0, err
 			}
 		}
 		// Update the atomic backend with [txs] from this block.
@@ -914,13 +914,13 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		// from any bonus blocks.
 		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
 		if err != nil {
-			return nil, nil, err
+			return nil, 0, err
 		}
 	}
 
 	// If there are no transactions, we can return early.
 	if len(txs) == 0 {
-		return nil, nil, nil
+		return nil, 0, nil
 	}
 
 	var (
@@ -929,13 +929,13 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	)
 	for _, tx := range txs {
 		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
-			return nil, nil, err
+			return nil, 0, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
 		if rules.IsApricotPhase4 {
 			contribution, gasUsed, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
 			if err != nil {
-				return nil, nil, err
+				return nil, 0, err
 			}
 
 			batchContribution.Add(batchContribution, contribution)
@@ -948,14 +948,14 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	if rules.IsApricotPhase5 {
 		remainingCapacity, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 		if err != nil {
-			return nil, nil, err
+			return nil, 0, err
 		}
 
 		if batchGasUsed > remainingCapacity {
-			return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), remainingCapacity)
+			return nil, 0, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), remainingCapacity)
 		}
 	}
-	return batchContribution, new(big.Int).SetUint64(batchGasUsed), nil
+	return batchContribution, batchGasUsed, nil
 }
 
 func (vm *VM) SetState(_ context.Context, state snow.State) error {

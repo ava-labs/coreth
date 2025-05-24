@@ -61,7 +61,7 @@ type (
 		statedb *state.StateDB,
 	) (
 		blockFeeContribution *big.Int,
-		extDataGasUsed *big.Int,
+		extDataGasUsed uint64,
 		err error,
 	)
 
@@ -367,8 +367,9 @@ func (eng *DummyEngine) verifyBlockFee(
 func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types.Block, parent *types.Header, state *state.StateDB, receipts []*types.Receipt) error {
 	// Perform extra state change while finalizing the block
 	var (
-		contribution, extDataGasUsed *big.Int
-		err                          error
+		contribution   *big.Int
+		extDataGasUsed uint64
+		err            error
 	)
 	if eng.cb.OnExtraStateChange != nil {
 		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state)
@@ -394,10 +395,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		//
 		// NOTE: This is a duplicate check of what is already performed in
 		// blockValidator but is done here for symmetry with FinalizeAndAssemble.
-		if extDataGasUsed == nil {
-			extDataGasUsed = new(big.Int).Set(common.Big0)
-		}
-		if blockExtDataGasUsed := customtypes.BlockExtDataGasUsed(block); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
+		if blockExtDataGasUsed := customtypes.BlockExtDataGasUsed(block); !utils.BigEqualUint64(blockExtDataGasUsed, extDataGasUsed) {
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
 		}
 
