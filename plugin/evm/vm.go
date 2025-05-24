@@ -955,12 +955,9 @@ func (vm *VM) onFinalizeAndAssemble(
 
 func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
-		batchContribution *big.Int = big.NewInt(0)
-		batchGasUsed      *big.Int = big.NewInt(0)
-		header                     = block.Header()
-		rules                      = vm.rules(header.Number, header.Time)
+		header = block.Header()
+		rules  = vm.rules(header.Number, header.Time)
 	)
-
 	txs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(block), rules.IsApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, nil, err
@@ -991,6 +988,10 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		return nil, nil, nil
 	}
 
+	var (
+		batchContribution = big.NewInt(0)
+		batchGasUsed      = big.NewInt(0)
+	)
 	for _, tx := range txs {
 		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
 			return nil, nil, err
