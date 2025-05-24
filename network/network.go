@@ -507,7 +507,7 @@ func (n *network) nextRequestID() uint32 {
 
 // IsNetworkRequest checks if the given requestID is a request for this network handler (even-numbered requestIDs)
 // SDK requests are odd-numbered requestIDs
-// (see invariant: https://github.com/ava-labs/avalanchego/blob/master/network/p2p/router.go#L83)
+// (see invariant: https://github.com/ava-labs/avalanchego/blob/v1.13.0/network/p2p/router.go#L83)
 func IsNetworkRequest(requestID uint32) bool {
 	return requestID%2 == 0
 }
