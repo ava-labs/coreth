@@ -343,14 +343,8 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 	// bootstrapping only verifies blocks that have been canonically accepted by
 	// the network, these checks would be guaranteed to pass on a synced node.
 	if b.vm.bootstrapped.Get() {
-		// Verify that the UTXOs named in import txs are present in shared
-		// memory.
-		//
-		// This does not fully verify that this block can spend these UTXOs.
-		// However, it guarantees that any block that fails the later checks was
-		// built by an incorrect block proposer. This ensures that we only mark
-		// blocks as BAD BLOCKs if they were incorrectly generated.
-		if err := b.verifyUTXOsPresent(); err != nil {
+		// Verify that the atomic txs in this block are valid to be executed.
+		if err := b.verifyAtomicTxs(); err != nil {
 			return err
 		}
 
@@ -417,26 +411,27 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 	return nil
 }
 
-// verifyUTXOsPresent verifies all atomic UTXOs consumed by the block are
-// present in shared memory.
-func (b *Block) verifyUTXOsPresent() error {
-	blockHash := common.Hash(b.ID())
-	if b.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
-		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
+// verifyAtomicTxs verifies that the atomic txs consumed by the block are valid.
+func (b *Block) verifyAtomicTxs() error {
+	hash := b.ethBlock.Hash()
+	if b.vm.atomicBackend.IsBonus(b.Height(), hash) {
+		log.Info("skipping atomic tx verification on bonus block",
+			"block", hash,
+		)
 		return nil
 	}
 
-	for _, atomicTx := range b.atomicTxs {
-		utx := atomicTx.UnsignedAtomicTx
-		chainID, requests, err := utx.AtomicOps()
-		if err != nil {
-			return err
-		}
-		if _, err := b.vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
-			return fmt.Errorf("%w: %s", errMissingUTXOs, err)
-		}
-	}
-	return nil
+	// Verify [txs] do not conflict with themselves or ancestor blocks.
+	var (
+		parentHash = b.ethBlock.ParentHash()
+		baseFee    = b.ethBlock.BaseFee()
+		number     = b.ethBlock.Number()
+		time       = b.ethBlock.Time()
+		rules      = b.vm.chainConfig.Rules(number, params.IsMergeTODO, time)
+		rulesExtra = params.GetRulesExtra(rules)
+	)
+	// TODO: Pass rulesExtra as a pointer
+	return b.vm.verifyTxs(b.atomicTxs, parentHash, baseFee, number.Uint64(), *rulesExtra)
 }
 
 // Bytes implements the snowman.Block interface

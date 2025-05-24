@@ -901,14 +901,6 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
 	if vm.atomicBackend != nil {
-		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
-			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
-		} else {
-			// Verify [txs] do not conflict with themselves or ancestor blocks.
-			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules); err != nil {
-				return nil, err
-			}
-		}
 		// Update the atomic backend with [txs] from this block.
 		//
 		// Note: The atomic trie canonically contains the duplicate operations
@@ -1570,35 +1562,37 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		return errRejectedParent
 	}
 
-	ancestorID := ids.ID(parentHash)
+	parentID := ids.ID(parentHash)
 	// If the ancestor is unknown, then the parent failed verification when
 	// it was called.
 	// If the ancestor is rejected, then this block shouldn't be inserted
 	// into the canonical chain because the parent will be missing.
-	ancestorInf, err := vm.GetBlockInternal(context.TODO(), ancestorID)
+	parentInf, err := vm.GetBlockInternal(context.TODO(), parentID)
 	if err != nil {
 		return errRejectedParent
 	}
-	ancestor, ok := ancestorInf.(*Block)
+	parent, ok := parentInf.(*Block)
 	if !ok {
-		return fmt.Errorf("expected parent block %s, to be *Block but is %T", ancestor.ID(), ancestorInf)
+		return fmt.Errorf("expected parent block %s, to be *Block but is %T", parent.ID(), parentInf)
 	}
 
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
-	inputs := set.Set[ids.ID]{}
-	atomicBackend := &atomic.Backend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.fx,
-		Rules:        rules,
-		Bootstrapped: vm.bootstrapped.Get(),
-		BlockFetcher: vm,
-		SecpCache:    vm.secpCache,
-	}
+	var (
+		atomicBackend = &atomic.Backend{
+			Ctx:          vm.ctx,
+			Fx:           &vm.fx,
+			Rules:        rules,
+			Bootstrapped: vm.bootstrapped.Get(),
+			BlockFetcher: vm,
+			SecpCache:    vm.secpCache,
+		}
+		inputs set.Set[ids.ID]
+	)
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.SemanticVerify(atomicBackend, atomicTx, ancestor, baseFee); err != nil {
-			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
+		if err := utx.SemanticVerify(atomicBackend, atomicTx, parent, baseFee); err != nil {
+			return fmt.Errorf("invalid block due to failed semantic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
