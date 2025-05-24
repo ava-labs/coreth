@@ -788,7 +788,7 @@ func (vm *VM) onFinalizeAndAssemble(
 	parent *types.Header,
 	state *state.StateDB,
 	txs []*types.Transaction,
-) ([]byte, *big.Int, *big.Int, error) {
+) ([]byte, *big.Int, uint64, error) {
 	var (
 		batchAtomicTxs    []*atomic.Tx
 		batchAtomicUTXOs  set.Set[ids.ID]
@@ -800,7 +800,7 @@ func (vm *VM) onFinalizeAndAssemble(
 
 	remainingCapacity, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	for {
@@ -821,7 +821,7 @@ func (vm *VM) onFinalizeAndAssemble(
 		// ApricotPhase5.
 		txContribution, txGasUsed, err := tx.BlockFeeContribution(true, vm.ctx.AVAXAssetID, header.BaseFee)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, 0, err
 		}
 		if txGasUsed > remainingCapacity {
 			// Send [tx] back to the mempool's tx heap.
@@ -871,21 +871,21 @@ func (vm *VM) onFinalizeAndAssemble(
 			// discard the entire set of current transactions.
 			log.Debug("discarding txs due to error marshaling atomic transactions", "err", err)
 			vm.mempool.DiscardCurrentTxs()
-			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
+			return nil, nil, 0, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 		}
-		return atomicTxBytes, batchContribution, new(big.Int).SetUint64(batchGasUsed), nil
+		return atomicTxBytes, batchContribution, batchGasUsed, nil
 	}
 
 	// If there are no regular transactions and there were also no atomic transactions to be included,
 	// then the block is empty and should be considered invalid.
 	if len(txs) == 0 {
 		// this could happen due to the async logic of geth tx pool
-		return nil, nil, nil, errEmptyBlock
+		return nil, nil, 0, errEmptyBlock
 	}
 
 	// If there are no atomic transactions, but there is a non-zero number of regular transactions, then
 	// we return a nil slice with no contribution from the atomic transactions and a nil error.
-	return nil, nil, nil, nil
+	return nil, nil, 0, nil
 }
 
 func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {

@@ -51,7 +51,7 @@ type (
 	) (
 		extraData []byte,
 		blockFeeContribution *big.Int,
-		extDataGasUsed *big.Int,
+		extDataGasUsed uint64,
 		err error,
 	)
 
@@ -420,9 +420,10 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	uncles []*types.Header, receipts []*types.Receipt,
 ) (*types.Block, error) {
 	var (
-		contribution, extDataGasUsed *big.Int
-		extraData                    []byte
-		err                          error
+		contribution   *big.Int
+		extDataGasUsed uint64
+		extraData      []byte
+		err            error
 	)
 	if eng.cb.OnFinalizeAndAssemble != nil {
 		extraData, contribution, extDataGasUsed, err = eng.cb.OnFinalizeAndAssemble(header, parent, state, txs)
@@ -440,10 +441,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		header.Time,
 	)
 	if configExtra.IsApricotPhase4(header.Time) {
-		headerExtra.ExtDataGasUsed = extDataGasUsed
-		if headerExtra.ExtDataGasUsed == nil {
-			headerExtra.ExtDataGasUsed = new(big.Int)
-		}
+		headerExtra.ExtDataGasUsed = new(big.Int).SetUint64(extDataGasUsed)
 
 		// Verify that this block covers the block fee.
 		if err := eng.verifyBlockFee(

@@ -130,8 +130,8 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 	}
 
 	engine := dummy.NewFakerWithCallbacks(dummy.ConsensusCallbacks{
-		OnFinalizeAndAssemble: func(*types.Header, *types.Header, *state.StateDB, []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-			return nil, common.Big0, extDataGasUsage, nil
+		OnFinalizeAndAssemble: func(*types.Header, *types.Header, *state.StateDB, []*types.Transaction) ([]byte, *big.Int, uint64, error) {
+			return nil, common.Big0, extDataGasUsage.Uint64(), nil
 		},
 		OnExtraStateChange: func(*types.Block, *types.Header, *state.StateDB) (*big.Int, *big.Int, error) {
 			return common.Big0, extDataGasUsage, nil
