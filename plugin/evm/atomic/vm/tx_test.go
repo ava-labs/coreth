@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -63,7 +64,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func(t *testing.T) atomic.UnsignedAtomicTx
-	rules       extras.Rules
+	rules       *extras.Rules
 	expectedErr string
 }
 
@@ -71,7 +72,7 @@ type atomicTxVerifyTest struct {
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
 	atomicTx := test.generate(t)
-	err := atomicTx.Verify(test.ctx, test.rules)
+	err := atomicTx.Verify(test.ctx, *test.rules)
 	if len(test.expectedErr) == 0 {
 		require.NoError(err)
 	} else {
@@ -98,36 +99,38 @@ type atomicTxTest struct {
 }
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
-	tvm := newVM(t, testVMConfig{
-		isSyncing: test.bootstrapping,
-		fork:      &test.fork,
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		IsSyncing: test.bootstrapping,
+		Fork:      &test.fork,
 	})
-	rules := tvm.vm.currentRules()
+	rules := vm.currentRules()
 
-	tx := test.setup(t, tvm.vm, tvm.atomicMemory)
+	tx := test.setup(t, vm, tvm.AtomicMemory)
 
 	var baseFee *big.Int
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
 	switch {
 	case rules.IsApricotPhase3:
-		baseFee = initialBaseFee
+		baseFee = vmtest.InitialBaseFee
 	}
 
-	lastAcceptedBlock := tvm.vm.LastAcceptedBlockInternal().(*Block)
-	backend := &atomic.VerifierBackend{
-		Ctx:          tvm.vm.ctx,
-		Fx:           &tvm.vm.fx,
-		Rules:        rules,
-		Bootstrapped: tvm.vm.bootstrapped.Get(),
-		BlockFetcher: tvm.vm,
-		SecpCache:    tvm.vm.secpCache,
+	lastAcceptedBlock := vm.LastAcceptedVMBlock()
+	backend := &verifierBackend{
+		ctx:          vm.ctx,
+		fx:           &vm.fx,
+		rules:        rules,
+		bootstrapped: vm.IsBootstrapped(),
+		blockFetcher: vm,
+		secpCache:    vm.secpCache,
 	}
-	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
-		Backend: backend,
-		Tx:      tx,
-		Parent:  lastAcceptedBlock,
-		BaseFee: baseFee,
-	}); len(test.semanticVerifyErr) == 0 && err != nil {
+	if err := tx.UnsignedAtomicTx.Visit(
+		&semanticVerifier{
+			backend: backend,
+			tx:      tx,
+			parent:  lastAcceptedBlock,
+			baseFee: baseFee,
+		}); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
 	} else if len(test.semanticVerifyErr) != 0 {
 		if err == nil {
@@ -141,11 +144,11 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+	sdb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.UnsignedAtomicTx.EVMStateTransfer(tvm.vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
+	if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
 		t.Fatalf("EVMStateTransfer failed unexpectedly due to: %s", err)
 	} else if len(test.evmStateTransferErr) != 0 {
 		if err == nil {
@@ -158,22 +161,17 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		return
 	}
 
-	if test.bootstrapping {
-		// If this test simulates processing txs during bootstrapping (where some verification is skipped),
-		// initialize the block building goroutines normally initialized in SetState(snow.NormalOps).
-		// This ensures that the VM can build a block correctly during the test.
-		if err := tvm.vm.initBlockBuilding(); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := tvm.vm.mempool.AddLocalTx(tx); err != nil {
+	if err := vm.mempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
+
+	if test.bootstrapping {
+		return
+	}
+	<-tvm.ToEngine
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
-	blk, err := tvm.vm.BuildBlock(context.Background())
+	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +194,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	if test.checkState != nil {
-		test.checkState(t, tvm.vm)
+		test.checkState(t, vm)
 	}
 }
 

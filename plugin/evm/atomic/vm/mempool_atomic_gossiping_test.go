@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"context"
@@ -10,6 +10,9 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
+
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 
 	"github.com/stretchr/testify/assert"
@@ -24,55 +27,61 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// we use AP3 here to not trip any block fees
 			fork := upgradetest.ApricotPhase3
-			tvm := newVM(t, testVMConfig{
-				fork: &fork,
+			vm := newAtomicTestVM()
+			tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &fork,
 			})
 			defer func() {
-				err := tvm.vm.Shutdown(context.Background())
+				err := vm.Shutdown(context.Background())
 				assert.NoError(err)
 			}()
-			mempool := tvm.vm.mempool
+			mempool := vm.mempool
 
 			// generate a valid and conflicting tx
 			var (
 				tx, conflictingTx *atomic.Tx
 			)
 			if name == "import" {
-				importTxs := createImportTxOptions(t, tvm.vm, tvm.atomicMemory)
+				importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 				tx, conflictingTx = importTxs[0], importTxs[1]
 			} else {
-				exportTxs := createExportTxOptions(t, tvm.vm, tvm.toEngine, tvm.atomicMemory)
+				exportTxs := createExportTxOptions(t, vm, tvm.ToEngine, tvm.AtomicMemory)
 				tx, conflictingTx = exportTxs[0], exportTxs[1]
 			}
 			txID := tx.ID()
 			conflictingTxID := conflictingTx.ID()
 
 			// add a tx to the mempool
-			err := tvm.vm.mempool.AddLocalTx(tx)
+			err := vm.mempool.AddLocalTx(tx)
 			assert.NoError(err)
 			has := mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
 
 			// try to add a conflicting tx
-			err = tvm.vm.mempool.AddLocalTx(conflictingTx)
+			err = vm.mempool.AddLocalTx(conflictingTx)
 			assert.ErrorIs(err, atomictxpool.ErrConflictingAtomicTx)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			<-tvm.toEngine
+			<-tvm.ToEngine
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
 
 			// Show that BuildBlock generates a block containing [txID] and that it is
 			// still present in the mempool.
-			blk, err := tvm.vm.BuildBlock(context.Background())
+			blk, err := vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
-			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(*Block)
+			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.VMBlock)
 			assert.True(ok, "unknown block type")
 
-			assert.Equal(txID, evmBlk.atomicTxs[0].ID(), "block does not include expected transaction")
+			blockExtension, ok := wrappedBlock.GetBlockExtension().(*blockExtension)
+			assert.True(ok, "unknown block extension type")
+
+			atomicTxs := blockExtension.atomicTxs
+			assert.NoError(err)
+			assert.Equal(txID, atomicTxs[0].ID(), "block does not include expected transaction")
 
 			has = mempool.Has(txID)
 			assert.True(has, "tx should stay in mempool until block is accepted")

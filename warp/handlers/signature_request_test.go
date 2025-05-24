@@ -16,13 +16,14 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/message/messagetest"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
 
 	"github.com/stretchr/testify/require"
 )
 
-var networkCodec = message.Codec
+var networkCodec = messagetest.BlockSyncSummaryCodec
 
 func TestMessageSignatureHandler(t *testing.T) {
 	metricstest.WithMetrics(t)

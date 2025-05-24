@@ -21,12 +21,12 @@ func TestMarshalMessageSignatureRequest(t *testing.T) {
 	}
 
 	base64MessageSignatureRequest := "AABET0ZBSElAawAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-	signatureRequestBytes, err := Codec.Marshal(Version, signatureRequest)
+	signatureRequestBytes, err := codecWithBlockSync.Marshal(Version, signatureRequest)
 	require.NoError(t, err)
 	require.Equal(t, base64MessageSignatureRequest, base64.StdEncoding.EncodeToString(signatureRequestBytes))
 
 	var s MessageSignatureRequest
-	_, err = Codec.Unmarshal(signatureRequestBytes, &s)
+	_, err = codecWithBlockSync.Unmarshal(signatureRequestBytes, &s)
 	require.NoError(t, err)
 	require.Equal(t, signatureRequest.MessageID, s.MessageID)
 }
@@ -39,12 +39,12 @@ func TestMarshalBlockSignatureRequest(t *testing.T) {
 	}
 
 	base64BlockSignatureRequest := "AABET0ZBSElAawAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-	signatureRequestBytes, err := Codec.Marshal(Version, signatureRequest)
+	signatureRequestBytes, err := codecWithBlockSync.Marshal(Version, signatureRequest)
 	require.NoError(t, err)
 	require.Equal(t, base64BlockSignatureRequest, base64.StdEncoding.EncodeToString(signatureRequestBytes))
 
 	var s BlockSignatureRequest
-	_, err = Codec.Unmarshal(signatureRequestBytes, &s)
+	_, err = codecWithBlockSync.Unmarshal(signatureRequestBytes, &s)
 	require.NoError(t, err)
 	require.Equal(t, signatureRequest.BlockID, s.BlockID)
 }
@@ -62,12 +62,12 @@ func TestMarshalSignatureResponse(t *testing.T) {
 	}
 
 	base64SignatureResponse := "AAABI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8BI0VniavN7wEjRWeJq83vASNFZ4mrze8="
-	signatureResponseBytes, err := Codec.Marshal(Version, signatureResponse)
+	signatureResponseBytes, err := codecWithBlockSync.Marshal(Version, signatureResponse)
 	require.NoError(t, err)
 	require.Equal(t, base64SignatureResponse, base64.StdEncoding.EncodeToString(signatureResponseBytes))
 
 	var s SignatureResponse
-	_, err = Codec.Unmarshal(signatureResponseBytes, &s)
+	_, err = codecWithBlockSync.Unmarshal(signatureResponseBytes, &s)
 	require.NoError(t, err)
 	require.Equal(t, signatureResponse.Signature, s.Signature)
 }

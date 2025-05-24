@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package sync
 
 import (
 	"bytes"
@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/config"
@@ -48,14 +49,14 @@ func testAtomicSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight 
 
 	numLeaves := 0
 	mockClient := syncclient.NewTestClient(
-		message.Codec,
-		handlers.NewLeafsRequestHandler(serverTrieDB, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
+		atomic.Codec,
+		handlers.NewLeafsRequestHandler(serverTrieDB, atomicstate.TrieKeyLength, nil, codecWithAtomicSync, handlerstats.NewNoopHandlerStats()),
 		nil,
 		nil,
 	)
 
 	clientDB := versiondb.New(memdb.New())
-	repo, err := atomicstate.NewAtomicTxRepository(clientDB, message.Codec, 0)
+	repo, err := atomicstate.NewAtomicTxRepository(clientDB, atomic.Codec, 0)
 	if err != nil {
 		t.Fatal("could not initialize atomix tx repository", err)
 	}
