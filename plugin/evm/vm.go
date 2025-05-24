@@ -46,7 +46,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -794,12 +793,12 @@ func (vm *VM) onFinalizeAndAssemble(
 		batchAtomicTxs    []*atomic.Tx
 		batchAtomicUTXOs  set.Set[ids.ID]
 		batchContribution *big.Int = new(big.Int).Set(common.Big0)
-		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.rules(header.Number, header.Time)
+		batchGasUsed      uint64
+		rules             = vm.rules(header.Number, header.Time)
 		size              int
 	)
 
-	atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
+	remainingCapacity, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -817,20 +816,14 @@ func (vm *VM) onFinalizeAndAssemble(
 			break
 		}
 
-		var (
-			txGasUsed, txContribution *big.Int
-			err                       error
-		)
-
 		// Note: we do not need to check if we are in at least ApricotPhase4 here because
 		// we assume that this function will only be called when the block is in at least
 		// ApricotPhase5.
-		txContribution, txGasUsed, err = tx.BlockFeeContribution(true, vm.ctx.AVAXAssetID, header.BaseFee)
+		txContribution, txGasUsed, err := tx.BlockFeeContribution(true, vm.ctx.AVAXAssetID, header.BaseFee)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		// ensure `gasUsed + batchGasUsed` doesn't exceed `atomicGasLimit`
-		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); !utils.BigLessOrEqualUint64(totalGasUsed, atomicGasLimit) {
+		if txGasUsed > remainingCapacity {
 			// Send [tx] back to the mempool's tx heap.
 			vm.mempool.CancelCurrentTx(tx.ID())
 			break
@@ -862,10 +855,11 @@ func (vm *VM) onFinalizeAndAssemble(
 
 		batchAtomicTxs = append(batchAtomicTxs, tx)
 		batchAtomicUTXOs.Union(tx.InputUTXOs())
-		// Add the [txGasUsed] to the [batchGasUsed] when the [tx] has passed verification
-		batchGasUsed.Add(batchGasUsed, txGasUsed)
 		batchContribution.Add(batchContribution, txContribution)
+		batchGasUsed += txGasUsed
 		size += txSize
+
+		remainingCapacity -= txGasUsed
 	}
 
 	// If there is a non-zero number of transactions, marshal them and return the byte slice
@@ -879,7 +873,7 @@ func (vm *VM) onFinalizeAndAssemble(
 			vm.mempool.DiscardCurrentTxs()
 			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 		}
-		return atomicTxBytes, batchContribution, batchGasUsed, nil
+		return atomicTxBytes, batchContribution, new(big.Int).SetUint64(batchGasUsed), nil
 	}
 
 	// If there are no regular transactions and there were also no atomic transactions to be included,
@@ -931,7 +925,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 
 	var (
 		batchContribution = big.NewInt(0)
-		batchGasUsed      = big.NewInt(0)
+		batchGasUsed      uint64
 	)
 	for _, tx := range txs {
 		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
@@ -945,23 +939,23 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 			}
 
 			batchContribution.Add(batchContribution, contribution)
-			batchGasUsed.Add(batchGasUsed, gasUsed)
+			batchGasUsed += gasUsed
 		}
 	}
 
 	// If ApricotPhase5 is enabled, enforce that the atomic gas used does not exceed the
 	// atomic gas limit.
 	if rules.IsApricotPhase5 {
-		atomicGasLimit, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
+		remainingCapacity, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if !utils.BigLessOrEqualUint64(batchGasUsed, atomicGasLimit) {
-			return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), atomicGasLimit)
+		if batchGasUsed > remainingCapacity {
+			return nil, nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), remainingCapacity)
 		}
 	}
-	return batchContribution, batchGasUsed, nil
+	return batchContribution, new(big.Int).SetUint64(batchGasUsed), nil
 }
 
 func (vm *VM) SetState(_ context.Context, state snow.State) error {
