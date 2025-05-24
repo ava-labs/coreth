@@ -1283,7 +1283,8 @@ func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {
 
 func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	start := time.Now()
-	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), block.Time()), block.Transactions())
+	signer := types.MakeSigner(bc.chainConfig, block.Number(), block.Time())
+	bc.senderCacher.Recover(signer, block.Transactions())
 
 	substart := time.Now()
 	err := bc.engine.VerifyHeader(bc, block.Header())
@@ -1401,11 +1402,17 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	blockWriteTimer.Inc((time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits).Milliseconds())
 	blockInsertTimer.Inc(time.Since(start).Milliseconds())
 
-	log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
+	log.Debug("Inserted new block",
+		"number", block.Number(),
+		"hash", block.Hash(),
 		"parentHash", block.ParentHash(),
-		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+		"uncles", len(block.Uncles()),
+		"txs", len(block.Transactions()),
+		"gas", block.GasUsed(),
 		"elapsed", common.PrettyDuration(time.Since(start)),
-		"root", block.Root(), "baseFeePerGas", block.BaseFee(), "blockGasCost", customtypes.BlockGasCost(block),
+		"root", block.Root(),
+		"baseFeePerGas", block.BaseFee(),
+		"blockGasCost", customtypes.BlockGasCost(block),
 	)
 
 	processedBlockGasUsedCounter.Inc(int64(block.GasUsed()))

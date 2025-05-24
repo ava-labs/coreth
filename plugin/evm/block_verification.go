@@ -4,28 +4,29 @@
 package evm
 
 import (
+	"errors"
 	"fmt"
-	"math/big"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/trie"
-
-	safemath "github.com/ava-labs/avalanchego/utils/math"
-
+	"github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/trie"
 )
 
 var (
-	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
-	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
+	errUnclesUnsupported = errors.New("uncles unsupported")
+	errInvalidUncleHash  = errors.New("invalid uncle hash")
+	errInvalidCoinbase   = errors.New("invalid coinbase")
+	errInvalidTxHash     = errors.New("invalid tx hash")
+	errInvalidDifficulty = errors.New("invalid difficulty")
+	errInvalidNumber     = errors.New("invalid number")
 )
 
 type blockValidator struct {
@@ -38,159 +39,111 @@ func newBlockValidator(extDataHashes map[common.Hash]common.Hash) *blockValidato
 	}
 }
 
-func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
-	rulesExtra := params.GetRulesExtra(rules)
-	blockHash := b.ethBlock.Hash()
-	if !rulesExtra.IsApricotPhase1 {
-		if v.extDataHashes != nil {
-			extData := customtypes.BlockExtData(b.ethBlock)
-			extDataHash := customtypes.CalcExtDataHash(extData)
-			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
-			// have a block that is unexpectedly missing extra data.
-			expectedExtDataHash, ok := v.extDataHashes[blockHash]
-			if len(extData) == 0 {
-				if ok {
-					return fmt.Errorf("found block with unexpected missing extra data (%s, %d), expected extra data hash: %s", blockHash, b.Height(), expectedExtDataHash)
-				}
-			} else {
-				// If there is extra data, check to make sure that the extra data hash matches the expected extra data hash for this
-				// block
-				if extDataHash != expectedExtDataHash {
-					return fmt.Errorf("extra data hash in block (%s, %d): %s, did not match the expected extra data hash: %s", blockHash, b.Height(), extDataHash, expectedExtDataHash)
-				}
-			}
+func verifyBlockStandalone(
+	extDataHashes map[common.Hash]common.Hash,
+	clock *mockable.Clock,
+	config *params.ChainConfig,
+	block *types.Block,
+	atomicTxs []*atomic.Tx,
+) error {
+	var (
+		ethHeader        = block.Header()
+		txs              = block.Transactions()
+		txsHash          = types.DeriveSha(txs, trie.NewStackTrie(nil))
+		maxBlockTime     = clock.Unix() + maxFutureBlockTime
+		rules            = config.Rules(ethHeader.Number, params.IsMergeTODO, ethHeader.Time)
+		rulesExtra       = params.GetRulesExtra(rules)
+		errExtraValidity = header.VerifyExtra(rulesExtra.AvalancheRules, ethHeader.Extra)
+		version          = customtypes.BlockVersion(block)
+	)
+	switch {
+	case len(block.Uncles()) != 0: // Block must not have any uncles
+		return errUnclesUnsupported
+	case ethHeader.UncleHash != types.EmptyUncleHash:
+		return fmt.Errorf("%w: %x", errInvalidUncleHash, ethHeader.UncleHash)
+	case ethHeader.Coinbase != constants.BlackholeAddr:
+		return fmt.Errorf("%w: %x", errInvalidCoinbase, ethHeader.Coinbase)
+	case txsHash != ethHeader.TxHash:
+		return fmt.Errorf("%w: %x does not match expected %x", errInvalidTxHash, ethHeader.TxHash, txsHash)
+	case !utils.BigEqualUint64(ethHeader.Difficulty, 1):
+		return fmt.Errorf("%w: %d", errInvalidDifficulty, ethHeader.Difficulty)
+	case ethHeader.Number == nil || !ethHeader.Number.IsUint64():
+		return fmt.Errorf("%w: %v", errInvalidNumber, ethHeader.Number)
+	case ethHeader.Time > maxBlockTime: // Make sure the block isn't too far in the future
+		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", ethHeader.Time, maxBlockTime)
+	case errExtraValidity != nil:
+		return errExtraValidity
+	case ethHeader.MixDigest != (common.Hash{}):
+		return fmt.Errorf("invalid mix digest: %v", ethHeader.MixDigest)
+	case ethHeader.Nonce.Uint64() != 0:
+		return fmt.Errorf("%w: %d", errInvalidNonce, ethHeader.Nonce.Uint64())
+	case ethHeader.WithdrawalsHash != nil:
+		return fmt.Errorf("unexpected withdrawalsHash: %x", ethHeader.WithdrawalsHash)
+	case version != 0:
+		return fmt.Errorf("invalid version: %d", version)
+	case len(txs) == 0 && len(atomicTxs) == 0: // Block must not be empty
+		return errEmptyBlock
+	}
+
+	for i, tx := range txs {
+		if len(tx.BlobHashes()) != 0 {
+			return fmt.Errorf("unexpected blobs in transaction at index %d", i)
 		}
 	}
 
-	// Skip verification of the genesis block since it should already be marked as accepted.
-	if blockHash == b.vm.genesisHash {
-		return nil
-	}
-
 	// Verify the ExtDataHash field
-	ethHeader := b.ethBlock.Header()
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase1 {
-		extraData := customtypes.BlockExtData(b.ethBlock)
+		extraData := customtypes.BlockExtData(block)
 		hash := customtypes.CalcExtDataHash(extraData)
 		if headerExtra.ExtDataHash != hash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
 		}
 	} else {
-		if headerExtra.ExtDataHash != (common.Hash{}) {
-			return fmt.Errorf(
-				"expected ExtDataHash to be empty but got %x",
-				headerExtra.ExtDataHash,
-			)
-		}
-	}
-
-	// Perform block and header sanity checks
-	if !ethHeader.Number.IsUint64() {
-		return fmt.Errorf("invalid block number: %v", ethHeader.Number)
-	}
-	if !ethHeader.Difficulty.IsUint64() || ethHeader.Difficulty.Cmp(common.Big1) != 0 {
-		return fmt.Errorf("invalid difficulty: %d", ethHeader.Difficulty)
-	}
-	if ethHeader.Nonce.Uint64() != 0 {
-		return fmt.Errorf(
-			"expected nonce to be 0 but got %d: %w",
-			ethHeader.Nonce.Uint64(), errInvalidNonce,
+		var (
+			blockHash = block.Hash()
+			extData   = customtypes.BlockExtData(block)
 		)
-	}
-
-	if ethHeader.MixDigest != (common.Hash{}) {
-		return fmt.Errorf("invalid mix digest: %v", ethHeader.MixDigest)
-	}
-
-	// Verify the extra data is well-formed.
-	if err := header.VerifyExtra(rulesExtra.AvalancheRules, ethHeader.Extra); err != nil {
-		return err
-	}
-
-	if version := customtypes.BlockVersion(b.ethBlock); version != 0 {
-		return fmt.Errorf("invalid version: %d", version)
-	}
-
-	// Check that the tx hash in the header matches the body
-	txsHash := types.DeriveSha(b.ethBlock.Transactions(), trie.NewStackTrie(nil))
-	if txsHash != ethHeader.TxHash {
-		return fmt.Errorf("invalid txs hash %v does not match calculated txs hash %v", ethHeader.TxHash, txsHash)
-	}
-	// Check that the uncle hash in the header matches the body
-	if ethHeader.UncleHash != types.EmptyUncleHash {
-		return fmt.Errorf("invalid uncle hash %v does not match calculated uncle hash %v", ethHeader.UncleHash, types.EmptyUncleHash)
-	}
-	// Coinbase must match the BlackholeAddr on C-Chain
-	if ethHeader.Coinbase != constants.BlackholeAddr {
-		return fmt.Errorf("invalid coinbase %v does not match required blackhole address %v", ethHeader.Coinbase, constants.BlackholeAddr)
-	}
-	// Block must not have any uncles
-	if len(b.ethBlock.Uncles()) != 0 {
-		return errUnclesUnsupported
-	}
-
-	// Block must not be empty
-	txs := b.ethBlock.Transactions()
-	if len(txs) == 0 && len(b.atomicTxs) == 0 {
-		return errEmptyBlock
-	}
-
-	// Enforce minimum gas prices here prior to dynamic fees going into effect.
-	switch {
-	case !rulesExtra.IsApricotPhase1:
-		// If we are in ApricotPhase0, enforce each transaction has a minimum gas price of at least the LaunchMinGasPrice
-		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(ap0MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap0.MinGasPrice)
+		expectedExtDataHash, ok := extDataHashes[blockHash]
+		if len(extData) == 0 {
+			// If there is no extra data, check that there is no extra data in
+			// the hash map either to ensure we do not have a block that is
+			// unexpectedly missing extra data.
+			if ok {
+				return fmt.Errorf("found block with unexpected missing extra data (%s, %d), expected extra data hash: %s", blockHash, block.NumberU64(), expectedExtDataHash)
 			}
-		}
-	case !rulesExtra.IsApricotPhase3:
-		// If we are prior to ApricotPhase3, enforce each transaction has a minimum gas price of at least the ApricotPhase1MinGasPrice
-		for _, tx := range b.ethBlock.Transactions() {
-			if tx.GasPrice().Cmp(ap1MinGasPrice) < 0 {
-				return fmt.Errorf("block contains tx %s with gas price too low (%d < %d)", tx.Hash(), tx.GasPrice(), ap1.MinGasPrice)
+		} else {
+			// If there is extra data, check to make sure that the extra data
+			// hash matches the expected extra data hash for this block.
+			extDataHash := customtypes.CalcExtDataHash(extData)
+			if extDataHash != expectedExtDataHash {
+				return fmt.Errorf("extra data hash in block (%s, %d): %s, did not match the expected extra data hash: %s", blockHash, block.NumberU64(), extDataHash, expectedExtDataHash)
 			}
 		}
 	}
 
-	// Make sure the block isn't too far in the future
-	// TODO: move this to only be part of semantic verification.
-	blockTimestamp := b.ethBlock.Time()
-	if maxBlockTime := uint64(b.vm.clock.Time().Add(maxFutureBlockTime).Unix()); blockTimestamp > maxBlockTime {
-		return fmt.Errorf("block timestamp is too far in the future: %d > allowed %d", blockTimestamp, maxBlockTime)
-	}
-
-	// Ensure BaseFee is non-nil as of ApricotPhase3.
 	if rulesExtra.IsApricotPhase3 {
 		if ethHeader.BaseFee == nil {
 			return errNilBaseFeeApricotPhase3
 		}
-		// TODO: this should be removed as 256 is the maximum possible bit length of a big int
-		if bfLen := ethHeader.BaseFee.BitLen(); bfLen > 256 {
-			return fmt.Errorf("too large base fee: bitlen %d", bfLen)
+		if bitLen := ethHeader.BaseFee.BitLen(); bitLen > 256 {
+			return fmt.Errorf("baseFee too large: bitLen %d", bitLen)
 		}
 	}
 
-	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
+	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated
+	// correctly.
 	if rulesExtra.IsApricotPhase4 {
-		// After the F upgrade, the extDataGasUsed field is validated by
-		// [header.VerifyGasUsed].
-		if !rulesExtra.IsFortuna && rulesExtra.IsApricotPhase5 {
-			if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, ap5.AtomicGasLimit) {
-				return fmt.Errorf("too large extDataGasUsed: %d", headerExtra.ExtDataGasUsed)
-			}
-		}
 		var totalGasUsed uint64
-		for _, atomicTx := range b.atomicTxs {
-			// We perform this check manually here to avoid the overhead of having to
-			// reparse the atomicTx in `CalcExtDataGasUsed`.
+		for _, atomicTx := range atomicTxs {
+			// We perform this check manually here to avoid the overhead of
+			// having to reparse the atomicTx in `CalcExtDataGasUsed`.
 			fixedFee := rulesExtra.IsApricotPhase5 // Charge the atomic tx fixed fee as of ApricotPhase5
 			gasUsed, err := atomicTx.GasUsed(fixedFee)
 			if err != nil {
 				return err
 			}
-			totalGasUsed, err = safemath.Add(totalGasUsed, gasUsed)
+			totalGasUsed, err = math.Add(totalGasUsed, gasUsed)
 			if err != nil {
 				return err
 			}
@@ -199,9 +152,6 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		switch {
 		case !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed):
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
-
-		// Make sure BlockGasCost is not nil
-		// NOTE: ethHeader.BlockGasCost correctness is checked in header verification
 		case headerExtra.BlockGasCost == nil:
 			return errNilBlockGasCostApricotPhase4
 		case !headerExtra.BlockGasCost.IsUint64():
@@ -209,25 +159,14 @@ func (v blockValidator) SyntacticVerify(b *Block, rules params.Rules) error {
 		}
 	}
 
-	if !rules.IsCancun {
-		// Verify the cancun fields aren't populated
+	if rules.IsCancun {
 		switch {
-		case ethHeader.BlobGasUsed != nil:
-			return fmt.Errorf("invalid blobGasUsed: have %d, expected nil", *ethHeader.BlobGasUsed)
-		case ethHeader.ExcessBlobGas != nil:
-			return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", *ethHeader.ExcessBlobGas)
-		case ethHeader.ParentBeaconRoot != nil:
-			return fmt.Errorf("invalid parentBeaconRoot: have %x, expected nil", *ethHeader.ParentBeaconRoot)
-		}
-	} else {
-		// Verify the cancun fields are populated with zero values
-		switch {
-		case utils.PointerEqualsValue(ethHeader.BlobGasUsed, 0):
+		case !utils.PointerEqualsValue(ethHeader.BlobGasUsed, 0):
 			return fmt.Errorf("invalid BlobGasUsed: expected 0 got %v -> %d", ethHeader.BlobGasUsed, ethHeader.BlobGasUsed)
-		case utils.PointerEqualsValue(ethHeader.ExcessBlobGas, 0):
+		case !utils.PointerEqualsValue(ethHeader.ExcessBlobGas, 0):
 			return fmt.Errorf("invalid ExcessBlobGas: expected 0 got %v -> %d", ethHeader.ExcessBlobGas, ethHeader.ExcessBlobGas)
-		case utils.PointerEqualsValue(ethHeader.ParentBeaconRoot, common.Hash{}):
-			return fmt.Errorf("invalid ExcessBlobGas: expected empty hash got %x", ethHeader.ParentBeaconRoot)
+		case !utils.PointerEqualsValue(ethHeader.ParentBeaconRoot, common.Hash{}):
+			return fmt.Errorf("invalid ParentBeaconRoot: expected empty hash got %x", ethHeader.ParentBeaconRoot)
 		}
 	}
 	return nil

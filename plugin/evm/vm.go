@@ -118,7 +118,7 @@ var (
 const (
 	// Max time from current time allowed for blocks, before they're considered future blocks
 	// and fail verification
-	maxFutureBlockTime = 10 * time.Second
+	maxFutureBlockTime = 10 // seconds
 	maxUTXOsToFetch    = 1024
 	defaultMempoolSize = 4096
 
@@ -178,7 +178,6 @@ var (
 	errEmptyBlock                    = errors.New("empty block")
 	errInvalidBlock                  = errors.New("invalid block")
 	errInvalidNonce                  = errors.New("invalid nonce")
-	errUnclesUnsupported             = errors.New("uncles unsupported")
 	errRejectedParent                = errors.New("rejected parent")
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")

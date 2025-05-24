@@ -2645,8 +2645,7 @@ func TestFutureBlock(t *testing.T) {
 	// Set the VM's clock to the time of the produced block
 	tvm.vm.clock.Set(time.Unix(int64(modifiedHeader.Time), 0))
 	// Set the modified time to exceed the allowed future time
-	modifiedTime := modifiedHeader.Time + uint64(maxFutureBlockTime.Seconds()+1)
-	modifiedHeader.Time = modifiedTime
+	modifiedHeader.Time += maxFutureBlockTime + 1
 	modifiedBlock := customtypes.NewBlockWithExtData(
 		modifiedHeader,
 		nil,
@@ -3720,39 +3719,39 @@ func TestParentBeaconRootBlock(t *testing.T) {
 		errString     string
 	}{
 		{
-			name:          "non-empty parent beacon root in Durango",
+			name:          "non_empty_parent_beacon_root_in_Durango",
 			fork:          upgradetest.Durango,
 			beaconRoot:    &common.Hash{0x01},
 			expectedError: true,
 			// err string wont work because it will also fail with blob gas is non-empty (zeroed)
 		},
 		{
-			name:          "empty parent beacon root in Durango",
+			name:          "empty_parent_beacon_root_in_Durango",
 			fork:          upgradetest.Durango,
 			beaconRoot:    &common.Hash{},
 			expectedError: true,
 		},
 		{
-			name:          "nil parent beacon root in Durango",
+			name:          "nil_parent_beacon_root_in_Durango",
 			fork:          upgradetest.Durango,
 			beaconRoot:    nil,
 			expectedError: false,
 		},
 		{
-			name:          "non-empty parent beacon root in E-Upgrade (Cancun)",
+			name:          "non_empty_parent_beacon_root_in_Etna_Cancun",
 			fork:          upgradetest.Etna,
 			beaconRoot:    &common.Hash{0x01},
 			expectedError: true,
 			errString:     "expected empty hash",
 		},
 		{
-			name:          "empty parent beacon root in E-Upgrade (Cancun)",
+			name:          "empty_parent_beacon_root_in_Etna_Cancun",
 			fork:          upgradetest.Etna,
 			beaconRoot:    &common.Hash{},
 			expectedError: false,
 		},
 		{
-			name:          "nil parent beacon root in E-Upgrade (Cancun)",
+			name:          "nil_parent_beacon_root_in_Etna_Cancun",
 			fork:          upgradetest.Etna,
 			beaconRoot:    nil,
 			expectedError: true,

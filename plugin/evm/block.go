@@ -276,10 +276,13 @@ func (b *Block) syntacticVerify() error {
 	if b == nil || b.ethBlock == nil {
 		return errInvalidBlock
 	}
-
-	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
+	return verifyBlockStandalone(
+		b.vm.syntacticBlockValidator.extDataHashes,
+		&b.vm.clock,
+		b.vm.chainConfig,
+		b.ethBlock,
+		b.atomicTxs,
+	)
 }
 
 // Verify implements the snowman.Block interface
@@ -358,11 +361,12 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		}
 	}
 
-	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
-	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
-	// Additionally, if a block is already in processing, then it has already passed verification and
-	// at this point we have checked the predicates are still valid in the different context so we
-	// can return nil.
+	// The engine may call VerifyWithContext multiple times on the same block
+	// with different contexts. Since the engine will only call Accept/Reject
+	// once, we should only call InsertBlockManual once. Additionally, if a
+	// block is already in processing, then it has already passed verification
+	// and at this point we have checked the predicates are still valid in the
+	// different context so we can return nil.
 	if b.vm.State.IsProcessing(b.id) {
 		return nil
 	}
