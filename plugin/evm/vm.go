@@ -784,54 +784,7 @@ func (vm *VM) createConsensusCallbacks() dummy.ConsensusCallbacks {
 	}
 }
 
-func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-	for {
-		tx, exists := vm.mempool.NextTx()
-		if !exists {
-			break
-		}
-		// Take a snapshot of [state] before calling verifyTx so that if the transaction fails verification
-		// we can revert to [snapshot].
-		// Note: snapshot is taken inside the loop because you cannot revert to the same snapshot more than
-		// once.
-		snapshot := state.Snapshot()
-		rules := vm.rules(header.Number, header.Time)
-		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
-			// Discard the transaction from the mempool on failed verification.
-			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
-			vm.mempool.DiscardCurrentTx(tx.ID())
-			state.RevertToSnapshot(snapshot)
-			continue
-		}
-
-		atomicTxBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, tx)
-		if err != nil {
-			// Discard the transaction from the mempool and error if the transaction
-			// cannot be marshalled. This should never happen.
-			log.Debug("discarding tx due to unmarshal err", "txID", tx.ID(), "err", err)
-			vm.mempool.DiscardCurrentTx(tx.ID())
-			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
-		}
-		var contribution, gasUsed *big.Int
-		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err = tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, header.BaseFee)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-		}
-		return atomicTxBytes, contribution, gasUsed, nil
-	}
-
-	if len(txs) == 0 {
-		// this could happen due to the async logic of geth tx pool
-		return nil, nil, nil, errEmptyBlock
-	}
-
-	return nil, nil, nil, nil
-}
-
-// assumes that we are in at least Apricot Phase 5.
-func (vm *VM) postBatchOnFinalizeAndAssemble(
+func (vm *VM) onFinalizeAndAssemble(
 	header *types.Header,
 	parent *types.Header,
 	state *state.StateDB,
@@ -939,18 +892,6 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 	// If there are no atomic transactions, but there is a non-zero number of regular transactions, then
 	// we return a nil slice with no contribution from the atomic transactions and a nil error.
 	return nil, nil, nil, nil
-}
-
-func (vm *VM) onFinalizeAndAssemble(
-	header *types.Header,
-	parent *types.Header,
-	state *state.StateDB,
-	txs []*types.Transaction,
-) ([]byte, *big.Int, *big.Int, error) {
-	if !vm.chainConfigExtra().IsApricotPhase5(header.Time) {
-		return vm.preBatchOnFinalizeAndAssemble(header, state, txs)
-	}
-	return vm.postBatchOnFinalizeAndAssemble(header, parent, state, txs)
 }
 
 func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {

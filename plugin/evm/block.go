@@ -113,7 +113,6 @@ func readMainnetBonusBlocks() (map[uint64]ids.ID, error) {
 
 // Block implements the snowman.Block interface
 type Block struct {
-	id        ids.ID
 	ethBlock  *types.Block
 	vm        *VM
 	atomicTxs []*atomic.Tx
@@ -128,7 +127,6 @@ func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 	}
 
 	return &Block{
-		id:        ids.ID(ethBlock.Hash()),
 		ethBlock:  ethBlock,
 		vm:        vm,
 		atomicTxs: atomicTxs,
@@ -136,7 +134,7 @@ func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 }
 
 // ID implements the snowman.Block interface
-func (b *Block) ID() ids.ID { return b.id }
+func (b *Block) ID() ids.ID { return ids.ID(b.ethBlock.Hash()) }
 
 func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
@@ -329,11 +327,13 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
-	if predicateContext.ProposerVMBlockCtx != nil {
-		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
-	} else {
-		log.Debug("Verifying block without context", "block", b.ID(), "height", b.Height())
-	}
+	hash := b.ethBlock.Hash()
+	log.Debug("verifying block",
+		"hash", hash,
+		"height", b.Height(),
+		"hasContext", predicateContext.ProposerVMBlockCtx != nil,
+		"writes", writes,
+	)
 	if err := b.syntacticVerify(); err != nil {
 		return fmt.Errorf("syntactic block verification failed: %w", err)
 	}
@@ -367,7 +367,7 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 	// block is already in processing, then it has already passed verification
 	// and at this point we have checked the predicates are still valid in the
 	// different context so we can return nil.
-	if b.vm.State.IsProcessing(b.id) {
+	if b.vm.State.IsProcessing(ids.ID(hash)) {
 		return nil
 	}
 
@@ -376,7 +376,7 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		// if an error occurred inserting the block into the chain
 		// or if we are not pinning to memory, unpin the atomic trie
 		// changes from memory (if they were pinned).
-		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
+		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(hash); err == nil {
 			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
 		}
 	}
