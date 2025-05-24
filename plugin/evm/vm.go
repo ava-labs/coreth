@@ -899,18 +899,6 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		return nil, err
 	}
 
-	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
-	if vm.atomicBackend != nil {
-		// Update the atomic backend with [txs] from this block.
-		//
-		// Note: The atomic trie canonically contains the duplicate operations
-		// from any bonus blocks.
-		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// If there are no transactions, we can return early.
 	if len(txs) == 0 {
 		return nil, nil

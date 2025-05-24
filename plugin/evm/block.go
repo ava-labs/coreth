@@ -328,9 +328,10 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
 	hash := b.ethBlock.Hash()
+	number := b.ethBlock.NumberU64()
 	log.Debug("verifying block",
 		"hash", hash,
-		"height", b.Height(),
+		"height", number,
 		"hasContext", predicateContext.ProposerVMBlockCtx != nil,
 		"writes", writes,
 	)
@@ -365,11 +366,20 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		return nil
 	}
 
+	if writes {
+		// Update the atomic backend with [txs] from this block.
+		//
+		// Note: The atomic trie canonically contains the duplicate operations from
+		// any bonus blocks.
+		parentHash := b.ethBlock.ParentHash()
+		if _, err := b.vm.atomicBackend.InsertTxs(hash, number, parentHash, b.atomicTxs); err != nil {
+			return err
+		}
+	}
+
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if err != nil || !writes {
-		// if an error occurred inserting the block into the chain
-		// or if we are not pinning to memory, unpin the atomic trie
-		// changes from memory (if they were pinned).
+	if err != nil && writes {
+		// Unpin the atomic trie if it is pinned and verification failed.
 		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(hash); err == nil {
 			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
 		}
