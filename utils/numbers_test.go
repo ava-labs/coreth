@@ -10,6 +10,99 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestPointerEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		x    *uint64
+		y    *uint64
+		want bool
+	}{
+		{
+			name: "nil_nil",
+			x:    nil,
+			y:    nil,
+			want: true,
+		},
+		{
+			name: "0_nil",
+			x:    NewUint64(0),
+			y:    nil,
+			want: false,
+		},
+		{
+			name: "0_1",
+			x:    NewUint64(0),
+			y:    NewUint64(1),
+			want: false,
+		},
+		{
+			name: "0_0",
+			x:    NewUint64(0),
+			y:    NewUint64(0),
+			want: true,
+		},
+		{
+			name: "1_1",
+			x:    NewUint64(1),
+			y:    NewUint64(1),
+			want: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			assert.Equal(test.want, PointerEqual(test.x, test.y))
+			assert.Equal(test.want, PointerEqual(test.y, test.x))
+		})
+	}
+}
+
+func TestPointerEqualsValue(t *testing.T) {
+	tests := []struct {
+		name string
+		p    *uint64
+		v    uint64
+		want bool
+	}{
+		{
+			name: "nil_0",
+			p:    nil,
+			v:    0,
+			want: false,
+		},
+		{
+			name: "nil_1",
+			p:    nil,
+			v:    1,
+			want: false,
+		},
+		{
+			name: "0_0",
+			p:    NewUint64(0),
+			v:    0,
+			want: true,
+		},
+		{
+			name: "1_0",
+			p:    NewUint64(1),
+			v:    0,
+			want: false,
+		},
+		{
+			name: "1_1",
+			p:    NewUint64(1),
+			v:    1,
+			want: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, PointerEqualsValue(test.p, test.v))
+		})
+	}
+}
+
 func TestBigEqual(t *testing.T) {
 	tests := []struct {
 		name string

@@ -29,5 +29,5 @@ func (u *Upgrade) Equal(other *Upgrade) bool {
 	if other == nil {
 		return false
 	}
-	return u.Disable == other.Disable && utils.Uint64PtrEqual(u.BlockTimestamp, other.BlockTimestamp)
+	return u.Disable == other.Disable && utils.PointerEqual(u.BlockTimestamp, other.BlockTimestamp)
 }
