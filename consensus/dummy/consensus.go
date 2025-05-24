@@ -61,7 +61,6 @@ type (
 		statedb *state.StateDB,
 	) (
 		blockFeeContribution *big.Int,
-		extDataGasUsed uint64,
 		err error,
 	)
 
@@ -367,12 +366,11 @@ func (eng *DummyEngine) verifyBlockFee(
 func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types.Block, parent *types.Header, state *state.StateDB, receipts []*types.Receipt) error {
 	// Perform extra state change while finalizing the block
 	var (
-		contribution   *big.Int
-		extDataGasUsed uint64
-		err            error
+		contribution *big.Int
+		err          error
 	)
 	if eng.cb.OnExtraStateChange != nil {
-		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state)
+		contribution, err = eng.cb.OnExtraStateChange(block, parent, state)
 		if err != nil {
 			return err
 		}
@@ -391,14 +389,6 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 	}
 	if config.IsApricotPhase4(timestamp) {
-		// Validate extDataGasUsed and BlockGasCost match expectations
-		//
-		// NOTE: This is a duplicate check of what is already performed in
-		// blockValidator but is done here for symmetry with FinalizeAndAssemble.
-		if blockExtDataGasUsed := customtypes.BlockExtDataGasUsed(block); !utils.BigEqualUint64(blockExtDataGasUsed, extDataGasUsed) {
-			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
-		}
-
 		// Verify the block fee was paid.
 		if err := eng.verifyBlockFee(
 			block.BaseFee(),

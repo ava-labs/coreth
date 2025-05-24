@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -888,14 +889,14 @@ func (vm *VM) onFinalizeAndAssemble(
 	return nil, nil, 0, nil
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, uint64, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, error) {
 	var (
 		header = block.Header()
 		rules  = vm.rules(header.Number, header.Time)
 	)
 	txs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(block), rules.IsApricotPhase5, atomic.Codec)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
@@ -905,7 +906,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
 			if err := vm.verifyTxs(txs, block.ParentHash(), block.BaseFee(), block.NumberU64(), rules); err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 		}
 		// Update the atomic backend with [txs] from this block.
@@ -914,32 +915,28 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		// from any bonus blocks.
 		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 	}
 
 	// If there are no transactions, we can return early.
 	if len(txs) == 0 {
-		return nil, 0, nil
+		return nil, nil
 	}
 
-	var (
-		batchContribution = big.NewInt(0)
-		batchGasUsed      uint64
-	)
+	batchContribution := big.NewInt(0)
 	for _, tx := range txs {
 		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
 		if rules.IsApricotPhase4 {
-			contribution, gasUsed, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
+			contribution, _, err := tx.BlockFeeContribution(rules.IsApricotPhase5, vm.ctx.AVAXAssetID, block.BaseFee())
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 
 			batchContribution.Add(batchContribution, contribution)
-			batchGasUsed += gasUsed
 		}
 	}
 
@@ -948,14 +945,15 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	if rules.IsApricotPhase5 {
 		remainingCapacity, err := customheader.RemainingAtomicGasCapacity(vm.chainConfigExtra(), parent, header)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 
-		if batchGasUsed > remainingCapacity {
-			return nil, 0, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", batchGasUsed, block.Hash().Hex(), remainingCapacity)
+		headerExtra := customtypes.GetHeaderExtra(header)
+		if !utils.BigLessOrEqualUint64(headerExtra.ExtDataGasUsed, remainingCapacity) {
+			return nil, fmt.Errorf("atomic gas used (%d) by block (%s), exceeds atomic gas limit (%d)", headerExtra.ExtDataGasUsed, block.Hash().Hex(), remainingCapacity)
 		}
 	}
-	return batchContribution, batchGasUsed, nil
+	return batchContribution, nil
 }
 
 func (vm *VM) SetState(_ context.Context, state snow.State) error {
