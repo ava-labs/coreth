@@ -7,22 +7,31 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/sync/handlers"
 
 	"github.com/ava-labs/libevm/core/types"
 )
 
-var errNilConfig = errors.New("nil extension config")
+var (
+	errNilConfig              = errors.New("nil extension config")
+	errNilNetworkCodec        = errors.New("nil network codec")
+	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
+	errNilSyncableParser      = errors.New("nil syncable parser")
+)
 
 type ExtensibleVM interface {
 	// SetExtensionConfig sets the configuration for the VM extension
@@ -39,6 +48,10 @@ type ExtensibleVM interface {
 	IsBootstrapped() bool
 	// Ethereum returns the Ethereum client
 	Ethereum() *eth.Ethereum
+	// Config returns the configuration for the VM
+	Config() *config.Config
+	// SyncerClient returns the syncer client for the VM
+	SyncerClient() sync.Client
 }
 
 // InnerVM is the interface that must be implemented by the VM
@@ -96,14 +109,43 @@ type LeafRequestConfig struct {
 
 // Config is the configuration for the VM extension
 type Config struct {
+	// NetworkCodec is the codec manager to use
+	// for encoding and decoding network messages.
+	// It's required and should be non-nil
+	NetworkCodec codec.Manager
+	// SyncSummaryProvider is the sync summary provider to use
+	// for the VM to be used in syncer.
+	// It's required and should be non-nil
+	SyncSummaryProvider sync.SummaryProvider
+	// SyncExtender can extend the syncer to handle custom sync logic.
+	// It's optional and can be nil
+	SyncExtender sync.Extender
+	// SyncableParser is to parse summary messages from the network.
+	// It's required and should be non-nil
+	SyncableParser message.SyncableParser
 	// BlockExtender allows the VM extension to create an extension to handle block processing events.
 	// It's optional and can be nil
 	BlockExtender BlockExtender
+	// ExtraSyncLeafHandlerConfig is the extra configuration to handle leaf requests
+	// in the network and syncer. It's optional and can be nil
+	ExtraSyncLeafHandlerConfig *LeafRequestConfig
+	// Clock is the clock to use for time related operations.
+	// It's optional and can be nil
+	Clock *mockable.Clock
 }
 
 func (c *Config) Validate() error {
 	if c == nil {
 		return errNilConfig
+	}
+	if c.NetworkCodec == nil {
+		return errNilNetworkCodec
+	}
+	if c.SyncSummaryProvider == nil {
+		return errNilSyncSummaryProvider
+	}
+	if c.SyncableParser == nil {
+		return errNilSyncableParser
 	}
 	return nil
 }
