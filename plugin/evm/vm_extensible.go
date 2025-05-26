@@ -7,9 +7,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -69,13 +69,12 @@ func (vm *VM) Config() config.Config {
 	return vm.config
 }
 
-func (vm *VM) SyncerClient() vmsync.Client {
-	return vm.Client
+func (vm *VM) VersionDB() *versiondb.Database {
+	return vm.versiondb
 }
 
-// TODO: remove these
-func (vm *VM) AtomicBackend() *state.AtomicBackend {
-	return vm.atomicBackend
+func (vm *VM) SyncerClient() vmsync.Client {
+	return vm.Client
 }
 
 func (vm *VM) AtomicMempool() *txpool.Mempool {
