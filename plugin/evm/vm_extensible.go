@@ -65,7 +65,7 @@ func (vm *VM) Ethereum() *eth.Ethereum {
 	return vm.eth
 }
 
-func (vm *VM) Config() *config.Config {
+func (vm *VM) Config() config.Config {
 	return vm.config
 }
 

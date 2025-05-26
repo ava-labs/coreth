@@ -225,7 +225,7 @@ type VM struct {
 	// with an efficient caching layer.
 	*chain.State
 
-	config *config.Config
+	config config.Config
 
 	chainID     *big.Int
 	genesisHash common.Hash
@@ -356,7 +356,6 @@ func (vm *VM) Initialize(
 	if vm.extensionConfig.Clock != nil {
 		vm.clock = vm.extensionConfig.Clock
 	}
-	vm.config = &config.Config{}
 	vm.config.SetDefaults(defaultTxPoolConfig)
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &vm.config); err != nil {

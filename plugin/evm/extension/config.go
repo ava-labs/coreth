@@ -49,7 +49,7 @@ type ExtensibleVM interface {
 	// Ethereum returns the Ethereum client
 	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM
-	Config() *config.Config
+	Config() config.Config
 	// SyncerClient returns the syncer client for the VM
 	SyncerClient() sync.Client
 }

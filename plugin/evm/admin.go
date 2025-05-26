@@ -79,10 +79,6 @@ func (p *Admin) SetLogLevel(_ *http.Request, args *client.SetLogLevelArgs, reply
 }
 
 func (p *Admin) GetVMConfig(_ *http.Request, _ *struct{}, reply *client.ConfigReply) error {
-	// Should never happen, but just in case
-	if p.vm.config == nil {
-		return fmt.Errorf("VM is not initialized")
-	}
-	reply.Config = *p.vm.config
+	reply.Config = &p.vm.config
 	return nil
 }
