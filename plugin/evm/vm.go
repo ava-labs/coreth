@@ -356,6 +356,7 @@ func (vm *VM) Initialize(
 	if vm.extensionConfig.Clock != nil {
 		vm.clock = vm.extensionConfig.Clock
 	}
+	vm.config = &config.Config{}
 	vm.config.SetDefaults(defaultTxPoolConfig)
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
