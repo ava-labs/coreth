@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
 	"errors"
@@ -30,6 +30,7 @@ var (
 var (
 	errNilEthBlock  = errors.New("nil ethBlock")
 	errMissingUTXOs = errors.New("missing UTXOs")
+	errEmptyBlock   = errors.New("empty block")
 )
 
 type blockExtender struct {

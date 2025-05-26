@@ -7,8 +7,16 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ava-labs/libevm/ethdb"
 )
 
 var _ extension.InnerVM = (*VM)(nil)
@@ -30,7 +38,6 @@ func (vm *VM) SetExtensionConfig(config *extension.Config) error {
 }
 
 // All these methods below assumes that VM is already initialized
-
 func (vm *VM) GetExtendedBlock(ctx context.Context, blkID ids.ID) (extension.ExtendedBlock, error) {
 	// Since each internal handler used by [vm.State] always returns a block
 	// with non-nil ethBlock value, GetBlockInternal should never return a
@@ -54,4 +61,36 @@ func (vm *VM) LastAcceptedExtendedBlock() extension.ExtendedBlock {
 // IsBootstrapped returns true if the VM has finished bootstrapping
 func (vm *VM) IsBootstrapped() bool {
 	return vm.bootstrapped.Get()
+}
+
+func (vm *VM) Ethereum() *eth.Ethereum {
+	return vm.eth
+}
+
+func (vm *VM) Config() config.Config {
+	return vm.config
+}
+
+func (vm *VM) MetricRegistry() *prometheus.Registry {
+	return vm.sdkMetrics
+}
+
+func (vm *VM) Validators() *p2p.Validators {
+	return vm.P2PValidators()
+}
+
+func (vm *VM) VersionDB() *versiondb.Database {
+	return vm.versiondb
+}
+
+func (vm *VM) EthChainDB() ethdb.Database {
+	return vm.chaindb
+}
+
+func (vm *VM) SyncerClient() vmsync.Client {
+	return vm.Client
+}
+
+func (vm *VM) Version(context.Context) (string, error) {
+	return Version, nil
 }

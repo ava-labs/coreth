@@ -92,6 +92,8 @@ type Network interface {
 	AddHandler(protocol uint64, handler p2p.Handler) error
 
 	P2PValidators() *p2p.Validators
+
+	Codec() codec.Manager
 }
 
 // network is an implementation of Network that processes message requests for
@@ -486,6 +488,11 @@ func (n *network) AddHandler(protocol uint64, handler p2p.Handler) error {
 // P2PValidators returns the p2p validators
 func (n *network) P2PValidators() *p2p.Validators {
 	return n.p2pValidators
+}
+
+// Codec returns the codec used by this network
+func (n *network) Codec() codec.Manager {
+	return n.codec
 }
 
 // invariant: peer/network must use explicitly even request ids.
