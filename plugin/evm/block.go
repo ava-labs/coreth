@@ -434,7 +434,16 @@ func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) err
 	// - Bloom
 	// - GasUsed
 	// - BlockGasCost is paid for
-	// - All normal (non-atomic) transactions are executable
+	// - Normal eth tx checks:
+	//   - Sender can be recovered correctly (verifies chainID)
+	//   - Tx nonces are correct (matches what is in state and won't cause an overflow)
+	//   - Sender is an EOA (probably removed with 7702, also was really not possible before)
+	//   - Tx's GasFeeCap is >= the BaseFee
+	//   - Tx can afford the gas based on the gas limit and effective gas price
+	//   - Tx doesn't specify a GasLimit which exceeds the gas remaining allowed to process in the block
+	//   - Tx's gas limit is >= the intrinsic gas of the transaction
+	//   - Tx is able to send the value of the transaction from the sender after purchasing the gas
+	//   - The message data doesn't exceed MaxInitCodeSize when creating a contract (post Durango)
 	return nil
 }
 
