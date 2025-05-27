@@ -372,8 +372,31 @@ func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) err
 		return consensus.ErrUnknownAncestor
 	}
 
-	// Verify the BlockGasCost set in the header matches the expected value.
+	parentNumber := parentHeader.Number.Uint64()
+	if expectedNumber := parentNumber + 1; number != expectedNumber {
+		return fmt.Errorf("expected number %d, found %d", expectedNumber, number)
+	}
+
+	// Verify the header's timestamp is not earlier than parent's. It allows
+	// equality(==), multiple blocks can have the same timestamp.
+	if header.Time < parentHeader.Time {
+		return fmt.Errorf("invalid timestamp %d < parent timestamp %d", header.Time, parentHeader.Time)
+	}
+
 	config := params.GetExtra(b.vm.chainConfig)
+	if err := customheader.VerifyGasLimit(config, parentHeader, header); err != nil {
+		return err
+	}
+
+	expectedBaseFee, err := customheader.BaseFee(config, parentHeader, header.Time)
+	if err != nil {
+		return fmt.Errorf("failed to calculate base fee: %w", err)
+	}
+	if !utils.BigEqual(header.BaseFee, expectedBaseFee) {
+		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
+	}
+
+	// Verify the BlockGasCost set in the header matches the expected value.
 	expectedBlockGasCost := customheader.BlockGasCost(
 		config,
 		parentHeader,
@@ -384,6 +407,22 @@ func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) err
 		return fmt.Errorf("invalid blockGasCost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
 	}
 
+	// These checks assume that GasUsed is set correctly. GasUsed still needs to
+	// be verified after execution.
+	if err := customheader.VerifyGasUsed(config, parentHeader, header); err != nil {
+		return err
+	}
+	if err := customheader.VerifyExtraPrefix(config, parentHeader, header); err != nil {
+		return err
+	}
+
+	// Things still left to be verified:
+	// - Root hash
+	// - ReceiptHash
+	// - Bloom
+	// - GasUsed
+	// - BlockGasCost is paid for
+	// - All normal (non-atomic) transactions are executable
 	return nil
 }
 
