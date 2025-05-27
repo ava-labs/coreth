@@ -30,10 +30,8 @@ var (
 
 	ErrInsufficientBlockGas = errors.New("insufficient gas to cover the block cost")
 
-	errInvalidBlockTime       = errors.New("timestamp less than parent's")
-	errUnclesUnsupported      = errors.New("uncles unsupported")
-	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
-	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockTime  = errors.New("timestamp less than parent's")
+	errUnclesUnsupported = errors.New("uncles unsupported")
 )
 
 type Mode struct {
@@ -167,34 +165,6 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
 	}
 
-	headerExtra := customtypes.GetHeaderExtra(header)
-
-	// Enforce BlockGasCost constraints
-	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
-		parent,
-		header.Time,
-	)
-	if !utils.BigEqual(headerExtra.BlockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("invalid block gas cost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
-	}
-
-	// Verify ExtDataGasUsed not present before AP4
-	if !config.IsApricotPhase4(header.Time) {
-		if headerExtra.ExtDataGasUsed != nil {
-			return fmt.Errorf("invalid extDataGasUsed before fork: have %d, want <nil>", headerExtra.ExtDataGasUsed)
-		}
-		return nil
-	}
-
-	// ExtDataGasUsed correctness is checked during block validation
-	// (when the validator has access to the block contents)
-	if headerExtra.ExtDataGasUsed == nil {
-		return errExtDataGasUsedNil
-	}
-	if !headerExtra.ExtDataGasUsed.IsUint64() {
-		return errExtDataGasUsedTooLarge
-	}
 	return nil
 }
 
@@ -378,18 +348,9 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 
 	config := params.GetExtra(chain.Config())
 	timestamp := block.Time()
-	// Verify the BlockGasCost set in the header matches the expected value.
-	blockGasCost := customtypes.BlockGasCost(block)
-	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
-		parent,
-		timestamp,
-	)
-	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
-	}
 	if config.IsApricotPhase4(timestamp) {
 		// Verify the block fee was paid.
+		blockGasCost := customtypes.BlockGasCost(block)
 		if err := eng.verifyBlockFee(
 			block.BaseFee(),
 			blockGasCost,

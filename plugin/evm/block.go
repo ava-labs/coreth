@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 
+	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
@@ -22,12 +23,15 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 var (
@@ -348,20 +352,38 @@ func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) err
 	// bootstrapping and not have populated the required indices. Since
 	// bootstrapping only verifies blocks that have been canonically accepted by
 	// the network, these checks would be guaranteed to pass on a synced node.
-	if !b.vm.bootstrapped.Get() {
-		return nil
+	if b.vm.bootstrapped.Get() {
+		// Verify that the atomic txs in this block are valid to be executed.
+		if err := b.verifyAtomicTxs(); err != nil {
+			return err
+		}
+
+		// Verify that all the ICM messages are correctly marked as either valid
+		// or invalid.
+		if err := b.verifyPredicates(context); err != nil {
+			return fmt.Errorf("failed to verify predicates: %w", err)
+		}
 	}
 
-	// Verify that the atomic txs in this block are valid to be executed.
-	if err := b.verifyAtomicTxs(); err != nil {
-		return err
+	header := b.ethBlock.Header()
+	number := header.Number.Uint64()
+	parentHeader := b.vm.blockChain.GetHeader(header.ParentHash, number-1)
+	if parentHeader == nil {
+		return consensus.ErrUnknownAncestor
 	}
 
-	// Verify that all the ICM messages are correctly marked as either valid
-	// or invalid.
-	if err := b.verifyPredicates(context); err != nil {
-		return fmt.Errorf("failed to verify predicates: %w", err)
+	// Verify the BlockGasCost set in the header matches the expected value.
+	config := params.GetExtra(b.vm.chainConfig)
+	expectedBlockGasCost := customheader.BlockGasCost(
+		config,
+		parentHeader,
+		header.Time,
+	)
+	headerExtra := customtypes.GetHeaderExtra(header)
+	if !utils.BigEqual(headerExtra.BlockGasCost, expectedBlockGasCost) {
+		return fmt.Errorf("invalid blockGasCost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
 	}
+
 	return nil
 }
 
