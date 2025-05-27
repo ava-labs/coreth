@@ -28,7 +28,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ava-labs/coreth/consensus"
@@ -63,57 +62,6 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
-	// Check whether the block is already imported.
-	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
-		return ErrKnownBlock
-	}
-
-	// Header validity is known at this point. Here we verify that uncle and transactions
-	// given in the block body match the header.
-	header := block.Header()
-	if err := v.engine.VerifyUncles(v.bc, block); err != nil {
-		return err
-	}
-	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
-		return fmt.Errorf("uncle root hash mismatch (header value %x, calculated %x)", header.UncleHash, hash)
-	}
-	if hash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); hash != header.TxHash {
-		return fmt.Errorf("transaction root hash mismatch (header value %x, calculated %x)", header.TxHash, hash)
-	}
-
-	// Blob transactions may be present after the Cancun fork.
-	var blobs int
-	for i, tx := range block.Transactions() {
-		// Count the number of blobs to validate against the header's blobGasUsed
-		blobs += len(tx.BlobHashes())
-
-		// If the tx is a blob tx, it must NOT have a sidecar attached to be valid in a block.
-		if tx.BlobTxSidecar() != nil {
-			return fmt.Errorf("unexpected blob sidecar in transaction at index %d", i)
-		}
-
-		// The individual checks for blob validity (version-check + not empty)
-		// happens in StateTransition.
-	}
-
-	// Check blob gas usage.
-	if header.BlobGasUsed != nil {
-		if want := *header.BlobGasUsed / params.BlobTxBlobGasPerBlob; uint64(blobs) != want { // div because the header is surely good vs the body might be bloated
-			return fmt.Errorf("blob gas used mismatch (header %v, calculated %v)", *header.BlobGasUsed, blobs*params.BlobTxBlobGasPerBlob)
-		}
-	} else {
-		if blobs > 0 {
-			return errors.New("data blobs present in block body")
-		}
-	}
-
-	// Ancestor block must be known.
-	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
-			return consensus.ErrUnknownAncestor
-		}
-		return consensus.ErrPrunedAncestor
-	}
 	return nil
 }
 

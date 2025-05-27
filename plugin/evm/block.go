@@ -416,6 +416,18 @@ func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) err
 		return err
 	}
 
+	// Verify that there are no blob transactions
+	for i, tx := range b.ethBlock.Transactions() {
+		if tx.Type() == types.BlobTxType {
+			return fmt.Errorf("unexpected blob transaction at index %d", i)
+		}
+	}
+
+	// Ancestor block must be known.
+	if !b.vm.blockChain.HasBlockAndState(header.ParentHash, parentNumber) {
+		return fmt.Errorf("parent block or state not available: hash=%x, number=%d", header.ParentHash, parentNumber)
+	}
+
 	// Things still left to be verified:
 	// - Root hash
 	// - ReceiptHash

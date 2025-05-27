@@ -124,7 +124,6 @@ var (
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
-	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
 	errCacheConfigNotSpecified = errors.New("must specify cache config")
 	errInvalidOldChain         = errors.New("invalid old chain")
 	errInvalidNewChain         = errors.New("invalid new chain")
@@ -1288,37 +1287,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	bc.senderCacher.Recover(signer, block.Transactions())
 
 	substart := time.Now()
-	err := bc.engine.VerifyHeader(bc, block.Header())
-	if err == nil {
-		err = bc.validator.ValidateBody(block)
-	}
 
-	switch {
-	case errors.Is(err, ErrKnownBlock):
-		// even if the block is already known, we still need to generate the
-		// snapshot layer and add a reference to the triedb, so we re-execute
-		// the block. Note that insertBlock should only be called on a block
-		// once if it returns nil
-		if bc.newTip(block) {
-			log.Debug("Setting head to be known block", "number", block.Number(), "hash", block.Hash())
-		} else {
-			log.Debug("Reprocessing already known block", "number", block.Number(), "hash", block.Hash())
-		}
-
-	// If an ancestor has been pruned, then this block cannot be acceptable.
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		return errors.New("side chain insertion is not supported")
-
-	// Future blocks are not supported, but should not be reported, so we return an error
-	// early here
-	case errors.Is(err, consensus.ErrFutureBlock):
-		return errFutureBlockUnsupported
-
-	// Some other error occurred, abort
-	case err != nil:
-		bc.reportBlock(block, nil, err)
-		return err
-	}
 	blockContentValidationTimer.Inc(time.Since(substart).Milliseconds())
 
 	// No validation errors for the block
