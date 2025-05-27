@@ -269,20 +269,6 @@ func (b *Block) Timestamp() time.Time {
 	return time.Unix(int64(b.ethBlock.Time()), 0)
 }
 
-// syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() error {
-	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
-	}
-	return verifyBlockStandalone(
-		b.vm.syntacticBlockValidator.extDataHashes,
-		&b.vm.clock,
-		b.vm.chainConfig,
-		b.ethBlock,
-		b.atomicTxs,
-	)
-}
-
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
 	return b.verify(&precompileconfig.PredicateContext{
@@ -326,42 +312,68 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Verify the block is valid.
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
-func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
-	hash := b.ethBlock.Hash()
-	number := b.ethBlock.NumberU64()
+func (b *Block) verify(context *precompileconfig.PredicateContext, writes bool) error {
 	log.Debug("verifying block",
-		"hash", hash,
-		"height", number,
-		"hasContext", predicateContext.ProposerVMBlockCtx != nil,
+		"hash", b.ethBlock.Hash(),
+		"height", b.ethBlock.NumberU64(),
+		"hasContext", context.ProposerVMBlockCtx != nil,
 		"writes", writes,
 	)
-	if err := b.syntacticVerify(); err != nil {
-		return fmt.Errorf("syntactic block verification failed: %w", err)
-	}
 
+	if err := b.verifyWithoutParent(); err != nil {
+		return fmt.Errorf("verifyWithoutParent: %w", err)
+	}
+	if err := b.verifyCanExecute(context); err != nil {
+		return fmt.Errorf("verifyCanExecute: %w", err)
+	}
+	if err := b.execute(context, writes); err != nil {
+		return fmt.Errorf("execute: %w", err)
+	}
+	return nil
+}
+
+func (b *Block) verifyWithoutParent() error {
+	return verifyBlockStandalone(
+		b.vm.syntacticBlockValidator.extDataHashes,
+		&b.vm.clock,
+		b.vm.chainConfig,
+		b.ethBlock,
+		b.atomicTxs,
+	)
+}
+
+// Assumes [Block.verifyWithoutParent] has returned nil.
+func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) error {
 	// If the VM is not marked as bootstrapped the other chains may also be
 	// bootstrapping and not have populated the required indices. Since
 	// bootstrapping only verifies blocks that have been canonically accepted by
 	// the network, these checks would be guaranteed to pass on a synced node.
-	if b.vm.bootstrapped.Get() {
-		// Verify that the atomic txs in this block are valid to be executed.
-		if err := b.verifyAtomicTxs(); err != nil {
-			return err
-		}
-
-		// Verify that all the ICM messages are correctly marked as either valid
-		// or invalid.
-		if err := b.verifyPredicates(predicateContext); err != nil {
-			return fmt.Errorf("failed to verify predicates: %w", err)
-		}
+	if !b.vm.bootstrapped.Get() {
+		return nil
 	}
 
+	// Verify that the atomic txs in this block are valid to be executed.
+	if err := b.verifyAtomicTxs(); err != nil {
+		return err
+	}
+
+	// Verify that all the ICM messages are correctly marked as either valid
+	// or invalid.
+	if err := b.verifyPredicates(context); err != nil {
+		return fmt.Errorf("failed to verify predicates: %w", err)
+	}
+	return nil
+}
+
+// Assumes [Block.verifyCanExecute] has returned nil.
+func (b *Block) execute(context *precompileconfig.PredicateContext, writes bool) error {
 	// The engine may call VerifyWithContext multiple times on the same block
 	// with different contexts. Since the engine will only call Accept/Reject
 	// once, we should only call InsertBlockManual once. Additionally, if a
 	// block is already in processing, then it has already passed verification
 	// and at this point we have checked the predicates are still valid in the
 	// different context so we can return nil.
+	hash := b.ethBlock.Hash()
 	if b.vm.State.IsProcessing(ids.ID(hash)) {
 		return nil
 	}
@@ -371,7 +383,10 @@ func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writ
 		//
 		// Note: The atomic trie canonically contains the duplicate operations from
 		// any bonus blocks.
-		parentHash := b.ethBlock.ParentHash()
+		var (
+			number     = b.ethBlock.NumberU64()
+			parentHash = b.ethBlock.ParentHash()
+		)
 		if _, err := b.vm.atomicBackend.InsertTxs(hash, number, parentHash, b.atomicTxs); err != nil {
 			return err
 		}
