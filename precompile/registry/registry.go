@@ -17,3 +17,5 @@ import (
 // in /coreth/contracts/contracts/**.
 
 // WarpMessengerAddress = common.HexToAddress("0x0200000000000000000000000000000000000005")
+// ADD PRECOMPILES BELOW
+// NewPrecompileAddress = common.HexToAddress("0x02000000000000000000000000000000000000??")
