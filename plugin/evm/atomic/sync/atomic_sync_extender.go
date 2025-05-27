@@ -71,9 +71,9 @@ func (a *atomicSyncExtender) OnFinishBeforeCommit(lastAcceptedHeight uint64, syn
 
 func (a *atomicSyncExtender) OnFinishAfterCommit(summaryHeight uint64) error {
 	// The chain state is already restored, and from this point on the block being synced to
-	// is the accepted block. The last operation is updating shared memory with the atomic 
+	// is the accepted block. The last operation is updating shared memory with the atomic
 	// trie. ApplyToSharedMemory does this, and since MarkApplyToSharedMemoryCursor
-	// is called, even if the VM is stopped (gracefully or ungracefully), it will resume 
+	// is called, even if the VM is stopped (gracefully or ungracefully), it will resume
 	// ApplyToSharedMemory on Initialize.
 	if err := a.backend.ApplyToSharedMemory(summaryHeight); err != nil {
 		return fmt.Errorf("failed to apply atomic trie to shared memory after commit: %w", err)

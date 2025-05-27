@@ -67,20 +67,8 @@ func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot c
 	return &summary, nil
 }
 
-func (a *AtomicSyncSummary) GetBlockHash() common.Hash {
-	return a.BlockHash
-}
-
-func (a *AtomicSyncSummary) GetBlockRoot() common.Hash {
-	return a.BlockRoot
-}
-
 func (a *AtomicSyncSummary) Bytes() []byte {
 	return a.bytes
-}
-
-func (a *AtomicSyncSummary) Height() uint64 {
-	return a.BlockNumber
 }
 
 func (a *AtomicSyncSummary) ID() ids.ID {
