@@ -8,4 +8,12 @@ package registry
 // with the registry.
 import (
 	_ "github.com/ava-labs/coreth/precompile/contracts/warp"
+	// ADD PRECOMPILES BELOW
+	// _ "github.com/ava-labs/subnet-evm/precompile/contracts/yourprecompile"
 )
+
+// This list is kept just for reference. The actual addresses defined in respective packages of precompiles.
+// Note: it is important that none of these addresses conflict with each other or any other precompiles
+// in /coreth/contracts/contracts/**.
+
+// WarpMessengerAddress = common.HexToAddress("0x0200000000000000000000000000000000000005")
