@@ -1773,8 +1773,6 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			exportTx := tx.UnsignedAtomicTx
-
 			backend := &atomic.VerifierBackend{
 				Ctx:          tvm.vm.ctx,
 				Fx:           &tvm.vm.fx,
@@ -1787,6 +1785,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
+			exportTx := tx.UnsignedAtomicTx
 			burnedAVAX, err := exportTx.Burned(tvm.vm.ctx.AVAXAssetID)
 			if err != nil {
 				t.Fatal(err)
@@ -1972,7 +1971,6 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			exportTx := tx.UnsignedAtomicTx
 			backend := &atomic.VerifierBackend{
 				Ctx:          tvm.vm.ctx,
 				Fx:           &tvm.vm.fx,
@@ -1989,7 +1987,9 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
-			chainID, atomicRequests, err := exportTx.AtomicOps()
+
+			exportTx := tx.UnsignedAtomicTx
+			chainID, atomicRequests, err := tx.UnsignedAtomicTx.AtomicOps()
 			if err != nil {
 				t.Fatalf("Failed to accept export transaction due to: %s", err)
 			}
