@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -13,7 +13,7 @@ var (
 	// ID this VM should be referenced by
 	ID = ids.ID{'e', 'v', 'm'}
 
-	_ vms.Factory = &Factory{}
+	_ vms.Factory = (*Factory)(nil)
 )
 
 type Factory struct{}

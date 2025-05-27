@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package customtypes
@@ -220,8 +220,7 @@ func TestBodyExtraRLP(t *testing.T) {
 	require.NoError(t, err)
 
 	gotBody := new(Body)
-	err = rlp.DecodeBytes(encoded, gotBody)
-	require.NoError(t, err)
+	require.NoError(t, rlp.DecodeBytes(encoded, gotBody))
 
 	wantBody, wantExtra := bodyWithNonZeroFields()
 	wantBody.Withdrawals = nil
@@ -257,8 +256,7 @@ func TestBlockExtraRLP(t *testing.T) {
 	require.NoError(t, err)
 
 	gotBlock := new(Block)
-	err = rlp.DecodeBytes(encoded, gotBlock)
-	require.NoError(t, err)
+	require.NoError(t, rlp.DecodeBytes(encoded, gotBlock))
 
 	wantBlock, wantExtra := blockWithNonZeroFields()
 	wantBlock = wantBlock.WithWithdrawals(nil) // withdrawals are not encoded

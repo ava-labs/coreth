@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -28,6 +28,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/ava-labs/libevm/trie"
 
 	"github.com/stretchr/testify/assert"
@@ -58,6 +59,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/core/types"
@@ -121,6 +123,8 @@ var (
 		upgradetest.Fortuna:           params.TestFortunaChainConfig,
 	}
 
+	latestKnownFork = upgradetest.Fortuna
+
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
 
 	apricotRulesPhase0 = *params.GetRulesExtra(params.TestLaunchConfig.Rules(common.Big0, params.IsMergeTODO, 0))
@@ -181,7 +185,7 @@ type testVM struct {
 
 func newVM(t *testing.T, config testVMConfig) *testVM {
 	ctx := snowtest.Context(t, snowtest.CChainID)
-	fork := upgradetest.Latest
+	fork := latestKnownFork
 	if config.fork != nil {
 		fork = *config.fork
 	}
@@ -210,7 +214,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		CantSendAppGossip: true,
 		SendAppGossipF:    func(context.Context, commonEng.SendConfig, []byte) error { return nil },
 	}
-	err := vm.Initialize(
+	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,
 		prefixedDB,
@@ -220,8 +224,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		issuer,
 		nil,
 		appSender,
-	)
-	require.NoError(t, err, "error initializing vm")
+	), "error initializing vm")
 
 	if !config.isSyncing {
 		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
@@ -448,14 +451,12 @@ func TestImportMissingUTXOs(t *testing.T) {
 		},
 	})
 	defer func() {
-		err := tvm1.vm.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, tvm1.vm.Shutdown(context.Background()))
 	}()
 
 	importTx, err := tvm1.vm.newImportTx(tvm1.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
-	err = tvm1.vm.mempool.AddLocalTx(importTx)
-	require.NoError(t, err)
+	require.NoError(t, tvm1.vm.mempool.AddLocalTx(importTx))
 	<-tvm1.toEngine
 	blk, err := tvm1.vm.BuildBlock(context.Background())
 	require.NoError(t, err)
@@ -465,8 +466,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 		fork: &fork,
 	}).vm
 	defer func() {
-		err := vm2.Shutdown(context.Background())
-		require.NoError(t, err)
+		require.NoError(t, vm2.Shutdown(context.Background()))
 	}()
 
 	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
@@ -1006,8 +1006,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.mempool.AddLocalTx(reissuanceTx1); !errors.Is(err, atomic.ErrConflictingAtomicTx) {
-				t.Fatalf("Expected to fail with err: %s, but found err: %s", atomic.ErrConflictingAtomicTx, err)
+			if err := vm.mempool.AddLocalTx(reissuanceTx1); !errors.Is(err, atomictxpool.ErrConflictingAtomicTx) {
+				t.Fatalf("Expected to fail with err: %s, but found err: %s", atomictxpool.ErrConflictingAtomicTx, err)
 			}
 
 			assert.True(t, vm.mempool.Has(importTx1.ID()))
@@ -1296,7 +1296,7 @@ func TestSetPreferenceRace(t *testing.T) {
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
-	key := utils.NewKey(t)
+	key := utilstest.NewKey(t)
 
 	key0 := testKeys[0]
 	addr0 := key0.Address()
@@ -1484,7 +1484,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 	}
 
 	// Make [blk] a bonus block.
-	tvm.vm.atomicBackend.(*atomicBackend).bonusBlocks = map[uint64]ids.ID{blk.Height(): blk.ID()}
+	tvm.vm.atomicBackend.AddBonusBlock(blk.Height(), blk.ID())
 
 	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
 	if err := tvm.vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{tvm.vm.ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}); err != nil {
@@ -3474,7 +3474,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 			testShortIDAddrs[2]: importAmount,
 		},
 	})
-	conflictKey := utils.NewKey(t)
+	conflictKey := utilstest.NewKey(t)
 	defer func() {
 		if err := tvm.vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -3693,7 +3693,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
 	newCTX := snowtest.Context(t, tvm.vm.ctx.ChainID)
-	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
+	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, latestKnownFork, upgrade.UnscheduledActivationTime)
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
 	genesis := []byte(genesisJSON(forkToChainConfig[fork]))
@@ -3705,8 +3705,16 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// try again with skip-upgrade-check
 	config := []byte(`{"skip-upgrade-check": true}`)
-	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, config, tvm.toEngine, []*commonEng.Fx{}, tvm.appSender)
-	require.NoError(t, err)
+	require.NoError(t, reinitVM.Initialize(
+		context.Background(),
+		newCTX,
+		tvm.db,
+		genesis,
+		[]byte{},
+		config,
+		tvm.toEngine,
+		[]*commonEng.Fx{},
+		tvm.appSender))
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
 }
 
@@ -3834,8 +3842,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require := require.New(t)
 
 	gspec := new(core.Genesis)
-	err := json.Unmarshal([]byte(genesisJSONCancun), gspec)
-	require.NoError(err)
+	require.NoError(json.Unmarshal([]byte(genesisJSONCancun), gspec))
 
 	// Make one block with a single blob tx
 	signer := types.NewCancunSigner(gspec.Config.ChainID)
