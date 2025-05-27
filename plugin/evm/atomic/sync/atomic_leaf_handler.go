@@ -17,7 +17,7 @@ type atomicLeafHandler struct {
 	handlers.LeafRequestHandler
 }
 
-// Initialize initializes the atomicLeafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
+// NewAtomicLeafHandler initializes the atomicLeafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
 func NewAtomicLeafHandler(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) *atomicLeafHandler {
 	handlerStats := stats.GetOrRegisterHandlerStats(metrics.Enabled)
 	return &atomicLeafHandler{
