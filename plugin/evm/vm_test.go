@@ -124,6 +124,7 @@ var (
 		upgradetest.Durango:           params.TestDurangoChainConfig,
 		upgradetest.Etna:              params.TestEtnaChainConfig,
 		upgradetest.Fortuna:           params.TestFortunaChainConfig,
+		upgradetest.Granite:           params.TestGraniteChainConfig,
 	}
 
 	genesisJSONCancun = genesisJSON(activateCancun(params.TestChainConfig))
