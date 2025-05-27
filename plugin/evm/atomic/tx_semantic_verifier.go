@@ -47,27 +47,27 @@ type VerifierBackend struct {
 // SemanticVerify checks the semantic validity of atomic transactions.
 func (b *VerifierBackend) SemanticVerify(tx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
 	return tx.UnsignedAtomicTx.Visit(&semanticVerifier{
-		Backend: b,
-		Tx:      tx,
-		Parent:  parent,
-		BaseFee: baseFee,
+		backend: b,
+		tx:      tx,
+		parent:  parent,
+		baseFee: baseFee,
 	})
 }
 
 // semanticVerifier is a visitor that checks the semantic validity of atomic
 // transactions.
 type semanticVerifier struct {
-	Backend *VerifierBackend
-	Tx      *Tx
-	Parent  AtomicBlockContext
-	BaseFee *big.Int
+	backend *VerifierBackend
+	tx      *Tx
+	parent  AtomicBlockContext
+	baseFee *big.Int
 }
 
 func (s *semanticVerifier) ImportTx(utx *UnsignedImportTx) error {
-	backend := s.Backend
+	backend := s.backend
 	ctx := backend.Ctx
 	rules := backend.Rules
-	stx := s.Tx
+	stx := s.tx
 	if err := utx.Verify(ctx, rules); err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (s *semanticVerifier) ImportTx(utx *UnsignedImportTx) error {
 		if err != nil {
 			return err
 		}
-		txFee, err := CalculateDynamicFee(gasUsed, s.BaseFee)
+		txFee, err := CalculateDynamicFee(gasUsed, s.baseFee)
 		if err != nil {
 			return err
 		}
@@ -143,7 +143,7 @@ func (s *semanticVerifier) ImportTx(utx *UnsignedImportTx) error {
 		}
 	}
 
-	return conflicts(backend, utx.InputUTXOs(), s.Parent)
+	return conflicts(backend, utx.InputUTXOs(), s.parent)
 }
 
 // conflicts returns an error if [inputs] conflicts with any of the atomic inputs contained in [ancestor]
@@ -187,10 +187,10 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor Atomic
 }
 
 func (s *semanticVerifier) ExportTx(utx *UnsignedExportTx) error {
-	backend := s.Backend
+	backend := s.backend
 	ctx := backend.Ctx
 	rules := backend.Rules
-	stx := s.Tx
+	stx := s.tx
 	if err := utx.Verify(ctx, rules); err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (s *semanticVerifier) ExportTx(utx *UnsignedExportTx) error {
 		if err != nil {
 			return err
 		}
-		txFee, err := CalculateDynamicFee(gasUsed, s.BaseFee)
+		txFee, err := CalculateDynamicFee(gasUsed, s.baseFee)
 		if err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func (s *semanticVerifier) ExportTx(utx *UnsignedExportTx) error {
 		if len(cred.Sigs) != 1 {
 			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
 		}
-		pubKey, err := s.Backend.SecpCache.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
+		pubKey, err := s.backend.SecpCache.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
 		if err != nil {
 			return err
 		}
