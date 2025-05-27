@@ -21,7 +21,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 )
 
-var _ Visitor = (*SemanticVerifier)(nil)
+var _ Visitor = (*semanticVerifier)(nil)
 
 var (
 	ErrAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
@@ -44,16 +44,26 @@ type VerifierBackend struct {
 	SecpCache    *secp256k1.RecoverCache
 }
 
-// SemanticVerifier is a visitor that checks the semantic validity of atomic transactions.
-type SemanticVerifier struct {
+// SemanticVerify checks the semantic validity of atomic transactions.
+func (b *VerifierBackend) SemanticVerify(tx *Tx, parent AtomicBlockContext, baseFee *big.Int) error {
+	return tx.UnsignedAtomicTx.Visit(&semanticVerifier{
+		Backend: b,
+		Tx:      tx,
+		Parent:  parent,
+		BaseFee: baseFee,
+	})
+}
+
+// semanticVerifier is a visitor that checks the semantic validity of atomic
+// transactions.
+type semanticVerifier struct {
 	Backend *VerifierBackend
 	Tx      *Tx
 	Parent  AtomicBlockContext
 	BaseFee *big.Int
 }
 
-// ImportTx verifies this transaction is valid.
-func (s *SemanticVerifier) ImportTx(utx *UnsignedImportTx) error {
+func (s *semanticVerifier) ImportTx(utx *UnsignedImportTx) error {
 	backend := s.Backend
 	ctx := backend.Ctx
 	rules := backend.Rules
@@ -176,8 +186,7 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor Atomic
 	return nil
 }
 
-// ExportTx verifies this transaction is valid.
-func (s *SemanticVerifier) ExportTx(utx *UnsignedExportTx) error {
+func (s *semanticVerifier) ExportTx(utx *UnsignedExportTx) error {
 	backend := s.Backend
 	ctx := backend.Ctx
 	rules := backend.Rules
