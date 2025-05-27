@@ -9,7 +9,7 @@ package registry
 import (
 	_ "github.com/ava-labs/coreth/precompile/contracts/warp"
 	// ADD PRECOMPILES BELOW
-	// _ "github.com/ava-labs/subnet-evm/precompile/contracts/yourprecompile"
+	// _ "github.com/ava-labs/coreth/precompile/contracts/newprecompile"
 )
 
 // This list is kept just for reference. The actual addresses defined in respective packages of precompiles.
