@@ -684,10 +684,9 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 			}.BackendConstructor,
 		},
 	)
-	var leafHandlerConfigs []*extension.LeafRequestConfig
-	syncStats := handlerstats.GetOrRegisterHandlerStats(metrics.Enabled)
 	// register default leaf request handler for state trie
-	leafHandlerConfigs = append(leafHandlerConfigs, &extension.LeafRequestConfig{
+	syncStats := handlerstats.GetOrRegisterHandlerStats(metrics.Enabled)
+	stateLeafRequestConfig := &extension.LeafRequestConfig{
 		LeafType:   message.StateTrieNode,
 		MetricName: "sync_state_trie_leaves",
 		Handler: handlers.NewLeafsRequestHandler(evmTrieDB,
@@ -695,21 +694,18 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 			vm.blockChain, vm.networkCodec,
 			syncStats,
 		),
-	})
-	leafHandler := atomicsync.NewAtomicLeafHandler(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, vm.networkCodec)
-	leafHandlerConfigs = append(leafHandlerConfigs, &extension.LeafRequestConfig{
+	}
+
+	atomicLeafHandlerConfig := &extension.LeafRequestConfig{
 		LeafType:   atomicsync.AtomicTrieNode,
 		MetricName: "sync_atomic_trie_leaves",
-		Handler:    leafHandler,
-	})
-
-	leafHandlers := make(LeafHandlers, len(leafHandlerConfigs))
-	for _, leafConfig := range leafHandlerConfigs {
-		if _, exists := leafHandlers[leafConfig.LeafType]; exists {
-			return fmt.Errorf("duplicate leaf type %v", leafConfig.LeafType)
-		}
-		leafHandlers[leafConfig.LeafType] = leafConfig.Handler
+		Handler:    atomicsync.NewAtomicLeafHandler(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, vm.networkCodec),
 	}
+
+	leafHandlers := make(LeafHandlers)
+	leafHandlers[stateLeafRequestConfig.LeafType] = stateLeafRequestConfig.Handler
+	leafHandlers[atomicLeafHandlerConfig.LeafType] = atomicLeafHandlerConfig.Handler
+
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
@@ -737,10 +733,10 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	}
 
 	// Initialize the state sync client
-	leafMetricsNames := make(map[message.NodeType]string, len(leafHandlerConfigs))
-	for _, leafConfig := range leafHandlerConfigs {
-		leafMetricsNames[leafConfig.LeafType] = leafConfig.MetricName
-	}
+	leafMetricsNames := make(map[message.NodeType]string)
+	leafMetricsNames[stateLeafRequestConfig.LeafType] = stateLeafRequestConfig.MetricName
+	leafMetricsNames[atomicLeafHandlerConfig.LeafType] = atomicLeafHandlerConfig.MetricName
+
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
 		Chain: vm.eth,
 		State: vm.State,
