@@ -137,7 +137,7 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 
 	ctx := snowtest.Context(t, snowtest.CChainID)
 	mempool := &Mempool{}
-	require.NoError(mempool.Initialize(ctx, prometheus.NewRegistry(), 5_000, nil))
+	require.NoError(mempool.Initialize(ctx, prometheus.NewRegistry(), 1, nil))
 	// create candidate tx (we will drop before validation)
 	tx := atomictest.GenerateTestImportTx()
 
@@ -161,7 +161,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 
 	ctx := snowtest.Context(t, snowtest.CChainID)
 	mempool := &Mempool{}
-	require.NoError(mempool.Initialize(ctx, prometheus.NewRegistry(), 5_000, nil))
+	require.NoError(mempool.Initialize(ctx, prometheus.NewRegistry(), 1, nil))
 
 	tx1 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
 	require.NoError(mempool.AddRemoteTx(tx1))
