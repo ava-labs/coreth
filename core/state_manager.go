@@ -74,7 +74,7 @@ type TrieDB interface {
 
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 	// Firewood doesn't require monitoring
-	if config.Pruning && config.StateScheme == customrawdb.FirewoodScheme {
+	if config.Pruning && config.StateScheme != customrawdb.FirewoodScheme {
 		cm := &cappedMemoryTrieWriter{
 			TrieDB:           db,
 			memoryCap:        common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,

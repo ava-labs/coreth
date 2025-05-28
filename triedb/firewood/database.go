@@ -1,7 +1,7 @@
 // (c) 2025, Ava Labs, Inc.
 // See the file LICENSE for licensing terms.
 
-package firewooddb
+package firewood
 
 import (
 	"errors"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie/trienode"
@@ -19,13 +20,13 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
 
-	firewood "github.com/ava-labs/firewood-go/ffi"
+	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
 var (
-	_ IFirewood = &firewood.Database{}
-	_ IProposal = &firewood.Proposal{}
-	_ IDbView   = &firewood.Revision{}
+	_ IFirewood = &ffi.Database{}
+	_ IProposal = &ffi.Proposal{}
+	_ IDbView   = &ffi.Revision{}
 )
 
 type ProposalContext struct {
@@ -50,10 +51,12 @@ type IDbView interface {
 type IProposal interface {
 	// All proposals support read operations
 	IDbView
+	// Read the current root of the database.
+	Root() ([]byte, error)
 	// Propose takes a root and a set of keys-values and creates a new proposal
 	// and returns the new root.
 	// If values[i] is nil, the key is deleted.
-	Propose(keys [][]byte, values [][]byte) (*firewood.Proposal, error)
+	Propose(keys [][]byte, values [][]byte) (*ffi.Proposal, error)
 	// Commit commits the proposal as a new revision
 	Commit() error
 	// Drop drops the proposal; this object may no longer be used after this call.
@@ -66,10 +69,10 @@ type IFirewood interface {
 	// Propose takes a root and a set of keys-values and creates a new proposal
 	// and returns the new root.
 	// If values[i] is nil, the key is deleted.
-	Propose(keys [][]byte, values [][]byte) (*firewood.Proposal, error)
+	Propose(keys [][]byte, values [][]byte) (*ffi.Proposal, error)
 	// Revision returns a new view that is a copy of the current database
 	// at this historical revision.
-	Revision(root []byte) (*firewood.Revision, error)
+	Revision(root []byte) (*ffi.Revision, error)
 	// Close closes the database and releases all resources.
 	Close() error
 }
@@ -79,12 +82,18 @@ type TrieDBConfig struct {
 	FileName          string // File name of the database
 	CleanCacheSize    int    // Size of the clean cache in bytes
 	Revisions         uint
-	ReadCacheStrategy firewood.CacheStrategy
+	ReadCacheStrategy ffi.CacheStrategy
 	MetricsPort       uint16
+	Database          *Database
 }
 
-func (c TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
-	return New(diskdb, &c)
+// Must take reference to allow closure - reuse any existing database for the same config.
+func (c *TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
+	if c.Database == nil {
+		c.Database = New(diskdb, c)
+		return c.Database
+	}
+	return c.Database
 }
 
 type Database struct {
@@ -107,7 +116,7 @@ func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
 		return nil
 	}
 
-	fw, err := firewood.New(path, config)
+	fw, err := ffi.New(path, config)
 	if err != nil {
 		log.Error("firewooddb: error creating firewood database", "error", err)
 		return nil
@@ -126,7 +135,7 @@ func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
 	}
 }
 
-func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*firewood.Config, string, error) {
+func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*ffi.Config, string, error) {
 	// Get the path from the database
 	path, err := customrawdb.ReadDatabasePath(diskdb)
 	if err != nil {
@@ -160,7 +169,7 @@ func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*firewood.
 	}
 
 	// Create the Firewood config from the provided config.
-	config := &firewood.Config{
+	config := &ffi.Config{
 		Create:            !exists,                               // Use any existing file
 		NodeCacheEntries:  uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		Revisions:         trieConfig.Revisions,
@@ -172,8 +181,10 @@ func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*firewood.
 }
 
 // Scheme returns the scheme of the database.
+// This is only used in some weird API calls (TODO: fix that)
+// and in StateDB to avoid iterating through deleted storage tries.
 func (db *Database) Scheme() string {
-	return customrawdb.FirewoodScheme
+	return rawdb.HashScheme
 }
 
 // Initialized indicates whether the most recent root of the database
@@ -187,6 +198,8 @@ func (db *Database) Initialized(root common.Hash) bool {
 		return false
 	}
 
+	fmt.Printf("firewooddb: checking if initialized with root %s, current root %s\n", root.Hex(), common.BytesToHash(rootBytes).Hex())
+
 	return common.BytesToHash(rootBytes) == root
 }
 
@@ -194,22 +207,23 @@ func (db *Database) Initialized(root common.Hash) bool {
 // It will not be committed until the Commit method is called.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Create key-value pairs for the nodes in bytes.
-	flattenedNodes := nodes.Flatten()
 	var keys [][]byte
 	var values [][]byte
 
-	for owner, set := range flattenedNodes {
-		for _, n := range set {
-			var key []byte
-			if owner == (common.Hash{}) {
-				key = n.Hash.Bytes()
-			} else {
-				key = append(owner.Bytes(), n.Hash.Bytes()...)
-			}
-			keys = append(keys, key)
-			values = append(values, n.Blob)
+	flattenedNodes := nodes.Flatten()
+
+	for _, nodeset := range flattenedNodes {
+		for str, node := range nodeset {
+			keys = append(keys, []byte(str))
+			values = append(values, node.Blob)
 		}
 	}
+
+	// nodeSet := nodes[parent]
+	// for str, node := range nodeSet.Nodes {
+	// 	keys = append(keys, []byte(str))
+	// 	values = append(values, node.Blob)
+	// }
 
 	// Firewood ffi does not accept empty bashes, so if the keys are empty, the root is returned.
 	// Empty blocks are not allowed in coreth anyway.
@@ -230,6 +244,8 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	// Special case: we initialize the database with the empty hash.
 	// This is the only time we can propose a different parent root, since all syncing changes
 	// are directly written to disk, and any old root is for a loaded database is unknown.
+	fmt.Printf("firewooddb: proposing from parent %s at height %d\n", parent.Hex(), block)
+	fmt.Printf("db initialized: %t\n", db.Initialized(parent))
 	if db.Initialized(parent) && (db.proposalTree.Root == common.Hash{} || db.proposalTree.Block == block-1) {
 		p, err := db.fwDisk.Propose(keys, values)
 		if err != nil {
@@ -485,25 +501,55 @@ type reader struct {
 
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
-func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	// No reason to return the metaroot
-	if hash == (common.Hash{}) {
-		return nil, nil
-	}
-
+func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	// Ensure we have access to the requested root
 	view, err := reader.db.viewAtRoot(reader.root)
 	if err != nil {
 		return nil, fmt.Errorf("firewooddb: requested state root %s not found", reader.root.Hex()) // TODO: Should we return the error?
 	}
 
-	key := path
-	if owner != (common.Hash{}) {
-		key = append(owner.Bytes(), path...) // TODO: Is this right?
+	return view.Get(path)
+}
+
+// addPendingProposal adds a pending proposal to the database.
+func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byte) (common.Hash, error) {
+	db.proposalLock.Lock()
+	defer db.proposalLock.Unlock()
+
+	// Check whether if we can propose from the database root.
+	var (
+		p   IProposal
+		err error
+	)
+	if db.Initialized(parentRoot) {
+		// Propose from the database root.
+		fmt.Printf("firewooddb: proposing from db root %s\n", parentRoot.Hex())
+		p, err = db.fwDisk.Propose(keys, values)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("firewooddb: error proposing from root %s", parentRoot.Hex())
+		}
+	} else {
+		// Find any proposal with the given parent root.
+		fmt.Printf("firewooddb: proposing from other proposal parent root %s\n", parentRoot.Hex())
+		proposals, ok := db.proposalMap[parentRoot]
+		if !ok || len(proposals) == 0 {
+			return common.Hash{}, fmt.Errorf("firewooddb: no proposal found for parent root %s", parentRoot.Hex())
+		}
+		// Use the first proposal with the given parent root.
+		rootProposal := proposals[0].Proposal
+
+		p, err = rootProposal.Propose(keys, values)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("firewooddb: error proposing from parent proposal %s", parentRoot.Hex())
+		}
 	}
-	blob, err := view.Get(key)
+
+	// We succesffuly created a proposal, so we must drop it after use.
+	defer p.Drop()
+
+	rootBytes, err := p.Root()
 	if err != nil {
-		return nil, nil
+		return common.Hash{}, err
 	}
-	return blob, nil
+	return common.BytesToHash(rootBytes), nil
 }

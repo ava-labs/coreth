@@ -48,7 +48,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/triedb/firewooddb"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -66,7 +66,7 @@ import (
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
 
-	firewood "github.com/ava-labs/firewood-go/ffi"
+	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
 // ====== If resolving merge conflicts ======
@@ -217,13 +217,14 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		}.BackendConstructor
 	}
 	if c.StateScheme == customrawdb.FirewoodScheme {
-		config.DBOverride = firewooddb.TrieDBConfig{
+		cfg := &firewood.TrieDBConfig{
 			FileName:          "firewood_state",
 			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
 			Revisions:         uint(c.StateHistory),
-			ReadCacheStrategy: firewood.CacheAllReads,
+			ReadCacheStrategy: ffi.CacheAllReads,
 			MetricsPort:       0, // use any open port from OS
-		}.BackendConstructor
+		}
+		config.DBOverride = cfg.BackendConstructor // BackendConstructor is on the reference to allow closure
 	}
 	return config
 }
@@ -374,7 +375,13 @@ func NewBlockChain(
 		return nil, errCacheConfigNotSpecified
 	}
 	// Open trie database with provided config
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
+	var stateCache state.Database
+	triedbConfig := cacheConfig.triedbConfig()
+	if cacheConfig.StateScheme == customrawdb.FirewoodScheme {
+		stateCache = state.NewDatabaseWithFirewood(db, triedbConfig)
+	} else {
+		stateCache = state.NewDatabaseWithConfig(db, triedbConfig)
+	}
 
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
@@ -382,7 +389,7 @@ func NewBlockChain(
 	// Note: In go-ethereum, the code rewinds the chain on an incompatible config upgrade.
 	// We don't do this and expect the node operator to always update their node's configuration
 	// before network upgrades take effect.
-	chainConfig, _, err := SetupGenesisBlock(db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
+	chainConfig, _, err := SetupGenesisBlock(db, stateCache.TrieDB(), genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +405,8 @@ func NewBlockChain(
 		chainConfig:       chainConfig,
 		cacheConfig:       cacheConfig,
 		db:                db,
-		triedb:            triedb,
+		triedb:            stateCache.TrieDB(),
+		stateCache:        stateCache,
 		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:        lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
@@ -411,7 +419,7 @@ func NewBlockChain(
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 

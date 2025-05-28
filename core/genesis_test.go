@@ -40,10 +40,10 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
-	"github.com/ava-labs/coreth/triedb/firewooddb"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
-	firewood "github.com/ava-labs/firewood-go/ffi"
+	ffi "github.com/ava-labs/firewood-go/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -307,13 +307,16 @@ func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config 
 		})
 		// Set the temporary directory as the database path
 		require.NoError(t, customrawdb.WriteDatabasePath(db, tempDir))
-		return &triedb.Config{DBOverride: firewooddb.TrieDBConfig{
+		fwCfg := firewood.TrieDBConfig{
 			FileName:          "firewood_genesis_test",
 			CleanCacheSize:    256 * 1024 * 1024,
 			Revisions:         10,
-			ReadCacheStrategy: firewood.CacheAllReads,
+			ReadCacheStrategy: ffi.CacheAllReads,
 			MetricsPort:       0, // use any open port from OS
-		}.BackendConstructor}
+		}
+		trieCfg := &triedb.Config{}
+		trieCfg.DBOverride = fwCfg.BackendConstructor
+		return trieCfg
 	}
 
 	return nil // should never happen
