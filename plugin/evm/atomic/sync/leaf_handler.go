@@ -12,15 +12,15 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
-// atomicLeafHandler is a wrapper around handlers.LeafRequestHandler that allows for initialization after creation
-type atomicLeafHandler struct {
+// leafHandler is a wrapper around handlers.LeafRequestHandler that allows for initialization after creation
+type leafHandler struct {
 	handlers.LeafRequestHandler
 }
 
-// NewAtomicLeafHandler initializes the atomicLeafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
-func NewAtomicLeafHandler(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) *atomicLeafHandler {
+// Initialize initializes the leafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
+func NewLeafHandler(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) *leafHandler {
 	handlerStats := stats.GetOrRegisterHandlerStats(metrics.Enabled)
-	return &atomicLeafHandler{
+	return &leafHandler{
 		LeafRequestHandler: handlers.NewLeafsRequestHandler(atomicTrieDB, trieKeyLength, nil, networkCodec, handlerStats),
 	}
 }

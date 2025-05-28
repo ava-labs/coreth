@@ -43,6 +43,7 @@ type BlockSyncSummary struct {
 }
 
 func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash) (*BlockSyncSummary, error) {
+	// We intentionally do not use the acceptImpl here and leave it for the parser to set.
 	summary := BlockSyncSummary{
 		BlockNumber: blockNumber,
 		BlockHash:   blockHash,

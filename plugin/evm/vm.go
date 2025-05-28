@@ -697,9 +697,9 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	}
 
 	atomicLeafHandlerConfig := &extension.LeafRequestConfig{
-		LeafType:   atomicsync.AtomicTrieNode,
+		LeafType:   atomicsync.TrieNode,
 		MetricName: "sync_atomic_trie_leaves",
-		Handler:    atomicsync.NewAtomicLeafHandler(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, vm.networkCodec),
+		Handler:    atomicsync.NewLeafHandler(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, vm.networkCodec),
 	}
 
 	leafHandlers := make(LeafHandlers)
@@ -716,7 +716,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	)
 	vm.Network.SetRequestHandler(networkHandler)
 
-	vm.Server = vmsync.SyncServer(vm.blockChain, atomicsync.NewAtomicSyncSummaryProvider(vm.atomicBackend.AtomicTrie()), vm.config.StateSyncCommitInterval)
+	vm.Server = vmsync.SyncServer(vm.blockChain, atomicsync.NewSummaryProvider(vm.atomicBackend.AtomicTrie()), vm.config.StateSyncCommitInterval)
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
@@ -759,8 +759,8 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		MetadataDB:           vm.metadataDB,
 		ToEngine:             vm.toEngine,
 		Acceptor:             vm,
-		SyncableParser:       atomicsync.NewAtomicSyncSummaryParser(),
-		SyncExtender:         atomicsync.NewAtomicSyncExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
+		SyncableParser:       atomicsync.NewSummaryParser(),
+		SyncExtender:         atomicsync.NewExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

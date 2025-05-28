@@ -1,5 +1,6 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
+
 package sync
 
 import (
@@ -141,7 +142,7 @@ func (client *stateSyncerClient) GetOngoingSyncStateSummary(context.Context) (bl
 		return nil, err // includes the [database.ErrNotFound] case
 	}
 
-	summary, err := client.SyncableParser.ParseFromBytes(summaryBytes, client.acceptSyncSummary)
+	summary, err := client.SyncableParser.Parse(summaryBytes, client.acceptSyncSummary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncSummary: %w", err)
 	}
@@ -163,7 +164,7 @@ func (client *stateSyncerClient) ClearOngoingSummary() error {
 
 // ParseStateSummary parses [summaryBytes] to [commonEng.Summary]
 func (client *stateSyncerClient) ParseStateSummary(_ context.Context, summaryBytes []byte) (block.StateSummary, error) {
-	return client.SyncableParser.ParseFromBytes(summaryBytes, client.acceptSyncSummary)
+	return client.SyncableParser.Parse(summaryBytes, client.acceptSyncSummary)
 }
 
 // stateSync blockingly performs the state sync for the EVM state and the atomic state

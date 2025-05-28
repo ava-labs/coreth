@@ -17,24 +17,24 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 )
 
-var _ message.Syncable = (*AtomicSyncSummary)(nil)
+var _ message.Syncable = (*Summary)(nil)
 
-// Codec is the codec manager that contains the codec for AtomicSyncSummary and
+// Codec is the codec manager that contains the codec for Summary and
 // other message types that are used in the network protocol. This is to ensure that the codec
-// version is consistent across all message types and includes the codec for AtomicSyncSummary.
+// version is consistent across all message types and includes the codec for Summary.
 var Codec codec.Manager
 
 func init() {
 	var err error
-	Codec, err = message.NewCodec(AtomicSyncSummary{})
+	Codec, err = message.NewCodec(Summary{})
 	if err != nil {
 		panic(fmt.Errorf("failed to create codec manager: %w", err))
 	}
 }
 
-// AtomicSyncSummary provides the information necessary to sync a node starting
+// Summary provides the information necessary to sync a node starting
 // at the given block.
-type AtomicSyncSummary struct {
+type Summary struct {
 	*message.BlockSyncSummary `serialize:"true"`
 	AtomicRoot                common.Hash `serialize:"true"`
 
@@ -43,8 +43,9 @@ type AtomicSyncSummary struct {
 	acceptImpl message.AcceptImplFn
 }
 
-func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (*AtomicSyncSummary, error) {
-	summary := AtomicSyncSummary{
+func NewSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash, atomicRoot common.Hash) (*Summary, error) {
+	// We intentionally do not use the acceptImpl here and leave it for the parser to set.
+	summary := Summary{
 		BlockSyncSummary: &message.BlockSyncSummary{
 			BlockNumber: blockNumber,
 			BlockHash:   blockHash,
@@ -67,19 +68,19 @@ func NewAtomicSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot c
 	return &summary, nil
 }
 
-func (a *AtomicSyncSummary) Bytes() []byte {
+func (a *Summary) Bytes() []byte {
 	return a.bytes
 }
 
-func (a *AtomicSyncSummary) ID() ids.ID {
+func (a *Summary) ID() ids.ID {
 	return a.summaryID
 }
 
-func (a *AtomicSyncSummary) String() string {
-	return fmt.Sprintf("AtomicSyncSummary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", a.BlockHash, a.BlockNumber, a.BlockRoot, a.AtomicRoot)
+func (a *Summary) String() string {
+	return fmt.Sprintf("Summary(BlockHash=%s, BlockNumber=%d, BlockRoot=%s, AtomicRoot=%s)", a.BlockHash, a.BlockNumber, a.BlockRoot, a.AtomicRoot)
 }
 
-func (a *AtomicSyncSummary) Accept(context.Context) (block.StateSyncMode, error) {
+func (a *Summary) Accept(context.Context) (block.StateSyncMode, error) {
 	if a.acceptImpl == nil {
 		return block.StateSyncSkipped, fmt.Errorf("accept implementation not specified for summary: %s", a)
 	}

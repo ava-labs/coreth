@@ -14,22 +14,22 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 )
 
-var _ sync.SummaryProvider = (*atomicSummaryProvider)(nil)
+var _ sync.SummaryProvider = (*summaryProvider)(nil)
 
-type atomicSummaryProvider struct {
-	atomicTrie *state.AtomicTrie
+type summaryProvider struct {
+	trie *state.AtomicTrie
 }
 
-func NewAtomicSyncSummaryProvider(atomicTrie *state.AtomicTrie) *atomicSummaryProvider {
-	return &atomicSummaryProvider{
-		atomicTrie: atomicTrie,
+func NewSummaryProvider(atomicTrie *state.AtomicTrie) *summaryProvider {
+	return &summaryProvider{
+		trie: atomicTrie,
 	}
 }
 
 // StateSummaryAtBlock returns the block state summary at [blk] if valid.
-func (a *atomicSummaryProvider) StateSummaryAtBlock(blk *types.Block) (block.StateSummary, error) {
+func (a *summaryProvider) StateSummaryAtBlock(blk *types.Block) (block.StateSummary, error) {
 	height := blk.NumberU64()
-	atomicRoot, err := a.atomicTrie.Root(height)
+	atomicRoot, err := a.trie.Root(height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve atomic trie root for height (%d): %w", height, err)
 	}
@@ -38,7 +38,7 @@ func (a *atomicSummaryProvider) StateSummaryAtBlock(blk *types.Block) (block.Sta
 		return nil, fmt.Errorf("atomic trie root not found for height (%d)", height)
 	}
 
-	summary, err := NewAtomicSyncSummary(blk.Hash(), height, blk.Root(), atomicRoot)
+	summary, err := NewSummary(blk.Hash(), height, blk.Root(), atomicRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct syncable block at height %d: %w", height, err)
 	}

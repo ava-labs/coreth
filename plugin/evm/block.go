@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -33,15 +34,8 @@ import (
 var (
 	_ snowman.Block           = (*Block)(nil)
 	_ block.WithVerifyContext = (*Block)(nil)
-	_ EthBlockWrapper         = (*Block)(nil)
+	_ sync.EthBlockWrapper    = (*Block)(nil)
 )
-
-// EthBlockWrapper can be implemented by a concrete block wrapper type to
-// return *types.Block, which is needed to update chain pointers at the
-// end of the sync operation.
-type EthBlockWrapper interface {
-	GetEthBlock() *types.Block
-}
 
 var errMissingUTXOs = errors.New("missing UTXOs")
 
