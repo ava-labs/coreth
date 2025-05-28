@@ -86,8 +86,8 @@ func verifyBlockStandalone(
 	}
 
 	for i, tx := range txs {
-		if len(tx.BlobHashes()) != 0 {
-			return fmt.Errorf("unexpected blobs in transaction at index %d", i)
+		if tx.Type() == types.BlobTxType {
+			return fmt.Errorf("unexpected blobTx at index %d", i)
 		}
 	}
 
