@@ -194,7 +194,7 @@ func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
-		vm.AtomicMempool().RemoveTx(tx)
+		vm.Mempool.RemoveTx(tx)
 	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
@@ -214,8 +214,8 @@ func (be *blockExtension) OnReject() error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
-		vm.AtomicMempool().RemoveTx(tx)
-		if err := vm.AtomicMempool().AddRemoteTx(tx); err != nil {
+		vm.Mempool.RemoveTx(tx)
+		if err := vm.Mempool.AddRemoteTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
