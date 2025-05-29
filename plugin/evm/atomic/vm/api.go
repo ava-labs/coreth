@@ -24,7 +24,6 @@ const (
 	// Max number of addresses that can be passed in as argument to GetUTXOs
 	maxGetUTXOsAddrs = 1024
 	maxUTXOsToFetch  = 1024
-	avaxEndpoint     = "/avax"
 )
 
 var (
