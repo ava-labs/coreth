@@ -363,7 +363,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer triedb.Close()
-	_, err := genesis.Commit(db, triedb)
+	_, err := genesis.Commit(state.NewDatabaseWithNodeDB(db, triedb))
 	if err != nil {
 		return nil, nil, nil, err
 	}

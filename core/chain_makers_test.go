@@ -32,6 +32,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -58,7 +59,7 @@ func ExampleGenerateChain() {
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
-	genesis := gspec.MustCommit(genDb, triedb.NewDatabase(genDb, triedb.HashDefaults))
+	genesis := gspec.MustCommit(state.NewDatabaseWithConfig(genDb, triedb.HashDefaults))
 
 	// This call generates a chain of 3 blocks. The function runs for
 	// each block and adds different features to gen based on the

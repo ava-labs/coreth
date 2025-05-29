@@ -36,6 +36,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
@@ -43,7 +44,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -564,7 +564,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	var sideblocks types.Blocks
 	if tt.sidechainBlocks > 0 {
 		genDb := rawdb.NewMemoryDatabase()
-		gspec.MustCommit(genDb, triedb.NewDatabase(genDb, nil))
+		gspec.MustCommit(state.NewDatabase(genDb))
 		sideblocks, _, err = GenerateChain(gspec.Config, gspec.ToBlock(), engine, genDb, tt.sidechainBlocks, 10, func(i int, b *BlockGen) {
 			b.SetCoinbase(common.Address{0x01})
 			tx, err := types.SignTx(types.NewTransaction(b.TxNonce(addr1), common.Address{0x01}, big.NewInt(10000), params.TxGas, big.NewInt(ap3.InitialBaseFee), nil), signer, key1)
@@ -577,7 +577,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		}
 	}
 	genDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(genDb, triedb.NewDatabase(genDb, nil))
+	gspec.MustCommit(state.NewDatabase(genDb))
 	canonblocks, _, err := GenerateChain(gspec.Config, gspec.ToBlock(), engine, genDb, tt.canonicalBlocks, 10, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))

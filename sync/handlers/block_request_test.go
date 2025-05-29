@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
@@ -21,7 +22,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/rlp"
-	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -107,8 +107,8 @@ func TestBlockRequestHandler(t *testing.T) {
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
-	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	coredb := state.NewDatabase(memdb)
+	genesis := gspec.MustCommit(coredb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {
@@ -165,8 +165,8 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 		signer = types.LatestSigner(gspec.Config)
 	)
 	memdb := rawdb.NewMemoryDatabase()
-	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	coredb := state.NewDatabase(memdb)
+	genesis := gspec.MustCommit(coredb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(gspec.Config, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {
 		var data []byte
@@ -219,8 +219,8 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
-	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	coredb := state.NewDatabase(memdb)
+	genesis := gspec.MustCommit(coredb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {

@@ -364,7 +364,7 @@ func NewBlockChain(
 		return nil, errCacheConfigNotSpecified
 	}
 	// Open trie database with provided config
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
+	stateCache := state.NewDatabaseWithConfig(db, cacheConfig.triedbConfig())
 
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
@@ -372,7 +372,7 @@ func NewBlockChain(
 	// Note: In go-ethereum, the code rewinds the chain on an incompatible config upgrade.
 	// We don't do this and expect the node operator to always update their node's configuration
 	// before network upgrades take effect.
-	chainConfig, _, err := SetupGenesisBlock(db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
+	chainConfig, _, err := SetupGenesisBlock(db, stateCache, genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +388,8 @@ func NewBlockChain(
 		chainConfig:       chainConfig,
 		cacheConfig:       cacheConfig,
 		db:                db,
-		triedb:            triedb,
+		triedb:            stateCache.TrieDB(),
+		stateCache:        stateCache,
 		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:        lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
@@ -401,7 +402,6 @@ func NewBlockChain(
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 

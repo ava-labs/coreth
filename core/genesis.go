@@ -125,7 +125,7 @@ func (e *GenesisMismatchError) Error() string {
 // specify a fork block below the local head block). In case of a conflict, the
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 func SetupGenesisBlock(
-	db ethdb.Database, triedb *triedb.Database, genesis *Genesis, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+	db ethdb.Database, coredb state.Database, genesis *Genesis, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
 ) (*params.ChainConfig, common.Hash, error) {
 	if genesis == nil {
 		return nil, common.Hash{}, ErrNoGenesis
@@ -137,7 +137,7 @@ func SetupGenesisBlock(
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		log.Info("Writing genesis to database")
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(coredb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -148,13 +148,13 @@ func SetupGenesisBlock(
 	// is initialized with an external ancient store. Commit genesis state
 	// in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
+	if header.Root != types.EmptyRootHash && !coredb.TrieDB().Initialized(header.Root) {
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock().Hash()
 		if hash != stored {
 			return genesis.Config, common.Hash{}, &GenesisMismatchError{stored, hash}
 		}
-		_, err := genesis.Commit(db, triedb)
+		_, err := genesis.Commit(coredb)
 		return genesis.Config, common.Hash{}, err
 	}
 	// Check whether the genesis block is already written.
@@ -215,7 +215,7 @@ func (g *Genesis) IsVerkle() bool {
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
 	db := rawdb.NewMemoryDatabase()
-	return g.toBlock(db, triedb.NewDatabase(db, g.trieConfig()))
+	return g.toBlock(state.NewDatabaseWithConfig(db, g.trieConfig()))
 }
 
 func (g *Genesis) trieConfig() *triedb.Config {
@@ -229,8 +229,8 @@ func (g *Genesis) trieConfig() *triedb.Config {
 }
 
 // TODO: migrate this function to "flush" for more similarity with upstream.
-func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+func (g *Genesis) toBlock(coredb state.Database) *types.Block {
+	statedb, err := state.New(types.EmptyRootHash, coredb, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -304,7 +304,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	}
 	// Commit newly generated states into disk if it's not empty.
 	if root != types.EmptyRootHash {
-		if err := triedb.Commit(root, true); err != nil {
+		if err := coredb.TrieDB().Commit(root, true); err != nil {
 			panic(fmt.Sprintf("unable to commit genesis block: %v", err))
 		}
 	}
@@ -313,8 +313,9 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Block, error) {
-	block := g.toBlock(db, triedb)
+func (g *Genesis) Commit(coredb state.Database) (*types.Block, error) {
+	db := coredb.DiskDB()
+	block := g.toBlock(coredb)
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
@@ -336,8 +337,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	block, err := g.Commit(db, triedb)
+func (g *Genesis) MustCommit(coredb state.Database) *types.Block {
+	block, err := g.Commit(coredb)
 	if err != nil {
 		panic(err)
 	}
@@ -351,7 +352,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 		Alloc:   types.GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(ap3.InitialBaseFee),
 	}
-	return g.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	return g.MustCommit(state.NewDatabaseWithConfig(db, triedb.HashDefaults))
 }
 
 // ReadBlockByHash reads the block with the given hash from the database.

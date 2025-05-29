@@ -35,6 +35,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
@@ -53,8 +54,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, lastAcceptedHash common.Hash) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlock(db, triedb, genesis, lastAcceptedHash, false)
+func setupGenesisBlock(db ethdb.Database, coredb state.Database, genesis *Genesis, lastAcceptedHash common.Hash) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlock(db, coredb, genesis, lastAcceptedHash, false)
 }
 
 func TestGenesisBlockForTesting(t *testing.T) {
@@ -97,7 +98,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "genesis without ChainConfig",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), new(Genesis), common.Hash{})
+				return setupGenesisBlock(db, state.NewDatabaseWithConfig(db, newDbConfig(scheme)), new(Genesis), common.Hash{})
 			},
 			wantErr:    errGenesisNoConfig,
 			wantConfig: nil,
@@ -105,7 +106,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "no block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), nil, common.Hash{})
+				return setupGenesisBlock(db, state.NewDatabaseWithConfig(db, newDbConfig(scheme)), nil, common.Hash{})
 			},
 			wantErr:    ErrNoGenesis,
 			wantConfig: nil,
@@ -113,9 +114,9 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
-				return setupGenesisBlock(db, tdb, nil, common.Hash{})
+				coredb := state.NewDatabaseWithConfig(db, newDbConfig(scheme))
+				customg.Commit(coredb)
+				return setupGenesisBlock(db, coredb, nil, common.Hash{})
 			},
 			wantErr:    ErrNoGenesis,
 			wantConfig: nil,
@@ -123,9 +124,9 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb)
-				return setupGenesisBlock(db, tdb, &customg, customghash)
+				coredb := state.NewDatabaseWithConfig(db, newDbConfig(scheme))
+				oldcustomg.Commit(coredb)
+				return setupGenesisBlock(db, coredb, &customg, customghash)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -135,8 +136,8 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with ApricotPhase1 transition at 90.
 				// Advance to block #4, past the ApricotPhase1 transition block of customg.
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				genesis, err := oldcustomg.Commit(db, tdb)
+				coredb := state.NewDatabaseWithConfig(db, newDbConfig(scheme))
+				genesis, err := oldcustomg.Commit(coredb)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -157,7 +158,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				}
 
 				// This should return a compatibility error.
-				return setupGenesisBlock(db, tdb, &customg, bc.lastAccepted.Hash())
+				return setupGenesisBlock(db, coredb, &customg, bc.lastAccepted.Hash())
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -237,7 +238,7 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 	require.Less(bc.lastAccepted.Time(), *apricotPhase2Timestamp)
 
 	// This should not return any error since the last accepted block is before the activation block.
-	config, _, err := setupGenesisBlock(db, triedb.NewDatabase(db, nil), &activatedGenesis, bc.lastAccepted.Hash())
+	config, _, err := setupGenesisBlock(db, state.NewDatabase(db), &activatedGenesis, bc.lastAccepted.Hash())
 	require.NoError(err)
 	if !reflect.DeepEqual(config, activatedGenesis.Config) {
 		t.Errorf("returned %v\nwant     %v", config, activatedGenesis.Config)
@@ -255,10 +256,10 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	trieDB := triedb.NewDatabase(db, triedb.HashDefaults)
-	genesisBlock := genesis.MustCommit(db, trieDB)
+	coredb := state.NewDatabaseWithConfig(db, triedb.HashDefaults)
+	genesisBlock := genesis.MustCommit(coredb)
 
-	_, _, err := SetupGenesisBlock(db, trieDB, genesis, genesisBlock.Hash(), false)
+	_, _, err := SetupGenesisBlock(db, coredb, genesis, genesisBlock.Hash(), false)
 	require.NoError(err)
 
 	params.GetExtra(genesis.Config).UpgradeConfig.PrecompileUpgrades = []extras.PrecompileUpgrade{
@@ -266,7 +267,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 			Config: warp.NewConfig(utils.NewUint64(51), 0, false),
 		},
 	}
-	_, _, err = SetupGenesisBlock(db, trieDB, genesis, genesisBlock.Hash(), false)
+	_, _, err = SetupGenesisBlock(db, coredb, genesis, genesisBlock.Hash(), false)
 	require.NoError(err)
 
 	timestamp := uint64(100)
@@ -281,7 +282,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 
 	// Attempt restart after the chain has advanced past the activation of the precompile upgrade.
 	// This tests a regression where the UpgradeConfig would not be written to disk correctly.
-	_, _, err = SetupGenesisBlock(db, trieDB, genesis, lastAcceptedBlock.Hash(), false)
+	_, _, err = SetupGenesisBlock(db, coredb, genesis, lastAcceptedBlock.Hash(), false)
 	require.NoError(err)
 }
 
@@ -329,14 +330,14 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, DBOverride: pathdb.Defaults.BackendConstructor})
-	block := genesis.MustCommit(db, triedb)
+	coredb := state.NewDatabaseWithConfig(db, &triedb.Config{IsVerkle: true, DBOverride: pathdb.Defaults.BackendConstructor})
+	block := genesis.MustCommit(coredb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
 	}
 
 	// Test that the trie is verkle
-	if !triedb.IsVerkle() {
+	if !coredb.TrieDB().IsVerkle() {
 		t.Fatalf("expected trie to be verkle")
 	}
 

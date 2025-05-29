@@ -17,6 +17,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	clientstats "github.com/ava-labs/coreth/sync/client/stats"
@@ -143,8 +144,8 @@ func TestGetBlocks(t *testing.T) {
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
-	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	coredb := state.NewDatabase(memdb)
+	genesis := gspec.MustCommit(coredb)
 	engine := dummy.NewETHFaker()
 	numBlocks := 110
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, numBlocks, 0, func(i int, b *core.BlockGen) {})
