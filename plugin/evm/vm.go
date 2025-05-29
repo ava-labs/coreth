@@ -123,12 +123,11 @@ const (
 
 // Define the API endpoints for the VM
 const (
-	avaxEndpoint            = "/avax"
-	adminEndpoint           = "/admin"
-	ethRPCEndpoint          = "/rpc"
-	ethWSEndpoint           = "/ws"
-	ethTxGossipNamespace    = "eth_tx_gossip"
-	atomicTxGossipNamespace = "atomic_tx_gossip"
+	avaxEndpoint         = "/avax"
+	adminEndpoint        = "/admin"
+	ethRPCEndpoint       = "/rpc"
+	ethWSEndpoint        = "/ws"
+	ethTxGossipNamespace = "eth_tx_gossip"
 )
 
 var (
