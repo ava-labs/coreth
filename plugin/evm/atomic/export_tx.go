@@ -311,7 +311,7 @@ func NewExportTx(
 
 // EVMStateTransfer executes the state update from the atomic export transaction
 func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
-	addrs := map[[20]byte]uint64{}
+	addrs := map[common.Address]uint64{}
 	for _, from := range utx.Ins {
 		if from.AssetID == ctx.AVAXAssetID {
 			log.Debug("export_tx", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", "AVAX")

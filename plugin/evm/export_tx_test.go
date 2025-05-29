@@ -932,15 +932,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		}
 
 		t.Run(test.name, func(t *testing.T) {
-			tx := test.tx
-			exportTx := tx.UnsignedAtomicTx
-
-			err := exportTx.Visit(&atomic.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: test.baseFee,
-			})
+			err := backend.SemanticVerify(test.tx, parent, test.baseFee)
 			if test.shouldErr && err == nil {
 				t.Fatalf("should have errored but returned valid")
 			}
@@ -1791,13 +1783,7 @@ func TestNewExportTx(t *testing.T) {
 				BlockFetcher: tvm.vm,
 				SecpCache:    tvm.vm.secpCache,
 			}
-
-			if err := exportTx.Visit(&atomic.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: parent.ethBlock.BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.ethBlock.BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
@@ -1995,13 +1981,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				BlockFetcher: tvm.vm,
 				SecpCache:    tvm.vm.secpCache,
 			}
-
-			if err := exportTx.Visit(&atomic.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: parent.ethBlock.BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.ethBlock.BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 

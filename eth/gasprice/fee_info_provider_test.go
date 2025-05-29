@@ -11,13 +11,12 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFeeInfoProvider(t *testing.T) {
-	backend := newTestBackend(t, params.TestChainConfig, 2, common.Big0, testGenBlock(t, 55, 80))
+	backend := newTestBackend(t, params.TestChainConfig, 2, 0, testGenBlock(t, 55, 80))
 	f, err := newFeeInfoProvider(backend, 1, 2)
 	require.NoError(t, err)
 
@@ -45,7 +44,7 @@ func TestFeeInfoProvider(t *testing.T) {
 func TestFeeInfoProviderCacheSize(t *testing.T) {
 	size := 5
 	overflow := 3
-	backend := newTestBackend(t, params.TestChainConfig, 0, common.Big0, testGenBlock(t, 55, 370))
+	backend := newTestBackend(t, params.TestChainConfig, 0, 0, testGenBlock(t, 55, 370))
 	f, err := newFeeInfoProvider(backend, 1, size)
 	require.NoError(t, err)
 

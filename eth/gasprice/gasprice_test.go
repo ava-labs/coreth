@@ -124,18 +124,18 @@ func newTestBackendFakerEngine(t *testing.T, config *params.ChainConfig, numBloc
 
 // newTestBackend creates a test backend. OBS: don't forget to invoke tearDown
 // after use, otherwise the blockchain instance will mem-leak via goroutines.
-func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, extDataGasUsage *big.Int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
+func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, extDataGasUsage uint64, genBlocks func(i int, b *core.BlockGen)) *testBackend {
 	var gspec = &core.Genesis{
 		Config: config,
 		Alloc:  types.GenesisAlloc{addr: {Balance: bal}},
 	}
 
 	engine := dummy.NewFakerWithCallbacks(dummy.ConsensusCallbacks{
-		OnFinalizeAndAssemble: func(*types.Header, *types.Header, *state.StateDB, []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
+		OnFinalizeAndAssemble: func(*types.Header, *types.Header, *state.StateDB, []*types.Transaction) ([]byte, *big.Int, uint64, error) {
 			return nil, common.Big0, extDataGasUsage, nil
 		},
-		OnExtraStateChange: func(*types.Block, *types.Header, *state.StateDB) (*big.Int, *big.Int, error) {
-			return common.Big0, extDataGasUsage, nil
+		OnExtraStateChange: func(*types.Block, *types.Header, *state.StateDB) (*big.Int, error) {
+			return common.Big0, nil
 		},
 	})
 
@@ -179,7 +179,7 @@ func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {
 type suggestTipCapTest struct {
 	chainConfig     *params.ChainConfig
 	numBlocks       int
-	extDataGasUsage *big.Int
+	extDataGasUsage uint64
 	genBlock        func(i int, b *core.BlockGen)
 	expectedTip     *big.Int
 }
@@ -252,7 +252,7 @@ func TestSuggestTipCapEmptyExtDataGasUsage(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
-		extDataGasUsage: nil,
+		extDataGasUsage: 0,
 		genBlock:        testGenBlock(t, 55, 80),
 		expectedTip:     big.NewInt(1),
 	}, defaultOracleConfig())
@@ -262,7 +262,7 @@ func TestSuggestTipCapSimple(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
-		extDataGasUsage: common.Big0,
+		extDataGasUsage: 0,
 		genBlock:        testGenBlock(t, 55, 80),
 		expectedTip:     big.NewInt(1),
 	}, defaultOracleConfig())
@@ -272,7 +272,7 @@ func TestSuggestTipCapSimpleFloor(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       1,
-		extDataGasUsage: common.Big0,
+		extDataGasUsage: 0,
 		genBlock:        testGenBlock(t, 55, 80),
 		expectedTip:     big.NewInt(1),
 	}, defaultOracleConfig())
@@ -283,7 +283,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
-		extDataGasUsage: common.Big0,
+		extDataGasUsage: 0,
 		genBlock: func(i int, b *core.BlockGen) {
 			b.SetCoinbase(common.Address{1})
 
@@ -328,7 +328,7 @@ func TestSuggestTipCapExtDataUsage(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
-		extDataGasUsage: big.NewInt(10_000),
+		extDataGasUsage: 10_000,
 		genBlock:        testGenBlock(t, 55, 80),
 		expectedTip:     big.NewInt(1),
 	}, defaultOracleConfig())
@@ -338,7 +338,7 @@ func TestSuggestTipCapMinGas(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
-		extDataGasUsage: common.Big0,
+		extDataGasUsage: 0,
 		genBlock:        testGenBlock(t, 500, 50),
 		expectedTip:     big.NewInt(1),
 	}, defaultOracleConfig())
@@ -353,7 +353,7 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 		Percentile: 60,
 	}
 
-	backend := newTestBackend(t, params.TestApricotPhase2Config, 3, nil, func(i int, b *core.BlockGen) {
+	backend := newTestBackend(t, params.TestApricotPhase2Config, 3, 0, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
 		signer := types.LatestSigner(params.TestApricotPhase2Config)
@@ -384,7 +384,7 @@ func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       200,
-		extDataGasUsage: common.Big0,
+		extDataGasUsage: 0,
 		genBlock:        testGenBlock(t, 550, 80),
 		expectedTip:     big.NewInt(3),
 	}, defaultOracleConfig())
@@ -394,7 +394,7 @@ func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       20,
-		extDataGasUsage: big.NewInt(1),
+		extDataGasUsage: 1,
 		genBlock:        testGenBlock(t, 550, 80),
 		expectedTip:     big.NewInt(1),
 	}, timeCrunchOracleConfig())
@@ -404,7 +404,7 @@ func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       1000,
-		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(params.TxGas)),
+		extDataGasUsage: acp176.MinMaxPerSecond - params.TxGas,
 		// The tip on the transaction is very large to pay the block gas cost.
 		genBlock: testGenBlock(t, 100_000, 1),
 		// The actual tip doesn't matter, we just want to ensure that the tip is

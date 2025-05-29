@@ -22,18 +22,18 @@ import (
 )
 
 var TestCallbacks = dummy.ConsensusCallbacks{
-	OnExtraStateChange: func(block *types.Block, _ *types.Header, sdb *state.StateDB) (*big.Int, *big.Int, error) {
+	OnExtraStateChange: func(block *types.Block, _ *types.Header, sdb *state.StateDB) (*big.Int, error) {
 		sdb.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
-		return nil, nil, nil
+		return nil, nil
 	},
 	OnFinalizeAndAssemble: func(
 		header *types.Header,
 		_ *types.Header,
 		sdb *state.StateDB,
 		_ []*types.Transaction,
-	) ([]byte, *big.Int, *big.Int, error) {
+	) ([]byte, *big.Int, uint64, error) {
 		sdb.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
-		return nil, nil, nil, nil
+		return nil, nil, 0, nil
 	},
 }
 

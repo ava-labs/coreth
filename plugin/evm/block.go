@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 
+	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
@@ -22,12 +23,15 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 var (
@@ -113,7 +117,6 @@ func readMainnetBonusBlocks() (map[uint64]ids.ID, error) {
 
 // Block implements the snowman.Block interface
 type Block struct {
-	id        ids.ID
 	ethBlock  *types.Block
 	vm        *VM
 	atomicTxs []*atomic.Tx
@@ -128,7 +131,6 @@ func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 	}
 
 	return &Block{
-		id:        ids.ID(ethBlock.Hash()),
 		ethBlock:  ethBlock,
 		vm:        vm,
 		atomicTxs: atomicTxs,
@@ -136,7 +138,7 @@ func (vm *VM) newBlock(ethBlock *types.Block) (*Block, error) {
 }
 
 // ID implements the snowman.Block interface
-func (b *Block) ID() ids.ID { return b.id }
+func (b *Block) ID() ids.ID { return ids.ID(b.ethBlock.Hash()) }
 
 func (b *Block) AtomicTxs() []*atomic.Tx { return b.atomicTxs }
 
@@ -271,17 +273,6 @@ func (b *Block) Timestamp() time.Time {
 	return time.Unix(int64(b.ethBlock.Time()), 0)
 }
 
-// syntacticVerify verifies that a *Block is well-formed.
-func (b *Block) syntacticVerify() error {
-	if b == nil || b.ethBlock == nil {
-		return errInvalidBlock
-	}
-
-	header := b.ethBlock.Header()
-	rules := b.vm.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
-	return b.vm.syntacticBlockValidator.SyntacticVerify(b, rules)
-}
-
 // Verify implements the snowman.Block interface
 func (b *Block) Verify(context.Context) error {
 	return b.verify(&precompileconfig.PredicateContext{
@@ -325,54 +316,161 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Verify the block is valid.
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
-func (b *Block) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
-	if predicateContext.ProposerVMBlockCtx != nil {
-		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
-	} else {
-		log.Debug("Verifying block without context", "block", b.ID(), "height", b.Height())
-	}
-	if err := b.syntacticVerify(); err != nil {
-		return fmt.Errorf("syntactic block verification failed: %w", err)
-	}
+func (b *Block) verify(context *precompileconfig.PredicateContext, writes bool) error {
+	log.Debug("verifying block",
+		"hash", b.ethBlock.Hash(),
+		"height", b.ethBlock.NumberU64(),
+		"hasContext", context.ProposerVMBlockCtx != nil,
+		"writes", writes,
+	)
 
+	if err := b.verifyWithoutParent(); err != nil {
+		return fmt.Errorf("verifyWithoutParent: %w", err)
+	}
+	if err := b.verifyCanExecute(context); err != nil {
+		return fmt.Errorf("verifyCanExecute: %w", err)
+	}
+	if err := b.execute(context, writes); err != nil {
+		return fmt.Errorf("execute: %w", err)
+	}
+	return nil
+}
+
+func (b *Block) verifyWithoutParent() error {
+	return verifyBlockStandalone(
+		b.vm.syntacticBlockValidator.extDataHashes,
+		&b.vm.clock,
+		b.vm.chainConfig,
+		b.ethBlock,
+		b.atomicTxs,
+	)
+}
+
+// Assumes [Block.verifyWithoutParent] has returned nil.
+func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) error {
 	// If the VM is not marked as bootstrapped the other chains may also be
 	// bootstrapping and not have populated the required indices. Since
 	// bootstrapping only verifies blocks that have been canonically accepted by
 	// the network, these checks would be guaranteed to pass on a synced node.
 	if b.vm.bootstrapped.Get() {
-		// Verify that the UTXOs named in import txs are present in shared
-		// memory.
-		//
-		// This does not fully verify that this block can spend these UTXOs.
-		// However, it guarantees that any block that fails the later checks was
-		// built by an incorrect block proposer. This ensures that we only mark
-		// blocks as BAD BLOCKs if they were incorrectly generated.
-		if err := b.verifyUTXOsPresent(); err != nil {
+		// Verify that the atomic txs in this block are valid to be executed.
+		if err := b.verifyAtomicTxs(); err != nil {
 			return err
 		}
 
 		// Verify that all the ICM messages are correctly marked as either valid
 		// or invalid.
-		if err := b.verifyPredicates(predicateContext); err != nil {
+		if err := b.verifyPredicates(context); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
 		}
 	}
 
-	// The engine may call VerifyWithContext multiple times on the same block with different contexts.
-	// Since the engine will only call Accept/Reject once, we should only call InsertBlockManual once.
-	// Additionally, if a block is already in processing, then it has already passed verification and
-	// at this point we have checked the predicates are still valid in the different context so we
-	// can return nil.
-	if b.vm.State.IsProcessing(b.id) {
+	header := b.ethBlock.Header()
+	number := header.Number.Uint64()
+	parentHeader := b.vm.blockChain.GetHeader(header.ParentHash, number-1)
+	if parentHeader == nil {
+		return consensus.ErrUnknownAncestor
+	}
+
+	parentNumber := parentHeader.Number.Uint64()
+	if expectedNumber := parentNumber + 1; number != expectedNumber {
+		return fmt.Errorf("expected number %d, found %d", expectedNumber, number)
+	}
+
+	// Verify the header's timestamp is not earlier than parent's. It allows
+	// equality(==), multiple blocks can have the same timestamp.
+	if header.Time < parentHeader.Time {
+		return fmt.Errorf("invalid timestamp %d < parent timestamp %d", header.Time, parentHeader.Time)
+	}
+
+	config := params.GetExtra(b.vm.chainConfig)
+	if err := customheader.VerifyGasLimit(config, parentHeader, header); err != nil {
+		return err
+	}
+
+	expectedBaseFee, err := customheader.BaseFee(config, parentHeader, header.Time)
+	if err != nil {
+		return fmt.Errorf("failed to calculate base fee: %w", err)
+	}
+	if !utils.BigEqual(header.BaseFee, expectedBaseFee) {
+		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
+	}
+
+	// Verify the BlockGasCost set in the header matches the expected value.
+	expectedBlockGasCost := customheader.BlockGasCost(
+		config,
+		parentHeader,
+		header.Time,
+	)
+	headerExtra := customtypes.GetHeaderExtra(header)
+	if !utils.BigEqual(headerExtra.BlockGasCost, expectedBlockGasCost) {
+		return fmt.Errorf("invalid blockGasCost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
+	}
+
+	// These checks assume that GasUsed is set correctly. GasUsed still needs to
+	// be verified after execution.
+	if err := customheader.VerifyGasUsed(config, parentHeader, header); err != nil {
+		return err
+	}
+	if err := customheader.VerifyExtraPrefix(config, parentHeader, header); err != nil {
+		return err
+	}
+
+	// Ancestor block must be known.
+	if !b.vm.blockChain.HasBlockAndState(header.ParentHash, parentNumber) {
+		return fmt.Errorf("parent block or state not available: hash=%x, number=%d", header.ParentHash, parentNumber)
+	}
+
+	// Things still left to be verified:
+	// - Root hash
+	// - ReceiptHash
+	// - Bloom
+	// - GasUsed
+	// - BlockGasCost is paid for
+	// - Normal eth tx checks:
+	//   - Sender can be recovered correctly (verifies chainID)
+	//   - Tx nonces are correct (matches what is in state and won't cause an overflow)
+	//   - Sender is an EOA (probably removed with 7702, also was really not possible before)
+	//   - Tx's GasFeeCap is >= the BaseFee
+	//   - Tx can afford the gas based on the gas limit and effective gas price
+	//   - Tx doesn't specify a GasLimit which exceeds the gas remaining allowed to process in the block
+	//   - Tx's gas limit is >= the intrinsic gas of the transaction
+	//   - Tx is able to send the value of the transaction from the sender after purchasing the gas
+	//   - The message data doesn't exceed MaxInitCodeSize when creating a contract (post Durango)
+	return nil
+}
+
+// Assumes [Block.verifyCanExecute] has returned nil.
+func (b *Block) execute(context *precompileconfig.PredicateContext, writes bool) error {
+	// The engine may call VerifyWithContext multiple times on the same block
+	// with different contexts. Since the engine will only call Accept/Reject
+	// once, we should only call InsertBlockManual once. Additionally, if a
+	// block is already in processing, then it has already passed verification
+	// and at this point we have checked the predicates are still valid in the
+	// different context so we can return nil.
+	hash := b.ethBlock.Hash()
+	if b.vm.State.IsProcessing(ids.ID(hash)) {
 		return nil
 	}
 
+	if writes {
+		// Update the atomic backend with [txs] from this block.
+		//
+		// Note: The atomic trie canonically contains the duplicate operations from
+		// any bonus blocks.
+		var (
+			number     = b.ethBlock.NumberU64()
+			parentHash = b.ethBlock.ParentHash()
+		)
+		if _, err := b.vm.atomicBackend.InsertTxs(hash, number, parentHash, b.atomicTxs); err != nil {
+			return err
+		}
+	}
+
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if err != nil || !writes {
-		// if an error occurred inserting the block into the chain
-		// or if we are not pinning to memory, unpin the atomic trie
-		// changes from memory (if they were pinned).
-		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(b.ethBlock.Hash()); err == nil {
+	if err != nil && writes {
+		// Unpin the atomic trie if it is pinned and verification failed.
+		if atomicState, err := b.vm.atomicBackend.GetVerifiedAtomicState(hash); err == nil {
 			_ = atomicState.Reject() // ignore this error so we can return the original error instead.
 		}
 	}
@@ -413,26 +511,27 @@ func (b *Block) verifyPredicates(predicateContext *precompileconfig.PredicateCon
 	return nil
 }
 
-// verifyUTXOsPresent verifies all atomic UTXOs consumed by the block are
-// present in shared memory.
-func (b *Block) verifyUTXOsPresent() error {
-	blockHash := common.Hash(b.ID())
-	if b.vm.atomicBackend.IsBonus(b.Height(), blockHash) {
-		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
+// verifyAtomicTxs verifies that the atomic txs consumed by the block are valid.
+func (b *Block) verifyAtomicTxs() error {
+	hash := b.ethBlock.Hash()
+	if b.vm.atomicBackend.IsBonus(b.Height(), hash) {
+		log.Info("skipping atomic tx verification on bonus block",
+			"block", hash,
+		)
 		return nil
 	}
 
-	for _, atomicTx := range b.atomicTxs {
-		utx := atomicTx.UnsignedAtomicTx
-		chainID, requests, err := utx.AtomicOps()
-		if err != nil {
-			return err
-		}
-		if _, err := b.vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
-			return fmt.Errorf("%w: %s", errMissingUTXOs, err)
-		}
-	}
-	return nil
+	// Verify [txs] do not conflict with themselves or ancestor blocks.
+	var (
+		parentHash = b.ethBlock.ParentHash()
+		baseFee    = b.ethBlock.BaseFee()
+		number     = b.ethBlock.Number()
+		time       = b.ethBlock.Time()
+		rules      = b.vm.chainConfig.Rules(number, params.IsMergeTODO, time)
+		rulesExtra = params.GetRulesExtra(rules)
+	)
+	// TODO: Pass rulesExtra as a pointer
+	return b.vm.verifyTxs(b.atomicTxs, parentHash, baseFee, number.Uint64(), *rulesExtra)
 }
 
 // Bytes implements the snowman.Block interface

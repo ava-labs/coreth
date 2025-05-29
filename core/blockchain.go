@@ -124,7 +124,6 @@ var (
 
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
-	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
 	errCacheConfigNotSpecified = errors.New("must specify cache config")
 	errInvalidOldChain         = errors.New("invalid old chain")
 	errInvalidNewChain         = errors.New("invalid new chain")
@@ -1284,40 +1283,11 @@ func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {
 
 func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	start := time.Now()
-	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), block.Time()), block.Transactions())
+	signer := types.MakeSigner(bc.chainConfig, block.Number(), block.Time())
+	bc.senderCacher.Recover(signer, block.Transactions())
 
 	substart := time.Now()
-	err := bc.engine.VerifyHeader(bc, block.Header())
-	if err == nil {
-		err = bc.validator.ValidateBody(block)
-	}
 
-	switch {
-	case errors.Is(err, ErrKnownBlock):
-		// even if the block is already known, we still need to generate the
-		// snapshot layer and add a reference to the triedb, so we re-execute
-		// the block. Note that insertBlock should only be called on a block
-		// once if it returns nil
-		if bc.newTip(block) {
-			log.Debug("Setting head to be known block", "number", block.Number(), "hash", block.Hash())
-		} else {
-			log.Debug("Reprocessing already known block", "number", block.Number(), "hash", block.Hash())
-		}
-
-	// If an ancestor has been pruned, then this block cannot be acceptable.
-	case errors.Is(err, consensus.ErrPrunedAncestor):
-		return errors.New("side chain insertion is not supported")
-
-	// Future blocks are not supported, but should not be reported, so we return an error
-	// early here
-	case errors.Is(err, consensus.ErrFutureBlock):
-		return errFutureBlockUnsupported
-
-	// Some other error occurred, abort
-	case err != nil:
-		bc.reportBlock(block, nil, err)
-		return err
-	}
 	blockContentValidationTimer.Inc(time.Since(substart).Milliseconds())
 
 	// No validation errors for the block
@@ -1402,11 +1372,17 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	blockWriteTimer.Inc((time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits).Milliseconds())
 	blockInsertTimer.Inc(time.Since(start).Milliseconds())
 
-	log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
+	log.Debug("Inserted new block",
+		"number", block.Number(),
+		"hash", block.Hash(),
 		"parentHash", block.ParentHash(),
-		"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
+		"uncles", len(block.Uncles()),
+		"txs", len(block.Transactions()),
+		"gas", block.GasUsed(),
 		"elapsed", common.PrettyDuration(time.Since(start)),
-		"root", block.Root(), "baseFeePerGas", block.BaseFee(), "blockGasCost", customtypes.BlockGasCost(block),
+		"root", block.Root(),
+		"baseFeePerGas", block.BaseFee(),
+		"blockGasCost", customtypes.BlockGasCost(block),
 	)
 
 	processedBlockGasUsedCounter.Inc(int64(block.GasUsed()))

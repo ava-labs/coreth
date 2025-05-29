@@ -230,34 +230,34 @@ func (tx *Tx) Sign(c codec.Manager, signers [][]*secp256k1.PrivateKey) error {
 // for via this transaction denominated in [avaxAssetID] with [baseFee] used to calculate the
 // cost of this transaction. This function also returns the [gasUsed] by the
 // transaction for inclusion in the [baseFee] algorithm.
-func (tx *Tx) BlockFeeContribution(fixedFee bool, avaxAssetID ids.ID, baseFee *big.Int) (*big.Int, *big.Int, error) {
+func (tx *Tx) BlockFeeContribution(fixedFee bool, avaxAssetID ids.ID, baseFee *big.Int) (*big.Int, uint64, error) {
 	if baseFee == nil {
-		return nil, nil, errNilBaseFee
+		return nil, 0, errNilBaseFee
 	}
 	if baseFee.Cmp(common.Big0) <= 0 {
-		return nil, nil, fmt.Errorf("cannot calculate tip with base fee %d <= 0", baseFee)
+		return nil, 0, fmt.Errorf("cannot calculate tip with base fee %d <= 0", baseFee)
 	}
 	gasUsed, err := tx.GasUsed(fixedFee)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 	txFee, err := CalculateDynamicFee(gasUsed, baseFee)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 	burned, err := tx.Burned(avaxAssetID)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 	if txFee > burned {
-		return nil, nil, fmt.Errorf("insufficient AVAX burned (%d) to cover import tx fee (%d)", burned, txFee)
+		return nil, 0, fmt.Errorf("insufficient AVAX burned (%d) to cover import tx fee (%d)", burned, txFee)
 	}
 	excessBurned := burned - txFee
 
 	// Calculate the amount of AVAX that has been burned above the required fee denominated
 	// in C-Chain native 18 decimal places
 	blockFeeContribution := new(big.Int).Mul(new(big.Int).SetUint64(excessBurned), X2CRate.ToBig())
-	return blockFeeContribution, new(big.Int).SetUint64(gasUsed), nil
+	return blockFeeContribution, gasUsed, nil
 }
 
 func (tx *Tx) GossipID() ids.ID {
