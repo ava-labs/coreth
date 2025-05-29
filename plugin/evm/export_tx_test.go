@@ -932,15 +932,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		}
 
 		t.Run(test.name, func(t *testing.T) {
-			tx := test.tx
-			exportTx := tx.UnsignedAtomicTx
-
-			err := exportTx.Visit(&atomic.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: test.baseFee,
-			})
+			err := backend.SemanticVerify(test.tx, parent, test.baseFee)
 			if test.shouldErr && err == nil {
 				t.Fatalf("should have errored but returned valid")
 			}
@@ -1781,8 +1773,6 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			exportTx := tx.UnsignedAtomicTx
-
 			backend := &atomic.VerifierBackend{
 				Ctx:          tvm.vm.ctx,
 				Fx:           &tvm.vm.fx,
@@ -1791,16 +1781,11 @@ func TestNewExportTx(t *testing.T) {
 				BlockFetcher: tvm.vm,
 				SecpCache:    tvm.vm.secpCache,
 			}
-
-			if err := exportTx.Visit(&atomic.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: parent.ethBlock.BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.ethBlock.BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
+			exportTx := tx.UnsignedAtomicTx
 			burnedAVAX, err := exportTx.Burned(tvm.vm.ctx.AVAXAssetID)
 			if err != nil {
 				t.Fatal(err)
@@ -1986,7 +1971,6 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			exportTx := tx.UnsignedAtomicTx
 			backend := &atomic.VerifierBackend{
 				Ctx:          tvm.vm.ctx,
 				Fx:           &tvm.vm.fx,
@@ -1995,13 +1979,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				BlockFetcher: tvm.vm,
 				SecpCache:    tvm.vm.secpCache,
 			}
-
-			if err := exportTx.Visit(&atomic.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: parent.ethBlock.BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.ethBlock.BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
@@ -2009,7 +1987,9 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create commit batch for VM due to %s", err)
 			}
-			chainID, atomicRequests, err := exportTx.AtomicOps()
+
+			exportTx := tx.UnsignedAtomicTx
+			chainID, atomicRequests, err := tx.UnsignedAtomicTx.AtomicOps()
 			if err != nil {
 				t.Fatalf("Failed to accept export transaction due to: %s", err)
 			}

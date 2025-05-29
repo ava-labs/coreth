@@ -1602,12 +1602,7 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 		BlockFetcher: vm,
 		SecpCache:    vm.secpCache,
 	}
-	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
-		Backend: atomicBackend,
-		Tx:      tx,
-		Parent:  parent,
-		BaseFee: baseFee,
-	}); err != nil {
+	if atomicBackend.SemanticVerify(tx, parent, baseFee); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
@@ -1646,17 +1641,11 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 		BlockFetcher: vm,
 		SecpCache:    vm.secpCache,
 	}
-	for _, atomicTx := range txs {
-		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.Visit(&atomic.SemanticVerifier{
-			Backend: atomicBackend,
-			Tx:      atomicTx,
-			Parent:  ancestor,
-			BaseFee: baseFee,
-		}); err != nil {
-			return fmt.Errorf("invalid block due to failed semanatic verify: %w at height %d", err, height)
+	for _, tx := range txs {
+		if atomicBackend.SemanticVerify(tx, ancestor, baseFee); err != nil {
+			return fmt.Errorf("invalid block due to failed semantic verify: %w at height %d", err, height)
 		}
-		txInputs := utx.InputUTXOs()
+		txInputs := tx.UnsignedAtomicTx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
 			return atomic.ErrConflictingAtomicInputs
 		}
