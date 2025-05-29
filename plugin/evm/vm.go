@@ -121,7 +121,6 @@ const (
 	maxFutureBlockTime = 10 * time.Second
 	maxUTXOsToFetch    = 1024
 
-	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB
 	missingCacheSize       = 50
 	unverifiedCacheSize    = 5 * units.MiB
