@@ -355,10 +355,12 @@ func (vm *VM) Shutdown(context.Context) error {
 }
 
 func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, error) {
-	apis, err := vm.InnerVM.CreateHandlers(ctx)
-	if err != nil {
-		return nil, err
-	}
+	// TODO: uncomment this once atomic VM fully wraps inner VM
+	// apis, err := vm.InnerVM.CreateHandlers(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	apis := make(map[string]http.Handler)
 	avaxAPI, err := utils.NewHandler("avax", &AvaxAPI{vm})
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)

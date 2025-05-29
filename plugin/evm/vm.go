@@ -1048,7 +1048,10 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		return nil, err
 	}
 
-	apis := make(map[string]http.Handler)
+	apis, err := vm.atomicVM.CreateHandlers(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create atomic VM handlers: %w", err)
+	}
 
 	if vm.config.AdminAPIEnabled {
 		adminAPI, err := utils.NewHandler("admin", NewAdminService(vm, os.ExpandEnv(fmt.Sprintf("%s_coreth_performance_%s", vm.config.AdminAPIDir, vm.chainAlias))))
