@@ -123,7 +123,6 @@ const (
 
 // Define the API endpoints for the VM
 const (
-	avaxEndpoint         = "/avax"
 	adminEndpoint        = "/admin"
 	ethRPCEndpoint       = "/rpc"
 	ethWSEndpoint        = "/ws"
