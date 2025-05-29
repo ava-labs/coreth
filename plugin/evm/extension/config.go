@@ -11,11 +11,13 @@ import (
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/eth"
@@ -41,6 +43,10 @@ type ExtensibleVM interface {
 	// Should be called before any other method and only once
 	SetExtensionConfig(config *Config) error
 
+	// NewClient returns a client to send messages with for the given protocol
+	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
+	// AddHandler registers a server handler for an application protocol
+	AddHandler(protocol uint64, handler p2p.Handler) error
 	// SetLastAcceptedBlock sets the last accepted block
 	SetLastAcceptedBlock(lastAcceptedBlock snowman.Block) error
 	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
@@ -49,10 +55,15 @@ type ExtensibleVM interface {
 	LastAcceptedExtendedBlock() ExtendedBlock
 	// IsBootstrapped returns true if the VM is bootstrapped
 	IsBootstrapped() bool
+
+	// P2PValidators returns the validators for the network
+	P2PValidators() *p2p.Validators
 	// Ethereum returns the Ethereum client
 	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM
 	Config() config.Config
+	// MetricRegistry returns the metric registry for the VM
+	MetricRegistry() *prometheus.Registry
 	// ReadLastAccepted returns the last accepted block hash and height
 	ReadLastAccepted() (common.Hash, uint64, error)
 	// VersionDB returns the versioned database for the VM
@@ -103,6 +114,15 @@ type BlockExtension interface {
 	OnReject() error
 }
 
+// BuilderMempool is a mempool that's used in the block builder
+type BuilderMempool interface {
+	// PendingLen returns the number of pending transactions
+	// that are waiting to be included in a block
+	PendingLen() int
+	// SubscribePendingTxs returns a channel that's signaled when there are pending transactions
+	SubscribePendingTxs() <-chan struct{}
+}
+
 // LeafRequestConfig is the configuration to handle leaf requests
 // in the network and syncer
 type LeafRequestConfig struct {
@@ -140,6 +160,9 @@ type Config struct {
 	// ExtraSyncLeafHandlerConfig is the extra configuration to handle leaf requests
 	// in the network and syncer. It's optional and can be nil
 	ExtraSyncLeafHandlerConfig *LeafRequestConfig
+	// ExtraMempool is the mempool to be used in the block builder.
+	// It's optional and can be nil
+	ExtraMempool BuilderMempool
 	// Clock is the clock to use for time related operations.
 	// It's optional and can be nil
 	Clock *mockable.Clock
