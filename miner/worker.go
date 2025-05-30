@@ -148,6 +148,15 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	}
 
 	chainExtra := params.GetExtra(w.chainConfig)
+	gasCap, err := customheader.GasCapacity(chainExtra, parent, timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("calculating current gas capacity: %w", err)
+	}
+	if min := uint64(10e6); gasCap < min {
+		// Ensures that large transactions can be included under high load, at
+		// the expense of delaying the next block as capacity refills.
+		return nil, fmt.Errorf("insufficient gas capacity; %d < %d", gasCap, min)
+	}
 	gasLimit, err := customheader.GasLimit(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("calculating new gas limit: %w", err)
