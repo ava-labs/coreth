@@ -60,8 +60,7 @@ import (
 const (
 	// Leaves 256 KBs for other sections of the block (limit is 2MB).
 	// This should suffice for atomic txs, proposervm header, and serialization overhead.
-	targetTxsSize  = 1792 * units.KiB
-	minGasCapacity = 12_800_000 // 12.8M gas is the minimum gas capacity to attempt block building
+	targetTxsSize = 1792 * units.KiB
 )
 
 var ErrInsufficientGasCapacityToBuild = errors.New("insufficient gas capacity to build block")
