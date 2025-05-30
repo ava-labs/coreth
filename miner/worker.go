@@ -59,8 +59,11 @@ import (
 const (
 	// Leaves 256 KBs for other sections of the block (limit is 2MB).
 	// This should suffice for atomic txs, proposervm header, and serialization overhead.
-	targetTxsSize = 1792 * units.KiB
+	targetTxsSize  = 1792 * units.KiB
+	minGasCapacity = 12_800_000 // 12.8M gas is the minimum gas capacity to attempt block building
 )
+
+var errInsufficientGasCapacity = errors.New("insufficient gas capacity to build block")
 
 // environment is the worker's current environment and holds all of the current state information.
 type environment struct {
@@ -267,6 +270,9 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	capacity, err := customheader.GasCapacity(chainConfigExtra, parent, header.Time)
 	if err != nil {
 		return nil, fmt.Errorf("calculating gas capacity: %w", err)
+	}
+	if capacity < minGasCapacity {
+		return nil, fmt.Errorf("%w: capacity (%d) < min capacity (%d)", errInsufficientGasCapacity, capacity, minGasCapacity)
 	}
 	numPrefetchers := w.chain.CacheConfig().TriePrefetcherParallelism
 	currentState.StartPrefetcher("miner", state.WithConcurrentWorkers(numPrefetchers))
