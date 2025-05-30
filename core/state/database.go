@@ -33,7 +33,6 @@ import (
 	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 
 	"github.com/ava-labs/coreth/triedb/firewood"
@@ -50,36 +49,27 @@ var (
 	_ Trie     = (*firewood.StorageTrie)(nil)
 )
 
-func NewDatabase(db ethdb.Database) ethstate.Database {
+func NewDatabase(db ethdb.Database) Database {
 	return ethstate.NewDatabase(db)
 }
 
-func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) ethstate.Database {
-	return ethstate.NewDatabaseWithConfig(db, config)
+func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
+	coredb := ethstate.NewDatabaseWithConfig(db, config)
+	return wrapIfFirewood(coredb)
 }
 
-func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) ethstate.Database {
-	return ethstate.NewDatabaseWithNodeDB(db, triedb)
+func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database {
+	coredb := ethstate.NewDatabaseWithNodeDB(db, triedb)
+	return wrapIfFirewood(coredb)
 }
 
-// Note trieConfig provides a closure here.
-func NewDatabaseWithFirewood(db ethdb.Database, trieConfig *triedb.Config) Database {
-	// I could create my own Config, create the config, and create the triedb.Config
-	// Don't accept the triedb and create it here
-	fw, ok := trieConfig.DBOverride(db).(*firewood.Database)
+func wrapIfFirewood(db Database) Database {
+	fw, ok := db.TrieDB().Backend().(*firewood.Database)
 	if !ok {
-		log.Error("Cannot create firewooddb.Database from the provided database")
-		fmt.Printf("not ok")
-		return nil
+		return db
 	}
-	if fw == nil {
-		fmt.Printf("firewood is nil")
-		log.Error("firewooddb.Database is nil")
-		return nil
-	}
-
 	return &firewoodAccessorDb{
-		Database: ethstate.NewDatabaseWithConfig(db, trieConfig),
+		Database: db,
 		fw:       fw,
 	}
 }

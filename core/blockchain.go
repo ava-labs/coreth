@@ -243,6 +243,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
+	StateHistory:              2,
 	StateScheme:               rawdb.HashScheme,
 }
 
@@ -251,6 +252,9 @@ var DefaultCacheConfig = &CacheConfig{
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
+	if config.StateScheme == customrawdb.FirewoodScheme {
+		config.SnapshotLimit = 0 // no snapshot allowed for firewood
+	}
 	return &config
 }
 
@@ -377,21 +381,14 @@ func NewBlockChain(
 		return nil, errCacheConfigNotSpecified
 	}
 	// Open trie database with provided config
-	var stateCache state.Database
-	triedbConfig := cacheConfig.triedbConfig()
-	if cacheConfig.StateScheme == customrawdb.FirewoodScheme {
-		stateCache = state.NewDatabaseWithFirewood(db, triedbConfig)
-	} else {
-		stateCache = state.NewDatabaseWithConfig(db, triedbConfig)
-	}
-
+	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
 	// Note: In go-ethereum, the code rewinds the chain on an incompatible config upgrade.
 	// We don't do this and expect the node operator to always update their node's configuration
 	// before network upgrades take effect.
-	chainConfig, _, err := SetupGenesisBlock(db, stateCache.TrieDB(), genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
+	chainConfig, _, err := SetupGenesisBlock(db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
 	if err != nil {
 		return nil, err
 	}
@@ -407,8 +404,7 @@ func NewBlockChain(
 		chainConfig:       chainConfig,
 		cacheConfig:       cacheConfig,
 		db:                db,
-		triedb:            stateCache.TrieDB(),
-		stateCache:        stateCache,
+		triedb:            triedb,
 		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:        lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
@@ -421,7 +417,7 @@ func NewBlockChain(
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
-
+	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 

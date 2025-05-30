@@ -5,7 +5,6 @@ package firewood
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
@@ -19,10 +18,7 @@ import (
 	"github.com/ava-labs/libevm/triedb/database"
 )
 
-var (
-	errNodeNotFound = errors.New("node not found")
-	errNoReader     = errors.New("reader unavailable")
-)
+var errNoReader = errors.New("reader unavailable")
 
 // AccountTrie implements state.Trie for managing account states.
 // There are several caveats to the current implementation:
@@ -72,7 +68,7 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 	}
 
 	if acctBytes == nil {
-		return nil, errNodeNotFound
+		return nil, nil
 	}
 
 	// Decode the account node
@@ -98,7 +94,7 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 		return nil, err
 	}
 	if storageBytes == nil {
-		return nil, errNodeNotFound
+		return nil, nil
 	}
 
 	return storageBytes, nil
@@ -210,7 +206,6 @@ func (a *AccountTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, 
 	nodeset := trienode.NewNodeSet(a.parentRoot)
 	for i, key := range a.updateKeys {
 		value := a.updateValues[i]
-		fmt.Printf("Adding node %x: %x\n", key, value)
 		nodeset.AddNode(key, &trienode.Node{
 			Blob: value,
 		})

@@ -198,8 +198,6 @@ func (db *Database) Initialized(root common.Hash) bool {
 		return false
 	}
 
-	fmt.Printf("firewooddb: checking if initialized with root %s, current root %s\n", root.Hex(), common.BytesToHash(rootBytes).Hex())
-
 	return common.BytesToHash(rootBytes) == root
 }
 
@@ -244,8 +242,6 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	// Special case: we initialize the database with the empty hash.
 	// This is the only time we can propose a different parent root, since all syncing changes
 	// are directly written to disk, and any old root is for a loaded database is unknown.
-	fmt.Printf("firewooddb: proposing from parent %s at height %d\n", parent.Hex(), block)
-	fmt.Printf("db initialized: %t\n", db.Initialized(parent))
 	if db.Initialized(parent) && (db.proposalTree.Root == common.Hash{} || db.proposalTree.Block == block-1) {
 		p, err := db.fwDisk.Propose(keys, values)
 		if err != nil {
@@ -523,14 +519,12 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 	)
 	if db.Initialized(parentRoot) {
 		// Propose from the database root.
-		fmt.Printf("firewooddb: proposing from db root %s\n", parentRoot.Hex())
 		p, err = db.fwDisk.Propose(keys, values)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("firewooddb: error proposing from root %s", parentRoot.Hex())
 		}
 	} else {
 		// Find any proposal with the given parent root.
-		fmt.Printf("firewooddb: proposing from other proposal parent root %s\n", parentRoot.Hex())
 		proposals, ok := db.proposalMap[parentRoot]
 		if !ok || len(proposals) == 0 {
 			return common.Hash{}, fmt.Errorf("firewooddb: no proposal found for parent root %s", parentRoot.Hex())

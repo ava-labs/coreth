@@ -82,7 +82,7 @@ func TestInsert(t *testing.T) {
 		MetricsPort:       0, // use any open port from OS
 	}
 	config.DBOverride = fwCfg.BackendConstructor // BackendConstructor is on the reference to allow closure
-	fwdb := NewDatabaseWithFirewood(firewoodmemdb, config)
+	fwdb := NewDatabaseWithConfig(firewoodmemdb, config)
 
 	ethRoot := types.EmptyRootHash
 
