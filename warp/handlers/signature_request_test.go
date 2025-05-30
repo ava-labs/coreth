@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package handlers
@@ -7,37 +7,36 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/cache"
+	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
+	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/testutils"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/coreth/warp/warptest"
+
 	"github.com/stretchr/testify/require"
 )
 
+var networkCodec = message.Codec
+
 func TestMessageSignatureHandler(t *testing.T) {
-	testutils.WithMetrics(t)
+	metricstest.WithMetrics(t)
 
 	database := memdb.New()
-	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.New()
-	require.NoError(t, err)
-	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 
 	addressedPayload, err := payload.NewAddressedCall([]byte{1, 2, 3}, []byte{1, 2, 3})
 	require.NoError(t, err)
 	offchainMessage, err := avalancheWarp.NewUnsignedMessage(snowCtx.NetworkID, snowCtx.ChainID, addressedPayload.Bytes())
 	require.NoError(t, err)
 
-	messageSignatureCache := &cache.LRU[ids.ID, []byte]{Size: 100}
-	backend, err := warp.NewBackend(snowCtx.NetworkID, snowCtx.ChainID, warpSigner, warptest.EmptyBlockClient, database, messageSignatureCache, [][]byte{offchainMessage.Bytes()})
+	messageSignatureCache := lru.NewCache[ids.ID, []byte](100)
+	backend, err := warp.NewBackend(snowCtx.NetworkID, snowCtx.ChainID, snowCtx.WarpSigner, warptest.EmptyBlockClient, database, messageSignatureCache, [][]byte{offchainMessage.Bytes()})
 	require.NoError(t, err)
 
 	msg, err := avalancheWarp.NewUnsignedMessage(snowCtx.NetworkID, snowCtx.ChainID, []byte("test"))
@@ -106,7 +105,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			handler := NewSignatureRequestHandler(backend, message.Codec)
+			handler := NewSignatureRequestHandler(backend, networkCodec)
 
 			request, expectedResponse := test.setup()
 			responseBytes, err := handler.OnMessageSignatureRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -120,7 +119,7 @@ func TestMessageSignatureHandler(t *testing.T) {
 				return
 			}
 			var response message.SignatureResponse
-			_, err = message.Codec.Unmarshal(responseBytes, &response)
+			_, err = networkCodec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err, "error unmarshalling SignatureResponse")
 
 			require.Equal(t, expectedResponse, response.Signature[:])
@@ -129,21 +128,18 @@ func TestMessageSignatureHandler(t *testing.T) {
 }
 
 func TestBlockSignatureHandler(t *testing.T) {
-	testutils.WithMetrics(t)
+	metricstest.WithMetrics(t)
 
 	database := memdb.New()
-	snowCtx := utils.TestSnowContext()
-	blsSecretKey, err := localsigner.New()
-	require.NoError(t, err)
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 
-	warpSigner := avalancheWarp.NewSigner(blsSecretKey, snowCtx.NetworkID, snowCtx.ChainID)
 	blkID := ids.GenerateTestID()
 	blockClient := warptest.MakeBlockClient(blkID)
-	messageSignatureCache := &cache.LRU[ids.ID, []byte]{Size: 100}
+	messageSignatureCache := lru.NewCache[ids.ID, []byte](100)
 	backend, err := warp.NewBackend(
 		snowCtx.NetworkID,
 		snowCtx.ChainID,
-		warpSigner,
+		snowCtx.WarpSigner,
 		blockClient,
 		database,
 		messageSignatureCache,
@@ -195,7 +191,7 @@ func TestBlockSignatureHandler(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			handler := NewSignatureRequestHandler(backend, message.Codec)
+			handler := NewSignatureRequestHandler(backend, networkCodec)
 
 			request, expectedResponse := test.setup()
 			responseBytes, err := handler.OnBlockSignatureRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
@@ -209,7 +205,7 @@ func TestBlockSignatureHandler(t *testing.T) {
 				return
 			}
 			var response message.SignatureResponse
-			_, err = message.Codec.Unmarshal(responseBytes, &response)
+			_, err = networkCodec.Unmarshal(responseBytes, &response)
 			require.NoError(t, err, "error unmarshalling SignatureResponse")
 
 			require.Equal(t, expectedResponse, response.Signature[:])

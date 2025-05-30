@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	agoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
@@ -43,7 +44,7 @@ import (
 func TestEthTxGossip(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
 
@@ -58,7 +59,6 @@ func TestEthTxGossip(t *testing.T) {
 		SentAppResponse: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender:             responseSender,
 		atomicTxGossipHandler: &p2p.NoOpHandler{},
 		atomicTxPullGossiper:  &gossip.NoOpGossiper{},
 	}
@@ -72,7 +72,7 @@ func TestEthTxGossip(t *testing.T) {
 		nil,
 		make(chan common.Message),
 		nil,
-		&enginetest.Sender{},
+		responseSender,
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
 
@@ -174,7 +174,7 @@ func TestEthTxGossip(t *testing.T) {
 func TestAtomicTxGossip(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
@@ -192,7 +192,6 @@ func TestAtomicTxGossip(t *testing.T) {
 		SentAppResponse: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender:          responseSender,
 		ethTxGossipHandler: &p2p.NoOpHandler{},
 		ethTxPullGossiper:  &gossip.NoOpGossiper{},
 	}
@@ -206,7 +205,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		nil,
 		make(chan common.Message),
 		nil,
-		&enginetest.Sender{},
+		responseSender,
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
 
@@ -291,7 +290,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
 
-	marshaller := atomic.GossipAtomicTxMarshaller{}
+	marshaller := atomic.TxMarshaller{}
 	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
@@ -315,13 +314,12 @@ func TestAtomicTxGossip(t *testing.T) {
 func TestEthTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	sender := &enginetest.SenderStub{
 		SentAppGossip: make(chan []byte, 1),
 	}
 
 	vm := &VM{
-		p2pSender:            sender,
 		ethTxPullGossiper:    gossip.NoOpGossiper{},
 		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
@@ -377,11 +375,10 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 func TestEthTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 
 	sender := &enginetest.Sender{}
 	vm := &VM{
-		p2pSender:            sender,
 		ethTxPullGossiper:    gossip.NoOpGossiper{},
 		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
@@ -438,7 +435,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
@@ -456,7 +453,6 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := &VM{
-		p2pSender:            sender,
 		ethTxPullGossiper:    gossip.NoOpGossiper{},
 		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
@@ -470,7 +466,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		nil,
 		make(chan common.Message),
 		nil,
-		&enginetest.SenderStub{},
+		sender,
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
 
@@ -492,7 +488,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
-	vm.atomicTxPushGossiper.Add(&atomic.GossipAtomicTx{Tx: tx})
+	vm.atomicTxPushGossiper.Add(tx)
 
 	gossipedBytes := <-sender.SentAppGossip
 	require.Equal(byte(p2p.AtomicTxGossipHandlerID), gossipedBytes[0])
@@ -501,17 +497,17 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require.NoError(proto.Unmarshal(gossipedBytes[1:], outboundGossipMsg))
 	require.Len(outboundGossipMsg.Gossip, 1)
 
-	marshaller := atomic.GossipAtomicTxMarshaller{}
+	marshaller := atomic.TxMarshaller{}
 	gossipedTx, err := marshaller.UnmarshalGossip(outboundGossipMsg.Gossip[0])
 	require.NoError(err)
-	require.Equal(tx.ID(), gossipedTx.Tx.ID())
+	require.Equal(tx.ID(), gossipedTx.GossipID())
 }
 
 // Tests that a tx is gossiped when it is issued
 func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
 	ctx := context.Background()
-	snowCtx := utils.TestSnowContext()
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
@@ -527,7 +523,6 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	sender := &enginetest.Sender{}
 	vm := &VM{
-		p2pSender:            sender,
 		ethTxPullGossiper:    gossip.NoOpGossiper{},
 		atomicTxPullGossiper: gossip.NoOpGossiper{},
 	}
@@ -541,7 +536,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		nil,
 		make(chan common.Message),
 		nil,
-		&enginetest.SenderStub{},
+		sender,
 	))
 	require.NoError(vm.SetState(ctx, snow.NormalOp))
 
@@ -564,11 +559,8 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require.NoError(err)
 	require.NoError(vm.mempool.AddLocalTx(tx))
 
-	marshaller := atomic.GossipAtomicTxMarshaller{}
-	gossipedTx := &atomic.GossipAtomicTx{
-		Tx: tx,
-	}
-	gossipBytes, err := marshaller.MarshalGossip(gossipedTx)
+	marshaller := atomic.TxMarshaller{}
+	gossipBytes, err := marshaller.MarshalGossip(tx)
 	require.NoError(err)
 
 	inboundGossip := &sdk.PushGossip{

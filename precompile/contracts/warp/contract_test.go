@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package warp
@@ -9,15 +9,15 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/snowtest"
 	agoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/set"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/core/extstate/extstatetest"
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/precompile/testutils"
+	"github.com/ava-labs/coreth/precompile/precompiletest"
 	"github.com/ava-labs/coreth/predicate"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/stretchr/testify/require"
@@ -26,10 +26,10 @@ import (
 func TestGetBlockchainID(t *testing.T) {
 	callerAddr := common.HexToAddress("0x0123")
 
-	defaultSnowCtx := utils.TestSnowContext()
+	defaultSnowCtx := snowtest.Context(t, snowtest.CChainID)
 	blockchainID := defaultSnowCtx.ChainID
 
-	tests := map[string]testutils.PrecompileTest{
+	tests := map[string]precompiletest.PrecompileTest{
 		"getBlockchainID success": {
 			Caller: callerAddr,
 			InputFn: func(t testing.TB) []byte {
@@ -78,13 +78,13 @@ func TestGetBlockchainID(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, extstate.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
 }
 
 func TestSendWarpMessage(t *testing.T) {
 	callerAddr := common.HexToAddress("0x0123")
 
-	defaultSnowCtx := utils.TestSnowContext()
+	defaultSnowCtx := snowtest.Context(t, snowtest.CChainID)
 	blockchainID := defaultSnowCtx.ChainID
 	sendWarpMessagePayload := agoUtils.RandomBytes(100)
 
@@ -102,7 +102,7 @@ func TestSendWarpMessage(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	tests := map[string]testutils.PrecompileTest{
+	tests := map[string]precompiletest.PrecompileTest{
 		"send warp message readOnly": {
 			Caller:      callerAddr,
 			InputFn:     func(t testing.TB) []byte { return sendWarpMessageInput },
@@ -173,7 +173,7 @@ func TestSendWarpMessage(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, extstate.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
 }
 
 func TestGetVerifiedWarpMessage(t *testing.T) {
@@ -197,7 +197,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 	noFailures := set.NewBits().Bytes()
 	require.Len(t, noFailures, 0)
 
-	tests := map[string]testutils.PrecompileTest{
+	tests := map[string]precompiletest.PrecompileTest{
 		"get message success": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
@@ -458,7 +458,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, extstate.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
 }
 
 func TestGetVerifiedWarpBlockHash(t *testing.T) {
@@ -478,7 +478,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 	noFailures := set.NewBits().Bytes()
 	require.Len(t, noFailures, 0)
 
-	tests := map[string]testutils.PrecompileTest{
+	tests := map[string]precompiletest.PrecompileTest{
 		"get message success": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
@@ -736,7 +736,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		},
 	}
 
-	testutils.RunPrecompileTests(t, Module, extstate.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
 }
 
 func TestPackEvents(t *testing.T) {
