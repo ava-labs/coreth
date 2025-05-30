@@ -274,6 +274,15 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	// If Fortuna has activated, enforce we only build a block when there is a minimum
 	// built up gas capacity.
 	if chainConfigExtra.IsFortuna(header.Time) {
+		// ACP-176 maintains a gas capacity bucket that fills up over time separate from the gas limit.
+		// Since smaller transactions can consume the available gas capacity every second, this can lead
+		// to transactions above this size stalling.
+		// To mitigate this, the block builder returns an error and waits until the gas capacity bucket
+		// has refilled to the desired minimum.
+		// We set that minimum to MaxCapacity - GasCapacityPerSecond to be available before building a block.
+		// This avoids waiting past the point where the gas capacity bucket is already full. If we waited
+		// until the MaxCapacity, then waiting beyond that point would "overflow" the bucket. Since we do
+		// not allow the bucket to overflow, this would waste potential gas capacity.
 		capacityPerSecond := header.GasLimit / acp176.TimeToFillCapacity
 		minimumBuildableCapacity := header.GasLimit - capacityPerSecond
 		if capacity < minimumBuildableCapacity {
