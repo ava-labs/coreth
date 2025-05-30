@@ -3903,23 +3903,6 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-	require.NoError(err)
-
-	require.NoError(tvm.vm.mempool.AddLocalTx(importTx))
-
-	<-tvm.toEngine
-
-	blk1, err := tvm.vm.BuildBlock(ctx)
-	require.NoError(err)
-
-	require.NoError(blk1.Verify(ctx))
-	require.NoError(tvm.vm.SetPreference(ctx, blk1.ID()))
-	require.NoError(blk1.Accept(ctx))
-
-	newHead := <-newTxPoolHeadChan
-	require.Equal(newHead.Head.Hash(), common.Hash(blk1.ID()))
-
 	// Build a block consuming all of the available gas
 	txs := make([]*types.Transaction, 0, 2)
 	for i := uint64(0); i < 2; i++ {
