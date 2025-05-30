@@ -22,9 +22,11 @@ import (
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/eth/filters"
+	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/utils"
@@ -3880,4 +3882,84 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = vmBlock.Verify(ctx)
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
+}
+
+func TestMinBlockBuildCapacity(t *testing.T) {
+	ctx := context.Background()
+	require := require.New(t)
+
+	importAmount := uint64(2_000_000_000_000_000) // 2M AVAX
+	fork := upgradetest.Fortuna
+	tvm := newVM(t, testVMConfig{
+		fork: &fork,
+		utxos: map[ids.ShortID]uint64{
+			testShortIDAddrs[0]: importAmount,
+		},
+	})
+	defer func() {
+		require.NoError(tvm.vm.Shutdown(ctx))
+	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	require.NoError(err)
+
+	require.NoError(tvm.vm.mempool.AddLocalTx(importTx))
+
+	<-tvm.toEngine
+
+	blk1, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk1.Verify(ctx))
+	require.NoError(tvm.vm.SetPreference(ctx, blk1.ID()))
+	require.NoError(blk1.Accept(ctx))
+
+	newHead := <-newTxPoolHeadChan
+	if newHead.Head.Hash() != common.Hash(blk1.ID()) {
+		t.Fatalf("Expected new block to match")
+	}
+	gasAmount := uint64(9_000_000) // 9M gas
+
+	// Build a block consuming all of the available gas
+	txs := make([]*types.Transaction, 0, 2)
+	for i := uint64(0); i < 2; i++ {
+		tx := types.NewContractCreation(i, big.NewInt(0), gasAmount, big.NewInt(ap0.MinGasPrice), []byte{0xfe /* invalid opcode consumes all gas */})
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(tvm.vm.chainID), testKeys[0].ToECDSA())
+		require.NoError(err)
+		txs = append(txs, signedTx)
+	}
+
+	errs := tvm.vm.txPool.AddRemotesSync([]*types.Transaction{txs[0]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.toEngine
+	blk2, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk2.Verify(ctx))
+	require.NoError(blk2.Accept(ctx))
+
+	// Attempt to build a block consuming more gas than will be immediately available
+	errs = tvm.vm.txPool.AddRemotesSync([]*types.Transaction{txs[1]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.toEngine
+	// Expect block building to fail due to insufficient gas capacity
+	_, err = tvm.vm.BuildBlock(ctx)
+	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
+
+	// Wait to fill block capacity and retry block builiding
+	time.Sleep(acp176.TimeToFillCapacity * time.Second)
+
+	<-tvm.toEngine
+	blk3, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk3.Verify(ctx))
+	require.NoError(blk3.Accept(ctx))
 }

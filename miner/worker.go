@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
@@ -63,7 +64,7 @@ const (
 	minGasCapacity = 12_800_000 // 12.8M gas is the minimum gas capacity to attempt block building
 )
 
-var errInsufficientGasCapacity = errors.New("insufficient gas capacity to build block")
+var ErrInsufficientGasCapacityToBuild = errors.New("insufficient gas capacity to build block")
 
 // environment is the worker's current environment and holds all of the current state information.
 type environment struct {
@@ -274,8 +275,10 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	// If Fortuna has activated, enforce we only build a block when there is a minimum
 	// built up gas capacity.
 	if chainConfigExtra.IsFortuna(header.Time) {
-		if capacity < minGasCapacity {
-			return nil, fmt.Errorf("%w: capacity (%d) < min capacity (%d)", errInsufficientGasCapacity, capacity, minGasCapacity)
+		capacityPerSecond := header.GasLimit / acp176.TimeToFillCapacity
+		minimumBuildableCapacity := header.GasLimit - capacityPerSecond
+		if capacity < minimumBuildableCapacity {
+			return nil, fmt.Errorf("%w: %d waiting for %d", ErrInsufficientGasCapacityToBuild, capacity, minimumBuildableCapacity)
 		}
 	}
 	numPrefetchers := w.chain.CacheConfig().TriePrefetcherParallelism
