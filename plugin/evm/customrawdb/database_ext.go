@@ -5,6 +5,7 @@ package customrawdb
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -60,4 +61,55 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	}
 
 	return rawdb.InspectDatabase(db, keyPrefix, keyStart, options...)
+}
+
+// ParseStateSchemeExt parses the state scheme from the provided string.
+// It checks the rawdb package for HashDB or PathDB schemes.
+// If it's neither of those, it checks to see if the string is set to FirewoodScheme.
+func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
+	// Check for custom scheme
+	if provided == FirewoodScheme {
+		// TODO: Check if the database is a firewood database
+		// Assume valid scheme for now
+		return FirewoodScheme, nil
+	}
+
+	// Check for eth scheme
+	scheme, err := rawdb.ParseStateScheme(provided, disk)
+	if err == nil {
+		// Found valid eth scheme
+		return scheme, nil
+	} else if rawdb.ReadStateScheme(disk) != "" {
+		// Valid scheme on disk mismatched
+		return scheme, err
+	}
+
+	return "", fmt.Errorf("Unknown state scheme %q", provided)
+}
+
+// WriteDatabasePath writes the path to the database files.
+// This should only be written once.
+func WriteDatabasePath(db ethdb.KeyValueWriter, path string) error {
+	// Check if the path is valid
+	if path == "" {
+		return fmt.Errorf("Invalid state path %q", path)
+	}
+
+	// Write the state path to the database
+	return db.Put(statePathKey, []byte(path))
+}
+
+// ReadDatabasePath reads the path to the database files.
+func ReadDatabasePath(db ethdb.KeyValueReader) (string, error) {
+	has, err := db.Has(statePathKey)
+	if err != nil || !has {
+		return "", err
+	}
+	// Read the state path from the database
+	path, err := db.Get(statePathKey)
+	if err != nil {
+		return "", err
+	}
+
+	return string(path), nil
 }

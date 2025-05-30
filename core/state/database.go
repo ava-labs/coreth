@@ -28,9 +28,14 @@
 package state
 
 import (
+	"fmt"
+
+	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/triedb"
+
+	"github.com/ava-labs/coreth/triedb/firewood"
 )
 
 type (
@@ -38,14 +43,57 @@ type (
 	Trie     = ethstate.Trie
 )
 
-func NewDatabase(db ethdb.Database) ethstate.Database {
+var (
+	_ Database = (*firewoodAccessorDb)(nil)
+	_ Trie     = (*firewood.AccountTrie)(nil)
+	_ Trie     = (*firewood.StorageTrie)(nil)
+)
+
+func NewDatabase(db ethdb.Database) Database {
 	return ethstate.NewDatabase(db)
 }
 
-func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) ethstate.Database {
-	return ethstate.NewDatabaseWithConfig(db, config)
+func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
+	coredb := ethstate.NewDatabaseWithConfig(db, config)
+	return wrapIfFirewood(coredb)
 }
 
-func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) ethstate.Database {
-	return ethstate.NewDatabaseWithNodeDB(db, triedb)
+func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database {
+	coredb := ethstate.NewDatabaseWithNodeDB(db, triedb)
+	return wrapIfFirewood(coredb)
+}
+
+func wrapIfFirewood(db Database) Database {
+	fw, ok := db.TrieDB().Backend().(*firewood.Database)
+	if !ok {
+		return db
+	}
+	return &firewoodAccessorDb{
+		Database: db,
+		fw:       fw,
+	}
+}
+
+type firewoodAccessorDb struct {
+	Database
+	fw *firewood.Database
+}
+
+// OpenTrie opens the main account trie.
+func (db *firewoodAccessorDb) OpenTrie(root common.Hash) (Trie, error) {
+	return firewood.NewAccountTrie(root, db.fw)
+}
+
+// OpenStorageTrie opens the storage trie of an account.
+func (db *firewoodAccessorDb) OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, self Trie) (Trie, error) {
+	accountTrie, ok := self.(*firewood.AccountTrie)
+	if !ok {
+		return nil, fmt.Errorf("Invalid account trie type: %T", self)
+	}
+	return firewood.NewStorageTrie(accountTrie, root)
+}
+
+// CopyTrie returns an independent copy of the given trie.
+func (db *firewoodAccessorDb) CopyTrie(trie Trie) Trie {
+	return nil
 }

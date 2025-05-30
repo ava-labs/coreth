@@ -31,16 +31,20 @@ import (
 	"bytes"
 	_ "embed"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
+	ffi "github.com/ava-labs/firewood-go/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -68,6 +72,7 @@ func TestGenesisBlockForTesting(t *testing.T) {
 func TestSetupGenesis(t *testing.T) {
 	testSetupGenesis(t, rawdb.HashScheme)
 	testSetupGenesis(t, rawdb.PathScheme)
+	testSetupGenesis(t, customrawdb.FirewoodScheme)
 }
 
 func testSetupGenesis(t *testing.T, scheme string) {
@@ -97,7 +102,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "genesis without ChainConfig",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), new(Genesis), common.Hash{})
+				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(t, db, scheme)), new(Genesis), common.Hash{})
 			},
 			wantErr:    errGenesisNoConfig,
 			wantConfig: nil,
@@ -105,7 +110,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "no block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), nil, common.Hash{})
+				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(t, db, scheme)), nil, common.Hash{})
 			},
 			wantErr:    ErrNoGenesis,
 			wantConfig: nil,
@@ -113,7 +118,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
+				tdb := triedb.NewDatabase(db, newDbConfig(t, db, scheme))
 				customg.Commit(db, tdb)
 				return setupGenesisBlock(db, tdb, nil, common.Hash{})
 			},
@@ -123,7 +128,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
+				tdb := triedb.NewDatabase(db, newDbConfig(t, db, scheme))
 				oldcustomg.Commit(db, tdb)
 				return setupGenesisBlock(db, tdb, &customg, customghash)
 			},
@@ -135,7 +140,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with ApricotPhase1 transition at 90.
 				// Advance to block #4, past the ApricotPhase1 transition block of customg.
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
+				tdb := triedb.NewDatabase(db, newDbConfig(t, db, scheme))
 				genesis, err := oldcustomg.Commit(db, tdb)
 				if err != nil {
 					t.Fatal(err)
@@ -285,11 +290,37 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	require.NoError(err)
 }
 
-func newDbConfig(scheme string) *triedb.Config {
+func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config {
 	if scheme == rawdb.HashScheme {
 		return triedb.HashDefaults
 	}
-	return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
+	if scheme == rawdb.PathScheme {
+		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
+	}
+	if scheme == customrawdb.FirewoodScheme {
+		// Create a unique temporary directory for each test
+		tempDir, err := os.MkdirTemp("", "firewood-blockchain-*")
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				t.Fatalf("failed to remove temp dir: %v", err)
+			}
+		})
+		// Set the temporary directory as the database path
+		require.NoError(t, customrawdb.WriteDatabasePath(db, tempDir))
+		fwCfg := firewood.TrieDBConfig{
+			FileName:          "firewood_genesis_test",
+			CleanCacheSize:    256 * 1024 * 1024,
+			Revisions:         10,
+			ReadCacheStrategy: ffi.CacheAllReads,
+			MetricsPort:       0, // use any open port from OS
+		}
+		trieCfg := &triedb.Config{}
+		trieCfg.DBOverride = fwCfg.BackendConstructor
+		return trieCfg
+	}
+
+	return nil // should never happen
 }
 
 func TestVerkleGenesisCommit(t *testing.T) {
