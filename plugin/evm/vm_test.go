@@ -3884,7 +3884,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 }
 
-func TestMinBlockBuildCapacity(t *testing.T) {
+func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	ctx := context.Background()
 	require := require.New(t)
 
@@ -3921,12 +3921,17 @@ func TestMinBlockBuildCapacity(t *testing.T) {
 	if newHead.Head.Hash() != common.Hash(blk1.ID()) {
 		t.Fatalf("Expected new block to match")
 	}
-	gasAmount := uint64(9_000_000) // 9M gas
 
 	// Build a block consuming all of the available gas
 	txs := make([]*types.Transaction, 0, 2)
 	for i := uint64(0); i < 2; i++ {
-		tx := types.NewContractCreation(i, big.NewInt(0), gasAmount, big.NewInt(ap0.MinGasPrice), []byte{0xfe /* invalid opcode consumes all gas */})
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			8_000_000, // 8M gas is max guaranteed capacity with default gas target of 10M
+			big.NewInt(ap0.MinGasPrice),
+			[]byte{0xfe}, // invalid opcode consumes all gas
+		)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(tvm.vm.chainID), testKeys[0].ToECDSA())
 		require.NoError(err)
 		txs = append(txs, signedTx)
@@ -3943,7 +3948,7 @@ func TestMinBlockBuildCapacity(t *testing.T) {
 	require.NoError(blk2.Verify(ctx))
 	require.NoError(blk2.Accept(ctx))
 
-	// Attempt to build a block consuming more gas than will be immediately available
+	// Attempt to build a block consuming more than the current gas capacity
 	errs = tvm.vm.txPool.AddRemotesSync([]*types.Transaction{txs[1]})
 	require.Len(errs, 1)
 	require.NoError(errs[0])
@@ -3964,7 +3969,7 @@ func TestMinBlockBuildCapacity(t *testing.T) {
 	require.NoError(blk3.Accept(ctx))
 }
 
-func TestLargeTxStarvation(t *testing.T) {
+func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	ctx := context.Background()
 	require := require.New(t)
 
@@ -4015,7 +4020,7 @@ func TestLargeTxStarvation(t *testing.T) {
 			big.NewInt(0),
 			gasAmount,
 			big.NewInt(2*ap0.MinGasPrice), // higher price than smaller tx
-			[]byte{0xfe},                  /* invalid opcode consumes all gas */
+			[]byte{0xfe},                  // invalid opcode consumes all gas
 		)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(tvm.vm.chainID), testKeys[0].ToECDSA())
 		require.NoError(err)
