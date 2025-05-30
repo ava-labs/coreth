@@ -3918,9 +3918,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.NoError(blk1.Accept(ctx))
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk1.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(newHead.Head.Hash(), common.Hash(blk1.ID()))
 
 	// Build a block consuming all of the available gas
 	txs := make([]*types.Transaction, 0, 2)
@@ -3959,7 +3957,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
 
 	// Wait to fill block capacity and retry block builiding
-	time.Sleep(acp176.TimeToFillCapacity * time.Second)
+	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 
 	<-tvm.toEngine
 	blk3, err := tvm.vm.BuildBlock(ctx)
@@ -4057,7 +4055,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
 
 	// Wait to fill block capacity and retry block building
-	time.Sleep(acp176.TimeToFillCapacity * time.Second)
+	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 	<-tvm.toEngine
 	blk4, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
