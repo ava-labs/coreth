@@ -3989,7 +3989,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.NoError(blk1.Accept(ctx))
 
 	newHead := <-newTxPoolHeadChan
-	require.Equal(newHead.Head.Hash(), common.Hash(blk1.ID()))
+	require.Equal(common.Hash(blk1.ID()), newHead.Head.Hash())
 
 	// Build a block consuming all of the available gas
 	var (
