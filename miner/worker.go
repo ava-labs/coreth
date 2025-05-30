@@ -47,6 +47,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
@@ -285,6 +286,10 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 		// not allow the bucket to overflow, this would waste potential gas capacity.
 		capacityPerSecond := header.GasLimit / acp176.TimeToFillCapacity
 		minimumBuildableCapacity := header.GasLimit - capacityPerSecond
+
+		// Since the GasLimit is configurable, only wait up to the GasLimit as of the Cortina upgrade.
+		// There is no need to continue scaling up beyond the GasLimit guaranteed prior to ACP-176 activation.
+		minimumBuildableCapacity = min(minimumBuildableCapacity, cortina.GasLimit)
 		if capacity < minimumBuildableCapacity {
 			return nil, fmt.Errorf("%w: %d waiting for %d", ErrInsufficientGasCapacityToBuild, capacity, minimumBuildableCapacity)
 		}
