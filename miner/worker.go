@@ -271,8 +271,12 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	if err != nil {
 		return nil, fmt.Errorf("calculating gas capacity: %w", err)
 	}
-	if capacity < minGasCapacity {
-		return nil, fmt.Errorf("%w: capacity (%d) < min capacity (%d)", errInsufficientGasCapacity, capacity, minGasCapacity)
+	// If Fortuna has activated, enforce we only build a block when there is a minimum
+	// built up gas capacity.
+	if chainConfigExtra.IsFortuna(header.Time) {
+		if capacity < minGasCapacity {
+			return nil, fmt.Errorf("%w: capacity (%d) < min capacity (%d)", errInsufficientGasCapacity, capacity, minGasCapacity)
+		}
 	}
 	numPrefetchers := w.chain.CacheConfig().TriePrefetcherParallelism
 	currentState.StartPrefetcher("miner", state.WithConcurrentWorkers(numPrefetchers))
