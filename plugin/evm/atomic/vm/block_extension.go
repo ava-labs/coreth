@@ -29,8 +29,8 @@ var (
 
 var (
 	errNilEthBlock  = errors.New("nil ethBlock")
-	ErrMissingUTXOs = errors.New("missing UTXOs")
-	ErrEmptyBlock   = errors.New("empty block")
+	errMissingUTXOs = errors.New("missing UTXOs")
+	errEmptyBlock   = errors.New("empty block")
 )
 
 type blockExtender struct {
@@ -132,7 +132,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	txs := ethBlock.Transactions()
 	atomicTxs := be.atomicTxs
 	if len(txs) == 0 && len(atomicTxs) == 0 {
-		return ErrEmptyBlock
+		return errEmptyBlock
 	}
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated correctly.
@@ -194,12 +194,12 @@ func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
-		vm.Mempool.RemoveTx(tx)
+		vm.mempool.RemoveTx(tx)
 	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
+	atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Accept
 		return err
@@ -214,12 +214,12 @@ func (be *blockExtension) OnReject() error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
-		vm.Mempool.RemoveTx(tx)
-		if err := vm.Mempool.AddRemoteTx(tx); err != nil {
+		vm.mempool.RemoveTx(tx)
+		if err := vm.mempool.AddRemoteTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
-	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
+	atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
 		return err
@@ -230,7 +230,7 @@ func (be *blockExtension) OnReject() error {
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
 func (be *blockExtension) CleanupVerified() {
 	vm := be.blockExtender.vm
-	if atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
+	if atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
 }
@@ -246,7 +246,7 @@ func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 	b := be.block
 	blockHash := common.Hash(b.ID())
 	vm := be.blockExtender.vm
-	if vm.AtomicBackend.IsBonus(b.Height(), blockHash) {
+	if vm.atomicBackend.IsBonus(b.Height(), blockHash) {
 		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
 		return nil
 	}
@@ -259,7 +259,7 @@ func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 			return err
 		}
 		if _, err := vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
-			return fmt.Errorf("%w: %s", ErrMissingUTXOs, err)
+			return fmt.Errorf("%w: %s", errMissingUTXOs, err)
 		}
 	}
 	return nil
