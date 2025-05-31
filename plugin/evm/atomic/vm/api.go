@@ -159,10 +159,10 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
 
-	if err := service.vm.Mempool.AddLocalTx(tx); err != nil {
+	if err := service.vm.mempool.AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.AtomicTxPushGossiper.Add(tx)
+	service.vm.atomicTxPushGossiper.Add(tx)
 	return nil
 }
 
@@ -177,7 +177,7 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
 
-	_, status, height, _ := service.vm.GetAtomicTx(args.TxID)
+	_, status, height, _ := service.vm.getAtomicTx(args.TxID)
 
 	reply.Status = status
 	if status == atomic.Accepted {
@@ -212,7 +212,7 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 	service.vm.ctx.Lock.Lock()
 	defer service.vm.ctx.Lock.Unlock()
 
-	tx, status, height, err := service.vm.GetAtomicTx(args.TxID)
+	tx, status, height, err := service.vm.getAtomicTx(args.TxID)
 	if err != nil {
 		return err
 	}
