@@ -934,14 +934,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 
 		t.Run(test.name, func(t *testing.T) {
 			tx := test.tx
-			exportTx := tx.UnsignedAtomicTx
-
-			err := exportTx.Visit(&semanticVerifier{
-				backend: backend,
-				tx:      tx,
-				parent:  parent,
-				baseFee: test.baseFee,
-			})
+			err := backend.SemanticVerify(tx, parent, test.baseFee)
 			if test.shouldErr && err == nil {
 				t.Fatalf("should have errored but returned valid")
 			}
@@ -1790,13 +1783,7 @@ func TestNewExportTx(t *testing.T) {
 			exportTx := tx.UnsignedAtomicTx
 
 			backend := newVerifierBackend(vm, vm.currentRules())
-
-			if err := exportTx.Visit(&semanticVerifier{
-				backend: backend,
-				tx:      tx,
-				parent:  parent,
-				baseFee: parent.GetEthBlock().BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.GetEthBlock().BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
@@ -1991,12 +1978,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			exportTx := tx.UnsignedAtomicTx
 			backend := newVerifierBackend(vm, vm.currentRules())
 
-			if err := exportTx.Visit(&semanticVerifier{
-				backend: backend,
-				tx:      tx,
-				parent:  parent,
-				baseFee: parent.GetEthBlock().BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.GetEthBlock().BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 

@@ -1327,13 +1327,8 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 
 	lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 	backend := newVerifierBackend(vm, rules)
-	if err := tx.UnsignedAtomicTx.Visit(
-		&semanticVerifier{
-			backend: backend,
-			tx:      tx,
-			parent:  lastAcceptedBlock,
-			baseFee: baseFee,
-		}); len(test.semanticVerifyErr) == 0 && err != nil {
+
+	if err := backend.SemanticVerify(tx, lastAcceptedBlock, baseFee); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
 	} else if len(test.semanticVerifyErr) != 0 {
 		if err == nil {
