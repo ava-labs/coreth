@@ -745,6 +745,7 @@ func TestSignatureRequestsToVM(t *testing.T) {
 
 	// Setup known message
 	knownPayload, err := payload.NewAddressedCall([]byte{0, 0, 0}, []byte("test"))
+	require.NoError(t, err)
 	knownWarpMessage, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, knownPayload.Bytes())
 	require.NoError(t, err)
 
