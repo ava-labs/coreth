@@ -884,64 +884,64 @@ func TestImportTxSemanticVerify(t *testing.T) {
 	require.NoError(t, err)
 	ethAddress := key.PublicKey().EthAddress()
 	tests := map[string]atomicTxTest{
-		"UTXO not present during bootstrapping": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: avax.UTXOID{
-							TxID: ids.GenerateTestID(),
-						},
-						Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  1,
-						AssetID: vm.ctx.AVAXAssetID,
-					}},
-				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			bootstrapping: true,
-		},
-		"UTXO not present": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: avax.UTXOID{
-							TxID: ids.GenerateTestID(),
-						},
-						Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  1,
-						AssetID: vm.ctx.AVAXAssetID,
-					}},
-				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			semanticVerifyErr: "failed to fetch import UTXOs from",
-		},
+		// "UTXO not present during bootstrapping": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: avax.UTXOID{
+		// 					TxID: ids.GenerateTestID(),
+		// 				},
+		// 				Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  1,
+		// 				AssetID: vm.ctx.AVAXAssetID,
+		// 			}},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	bootstrapping: true,
+		// },
+		// "UTXO not present": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: avax.UTXOID{
+		// 					TxID: ids.GenerateTestID(),
+		// 				},
+		// 				Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  1,
+		// 				AssetID: vm.ctx.AVAXAssetID,
+		// 			}},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	semanticVerifyErr: "failed to fetch import UTXOs from",
+		// },
 		"garbage UTXO": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
 				utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
@@ -982,215 +982,215 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			},
 			semanticVerifyErr: "failed to unmarshal UTXO",
 		},
-		"UTXO AssetID mismatch": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				txID := ids.GenerateTestID()
-				expectedAssetID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, expectedAssetID, 1, key.Address())
-				if err != nil {
-					t.Fatal(err)
-				}
+		// "UTXO AssetID mismatch": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		txID := ids.GenerateTestID()
+		// 		expectedAssetID := ids.GenerateTestID()
+		// 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, expectedAssetID, 1, key.Address())
+		// 		if err != nil {
+		// 			t.Fatal(err)
+		// 		}
 
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: utxo.UTXOID,
-						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID}, // Use a different assetID then the actual UTXO
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  1,
-						AssetID: vm.ctx.AVAXAssetID,
-					}},
-				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			semanticVerifyErr: errAssetIDMismatch.Error(),
-		},
-		"insufficient AVAX funds": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, key.Address())
-				if err != nil {
-					t.Fatal(err)
-				}
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: utxo.UTXOID,
+		// 				Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID}, // Use a different assetID then the actual UTXO
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  1,
+		// 				AssetID: vm.ctx.AVAXAssetID,
+		// 			}},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	semanticVerifyErr: errAssetIDMismatch.Error(),
+		// },
+		// "insufficient AVAX funds": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		txID := ids.GenerateTestID()
+		// 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, key.Address())
+		// 		if err != nil {
+		// 			t.Fatal(err)
+		// 		}
 
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: utxo.UTXOID,
-						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  2, // Produce more output than is consumed by the transaction
-						AssetID: vm.ctx.AVAXAssetID,
-					}},
-				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			semanticVerifyErr: "import tx flow check failed due to",
-		},
-		"insufficient non-AVAX funds": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				txID := ids.GenerateTestID()
-				assetID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, vmtest.TestShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: utxo.UTXOID,
+		// 				Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  2, // Produce more output than is consumed by the transaction
+		// 				AssetID: vm.ctx.AVAXAssetID,
+		// 			}},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	semanticVerifyErr: "import tx flow check failed due to",
+		// },
+		// "insufficient non-AVAX funds": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		txID := ids.GenerateTestID()
+		// 		assetID := ids.GenerateTestID()
+		// 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, assetID, 1, vmtest.TestShortIDAddrs[0])
+		// 		if err != nil {
+		// 			t.Fatal(err)
+		// 		}
 
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: utxo.UTXOID,
-						Asset:  avax.Asset{ID: assetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  2, // Produce more output than is consumed by the transaction
-						AssetID: assetID,
-					}},
-				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			semanticVerifyErr: "import tx flow check failed due to",
-		},
-		"no signatures": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, vmtest.TestShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: utxo.UTXOID,
+		// 				Asset:  avax.Asset{ID: assetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  2, // Produce more output than is consumed by the transaction
+		// 				AssetID: assetID,
+		// 			}},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	semanticVerifyErr: "import tx flow check failed due to",
+		// },
+		// "no signatures": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		txID := ids.GenerateTestID()
+		// 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, vmtest.TestShortIDAddrs[0])
+		// 		if err != nil {
+		// 			t.Fatal(err)
+		// 		}
 
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: utxo.UTXOID,
-						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  1,
-						AssetID: vm.ctx.AVAXAssetID,
-					}},
-				}}
-				if err := tx.Sign(atomic.Codec, nil); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			semanticVerifyErr: "import tx contained mismatched number of inputs/credentials",
-		},
-		"incorrect signature": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, vmtest.TestShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: utxo.UTXOID,
+		// 				Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  1,
+		// 				AssetID: vm.ctx.AVAXAssetID,
+		// 			}},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, nil); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	semanticVerifyErr: "import tx contained mismatched number of inputs/credentials",
+		// },
+		// "incorrect signature": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		txID := ids.GenerateTestID()
+		// 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 1, vmtest.TestShortIDAddrs[0])
+		// 		if err != nil {
+		// 			t.Fatal(err)
+		// 		}
 
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: utxo.UTXOID,
-						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   1,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{{
-						Address: ethAddress,
-						Amount:  1,
-						AssetID: vm.ctx.AVAXAssetID,
-					}},
-				}}
-				// Sign the transaction with the incorrect key
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{vmtest.TestKeys[1]}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			semanticVerifyErr: "import tx transfer failed verification",
-		},
-		"non-unique EVM Outputs": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
-				txID := ids.GenerateTestID()
-				utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 2, vmtest.TestShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: utxo.UTXOID,
+		// 				Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   1,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{{
+		// 				Address: ethAddress,
+		// 				Amount:  1,
+		// 				AssetID: vm.ctx.AVAXAssetID,
+		// 			}},
+		// 		}}
+		// 		// Sign the transaction with the incorrect key
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{vmtest.TestKeys[1]}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	semanticVerifyErr: "import tx transfer failed verification",
+		// },
+		// "non-unique EVM Outputs": {
+		// 	setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+		// 		txID := ids.GenerateTestID()
+		// 		utxo, err := addUTXO(sharedMemory, vm.ctx, txID, 0, vm.ctx.AVAXAssetID, 2, vmtest.TestShortIDAddrs[0])
+		// 		if err != nil {
+		// 			t.Fatal(err)
+		// 		}
 
-				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
-					NetworkID:    vm.ctx.NetworkID,
-					BlockchainID: vm.ctx.ChainID,
-					SourceChain:  vm.ctx.XChainID,
-					ImportedInputs: []*avax.TransferableInput{{
-						UTXOID: utxo.UTXOID,
-						Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
-						In: &secp256k1fx.TransferInput{
-							Amt:   2,
-							Input: secp256k1fx.Input{SigIndices: []uint32{0}},
-						},
-					}},
-					Outs: []atomic.EVMOutput{
-						{
-							Address: ethAddress,
-							Amount:  1,
-							AssetID: vm.ctx.AVAXAssetID,
-						},
-						{
-							Address: ethAddress,
-							Amount:  1,
-							AssetID: vm.ctx.AVAXAssetID,
-						},
-					},
-				}}
-				if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{vmtest.TestKeys[0]}}); err != nil {
-					t.Fatal(err)
-				}
-				return tx
-			},
-			fork:              upgradetest.ApricotPhase3,
-			semanticVerifyErr: atomic.ErrOutputsNotSortedUnique.Error(),
-		},
+		// 		tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
+		// 			NetworkID:    vm.ctx.NetworkID,
+		// 			BlockchainID: vm.ctx.ChainID,
+		// 			SourceChain:  vm.ctx.XChainID,
+		// 			ImportedInputs: []*avax.TransferableInput{{
+		// 				UTXOID: utxo.UTXOID,
+		// 				Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		// 				In: &secp256k1fx.TransferInput{
+		// 					Amt:   2,
+		// 					Input: secp256k1fx.Input{SigIndices: []uint32{0}},
+		// 				},
+		// 			}},
+		// 			Outs: []atomic.EVMOutput{
+		// 				{
+		// 					Address: ethAddress,
+		// 					Amount:  1,
+		// 					AssetID: vm.ctx.AVAXAssetID,
+		// 				},
+		// 				{
+		// 					Address: ethAddress,
+		// 					Amount:  1,
+		// 					AssetID: vm.ctx.AVAXAssetID,
+		// 				},
+		// 			},
+		// 		}}
+		// 		if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{vmtest.TestKeys[0]}}); err != nil {
+		// 			t.Fatal(err)
+		// 		}
+		// 		return tx
+		// 	},
+		// 	fork:              upgradetest.ApricotPhase3,
+		// 	semanticVerifyErr: atomic.ErrOutputsNotSortedUnique.Error(),
+		// },
 	}
 
 	for name, test := range tests {

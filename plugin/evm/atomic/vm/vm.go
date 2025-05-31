@@ -77,7 +77,6 @@ type VM struct {
 	extension.InnerVM
 	ctx *snow.Context
 
-	// TODO: unexport these fields
 	secpCache *secp256k1.RecoverCache
 	fx        secp256k1fx.Fx
 	baseCodec codec.Registry
@@ -86,7 +85,6 @@ type VM struct {
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	// TODO: unexport these fields
 	atomicTxRepository *atomicstate.AtomicRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
 	atomicBackend *atomicstate.AtomicBackend
@@ -243,9 +241,7 @@ func (vm *VM) SetState(ctx context.Context, state snow.State) error {
 		}
 	}
 
-	// TODO: uncomment this once atomic VM fully wraps inner VM
-	// return vm.InnerVM.SetState(ctx, state)
-	return nil
+	return vm.InnerVM.SetState(ctx, state)
 }
 
 func (vm *VM) onBootstrapStarted() error {
@@ -355,12 +351,10 @@ func (vm *VM) Shutdown(context.Context) error {
 }
 
 func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, error) {
-	// TODO: uncomment this once atomic VM fully wraps inner VM
-	// apis, err := vm.InnerVM.CreateHandlers(ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	apis := make(map[string]http.Handler)
+	apis, err := vm.InnerVM.CreateHandlers(ctx)
+	if err != nil {
+		return nil, err
+	}
 	avaxAPI, err := utils.NewHandler("avax", &AvaxAPI{vm})
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
@@ -413,7 +407,6 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // Note: VerifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-// TODO: unexport this function
 func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
 	parent, err := vm.InnerVM.GetExtendedBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
@@ -757,8 +750,6 @@ func (vm *VM) currentRules() extras.Rules {
 	header := vm.Ethereum().BlockChain().CurrentHeader()
 	return vm.rules(header.Number, header.Time)
 }
-
-// TODO: these should be unexported after test refactor is done
 
 // getAtomicTx returns the requested transaction, status, and height.
 // If the status is Unknown, then the returned transaction will be nil.
