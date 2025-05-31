@@ -73,7 +73,7 @@ func (vm *VM) newImportTx(
 		kc.Add(key)
 	}
 
-	atomicUTXOs, _, _, err := avax.GetAtomicUTXOs(vm.ctx.SharedMemory, atomic.Codec, chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, -1)
+	atomicUTXOs, _, _, err := avax.GetAtomicUTXOs(vm.ctx.SharedMemory, atomic.Codec, chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, maxUTXOsToFetch)
 	if err != nil {
 		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
 	}

@@ -495,7 +495,7 @@ func TestNewImportTx(t *testing.T) {
 		// Ensure that the UTXO has been removed from shared memory within Accept
 		addrSet := set.Set[ids.ShortID]{}
 		addrSet.Add(key.Address())
-		utxos, _, _, err := avax.GetAtomicUTXOs(vm.ctx.SharedMemory, atomic.Codec, vm.ctx.XChainID, addrSet, ids.ShortEmpty, ids.Empty, -1)
+		utxos, _, _, err := avax.GetAtomicUTXOs(vm.ctx.SharedMemory, atomic.Codec, vm.ctx.XChainID, addrSet, ids.ShortEmpty, ids.Empty, maxUTXOsToFetch)
 		if err != nil {
 			t.Fatal(err)
 		}
