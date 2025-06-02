@@ -2,10 +2,6 @@
 
 set -euo pipefail
 
-# This script assumes that an AvalancheGo and Subnet-EVM binaries are available in the standard location
-# within the $GOPATH
-# The AvalancheGo and PluginDir paths can be specified via the environment variables used in ./scripts/run.sh.
-
 CORETH_PATH=$(
   cd "$(dirname "${BASH_SOURCE[0]}")"
   cd .. && pwd

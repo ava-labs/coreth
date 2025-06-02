@@ -1,13 +1,13 @@
 # Load Simulator
 
-When building developing your own blockchain using `subnet-evm`, you may want to analyze how your fee parameterization behaves and/or how many resources your VM uses under different load patterns. For this reason, we developed `cmd/simulator`. `cmd/simulator` lets you drive arbitrary load across any number of [endpoints] with a user-specified `keys` directory (insecure) `timeout`, `workers`, `max-fee-cap`, and `max-tip-cap`.
+When building developing your own blockchain using `coreth`, you may want to analyze how your fee parameterization behaves and/or how many resources your VM uses under different load patterns. For this reason, we developed `cmd/simulator`. `cmd/simulator` lets you drive arbitrary load across any number of [endpoints] with a user-specified `keys` directory (insecure) `timeout`, `workers`, `max-fee-cap`, and `max-tip-cap`.
 
 ## Building the Load Simulator
 
 To build the load simulator, navigate to the base of the simulator directory:
 
 ```bash
-cd $GOPATH/src/github.com/ava-labs/subnet-evm/cmd/simulator
+cd $GOPATH/src/github.com/ava-labs/coreth/cmd/simulator
 ```
 
 Build the simulator:
