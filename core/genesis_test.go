@@ -140,11 +140,17 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with ApricotPhase1 transition at 90.
 				// Advance to block #4, past the ApricotPhase1 transition block of customg.
-				tdb := triedb.NewDatabase(db, newDbConfig(t, db, scheme))
+
+				// Find the genesis root hash
+				tempdb := rawdb.NewMemoryDatabase()
+				defer tempdb.Close()
+				tdb := triedb.NewDatabase(tempdb, triedb.HashDefaults)
 				genesis, err := oldcustomg.Commit(db, tdb)
 				if err != nil {
 					t.Fatal(err)
 				}
+
+				_ = newDbConfig(t, db, scheme) // need side-effect of creating temp directory for firewood
 
 				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, dummy.NewFullFaker(), vm.Config{}, genesis.Hash(), false)
 				defer bc.Stop()
@@ -162,7 +168,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				}
 
 				// This should return a compatibility error.
-				return setupGenesisBlock(db, tdb, &customg, bc.lastAccepted.Hash())
+				return setupGenesisBlock(db, bc.TrieDB(), &customg, bc.lastAccepted.Hash())
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,

@@ -197,8 +197,8 @@ func (db *Database) Initialized(root common.Hash) bool {
 		log.Warn("firewooddb: error getting root", "error", err)
 		return false
 	}
-
-	return common.BytesToHash(rootBytes) == root
+	currentRoot := common.BytesToHash(rootBytes)
+	return currentRoot == root
 }
 
 // Update takes a root and a set of keys-values and creates a new proposal.
@@ -317,6 +317,14 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	// We need to lock the proposal tree to prevent concurrent writes.
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
+
+	// This should only happen during tests - coreth doesn't allow empty commits.
+	// Moreover, any empty change will not call `Update`, so the proposal will not be found.
+	if root == db.proposalTree.Root {
+		log.Warn("firewooddb: Commit called with same root as proposal tree root, skipping")
+		// TODO: there should be more handling here if this can happen in coreth.
+		return nil
+	}
 
 	// Find the proposal with the given root.
 	// I.e. the proposal in which the parent root is the root of the database.
