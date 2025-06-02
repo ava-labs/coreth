@@ -157,8 +157,9 @@ jobs:
         with:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
-          path: /tmp/e2e/warp/avalanchego
+          path: avalanchego
           token: ${{ secrets.AVALANCHE_PAT }}
+          run: mv avalanchego /tmp/e2e/warp/avalanchego
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -171,8 +172,9 @@ jobs:
         with:
           repository: ava-labs/subnet-evm
           ref: master
-          path: /tmp/e2e/warp/subnet-evm
+          path: subnet-evm
           token: ${{ secrets.AVALANCHE_PAT }}
+          run: mv subnet-evm /tmp/e2e/warp/subnet-evm
       - name: Build Subnet-EVM
         run: |
           cd /tmp/e2e/warp/subnet-evm
