@@ -165,12 +165,12 @@ jobs:
       - name: Build AvalancheGo and update Coreth dependency
         run: ./scripts/build_avalanchego_with_coreth.sh
         env:
-          AVALANCHEGO_CLONE_PATH: warp-avalanchego
+          AVALANCHEGO_CLONE_PATH: /tmp/e2e/warp/avalanchego
       - name: Run Warp E2E Tests
         uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@86c0b96e8e07347f66d008faac50af1b2d3cecc9
         with:
           run: ./scripts/run_ginkgo_warp.sh
-          run_env: AVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego
+          run_env: AVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego/build
           artifact_prefix: warp
           prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
           prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
