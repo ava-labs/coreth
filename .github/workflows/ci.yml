@@ -128,6 +128,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
+      - name: Build AvalancheGo and update Coreth dependency
+        run: ./scripts/build_avalanchego_with_coreth.sh
       - name: Run e2e tests
         uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@86c0b96e8e07347f66d008faac50af1b2d3cecc9
         with:
@@ -136,3 +138,44 @@ jobs:
           prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
           loki_username: ${{ secrets.LOKI_ID || '' }}
           loki_password: ${{ secrets.LOKI_PASSWORD || '' }}
+  e2e_warp:
+    name: e2e warp tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.avalanchegoRepo }}
+          ref: ${{ github.event.inputs.avalanchegoBranch }}
+          path: warp-avalanchego
+          token: ${{ secrets.AVALANCHE_PAT }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - name: Build AvalancheGo and update Coreth dependency
+        run: ./scripts/build_avalanchego_with_coreth.sh
+        env:
+          AVALANCHEGO_CLONE_PATH: warp-avalanchego
+      - name: Run Warp E2E Tests
+        run: ./scripts/run_ginkgo_warp.sh
+        env:
+          AVALANCHEGO_BUILD_PATH: warp-avalanchego/build
+      # - name: Run Warp E2E Tests
+      #   uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@6e04bc0ac1d3d3cd1d0bf17c55a4eda41d094e88
+      #   with:
+      #     run: ./scripts/run_ginkgo_warp.sh
+      #     run_env: AVALANCHEGO_BUILD_PATH=warp-avalanchego
+      #     artifact_prefix: warp
+      #     prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
+      #     prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
+      #     loki_username: ${{ secrets.LOKI_ID || '' }}
+      #     loki_password: ${{ secrets.LOKI_PASSWORD || '' }}
