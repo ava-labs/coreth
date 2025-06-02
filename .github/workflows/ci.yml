@@ -30,7 +30,6 @@ jobs:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
           path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -72,7 +71,6 @@ jobs:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
           path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -158,7 +156,6 @@ jobs:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
           path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
       - name: Move AvalancheGo
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: mv avalanchego /tmp/e2e/warp/avalanchego
@@ -175,7 +172,6 @@ jobs:
           repository: ava-labs/subnet-evm
           ref: master
           path: subnet-evm
-          token: ${{ secrets.AVALANCHE_PAT }}
       - name: Move Subnet-EVM
         run: mv subnet-evm /tmp/e2e/warp/subnet-evm
       - name: Build Subnet-EVM
