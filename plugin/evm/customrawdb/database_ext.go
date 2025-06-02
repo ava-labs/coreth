@@ -113,3 +113,27 @@ func ReadDatabasePath(db ethdb.KeyValueReader) (string, error) {
 
 	return string(path), nil
 }
+
+// WriteGenesisRoot writes the genesis root to the database.
+func WriteGenesisRoot(db ethdb.KeyValueWriter, root common.Hash) error {
+	// Write the genesis root to the database
+	return db.Put(genesisRootKey, root[:])
+}
+
+// ReadGenesisRoot reads the genesis root from the database.
+func ReadGenesisRoot(db ethdb.KeyValueReader) (common.Hash, error) {
+	has, err := db.Has(genesisRootKey)
+	if err != nil || !has {
+		return common.Hash{}, err
+	}
+	// Read the genesis root from the database
+	rootBytes, err := db.Get(genesisRootKey)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if len(rootBytes) != common.HashLength {
+		return common.Hash{}, fmt.Errorf("Invalid genesis root length %d", len(rootBytes))
+	}
+
+	return common.BytesToHash(rootBytes), nil
+}

@@ -56,4 +56,5 @@ var (
 var (
 	FirewoodScheme = "firewood"
 	statePathKey   = []byte("state_path")
+	genesisRootKey = []byte("genesis_root")
 )

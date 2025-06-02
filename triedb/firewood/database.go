@@ -98,6 +98,7 @@ func (c *TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverri
 
 type Database struct {
 	fwDisk IFirewood
+	ethdb  ethdb.Database // The underlying disk database, used for storing genesis and the path.
 
 	proposalLock sync.RWMutex
 	proposalMap  map[common.Hash][]*ProposalContext
@@ -122,12 +123,19 @@ func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
 		return nil
 	}
 
+	currentRoot, err := fw.Root()
+	if err != nil {
+		log.Error("firewooddb: error getting current root", "error", err)
+		return nil
+	}
+
 	return &Database{
-		fwDisk:      fw, // TODO: Initialize with the actual Firewood database.
+		fwDisk:      fw,
+		ethdb:       diskdb,
 		proposalMap: make(map[common.Hash][]*ProposalContext),
 		proposalTree: &ProposalContext{
 			Proposal: nil,
-			Root:     common.Hash{},
+			Root:     common.Hash(currentRoot),
 			Block:    0,
 			Parent:   nil,
 			Children: nil,
@@ -190,15 +198,13 @@ func (db *Database) Scheme() string {
 // Initialized indicates whether the most recent root of the database
 // matches the given root.
 func (db *Database) Initialized(root common.Hash) bool {
-	// Shouldn't use proposal tree root here, since it may be empty.
-	rootBytes, err := db.fwDisk.Root()
+	// We store the genesis root in the rawdb, so we can check it.
+	genesisRoot, err := customrawdb.ReadGenesisRoot(db.ethdb)
 	if err != nil {
-		// TODO: Is this the correct log level?
-		log.Warn("firewooddb: error getting root", "error", err)
+		log.Error("firewooddb: error reading genesis root", "error", err)
 		return false
 	}
-	currentRoot := common.BytesToHash(rootBytes)
-	return currentRoot == root
+	return genesisRoot == root
 }
 
 // Update takes a root and a set of keys-values and creates a new proposal.
@@ -242,7 +248,7 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	// Special case: we initialize the database with the empty hash.
 	// This is the only time we can propose a different parent root, since all syncing changes
 	// are directly written to disk, and any old root is for a loaded database is unknown.
-	if db.Initialized(parent) && (db.proposalTree.Root == common.Hash{} || db.proposalTree.Block == block-1) {
+	if db.proposalTree.Root == parent && (block == 0 || db.proposalTree.Block == block-1) {
 		p, err := db.fwDisk.Propose(keys, values)
 		if err != nil {
 			return fmt.Errorf("firewooddb: error proposing from root %s", parent.Hex())
@@ -347,6 +353,14 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	// Commit the proposal to the database.
 	if err := pCtx.Proposal.Commit(); err != nil {
 		return fmt.Errorf("firewooddb: error committing proposal %s", root.Hex())
+	}
+
+	// If this is the genesis root, store in rawdb.
+	if pCtx.Block == 0 {
+		if err := customrawdb.WriteGenesisRoot(db.ethdb, root); err != nil {
+			return fmt.Errorf("firewooddb: error writing genesis root %s: %w", root.Hex(), err)
+		}
+		log.Info("Persisted genesis root to rawdb", "root", root.Hex())
 	}
 
 	if report {
@@ -525,7 +539,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		p   IProposal
 		err error
 	)
-	if db.Initialized(parentRoot) {
+	if db.proposalTree.Root == parentRoot {
 		// Propose from the database root.
 		p, err = db.fwDisk.Propose(keys, values)
 		if err != nil {

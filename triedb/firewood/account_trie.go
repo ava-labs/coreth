@@ -42,7 +42,7 @@ type AccountTrie struct {
 func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
 	reader, err := db.Reader(root)
 	if err != nil {
-		return nil, errors.Join(errNoReader, err)
+		return nil, err
 	}
 	return &AccountTrie{
 		fw:         db,
