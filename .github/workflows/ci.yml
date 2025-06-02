@@ -166,6 +166,17 @@ jobs:
         run: ./scripts/build_avalanchego_with_coreth.sh
         env:
           AVALANCHEGO_CLONE_PATH: /tmp/e2e/warp/avalanchego
+      - name: Clone Subnet-EVM
+        uses: actions/checkout@v4
+        with:
+          repository: ava-labs/subnet-evm
+          ref: master
+          path: /tmp/e2e/warp/subnet-evm
+          token: ${{ secrets.AVALANCHE_PAT }}
+      - name: Build Subnet-EVM
+        run: |
+          cd /tmp/e2e/warp/subnet-evm
+          ./scripts/build.sh
       - name: Run Warp E2E Tests
         uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@86c0b96e8e07347f66d008faac50af1b2d3cecc9
         with:

@@ -10,9 +10,9 @@ import (
 	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
-
-	"github.com/ava-labs/coreth/plugin/evm"
 )
+
+var subnetVMID = ids.ID{'s', 'u', 'b', 'n', 'e', 't', 'e', 'v', 'm'}
 
 var DefaultChainConfig = map[string]any{
 	"log-level":         "debug",
@@ -70,7 +70,7 @@ func NewTmpnetSubnet(name string, genesisPath string, chainConfig map[string]any
 		Name: name,
 		Chains: []*tmpnet.Chain{
 			{
-				VMID:         evm.ID,
+				VMID:         subnetVMID,
 				Genesis:      genesisBytes,
 				Config:       string(chainConfigBytes),
 				PreFundedKey: tmpnet.HardhatKey,
