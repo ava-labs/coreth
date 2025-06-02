@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
@@ -17,7 +18,7 @@ import (
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
-const numTriggerTxs = 2 // Number of txs needed to activate the proposer VM fork
+const expectedBlockHeight = 2
 
 // IssueTxsToActivateProposerVMFork issues transactions at the current
 // timestamp, which should be after the ProposerVM activation time (aka
@@ -35,16 +36,11 @@ func IssueTxsToActivateProposerVMFork(
 		return err
 	}
 
-	newHeads := make(chan *types.Header, 1)
-	sub, err := client.SubscribeNewHead(ctx, newHeads)
-	if err != nil {
-		return err
-	}
-	defer sub.Unsubscribe()
-
-	gasPrice := big.NewInt(ap1.GasLimit)
+	gasPrice := big.NewInt(ap1.MinGasPrice) // should be pretty generous for c-chain and subnets
 	txSigner := types.LatestSignerForChainID(chainID)
-	for i := 0; i < numTriggerTxs; i++ {
+
+	// Send exactly 2 transactions, waiting for each to be included in a block
+	for i := 0; i < expectedBlockHeight; i++ {
 		tx := types.NewTransaction(
 			nonce, addr, common.Big1, ethparams.TxGas, gasPrice, nil)
 		triggerTx, err := types.SignTx(tx, txSigner, fundedKey)
@@ -54,12 +50,27 @@ func IssueTxsToActivateProposerVMFork(
 		if err := client.SendTransaction(ctx, triggerTx); err != nil {
 			return err
 		}
-		<-newHeads // wait for block to be accepted
+
+		// Wait for this transaction to be included in a block
+		receiptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		for {
+			if receiptCtx.Err() != nil {
+				cancel()
+				return receiptCtx.Err()
+			}
+			_, err := client.TransactionReceipt(receiptCtx, triggerTx.Hash())
+			if err == nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		cancel()
 		nonce++
 	}
+
 	log.Info(
 		"Built sufficient blocks to activate proposerVM fork",
-		"txCount", numTriggerTxs,
+		"blockCount", expectedBlockHeight,
 	)
 	return nil
 }
