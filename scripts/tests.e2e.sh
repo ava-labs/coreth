@@ -13,5 +13,23 @@ if ! [[ "$0" =~ scripts/tests.e2e.sh ]]; then
   exit 255
 fi
 
+# Coreth root directory
+CORETH_PATH=$(
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+  cd .. && pwd
+)
+
+# Allow configuring the clone path to point to an existing clone
+AVALANCHEGO_CLONE_PATH="${AVALANCHEGO_CLONE_PATH:-avalanchego}"
+
+# Always return to the coreth path on exit
+function cleanup {
+  cd "${CORETH_PATH}"
+}
+
+trap cleanup EXIT
+
+cd "${AVALANCHEGO_CLONE_PATH}"
+
 echo "running AvalancheGo e2e tests"
 ./scripts/run_task.sh test-e2e-ci -- --ginkgo.label-filter='c || uses-c' "${@}"
