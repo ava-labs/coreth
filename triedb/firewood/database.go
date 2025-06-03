@@ -414,6 +414,13 @@ func (db *Database) Reference(_ common.Hash, _ common.Hash) {
 }
 
 // Dereference drops a proposal from the database.
+// This function is no-op because proposals can only be lazily dereferenced.
+// Consider the follwing case:
+// Chain 1 has root A and root C
+// Chain 2 has root B and root C
+// We commit root A, and dereference root B and it's child.
+// Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
+// Thus, we recognize the single root C as the only proposal, and dereference it.
 func (db *Database) Dereference(root common.Hash) {
 	// We need to lock the proposal tree to prevent concurrent writes.
 	// db.proposalLock.Lock()
@@ -441,13 +448,6 @@ func (db *Database) Dereference(root common.Hash) {
 	// 	log.Error("firewooddb: error dereferencing proposal", "error", err)
 	// 	return
 	// }
-
-	// Proposals can only be lazily dereferenced.
-	// Consider the follwing case:
-	// Chain 1 has root A and root C
-	// Chain 2 has root B and root C
-	// We commit root A, and dereference root B and it's child.
-	// Root C is Rejected, but there's now only one record of root C in the proposal map.
 }
 
 // dereference drops a proposal from the database.
