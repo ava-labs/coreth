@@ -223,12 +223,6 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 		}
 	}
 
-	// nodeSet := nodes[parent]
-	// for str, node := range nodeSet.Nodes {
-	// 	keys = append(keys, []byte(str))
-	// 	values = append(values, node.Blob)
-	// }
-
 	// Firewood ffi does not accept empty bashes, so if the keys are empty, the root is returned.
 	// Empty blocks are not allowed in coreth anyway.
 	if len(keys) == 0 {
@@ -244,6 +238,17 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 // If the parent cannot be found, an error will be returned.
 // Should only be accessed with the proposal lock held.
 func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, keys [][]byte, values [][]byte) error {
+	// Check if this proposal already exists. For reorgs, this could occur.
+	if existingProposals, ok := db.proposalMap[root]; ok {
+		// If the proposal already exists, we can just return.
+		for _, existing := range existingProposals {
+			if existing.Parent.Root == parent && existing.Block == block {
+				return nil
+			}
+		}
+		log.Debug("firewooddb: proposal already exists, but not at the same parent and block", "root", root.Hex(), "parent", parent.Hex(), "block", block)
+	}
+
 	// If parent is root, we should propose from the db.
 	// Special case: we initialize the database with the empty hash.
 	// This is the only time we can propose a different parent root, since all syncing changes
@@ -391,6 +396,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 			db.dereference(childCtx)
 		}
 	}
+
 	return nil
 }
 
@@ -410,31 +416,38 @@ func (db *Database) Reference(_ common.Hash, _ common.Hash) {
 // Dereference drops a proposal from the database.
 func (db *Database) Dereference(root common.Hash) {
 	// We need to lock the proposal tree to prevent concurrent writes.
-	db.proposalLock.Lock()
-	defer db.proposalLock.Unlock()
+	// db.proposalLock.Lock()
+	// defer db.proposalLock.Unlock()
 
-	// Find the proposal of given root.
-	var pCtx *ProposalContext
-	count := 0
-	for _, possible := range db.proposalMap[root] {
-		pCtx = possible
-		count++
-	}
+	// // Find the proposal of given root.
+	// var pCtx *ProposalContext
+	// count := 0
+	// for _, possible := range db.proposalMap[root] {
+	// 	pCtx = possible
+	// 	count++
+	// }
 
-	// If there are multiple proposals with the same root, we cannot dereference,
-	// as we do not know the parent or height.
-	if count > 1 {
-		log.Debug("Cannot dereference root with multiple proposals", "root", root.Hex(), "count", count)
-		return // will be cleaned up eventually on later commit, when it is no longer possible to be committed.
-	} else if count == 0 {
-		log.Debug("No proposal to dereference found", "root", root.Hex())
-		return // no error, may have already been dropped
-	}
+	// // If there are multiple proposals with the same root, we cannot dereference,
+	// // as we do not know the parent or height.
+	// if count > 1 {
+	// 	log.Debug("Cannot dereference root with multiple proposals", "root", root.Hex(), "count", count)
+	// 	return // will be cleaned up eventually on later commit, when it is no longer possible to be committed.
+	// } else if count == 0 {
+	// 	log.Debug("No proposal to dereference found", "root", root.Hex())
+	// 	return // no error, may have already been dropped
+	// }
 
-	if err := db.dereference(pCtx); err != nil {
-		log.Error("firewooddb: error dereferencing proposal", "error", err)
-		return
-	}
+	// if err := db.dereference(pCtx); err != nil {
+	// 	log.Error("firewooddb: error dereferencing proposal", "error", err)
+	// 	return
+	// }
+
+	// Proposals can only be lazily dereferenced.
+	// Consider the follwing case:
+	// Chain 1 has root A and root C
+	// Chain 2 has root B and root C
+	// We commit root A, and dereference root B and it's child.
+	// Root C is Rejected, but there's now only one record of root C in the proposal map.
 }
 
 // dereference drops a proposal from the database.
@@ -568,4 +581,29 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		return common.Hash{}, err
 	}
 	return common.BytesToHash(rootBytes), nil
+}
+
+func PrintTree(node *ProposalContext, prefix string, isTail bool) {
+	if node == nil {
+		return
+	}
+
+	connector := "└── "
+	if !isTail {
+		connector = "├── "
+	}
+
+	fmt.Printf("%s%s%x\n", prefix, connector, node.Root)
+
+	// Update prefix for children
+	newPrefix := prefix
+	if isTail {
+		newPrefix += "    "
+	} else {
+		newPrefix += "│   "
+	}
+
+	for i, child := range node.Children {
+		PrintTree(child, newPrefix, i == len(node.Children)-1)
+	}
 }

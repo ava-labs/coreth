@@ -97,7 +97,10 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 		return nil, nil
 	}
 
-	return storageBytes, nil
+	// Decode the storage value
+	var storageBytesDecoded []byte
+	err = rlp.DecodeBytes(storageBytes, &storageBytesDecoded)
+	return storageBytesDecoded, err
 }
 
 // UpdateAccount implements state.Trie.
@@ -129,13 +132,13 @@ func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byt
 
 	acctKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	key = append(acctKey, storageKey...)
+	newKey := append(acctKey, storageKey...)
 	data, err := rlp.EncodeToBytes(value)
 	if err != nil {
 		return err
 	}
 	// Queue the keys and values for later commit
-	a.updateKeys = append(a.updateKeys, key)
+	a.updateKeys = append(a.updateKeys, newKey)
 	a.updateValues = append(a.updateValues, data)
 	return nil
 }
@@ -186,6 +189,7 @@ func (a *AccountTrie) Hash() common.Hash {
 func (a *AccountTrie) hash() (common.Hash, error) {
 	// If we haven't already hashed, we need to do so.
 	if a.root != (common.Hash{}) {
+		// TODO Populate this
 		return a.root, nil
 	}
 	return a.fw.getProposalHash(a.parentRoot, a.updateKeys, a.updateValues)
