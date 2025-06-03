@@ -605,8 +605,15 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	testCanonicalHashMarker(t, rawdb.HashScheme)
-	testCanonicalHashMarker(t, rawdb.PathScheme)
+	for _, scheme := range []string{
+		customrawdb.FirewoodScheme,
+		rawdb.HashScheme,
+		rawdb.PathScheme,
+	} {
+		t.Run(scheme, func(t *testing.T) {
+			testCanonicalHashMarker(t, scheme)
+		})
+	}
 }
 
 func testCanonicalHashMarker(t *testing.T, scheme string) {
@@ -663,7 +670,17 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 		}
 
 		// Initialize test chain
-		chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
+		db := rawdb.NewMemoryDatabase()
+		tempdir := t.TempDir()
+		if err := customrawdb.WriteDatabasePath(db, tempdir); err != nil {
+			t.Fatalf("failed to write database path: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.RemoveAll(tempdir); err != nil {
+				t.Fatalf("failed to remove temp dir: %v", err)
+			}
+		})
+		chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}

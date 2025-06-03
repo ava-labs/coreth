@@ -37,6 +37,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -506,7 +507,7 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 }
 
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
 		testRepairWithScheme(t, tt, snapshots, scheme)
 	}
 }
@@ -527,6 +528,9 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
 	defer db.Close() // Might double close, should be fine
+
+	// Set path for firewood
+	require.NoError(t, customrawdb.WriteDatabasePath(db, datadir))
 
 	// Initialize a fresh chain
 	var (
@@ -552,6 +556,10 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if snapshots {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
+	}
+	if scheme == customrawdb.FirewoodScheme && snapshots {
+		t.Log("Firewood scheme does not support snapshots")
+		return
 	}
 	chain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
@@ -618,6 +626,9 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
 	defer db.Close()
+
+	// Set path for firewood
+	require.NoError(customrawdb.WriteDatabasePath(db, datadir))
 
 	newChain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)
 	if err != nil {

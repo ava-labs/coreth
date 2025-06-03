@@ -222,7 +222,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		cfg := &firewood.TrieDBConfig{
 			FileName:          "firewood_state",
 			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
-			Revisions:         uint(c.StateHistory),
+			Revisions:         max(10, uint(c.StateHistory)), // must be at least 2
 			ReadCacheStrategy: ffi.CacheAllReads,
 			MetricsPort:       0, // use any open port from OS
 		}
