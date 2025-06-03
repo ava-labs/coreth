@@ -494,7 +494,7 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
 
-	vm.networkCodec = atomicsync.Codec
+	vm.networkCodec = message.Codec
 	vm.Network, err = network.NewNetwork(vm.ctx, appSender, vm.networkCodec, vm.config.MaxOutboundActiveRequests, vm.sdkMetrics)
 	if err != nil {
 		return fmt.Errorf("failed to create network: %w", err)

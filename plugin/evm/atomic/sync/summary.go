@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 
@@ -18,19 +17,6 @@ import (
 )
 
 var _ message.Syncable = (*Summary)(nil)
-
-// Codec is the codec manager that contains the codec for Summary and
-// other message types that are used in the network protocol. This is to ensure that the codec
-// version is consistent across all message types and includes the codec for Summary.
-var Codec codec.Manager
-
-func init() {
-	var err error
-	Codec, err = message.NewCodec(Summary{})
-	if err != nil {
-		panic(fmt.Errorf("failed to create codec manager: %w", err))
-	}
-}
 
 // Summary provides the information necessary to sync a node starting
 // at the given block.
@@ -53,7 +39,7 @@ func NewSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash
 		},
 		AtomicRoot: atomicRoot,
 	}
-	bytes, err := Codec.Marshal(message.Version, &summary)
+	bytes, err := message.Codec.Marshal(message.Version, &summary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal syncable summary: %w", err)
 	}
