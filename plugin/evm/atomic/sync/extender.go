@@ -24,11 +24,11 @@ type extender struct {
 	requestSize uint16 // maximum number of leaves to sync in a single request
 }
 
-// Initialize initializes the atomic sync extender with the atomic backend and atomic trie.
-func NewExtender(backend *state.AtomicBackend, atomicTrie *state.AtomicTrie, requestSize uint16) *extender {
+// Initialize initializes the sync extender with the backend and trie.
+func NewExtender(backend *state.AtomicBackend, trie *state.AtomicTrie, requestSize uint16) *extender {
 	return &extender{
 		backend:     backend,
-		trie:        atomicTrie,
+		trie:        trie,
 		requestSize: requestSize,
 	}
 }
@@ -38,7 +38,7 @@ func (a *extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 	if !ok {
 		return fmt.Errorf("expected *Summary, got %T", summary)
 	}
-	log.Info("atomic tx: sync starting", "root", atomicSummary)
+	log.Info("atomic sync starting", "summary", atomicSummary)
 	syncer, err := newSyncer(
 		client,
 		verDB,
@@ -54,7 +54,7 @@ func (a *extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 		return fmt.Errorf("failed to start atomic syncer: %w", err)
 	}
 	err = <-syncer.Done()
-	log.Info("atomic tx: sync finished", "root", atomicSummary.AtomicRoot, "err", err)
+	log.Info("atomic sync finished", "summary", atomicSummary, "err", err)
 	return err
 }
 

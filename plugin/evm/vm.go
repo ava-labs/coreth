@@ -716,7 +716,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	)
 	vm.Network.SetRequestHandler(networkHandler)
 
-	vm.Server = vmsync.SyncServer(vm.blockChain, atomicsync.NewSummaryProvider(vm.atomicBackend.AtomicTrie()), vm.config.StateSyncCommitInterval)
+	vm.Server = vmsync.NewServer(vm.blockChain, atomicsync.NewSummaryProvider(vm.atomicBackend.AtomicTrie()), vm.config.StateSyncCommitInterval)
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
@@ -749,18 +749,18 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 				BlockParser:      vm,
 			},
 		),
-		Enabled:              stateSyncEnabled,
-		SkipResume:           vm.config.StateSyncSkipResume,
-		StateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		StateSyncRequestSize: vm.config.StateSyncRequestSize,
-		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		ChaindDB:             vm.chaindb,
-		VerDB:                vm.versiondb,
-		MetadataDB:           vm.metadataDB,
-		ToEngine:             vm.toEngine,
-		Acceptor:             vm,
-		SyncableParser:       atomicsync.NewSummaryParser(),
-		SyncExtender:         atomicsync.NewExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
+		Enabled:            stateSyncEnabled,
+		SkipResume:         vm.config.StateSyncSkipResume,
+		MinBlocks:          vm.config.StateSyncMinBlocks,
+		RequestSize:        vm.config.StateSyncRequestSize,
+		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
+		ChaindDB:           vm.chaindb,
+		VerDB:              vm.versiondb,
+		MetadataDB:         vm.metadataDB,
+		ToEngine:           vm.toEngine,
+		Acceptor:           vm,
+		Parser:             atomicsync.NewSummaryParser(),
+		Extender:           atomicsync.NewExtender(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.config.StateSyncRequestSize),
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
