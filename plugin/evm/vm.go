@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	avalanchegoConstants "github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/coreth/network"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -392,6 +393,12 @@ func (vm *VM) Initialize(
 		}
 	}
 
+	// Write where the database files are located to be used by any Firewood
+	// databases set up later.
+	if err := customrawdb.WriteDatabasePath(vm.chaindb, chainCtx.ChainDataDir); err != nil {
+		return fmt.Errorf("failed to write database path: %w", err)
+	}
+
 	g, err := parseGenesis(chainCtx, genesisBytes)
 	if err != nil {
 		return err
@@ -471,6 +478,14 @@ func (vm *VM) Initialize(
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	vm.ethConfig.StateScheme = vm.config.StateScheme
+
+	// Firewood automatically prunes based on config
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme && vm.ethConfig.Pruning {
+		log.Warn("Pruning must be disabled for Firewood, setting to false")
+		vm.ethConfig.Pruning = false
+		vm.config.Pruning = false
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -1226,14 +1241,19 @@ func (vm *VM) setAppRequestHandlers() {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
-	evmTrieDB := triedb.NewDatabase(
-		vm.chaindb,
-		&triedb.Config{
-			DBOverride: hashdb.Config{
-				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			}.BackendConstructor,
-		},
-	)
+	// However, Firewood does not support multiple TrieDBs, so we use the same one.
+	evmTrieDB := vm.eth.BlockChain().TrieDB()
+	if vm.ethConfig.StateScheme != customrawdb.FirewoodScheme {
+		evmTrieDB = triedb.NewDatabase(
+			vm.chaindb,
+			&triedb.Config{
+				DBOverride: hashdb.Config{
+					CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
+				}.BackendConstructor,
+			},
+		)
+	}
+
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,

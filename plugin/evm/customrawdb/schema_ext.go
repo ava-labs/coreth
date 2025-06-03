@@ -51,3 +51,10 @@ var (
 	// and is equal to [syncPerformedPrefix] + block number as uint64.
 	syncPerformedKeyLength = len(syncPerformedPrefix) + wrappers.LongLen
 )
+
+// Firewood keys
+var (
+	FirewoodScheme = "firewood"
+	statePathKey   = []byte("state_path")
+	genesisRootKey = []byte("genesis_root")
+)

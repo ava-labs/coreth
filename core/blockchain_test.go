@@ -48,6 +48,7 @@ import (
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -94,6 +95,46 @@ func createBlockChain(
 		false,
 	)
 	return blockchain, err
+}
+
+func TestFirewoodBlockChain(t *testing.T) {
+	for _, tt := range tests {
+		// Use the temporary directory for the database
+		getTempDir := func() string {
+			// Create a unique temporary directory for each call
+			tempDir, err := os.MkdirTemp("", "firewood-blockchain-*")
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				if err := os.RemoveAll(tempDir); err != nil {
+					t.Fatalf("failed to remove temp dir: %v", err)
+				}
+			})
+			return tempDir
+		}
+		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+			// Only replace the database path if it is not already set.
+			if path, err := customrawdb.ReadDatabasePath(db); err != nil || path == "" {
+				customrawdb.WriteDatabasePath(db, getTempDir())
+			}
+			return createBlockChain(
+				db,
+				&CacheConfig{
+					TrieCleanLimit:     256,
+					Pruning:            true,
+					SnapshotLimit:      0, // Disable snapshots
+					AcceptorQueueLimit: 64,
+					StateScheme:        customrawdb.FirewoodScheme,
+					StateHistory:       100,
+				},
+				gspec,
+				lastAcceptedHash,
+			)
+		}
+		// Run the test with the temporary database
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, createFirewoodBlockChain)
+		})
+	}
 }
 
 func TestArchiveBlockChain(t *testing.T) {
@@ -566,6 +607,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 func TestCanonicalHashMarker(t *testing.T) {
 	testCanonicalHashMarker(t, rawdb.HashScheme)
 	testCanonicalHashMarker(t, rawdb.PathScheme)
+	testCanonicalHashMarker(t, customrawdb.FirewoodScheme)
 }
 
 func testCanonicalHashMarker(t *testing.T, scheme string) {
@@ -622,7 +664,17 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 		}
 
 		// Initialize test chain
-		chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
+		db := rawdb.NewMemoryDatabase()
+		tempdir := t.TempDir()
+		if err := customrawdb.WriteDatabasePath(db, tempdir); err != nil {
+			t.Fatalf("failed to write database path: %v", err)
+		}
+		t.Cleanup(func() {
+			if err := os.RemoveAll(tempdir); err != nil {
+				t.Fatalf("failed to remove temp dir: %v", err)
+			}
+		})
+		chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}

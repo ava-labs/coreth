@@ -50,6 +50,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -66,6 +67,8 @@ import (
 
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
+
+	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
 // ====== If resolving merge conflicts ======
@@ -215,6 +218,16 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
+	if c.StateScheme == customrawdb.FirewoodScheme {
+		cfg := &firewood.TrieDBConfig{
+			FileName:          "firewood_state",
+			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
+			Revisions:         max(10, uint(c.StateHistory)), // must be at least 2
+			ReadCacheStrategy: ffi.CacheAllReads,
+			MetricsPort:       0, // use any open port from OS
+		}
+		config.DBOverride = cfg.BackendConstructor // BackendConstructor is on the reference to allow closure
+	}
 	return config
 }
 
@@ -238,6 +251,9 @@ var DefaultCacheConfig = &CacheConfig{
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
+	if config.StateScheme == customrawdb.FirewoodScheme {
+		config.SnapshotLimit = 0 // no snapshot allowed for firewood
+	}
 	return &config
 }
 
@@ -365,7 +381,6 @@ func NewBlockChain(
 	}
 	// Open trie database with provided config
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
-
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
