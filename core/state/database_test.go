@@ -2,7 +2,6 @@ package state
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/rand"
 	"path"
 	"slices"
@@ -87,7 +86,6 @@ func TestInsert(t *testing.T) {
 	ethRoot := types.EmptyRootHash
 
 	for i := range uint64(10_000) {
-		fmt.Printf("\n\nIteration %d: %x\n", i, ethRoot)
 		hashTr, err := hashdb.OpenTrie(ethRoot)
 		require.NoError(t, err)
 		hashSet := trienode.NewMergedNodeSet()

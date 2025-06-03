@@ -37,6 +37,7 @@ type AccountTrie struct {
 	updateLock   sync.RWMutex
 	updateKeys   [][]byte
 	updateValues [][]byte
+	hasChanges   bool
 }
 
 func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
@@ -48,6 +49,7 @@ func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
 		fw:         db,
 		parentRoot: root,
 		reader:     reader,
+		hasChanges: true, // Start with hasChanges true to allow computing the proposal hash
 	}, nil
 }
 
@@ -119,6 +121,7 @@ func (a *AccountTrie) UpdateAccount(addr common.Address, account *types.StateAcc
 	}
 	a.updateKeys = append(a.updateKeys, key)
 	a.updateValues = append(a.updateValues, data)
+	a.hasChanges = true // Mark that there are changes to commit
 	return nil
 }
 
@@ -140,6 +143,7 @@ func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byt
 	// Queue the keys and values for later commit
 	a.updateKeys = append(a.updateKeys, newKey)
 	a.updateValues = append(a.updateValues, data)
+	a.hasChanges = true // Mark that there are changes to commit
 	return nil
 }
 
@@ -172,6 +176,7 @@ func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
 	// Queue the key for deletion
 	a.updateKeys = append(a.updateKeys, key)
 	a.updateValues = append(a.updateValues, []byte{}) // nil value indicates deletion
+	a.hasChanges = true                               // Mark that there are changes to commit
 	return nil
 }
 
@@ -188,11 +193,15 @@ func (a *AccountTrie) Hash() common.Hash {
 
 func (a *AccountTrie) hash() (common.Hash, error) {
 	// If we haven't already hashed, we need to do so.
-	if a.root != (common.Hash{}) {
-		// TODO Populate this
-		return a.root, nil
+	if a.hasChanges {
+		root, err := a.fw.getProposalHash(a.parentRoot, a.updateKeys, a.updateValues)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		a.root = root
+		a.hasChanges = false // Reset hasChanges after hashing
 	}
-	return a.fw.getProposalHash(a.parentRoot, a.updateKeys, a.updateValues)
+	return a.root, nil
 }
 
 // Commit implements state.Trie.
