@@ -317,8 +317,9 @@ func (b *Block) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *Block) verify(context *precompileconfig.PredicateContext, writes bool) error {
+	hash := b.ethBlock.Hash()
 	log.Debug("verifying block",
-		"hash", b.ethBlock.Hash(),
+		"hash", hash,
 		"height", b.ethBlock.NumberU64(),
 		"hasContext", context.ProposerVMBlockCtx != nil,
 		"writes", writes,
@@ -327,7 +328,21 @@ func (b *Block) verify(context *precompileconfig.PredicateContext, writes bool) 
 	if err := b.verifyWithoutParent(); err != nil {
 		return fmt.Errorf("verifyWithoutParent: %w", err)
 	}
-	if err := b.verifyCanExecute(context); err != nil {
+	if err := b.verifyContext(context); err != nil {
+		return fmt.Errorf("verifyCanExecute: %w", err)
+	}
+
+	// The engine may call VerifyWithContext multiple times on the same block
+	// with different contexts. Since the engine will only call Accept/Reject
+	// once, we should only call InsertBlockManual once. Additionally, if a
+	// block is already in processing, then it has already passed verification
+	// and at this point we have checked the predicates are still valid in the
+	// different context so we can return nil.
+	if b.vm.State.IsProcessing(ids.ID(hash)) {
+		return nil
+	}
+
+	if err := b.verifyCanExecute(); err != nil {
 		return fmt.Errorf("verifyCanExecute: %w", err)
 	}
 	if err := b.execute(context, writes); err != nil {
@@ -347,24 +362,30 @@ func (b *Block) verifyWithoutParent() error {
 }
 
 // Assumes [Block.verifyWithoutParent] has returned nil.
-func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) error {
+func (b *Block) verifyContext(context *precompileconfig.PredicateContext) error {
 	// If the VM is not marked as bootstrapped the other chains may also be
 	// bootstrapping and not have populated the required indices. Since
 	// bootstrapping only verifies blocks that have been canonically accepted by
 	// the network, these checks would be guaranteed to pass on a synced node.
-	if b.vm.bootstrapped.Get() {
-		// Verify that the atomic txs in this block are valid to be executed.
-		if err := b.verifyAtomicTxs(); err != nil {
-			return err
-		}
-
-		// Verify that all the ICM messages are correctly marked as either valid
-		// or invalid.
-		if err := b.verifyPredicates(context); err != nil {
-			return fmt.Errorf("failed to verify predicates: %w", err)
-		}
+	if !b.vm.bootstrapped.Get() {
+		return nil
 	}
 
+	// Verify that the atomic txs in this block are valid to be executed.
+	if err := b.verifyAtomicTxs(); err != nil {
+		return err
+	}
+
+	// Verify that all the ICM messages are correctly marked as either valid
+	// or invalid.
+	if err := b.verifyPredicates(context); err != nil {
+		return fmt.Errorf("failed to verify predicates: %w", err)
+	}
+	return nil
+}
+
+// Assumes [Block.verifyContext] has returned nil.
+func (b *Block) verifyCanExecute() error {
 	header := b.ethBlock.Header()
 	number := header.Number.Uint64()
 	parentHeader := b.vm.blockChain.GetHeader(header.ParentHash, number-1)
@@ -430,29 +451,15 @@ func (b *Block) verifyCanExecute(context *precompileconfig.PredicateContext) err
 	// - Normal eth tx checks:
 	//   - Sender can be recovered correctly (verifies chainID)
 	//   - Tx nonces are correct (matches what is in state and won't cause an overflow)
-	//   - Sender is an EOA (probably removed with 7702, also was really not possible before)
-	//   - Tx's GasFeeCap is >= the BaseFee
 	//   - Tx can afford the gas based on the gas limit and effective gas price
 	//   - Tx doesn't specify a GasLimit which exceeds the gas remaining allowed to process in the block
-	//   - Tx's gas limit is >= the intrinsic gas of the transaction
 	//   - Tx is able to send the value of the transaction from the sender after purchasing the gas
-	//   - The message data doesn't exceed MaxInitCodeSize when creating a contract (post Durango)
 	return nil
 }
 
 // Assumes [Block.verifyCanExecute] has returned nil.
 func (b *Block) execute(context *precompileconfig.PredicateContext, writes bool) error {
-	// The engine may call VerifyWithContext multiple times on the same block
-	// with different contexts. Since the engine will only call Accept/Reject
-	// once, we should only call InsertBlockManual once. Additionally, if a
-	// block is already in processing, then it has already passed verification
-	// and at this point we have checked the predicates are still valid in the
-	// different context so we can return nil.
 	hash := b.ethBlock.Hash()
-	if b.vm.State.IsProcessing(ids.ID(hash)) {
-		return nil
-	}
-
 	if writes {
 		// Update the atomic backend with [txs] from this block.
 		//

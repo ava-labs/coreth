@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -85,10 +86,43 @@ func verifyBlockStandalone(
 		return errEmptyBlock
 	}
 
+	var cumulativeIntrinsicGas uint64
 	for i, tx := range txs {
 		if tx.Type() == types.BlobTxType {
 			return fmt.Errorf("unexpected blobTx at index %d", i)
 		}
+
+		var (
+			contractCreation = tx.To() == nil
+			txData           = tx.Data()
+		)
+		// Check whether the init code size has been exceeded.
+		if rulesExtra.IsDurango && contractCreation && len(txData) > params.MaxInitCodeSize {
+			return fmt.Errorf("code size %d exceeds limit %d at index %d", len(txData), params.MaxInitCodeSize, i)
+		}
+
+		intrinsicGas, err := core.IntrinsicGas(
+			txData,
+			tx.AccessList(),
+			contractCreation,
+			rules,
+		)
+		if err != nil {
+			return fmt.Errorf("could not calculate intrinsic gas with %w at index %d", err, i)
+		}
+		if tx.Gas() < intrinsicGas {
+			return fmt.Errorf("insufficient intrinsic gas at index %d", i)
+		}
+
+		cumulativeIntrinsicGas, err = math.Add(cumulativeIntrinsicGas, intrinsicGas)
+		if err != nil {
+			return fmt.Errorf("calculating cumulative intrinsic gas with %w at index %d", err, i)
+		}
+	}
+	// Ensures that there aren't an unreasonable number of transactions in the
+	// block.
+	if cumulativeIntrinsicGas > ethHeader.GasLimit {
+		return fmt.Errorf("cumulative intrinsic gas %d exceeds block gas limit %d", cumulativeIntrinsicGas, ethHeader.GasLimit)
 	}
 
 	// Verify the ExtDataHash field
@@ -129,6 +163,12 @@ func verifyBlockStandalone(
 		if bitLen := ethHeader.BaseFee.BitLen(); bitLen > 256 {
 			return fmt.Errorf("baseFee too large: bitLen %d", bitLen)
 		}
+
+		for i, tx := range txs {
+			if gasFeeCap := tx.GasFeeCap(); gasFeeCap.Cmp(ethHeader.BaseFee) < 0 {
+				return fmt.Errorf("insufficient gasFeeCap %d must be at least %d at index %d", gasFeeCap, ethHeader.BaseFee, i)
+			}
+		}
 	}
 
 	// If we are in ApricotPhase4, ensure that ExtDataGasUsed is populated
@@ -149,13 +189,8 @@ func verifyBlockStandalone(
 			}
 		}
 
-		switch {
-		case !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed):
+		if !utils.BigEqualUint64(headerExtra.ExtDataGasUsed, totalGasUsed) {
 			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", headerExtra.ExtDataGasUsed, totalGasUsed)
-		case headerExtra.BlockGasCost == nil:
-			return errNilBlockGasCostApricotPhase4
-		case !headerExtra.BlockGasCost.IsUint64():
-			return fmt.Errorf("too large blockGasCost: %d", headerExtra.BlockGasCost)
 		}
 	}
 
