@@ -234,15 +234,36 @@ func (a *AccountTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []by
 
 // GetKey implements state.Trie.
 func (a *AccountTrie) GetKey(_ []byte) []byte {
-	panic("unimplemented")
+	return nil // Not implemented, as this is only used in APIs
 }
 
 // NodeIterator implements state.Trie.
 func (a *AccountTrie) NodeIterator(_ []byte) (trie.NodeIterator, error) {
-	panic("unimplemented")
+	return nil, errors.New("NodeIterator not implemented for AccountTrie")
 }
 
 // Prove implements state.Trie.
 func (a *AccountTrie) Prove(_ []byte, _ ethdb.KeyValueWriter) error {
-	panic("unimplemented")
+	return errors.New("Prove not implemented for AccountTrie")
+}
+
+func (a *AccountTrie) Copy() *AccountTrie {
+	a.updateLock.RLock()
+	defer a.updateLock.RUnlock()
+
+	// Create a new AccountTrie with the same root and reader
+	newTrie := &AccountTrie{
+		fw:           a.fw,
+		parentRoot:   a.parentRoot,
+		root:         a.root,
+		reader:       a.reader, // Share the same reader
+		hasChanges:   a.hasChanges,
+		updateKeys:   make([][]byte, len(a.updateKeys)),
+		updateValues: make([][]byte, len(a.updateValues)),
+	}
+
+	copy(newTrie.updateKeys, a.updateKeys)
+	copy(newTrie.updateValues, a.updateValues)
+
+	return newTrie
 }

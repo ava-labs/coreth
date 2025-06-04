@@ -31,7 +31,6 @@ import (
 	"bytes"
 	_ "embed"
 	"math/big"
-	"os"
 	"reflect"
 	"testing"
 
@@ -305,13 +304,7 @@ func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config 
 	}
 	if scheme == customrawdb.FirewoodScheme {
 		// Create a unique temporary directory for each test
-		tempDir, err := os.MkdirTemp("", "firewood-blockchain-*")
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			if err := os.RemoveAll(tempDir); err != nil {
-				t.Fatalf("failed to remove temp dir: %v", err)
-			}
-		})
+		tempDir := t.TempDir()
 		// Set the temporary directory as the database path
 		require.NoError(t, customrawdb.WriteDatabasePath(db, tempDir))
 		fwCfg := firewood.TrieDBConfig{

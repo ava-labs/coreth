@@ -94,6 +94,13 @@ func (db *firewoodAccessorDb) OpenStorageTrie(stateRoot common.Hash, address com
 }
 
 // CopyTrie returns an independent copy of the given trie.
-func (db *firewoodAccessorDb) CopyTrie(trie Trie) Trie {
-	return nil
+func (db *firewoodAccessorDb) CopyTrie(t Trie) Trie {
+	switch t := t.(type) {
+	case *firewood.AccountTrie:
+		return t.Copy()
+	case *firewood.StorageTrie:
+		return nil
+	default:
+		panic(fmt.Errorf("unknown trie type %T", t))
+	}
 }

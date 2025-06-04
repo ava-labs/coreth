@@ -79,8 +79,8 @@ type IFirewood interface {
 
 // Config contains the settings for database.
 type TrieDBConfig struct {
-	FileName          string // File name of the database
-	CleanCacheSize    int    // Size of the clean cache in bytes
+	FileName          string
+	CleanCacheSize    int // Size of the clean cache in bytes
 	Revisions         uint
 	ReadCacheStrategy ffi.CacheStrategy
 	MetricsPort       uint16
@@ -380,15 +380,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	db.proposalTree = pCtx
 	db.proposalTree.Parent = nil // We should not index historical revisions here.
 	// Remove the proposal from the map.
-	rootList := db.proposalMap[root]
-	for i, p := range rootList {
-		// There could be other proposals with the same root later in the tree.
-		if p == pCtx { // pointer comparison
-			rootList = append(rootList[:i], rootList[i+1:]...)
-			break
-		}
-	}
-	db.proposalMap[root] = rootList
+	db.removeProposalFromMap(pCtx)
 
 	for _, childCtx := range oldChildren {
 		// Don't dereference the recently commit proposal.
@@ -464,12 +456,22 @@ func (db *Database) dereference(pCtx *ProposalContext) error {
 	}
 	pCtx.Children = nil // We can clear the children now.
 
+	// Remove the proposal from the map.
+	db.removeProposalFromMap(pCtx)
+
 	// Drop the proposal in the backend.
 	if err := pCtx.Proposal.Drop(); err != nil {
 		return fmt.Errorf("firewooddb: error dropping proposal %s", pCtx.Root.Hex())
 	}
 
-	// Remove the proposal from the map.
+	// Don't remove the proposal from the tree.
+	// This should be done by the caller.
+	return nil
+}
+
+// removeProposalFromMap removes the proposal from the proposal map.
+// The proposal lock must be held when calling this function.
+func (db *Database) removeProposalFromMap(pCtx *ProposalContext) {
 	rootList := db.proposalMap[pCtx.Root]
 	for i, p := range rootList {
 		if p == pCtx { // pointer comparison
@@ -477,11 +479,12 @@ func (db *Database) dereference(pCtx *ProposalContext) error {
 			break
 		}
 	}
-	db.proposalMap[pCtx.Root] = rootList
-
-	// Don't remove the proposal from the tree.
-	// This should be done by the caller.
-	return nil
+	if len(rootList) == 0 {
+		// If there are no more proposals with this root, remove it from the map.
+		delete(db.proposalMap, pCtx.Root)
+	} else {
+		db.proposalMap[pCtx.Root] = rootList
+	}
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
@@ -496,8 +499,6 @@ func (db *Database) Cap(limit common.StorageSize) error {
 // An error will be returned if the requested state is not available.
 func (db *Database) viewAtRoot(root common.Hash) (IDbView, error) {
 	// Check if the state root corresponds with a proposal.
-	db.proposalLock.RLock()
-	defer db.proposalLock.RUnlock()
 	proposals, ok := db.proposalMap[root]
 	if ok && len(proposals) > 0 {
 		// If there are multiple proposals with the same root, we can use the first one.
@@ -516,6 +517,8 @@ func (db *Database) viewAtRoot(root common.Hash) (IDbView, error) {
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	// Check if we can currently read the requested root
+	db.proposalLock.RLock()
+	defer db.proposalLock.RUnlock()
 	_, err := db.viewAtRoot(root)
 	if err != nil {
 		return nil, fmt.Errorf("firewooddb: requested state root %s not found", root.Hex())
@@ -534,6 +537,8 @@ type reader struct {
 // returned if the node is not found.
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	// Ensure we have access to the requested root
+	reader.db.proposalLock.RLock()
+	defer reader.db.proposalLock.RUnlock()
 	view, err := reader.db.viewAtRoot(reader.root)
 	if err != nil {
 		return nil, fmt.Errorf("firewooddb: requested state root %s not found", reader.root.Hex()) // TODO: Should we return the error?
@@ -544,8 +549,9 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 
 // addPendingProposal adds a pending proposal to the database.
 func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byte) (common.Hash, error) {
-	db.proposalLock.Lock()
-	defer db.proposalLock.Unlock()
+	// This function only reads from existing tracked proposals, so we can use a read lock.
+	db.proposalLock.RLock()
+	defer db.proposalLock.RUnlock()
 
 	// Check whether if we can propose from the database root.
 	var (

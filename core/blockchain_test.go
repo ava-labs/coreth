@@ -48,7 +48,6 @@ import (
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -99,22 +98,10 @@ func createBlockChain(
 
 func TestFirewoodBlockChain(t *testing.T) {
 	for _, tt := range tests {
-		// Use the temporary directory for the database
-		getTempDir := func() string {
-			// Create a unique temporary directory for each call
-			tempDir, err := os.MkdirTemp("", "firewood-blockchain-*")
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				if err := os.RemoveAll(tempDir); err != nil {
-					t.Fatalf("failed to remove temp dir: %v", err)
-				}
-			})
-			return tempDir
-		}
 		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 			// Only replace the database path if it is not already set.
 			if path, err := customrawdb.ReadDatabasePath(db); err != nil || path == "" {
-				customrawdb.WriteDatabasePath(db, getTempDir())
+				customrawdb.WriteDatabasePath(db, t.TempDir())
 			}
 			return createBlockChain(
 				db,
@@ -665,15 +652,9 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 
 		// Initialize test chain
 		db := rawdb.NewMemoryDatabase()
-		tempdir := t.TempDir()
-		if err := customrawdb.WriteDatabasePath(db, tempdir); err != nil {
+		if err := customrawdb.WriteDatabasePath(db, t.TempDir()); err != nil {
 			t.Fatalf("failed to write database path: %v", err)
 		}
-		t.Cleanup(func() {
-			if err := os.RemoveAll(tempdir); err != nil {
-				t.Fatalf("failed to remove temp dir: %v", err)
-			}
-		})
 		chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
