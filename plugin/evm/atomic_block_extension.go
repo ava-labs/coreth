@@ -185,11 +185,11 @@ func (be *blockExtension) SemanticVerify() error {
 	return nil
 }
 
-// OnAccept is called when the block is accepted. This is called by the wrapper
+// Accept is called when the block is accepted. This is called by the wrapper
 // block manager's Accept method. The acceptedBatch contains the changes that
 // were made to the database as a result of accepting the block, and it's flushed
 // to the database in this method.
-func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
+func (be *blockExtension) Accept(acceptedBatch database.Batch) error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
@@ -207,9 +207,9 @@ func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
 	return atomicState.Accept(acceptedBatch)
 }
 
-// OnReject is called when the block is rejected. This is called by the wrapper
+// Reject is called when the block is rejected. This is called by the wrapper
 // block manager's Reject method.
-func (be *blockExtension) OnReject() error {
+func (be *blockExtension) Reject() error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
@@ -229,6 +229,8 @@ func (be *blockExtension) OnReject() error {
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
 func (be *blockExtension) CleanupVerified() {
 	vm := be.blockExtender.vm
+	// If an error occurred inserting the block into the chain or if we are not pinning to memory,
+	// unpin the atomic trie changes from memory (if they were pinned).
 	if atomicState, err := vm.atomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}

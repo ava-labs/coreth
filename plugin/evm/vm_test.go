@@ -4047,7 +4047,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	<-tvm.toEngine
 	blk4, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
-	ethBlk4 := blk4.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk4 := blk4.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	actualTxs := ethBlk4.Transactions()
 	require.Len(actualTxs, 1)
 	require.Equal(maxSizeTxs[1].Hash(), actualTxs[0].Hash())

@@ -412,8 +412,7 @@ func (vm *VM) Initialize(
 	case avalanchegoConstants.FujiID:
 		extDataHashes = fujiExtDataHashes
 	}
-	blockExtender := newBlockExtender(extDataHashes, vm)
-	vm.extensionConfig.BlockExtender = blockExtender
+	vm.extensionConfig.BlockExtender = newBlockExtender(extDataHashes, vm)
 
 	// Free the memory of the extDataHash map that is not used (i.e. if mainnet
 	// config, free fuji)

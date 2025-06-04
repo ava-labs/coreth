@@ -62,12 +62,12 @@ type BlockExtension interface {
 	// and should be cleaned up due to error or verification runs under non-write mode. This
 	// does not return an error because the block has already been verified.
 	CleanupVerified()
-	// OnAccept is called when a block is accepted by the block manager. OnAccept takes a
+	// Accept is called when a block is accepted by the block manager. Accept takes a
 	// database.Batch that contains the changes that were made to the database as a result
 	// of accepting the block. The changes in the batch should be flushed to the database in this method.
-	OnAccept(acceptedBatch database.Batch) error
-	// OnReject is called when a block is rejected by the block manager
-	OnReject() error
+	Accept(acceptedBatch database.Batch) error
+	// Reject is called when a block is rejected by the block manager
+	Reject() error
 }
 type LeafRequestConfig struct {
 	// LeafType is the type of the leaf node
