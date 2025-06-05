@@ -90,11 +90,10 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	blockHash := ethBlock.Hash()
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 
-	if rules.IsApricotPhase1 {
-		extraData := customtypes.BlockExtData(ethBlock)
-		hash := customtypes.CalcExtDataHash(extraData)
-		if headerExtra.ExtDataHash != hash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
+	if extData := customtypes.BlockExtData(ethBlock); rules.IsApricotPhase1 {
+		extDataHash := customtypes.CalcExtDataHash(extData)
+		if headerExtra.ExtDataHash != extDataHash {
+			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, extDataHash)
 		}
 	} else {
 		// Prior to AP1, the extra data hash was not properly initialized.
@@ -105,8 +104,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 		// Because the extra data hash was not included, the extra data prior to
 		// AP1 is not committed to based on the block hash. Therefore, we must
 		// manually verify that the extra data is correct for each block.
-		extData := customtypes.BlockExtData(ethBlock)
-
+		//
 		// If the extra data hashes map includes the block hash, we must enforce
 		// that the extra data provided in the block bytes matches the expected
 		// hash.
