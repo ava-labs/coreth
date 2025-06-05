@@ -107,7 +107,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 		// manually verify that the extra data is correct for each block.
 		extData := customtypes.BlockExtData(ethBlock)
 
-		// If extra data hashes map includes the block hash, we must enforce
+		// If the extra data hashes map includes the block hash, we must enforce
 		// that the extra data provided in the block bytes matches the expected
 		// hash.
 		//
