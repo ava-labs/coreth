@@ -112,8 +112,8 @@ func (b *wrappedBlock) Accept(context.Context) error {
 	if b.extension != nil {
 		// Apply any changes atomically with other pending changes to
 		// the vm's versionDB.
-		// OnAccept flushes the changes in the batch to the database.
-		return b.extension.OnAccept(vdbBatch)
+		// Accept flushes the changes in the batch to the database.
+		return b.extension.Accept(vdbBatch)
 	}
 
 	// If there is no extension, we still need to apply the changes to the versionDB
@@ -165,7 +165,7 @@ func (b *wrappedBlock) Reject(context.Context) error {
 	)
 
 	if b.extension != nil {
-		if err := b.extension.OnReject(); err != nil {
+		if err := b.extension.Reject(); err != nil {
 			return err
 		}
 	}
