@@ -90,7 +90,8 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	blockHash := ethBlock.Hash()
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 
-	if extData := customtypes.BlockExtData(ethBlock); rules.IsApricotPhase1 {
+	extData := customtypes.BlockExtData(ethBlock)
+	if rules.IsApricotPhase1 {
 		extDataHash := customtypes.CalcExtDataHash(extData)
 		if headerExtra.ExtDataHash != extDataHash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, extDataHash)
