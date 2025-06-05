@@ -87,6 +87,14 @@ type TrieDBConfig struct {
 	Database          *Database
 }
 
+var Defaults = &TrieDBConfig{
+	FileName:          "firewooddb",
+	CleanCacheSize:    1024 * 1024, // 1MB
+	Revisions:         100,
+	ReadCacheStrategy: ffi.CacheAllReads,
+	MetricsPort:       0, // Default metrics port
+}
+
 // Must take reference to allow closure - reuse any existing database for the same config.
 func (c *TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
 	if c.Database == nil {

@@ -24,12 +24,14 @@ import (
 )
 
 func TestPrestateWithDiffModeANTTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer_ant", t)
+	for _, scheme := range schemes {
+		testPrestateDiffTracer("prestateTracer", "prestate_tracer_ant", t, scheme)
+	}
 }
 
 // testPrestateDiffTracer is adapted from the original testPrestateDiffTracer in
 // eth/tracers/internal/tracetest/prestate_test.go.
-func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
+func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T, scheme string) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -71,7 +73,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 						Time:   uint64(test.Context.Time),
 					},
 				}
-				state = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				state = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, scheme)
 			)
 			defer state.Close()
 

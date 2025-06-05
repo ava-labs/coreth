@@ -28,8 +28,12 @@
 package tests
 
 import (
+	"os"
+
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -45,16 +49,32 @@ type StateTestState struct {
 	StateDB   *state.StateDB
 	TrieDB    *triedb.Database
 	Snapshots *snapshot.Tree
+	TempDir   string
 }
 
 // MakePreState creates a state containing the given allocation.
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
 	tconf := &triedb.Config{Preimages: true}
-	if scheme == rawdb.HashScheme {
+	switch scheme {
+	case rawdb.HashScheme:
 		tconf.DBOverride = hashdb.Defaults.BackendConstructor
-	} else {
+	case rawdb.PathScheme:
 		tconf.DBOverride = pathdb.Defaults.BackendConstructor
+	case customrawdb.FirewoodScheme:
+		tconf.DBOverride = firewood.Defaults.BackendConstructor
+	default:
+		panic("unknown trie database scheme" + scheme)
 	}
+
+	// Set database path
+	tempdir, err := os.MkdirTemp("", "coreth-state-test-*")
+	if err != nil {
+		panic("failed to create temporary directory: " + err.Error())
+	}
+	if err := customrawdb.WriteDatabasePath(db, tempdir); err != nil {
+		panic("failed to set database path: " + err.Error())
+	}
+
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabaseWithNodeDB(db, triedb)
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
@@ -81,7 +101,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		snaps, _ = snapshot.New(snapconfig, db, triedb, common.Hash{}, root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
-	return StateTestState{statedb, triedb, snaps}
+	return StateTestState{statedb, triedb, snaps, tempdir}
 }
 
 // Close should be called when the state is no longer needed, ie. after running the test.
@@ -95,5 +115,12 @@ func (st *StateTestState) Close() {
 		st.Snapshots.AbortGeneration()
 		st.Snapshots.Release()
 		st.Snapshots = nil
+	}
+
+	if st.TempDir != "" {
+		if err := os.RemoveAll(st.TempDir); err != nil {
+			panic("failed to remove temporary directory: " + err.Error())
+		}
+		st.TempDir = ""
 	}
 }
