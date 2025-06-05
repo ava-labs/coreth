@@ -97,8 +97,8 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 			return fmt.Errorf("expected ExtDataHash to be empty but got %x", headerExtra.ExtDataHash)
 		}
 
-		// Because the extra data hash was not included, the extra data prior to
-		// AP1 is not committed to based on the block hash. Therefore, we must
+		// Because the extra data hash was not initialized, the extra data prior
+		// to AP1 is not committed to with the block hash. Therefore, we must
 		// manually verify that the extra data is correct for each block.
 		//
 		// If the extra data hashes map includes the block hash, we must enforce
