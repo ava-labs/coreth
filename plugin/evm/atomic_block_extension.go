@@ -116,6 +116,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 			return fmt.Errorf("unexpectedly provided extra data in block (%s, %d)", blockHash, b.Height())
 		}
 	} else {
+		// After AP1, the extra data hash must be properly initialized.
 		extDataHash := customtypes.CalcExtDataHash(extData)
 		if headerExtra.ExtDataHash != extDataHash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, extDataHash)
