@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -200,6 +201,33 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	return nil, nil, errors.New("historical state not available in path scheme yet")
 }
 
+// firewoodState handles state retrieval for the firewood database scheme.
+// It provides safe access to historical state without altering the underlying database.
+//
+// IMPLEMENTATION CONCERNS:
+// - Thread safety: Multiple concurrent state accesses could conflict with firewood's proposal system
+// - Resource management: Proper cleanup of firewood revisions and proposals to prevent memory leaks
+// - Consistency: Ensuring proposals don't interfere with historical revision reads
+// - Performance: Creating new database instances vs reusing existing connections
+// - Error handling: Firewood-specific errors may not map well to existing state access patterns
+// - Proposal conflicts: Read-write operations might create proposals that conflict with ongoing operations
+func (eth *Ethereum) firewoodState(block *types.Block) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
+	// For firewood, we don't support re-executing historical blocks to grab state
+	// since firewood maintains its own revision history
+	// We additionally
+
+	// Check if the state is available in the live blockchain
+	if statedb, err = eth.blockchain.StateAt(block.Root()); err != nil {
+		// For firewood, we don't need to manage references the same way as hashdb
+		// since firewood handles its own revision management
+		return nil, nil, errors.New("state not available")
+	}
+
+	// For firewood, we don't need complex release logic since the database
+	// manages its own revision lifecycle
+	return statedb, noopReleaser, nil
+}
+
 // stateAtBlock retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks
 // are attempted to be reexecuted to generate the desired state. The optional
@@ -223,10 +251,21 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 //     provided, it would be preferable to start from a fresh state, if we have it
 //     on disk.
 func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
-	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme {
-		return eth.hashState(ctx, block, reexec, base, readOnly, preferDisk)
+	// Check if we're using firewood backend by typecasting
+	if _, ok := eth.blockchain.TrieDB().Backend().(*firewood.Database); ok {
+		return eth.firewoodState(block)
 	}
-	return eth.pathState(block)
+
+	// Fall back to scheme-based routing for other backends
+	scheme := eth.blockchain.TrieDB().Scheme()
+	switch scheme {
+	case rawdb.HashScheme:
+		return eth.hashState(ctx, block, reexec, base, readOnly, preferDisk)
+	case rawdb.PathScheme:
+		return eth.pathState(block)
+	default:
+		return nil, nil, fmt.Errorf("unsupported trie database scheme: %s", scheme)
+	}
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.
