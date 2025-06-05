@@ -71,6 +71,7 @@ var (
 		SnapshotLimit:             256,
 		AcceptorQueueLimit:        64,
 	}
+	schemes = []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme}
 )
 
 func newGwei(n int64) *big.Int {
@@ -447,8 +448,18 @@ func TestRepopulateMissingTries(t *testing.T) {
 }
 
 func TestUngracefulAsyncShutdown(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testUngracefulAsyncShutdown(t, scheme)
+		})
+	}
+}
+func testUngracefulAsyncShutdown(t *testing.T, scheme string) {
 	var (
 		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+			if path, err := customrawdb.ReadDatabasePath(db); err != nil || path == "" {
+				customrawdb.WriteDatabasePath(db, t.TempDir())
+			}
 			blockchain, err := createBlockChain(db, &CacheConfig{
 				TrieCleanLimit:            256,
 				TrieDirtyLimit:            256,
@@ -592,9 +603,11 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	testCanonicalHashMarker(t, rawdb.HashScheme)
-	testCanonicalHashMarker(t, rawdb.PathScheme)
-	testCanonicalHashMarker(t, customrawdb.FirewoodScheme)
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testCanonicalHashMarker(t, scheme)
+		})
+	}
 }
 
 func testCanonicalHashMarker(t *testing.T, scheme string) {

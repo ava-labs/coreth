@@ -258,14 +258,16 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	}
 
 	// If parent is root, we should propose from the db.
-	// Special case: we initialize the database with the empty hash.
-	// This is the only time we can propose a different parent root, since all syncing changes
-	// are directly written to disk, and any old root is for a loaded database is unknown.
-	if db.proposalTree.Root == parent && (block == 0 || db.proposalTree.Block == block-1) {
+	// Special case: if we are proposing on top of an empty proposal.
+	// This function will never be called in the case that no changes are made,
+	// so we must interpret this as a valid potential proposal.
+	pCount := 0
+	if db.proposalTree.Root == parent {
 		p, err := db.fwDisk.Propose(keys, values)
 		if err != nil {
 			return fmt.Errorf("firewooddb: error proposing from root %s", parent.Hex())
 		}
+		pCount++
 
 		// Store the proposal context.
 		pContext := &ProposalContext{
@@ -276,19 +278,14 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 		}
 		db.proposalMap[root] = append(db.proposalMap[root], pContext)
 		db.proposalTree.Children = append(db.proposalTree.Children, pContext)
-		return nil
 	}
 
 	// If the parent is not the root of the database,
 	// we need to find all possible parent proposals.
-	possibleProposals, ok := db.proposalMap[parent]
-	if !ok {
-		return fmt.Errorf("firewooddb: parent proposal not found for %s", parent.Hex())
-	}
+	possibleProposals := db.proposalMap[parent]
 
 	// Find all proposals with the correct parent height.
 	// We must create a new proposal for each one, since we don't know which one will be used.
-	pCount := 0
 	for _, parentProposal := range possibleProposals {
 		// Check if the parent proposal is at the correct height.
 		if parentProposal.Block == block-1 {
@@ -336,50 +333,51 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	// We need to lock the proposal tree to prevent concurrent writes.
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
+	var pCtx *ProposalContext
 
 	// This should only happen during tests - coreth doesn't allow empty commits.
 	// Moreover, any empty change will not call `Update`, so the proposal will not be found.
 	if root == db.proposalTree.Root {
 		log.Warn("firewooddb: Commit called with same root as proposal tree root, skipping")
-		// TODO: there should be more handling here if this can happen in coreth.
-		return nil
-	}
-
-	// Find the proposal with the given root.
-	// I.e. the proposal in which the parent root is the root of the database.
-	// Is this true??? - This is guaranteed to be unique, since it's only height +1 from the disk.
-	var pCtx *ProposalContext
-	for _, possible := range db.proposalMap[root] {
-		if possible.Parent.Root == db.proposalTree.Root && possible.Parent.Block == db.proposalTree.Block {
-			// We found the proposal with the correct parent.
-			if pCtx != nil {
-				// TODO: Is this possible?
-				return fmt.Errorf("firewooddb: multiple proposals found for %s", root.Hex())
-			}
-			pCtx = possible
-		}
-	}
-	if pCtx == nil {
-		return fmt.Errorf("firewooddb: proposal not found for %s", root.Hex())
-	}
-
-	// Commit the proposal to the database.
-	if err := pCtx.Proposal.Commit(); err != nil {
-		return fmt.Errorf("firewooddb: error committing proposal %s", root.Hex())
-	}
-
-	// If this is the genesis root, store in rawdb.
-	if pCtx.Block == 0 {
-		if err := customrawdb.WriteGenesisRoot(db.ethdb, root); err != nil {
-			return fmt.Errorf("firewooddb: error writing genesis root %s: %w", root.Hex(), err)
-		}
-		log.Info("Persisted genesis root to rawdb", "root", root.Hex())
-	}
-
-	if report {
-		log.Info("Persisted trie from memory database", "node", root)
+		pCtx = db.proposalTree
+		pCtx.Block++ // Increment the block number, since no change is necessary.
+		// We must still cleanup the children.
 	} else {
-		log.Info("Persisted trie from memory database", "node", root)
+		// Find the proposal with the given root.
+		// I.e. the proposal in which the parent root is the root of the database.
+		// Is this true??? - This is guaranteed to be unique, since it's only height +1 from the disk.
+		for _, possible := range db.proposalMap[root] {
+			if possible.Parent.Root == db.proposalTree.Root && possible.Parent.Block == db.proposalTree.Block {
+				// We found the proposal with the correct parent.
+				if pCtx != nil {
+					// TODO: Is this possible?
+					return fmt.Errorf("firewooddb: multiple proposals found for %s", root.Hex())
+				}
+				pCtx = possible
+			}
+		}
+		if pCtx == nil {
+			return fmt.Errorf("firewooddb: proposal not found for %s", root.Hex())
+		}
+
+		// Commit the proposal to the database.
+		if err := pCtx.Proposal.Commit(); err != nil {
+			return fmt.Errorf("firewooddb: error committing proposal %s", root.Hex())
+		}
+
+		// If this is the genesis root, store in rawdb.
+		if pCtx.Block == 0 {
+			if err := customrawdb.WriteGenesisRoot(db.ethdb, root); err != nil {
+				return fmt.Errorf("firewooddb: error writing genesis root %s: %w", root.Hex(), err)
+			}
+			log.Info("Persisted genesis root to rawdb", "root", root.Hex())
+		}
+
+		if report {
+			log.Info("Persisted trie from memory database", "node", root)
+		} else {
+			log.Info("Persisted trie from memory database", "node", root)
+		}
 	}
 
 	// Committing removed the proposal in the backend.

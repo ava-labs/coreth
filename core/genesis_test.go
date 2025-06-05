@@ -30,6 +30,7 @@ package core
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -69,9 +70,11 @@ func TestGenesisBlockForTesting(t *testing.T) {
 }
 
 func TestSetupGenesis(t *testing.T) {
-	testSetupGenesis(t, rawdb.HashScheme)
-	testSetupGenesis(t, rawdb.PathScheme)
-	testSetupGenesis(t, customrawdb.FirewoodScheme)
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testSetupGenesis(t, scheme)
+		})
+	}
 }
 
 func testSetupGenesis(t *testing.T, scheme string) {
@@ -181,7 +184,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s %s", test.name, scheme), func(t *testing.T) {
 			db := rawdb.NewMemoryDatabase()
 			config, hash, err := test.fn(db)
 			// Check the return values.
