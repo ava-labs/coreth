@@ -91,12 +91,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 
 	extData := customtypes.BlockExtData(ethBlock)
-	if rules.IsApricotPhase1 {
-		extDataHash := customtypes.CalcExtDataHash(extData)
-		if headerExtra.ExtDataHash != extDataHash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, extDataHash)
-		}
-	} else {
+	if !rules.IsApricotPhase1 {
 		// Prior to AP1, the extra data hash was not properly initialized.
 		if headerExtra.ExtDataHash != (common.Hash{}) {
 			return fmt.Errorf("expected ExtDataHash to be empty but got %x", headerExtra.ExtDataHash)
@@ -119,6 +114,11 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 			}
 		} else if len(extData) != 0 {
 			return fmt.Errorf("unexpectedly provided extra data in block (%s, %d)", blockHash, b.Height())
+		}
+	} else {
+		extDataHash := customtypes.CalcExtDataHash(extData)
+		if headerExtra.ExtDataHash != extDataHash {
+			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, extDataHash)
 		}
 	}
 
