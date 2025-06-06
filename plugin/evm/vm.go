@@ -343,6 +343,7 @@ func (vm *VM) Initialize(
 	// and should be removed after everything is migrated to atomicvm.VM
 	// atomicVM.Initialize() should be calling this vm's Initialize()
 	// we should prevent infinite recursion
+	// See https://github.com/ava-labs/coreth/pull/998 for the resolution of this TODO.
 	if vm.atomicVM == nil {
 		vm.atomicVM = atomicvm.WrapVM(vm)
 		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, toEngine, nil, appSender); err != nil {

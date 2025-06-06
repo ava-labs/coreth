@@ -63,7 +63,6 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
@@ -476,7 +475,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
 	require.NoError(t, err)
 	err = vm2Blk.Verify(context.Background())
-	require.ErrorIs(t, err, vm.ErrMissingUTXOs)
+	require.ErrorIs(t, err, atomicvm.ErrMissingUTXOs)
 
 	// This should not result in a bad block since the missing UTXO should
 	// prevent InsertBlockManual from being called.

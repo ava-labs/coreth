@@ -266,7 +266,10 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 	}
 
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if b.extension != nil && (err != nil || !writes) {
+	// If this was not called with intention to writing to the database or
+	// got an error while inserting to blockchain, we may need to cleanup the extension.
+	// so that the extension can be garbage collected.
+	if doCleanup := err != nil || !writes; b.extension != nil && doCleanup {
 		b.extension.CleanupVerified()
 	}
 	return err
