@@ -90,40 +90,36 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	blockHash := ethBlock.Hash()
 	headerExtra := customtypes.GetHeaderExtra(ethHeader)
 
+	extData := customtypes.BlockExtData(ethBlock)
 	if !rules.IsApricotPhase1 {
-		if blockExtender.extDataHashes != nil {
-			extData := customtypes.BlockExtData(ethBlock)
-			extDataHash := customtypes.CalcExtDataHash(extData)
-			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
-			// have a block that is unexpectedly missing extra data.
-			expectedExtDataHash, ok := blockExtender.extDataHashes[blockHash]
-			if len(extData) == 0 {
-				if ok {
-					return fmt.Errorf("found block with unexpected missing extra data (%s, %d), expected extra data hash: %s", blockHash, b.Height(), expectedExtDataHash)
-				}
-			} else {
-				// If there is extra data, check to make sure that the extra data hash matches the expected extra data hash for this
-				// block
-				if extDataHash != expectedExtDataHash {
-					return fmt.Errorf("extra data hash in block (%s, %d): %s, did not match the expected extra data hash: %s", blockHash, b.Height(), extDataHash, expectedExtDataHash)
-				}
-			}
+		// Prior to AP1, the extra data hash was not properly initialized.
+		if headerExtra.ExtDataHash != (common.Hash{}) {
+			return fmt.Errorf("expected ExtDataHash to be empty but got %x", headerExtra.ExtDataHash)
 		}
-	}
 
-	// Verify the ExtDataHash field
-	if rules.IsApricotPhase1 {
-		extraData := customtypes.BlockExtData(ethBlock)
-		hash := customtypes.CalcExtDataHash(extraData)
-		if headerExtra.ExtDataHash != hash {
-			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
+		// Because the extra data hash was not initialized, the extra data prior
+		// to AP1 is not committed to with the block hash. Therefore, we must
+		// manually verify that the extra data is correct for each block.
+		//
+		// If the extra data hashes map includes the block hash, we must enforce
+		// that the extra data provided in the block bytes matches the expected
+		// hash.
+		//
+		// Otherwise, if the extra data hashes map does not include the block
+		// hash, it is expected for no extra data to have been provided.
+		if expectedExtDataHash, ok := blockExtender.extDataHashes[blockHash]; ok {
+			extDataHash := customtypes.CalcExtDataHash(extData)
+			if extDataHash != expectedExtDataHash {
+				return fmt.Errorf("extra data hash in block (%s, %d): %s, did not match the expected extra data hash: %s", blockHash, b.Height(), extDataHash, expectedExtDataHash)
+			}
+		} else if len(extData) != 0 {
+			return fmt.Errorf("unexpectedly provided extra data in block (%s, %d)", blockHash, b.Height())
 		}
 	} else {
-		if headerExtra.ExtDataHash != (common.Hash{}) {
-			return fmt.Errorf(
-				"expected ExtDataHash to be empty but got %x",
-				headerExtra.ExtDataHash,
-			)
+		// After AP1, the extra data hash must be properly initialized.
+		extDataHash := customtypes.CalcExtDataHash(extData)
+		if headerExtra.ExtDataHash != extDataHash {
+			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, extDataHash)
 		}
 	}
 
