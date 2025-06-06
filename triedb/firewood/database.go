@@ -501,10 +501,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	return nil
 }
 
-// viewAtRoot returns a view of the database at the given root.
-// An error will be returned if the requested state is not available.
-// One of revision and proposal will be non-nil in the no-error case.
-func (db *Database) viewAtRoot(root common.Hash) (*ffi.Revision, *ffi.Proposal, error) {
+// proposalAtRoot returns any proposal at the given root.
+// If there are multiple proposals with the same root, it will return the first one.
+// If no proposal is found, it will return nil.
+func (db *Database) proposalAtRoot(root common.Hash) *ffi.Proposal {
 	// Check if the state root corresponds with a proposal.
 	db.proposalLock.RLock()
 	defer db.proposalLock.RUnlock()
@@ -515,21 +515,25 @@ func (db *Database) viewAtRoot(root common.Hash) (*ffi.Revision, *ffi.Proposal, 
 			log.Debug("Multiple proposals found for root", "root", root.Hex(), "count", len(proposals))
 		}
 		// Use the first proposal
-		return nil, proposals[0].Proposal, nil
+		return proposals[0].Proposal
 	}
 
-	// No proposal found, check revisions
-	rev, err := db.fwDisk.Revision(root.Bytes())
-	return rev, nil, err
+	// No proposal found
+	return nil
 }
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	// Check if we can currently read the requested root
-	rev, _, err := db.viewAtRoot(root)
-	if err != nil {
-		return nil, fmt.Errorf("firewooddb: requested state root %s not found", root.Hex())
+	var rev *ffi.Revision
+	prop := db.proposalAtRoot(root)
+	if prop == nil {
+		var err error
+		rev, err = db.fwDisk.Revision(root[:])
+		if err != nil {
+			return nil, fmt.Errorf("firewooddb: requested state root %s not found", root.Hex())
+		}
 	}
 
 	return &reader{db: db, root: root, revision: rev}, nil
@@ -551,19 +555,19 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 		return reader.revision.Get(path)
 	}
 
-	// If we don't have a revision, we need to get the view at the root.
-	rev, prop, err := reader.db.viewAtRoot(reader.root)
-	if err != nil {
-		return nil, fmt.Errorf("firewooddb: requested state root %s not found", reader.root.Hex()) // TODO: Should we return the error?
+	// The most likely path when the revision is nil is that the root is not committed yet.
+	prop := reader.db.proposalAtRoot(reader.root)
+	if prop != nil {
+		return prop.Get(path)
 	}
 
 	// Assume that the root is now committed and we can use it for the lifetime of the reader.
-	if rev != nil {
-		reader.revision = rev
-		return rev.Get(path)
+	rev, err := reader.db.fwDisk.Revision(reader.root[:])
+	if err != nil || rev == nil {
+		return nil, fmt.Errorf("firewooddb: requested state root %s not found", reader.root.Hex())
 	}
-
-	return prop.Get(path)
+	reader.revision = rev
+	return rev.Get(path)
 }
 
 // addPendingProposal adds a pending proposal to the database.
