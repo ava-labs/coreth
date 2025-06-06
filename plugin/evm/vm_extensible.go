@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 )
 
 var _ extension.InnerVM = (*VM)(nil)
@@ -67,10 +66,6 @@ func (vm *VM) Ethereum() *eth.Ethereum {
 
 func (vm *VM) Config() config.Config {
 	return vm.config
-}
-
-func (vm *VM) SyncerClient() vmsync.Client {
-	return vm.Client
 }
 
 // TODO: remove these

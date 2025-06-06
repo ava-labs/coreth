@@ -17,7 +17,11 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 )
 
-var errUninitialized = errors.New("uninitialized handler")
+var (
+	_ handlers.LeafRequestHandler = (*uninitializedHandler)(nil)
+
+	errUninitialized = errors.New("uninitialized handler")
+)
 
 type uninitializedHandler struct{}
 

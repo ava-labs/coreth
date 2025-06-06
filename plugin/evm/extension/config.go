@@ -48,8 +48,6 @@ type ExtensibleVM interface {
 	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM
 	Config() config.Config
-	// SyncerClient returns the syncer client for the VM
-	SyncerClient() sync.Client
 }
 
 // InnerVM is the interface that must be implemented by the VM
