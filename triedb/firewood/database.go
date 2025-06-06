@@ -506,8 +506,6 @@ func (db *Database) Cap(limit common.StorageSize) error {
 // If no proposal is found, it will return nil.
 func (db *Database) proposalAtRoot(root common.Hash) *ffi.Proposal {
 	// Check if the state root corresponds with a proposal.
-	db.proposalLock.RLock()
-	defer db.proposalLock.RUnlock()
 	proposals, ok := db.proposalMap[root]
 	if ok && len(proposals) > 0 {
 		// If there are multiple proposals with the same root, we can use the first one.
@@ -527,6 +525,8 @@ func (db *Database) proposalAtRoot(root common.Hash) *ffi.Proposal {
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	// Check if we can currently read the requested root
 	var rev *ffi.Revision
+	db.proposalLock.RLock()
+	defer db.proposalLock.RUnlock()
 	prop := db.proposalAtRoot(root)
 	if prop == nil {
 		var err error
@@ -556,6 +556,8 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 	}
 
 	// The most likely path when the revision is nil is that the root is not committed yet.
+	reader.db.proposalLock.RLock()
+	defer reader.db.proposalLock.RUnlock()
 	prop := reader.db.proposalAtRoot(reader.root)
 	if prop != nil {
 		return prop.Get(path)
