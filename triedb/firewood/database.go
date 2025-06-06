@@ -31,7 +31,7 @@ var (
 
 type ProposalContext struct {
 	// The actual proposal
-	Proposal IProposal
+	Proposal *ffi.Proposal
 	// The root of the proposal
 	Root common.Hash
 	// The block number of the proposal
@@ -503,8 +503,11 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 // viewAtRoot returns a view of the database at the given root.
 // An error will be returned if the requested state is not available.
-func (db *Database) viewAtRoot(root common.Hash) (IDbView, error) {
+// One of revision and proposal will be non-nil in the no-error case.
+func (db *Database) viewAtRoot(root common.Hash) (*ffi.Revision, *ffi.Proposal, error) {
 	// Check if the state root corresponds with a proposal.
+	db.proposalLock.RLock()
+	defer db.proposalLock.RUnlock()
 	proposals, ok := db.proposalMap[root]
 	if ok && len(proposals) > 0 {
 		// If there are multiple proposals with the same root, we can use the first one.
@@ -512,45 +515,55 @@ func (db *Database) viewAtRoot(root common.Hash) (IDbView, error) {
 			log.Debug("Multiple proposals found for root", "root", root.Hex(), "count", len(proposals))
 		}
 		// Use the first proposal
-		return proposals[0].Proposal, nil
+		return nil, proposals[0].Proposal, nil
 	}
 
 	// No proposal found, check revisions
-	return db.fwDisk.Revision(root.Bytes())
+	rev, err := db.fwDisk.Revision(root.Bytes())
+	return rev, nil, err
 }
 
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	// Check if we can currently read the requested root
-	db.proposalLock.RLock()
-	defer db.proposalLock.RUnlock()
-	_, err := db.viewAtRoot(root)
+	rev, _, err := db.viewAtRoot(root)
 	if err != nil {
 		return nil, fmt.Errorf("firewooddb: requested state root %s not found", root.Hex())
 	}
 
-	return &reader{db: db, root: root}, nil
+	return &reader{db: db, root: root, revision: rev}, nil
 }
 
 // reader is a state reader of Database which implements the Reader interface.
 type reader struct {
-	db   *Database
-	root common.Hash
+	db       *Database
+	root     common.Hash   // The root of the state this reader is reading.
+	revision *ffi.Revision // The revision at which this reader is created.
 }
 
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
+// It defaults to using a revision if available.
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
-	// Ensure we have access to the requested root
-	reader.db.proposalLock.RLock()
-	defer reader.db.proposalLock.RUnlock()
-	view, err := reader.db.viewAtRoot(reader.root)
+	// If we have a revision, we can use it to get the node.
+	if reader.revision != nil {
+		return reader.revision.Get(path)
+	}
+
+	// If we don't have a revision, we need to get the view at the root.
+	rev, prop, err := reader.db.viewAtRoot(reader.root)
 	if err != nil {
 		return nil, fmt.Errorf("firewooddb: requested state root %s not found", reader.root.Hex()) // TODO: Should we return the error?
 	}
 
-	return view.Get(path)
+	// Assume that the root is now committed and we can use it for the lifetime of the reader.
+	if rev != nil {
+		reader.revision = rev
+		return rev.Get(path)
+	}
+
+	return prop.Get(path)
 }
 
 // addPendingProposal adds a pending proposal to the database.

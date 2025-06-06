@@ -203,28 +203,17 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 
 // firewoodState handles state retrieval for the firewood database scheme.
 // It provides safe access to historical state without altering the underlying database.
-//
-// IMPLEMENTATION CONCERNS:
-// - Thread safety: Multiple concurrent state accesses could conflict with firewood's proposal system
-// - Resource management: Proper cleanup of firewood revisions and proposals to prevent memory leaks
-// - Consistency: Ensuring proposals don't interfere with historical revision reads
-// - Performance: Creating new database instances vs reusing existing connections
-// - Error handling: Firewood-specific errors may not map well to existing state access patterns
-// - Proposal conflicts: Read-write operations might create proposals that conflict with ongoing operations
 func (eth *Ethereum) firewoodState(block *types.Block) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	// For firewood, we don't support re-executing historical blocks to grab state
 	// since firewood maintains its own revision history
-	// We additionally
 
 	// Check if the state is available in the live blockchain
 	if statedb, err = eth.blockchain.StateAt(block.Root()); err != nil {
-		// For firewood, we don't need to manage references the same way as hashdb
-		// since firewood handles its own revision management
 		return nil, nil, errors.New("state not available")
 	}
 
-	// For firewood, we don't need complex release logic since the database
-	// manages its own revision lifecycle
+	// For firewood, we don't need complex release logic since any proposal
+	// created from the statedb is ephemeral.
 	return statedb, noopReleaser, nil
 }
 
