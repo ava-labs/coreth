@@ -83,30 +83,23 @@ func (vm *VM) Initialize(
 	fujiExtDataHashes = nil
 	mainnetExtDataHashes = nil
 
-	networkCodec, err := message.NewCodec(sync.AtomicSyncSummary{})
-	if err != nil {
-		return fmt.Errorf("failed to create codec manager: %w", err)
-	}
-
 	// Create the atomic extension structs
 	// some of them need to be initialized after the inner VM is initialized
 	blockExtender := newBlockExtender(extDataHashes, vm)
-	syncExtender := &sync.AtomicSyncExtender{}
-	syncProvider := &sync.AtomicSummaryProvider{}
+	syncExtender := sync.NewExtender()
+	syncProvider := sync.NewSummaryProvider()
 	// Create and pass the leaf handler to the atomic extension
 	// it will be initialized after the inner VM is initialized
-	leafHandler := sync.NewAtomicLeafHandler()
+	leafHandler := sync.NewLeafHandler()
 	atomicLeafTypeConfig := &extension.LeafRequestConfig{
-		LeafType:   sync.AtomicTrieNode,
+		LeafType:   sync.TrieNode,
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
 
 	extensionConfig := &extension.Config{
-		NetworkCodec: networkCodec,
-
 		BlockExtender:              blockExtender,
-		SyncableParser:             sync.NewAtomicSyncSummaryParser(),
+		SyncableParser:             sync.NewSummaryParser(),
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
@@ -134,7 +127,7 @@ func (vm *VM) Initialize(
 	// Atomic backend is available now, we can initialize structs that depend on it
 	syncProvider.Initialize(vm.AtomicBackend().AtomicTrie())
 	syncExtender.Initialize(vm.AtomicBackend(), vm.AtomicBackend().AtomicTrie(), vm.Config().StateSyncRequestSize)
-	leafHandler.Initialize(vm.AtomicBackend().AtomicTrie().TrieDB(), state.TrieKeyLength, networkCodec)
+	leafHandler.Initialize(vm.AtomicBackend().AtomicTrie().TrieDB(), state.TrieKeyLength, message.Codec)
 
 	return nil
 }

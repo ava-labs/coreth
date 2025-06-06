@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
@@ -28,7 +27,6 @@ import (
 
 var (
 	errNilConfig              = errors.New("nil extension config")
-	errNilNetworkCodec        = errors.New("nil network codec")
 	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
 	errNilSyncableParser      = errors.New("nil syncable parser")
 )
@@ -88,16 +86,13 @@ type BlockExtension interface {
 	// and should be cleaned up due to error or verification runs under non-write mode. This
 	// does not return an error because the block has already been verified.
 	CleanupVerified()
-	// OnAccept is called when a block is accepted by the block manager. OnAccept takes a
+	// Accept is called when a block is accepted by the block manager. Accept takes a
 	// database.Batch that contains the changes that were made to the database as a result
 	// of accepting the block. The changes in the batch should be flushed to the database in this method.
-	OnAccept(acceptedBatch database.Batch) error
-	// OnReject is called when a block is rejected by the block manager
-	OnReject() error
+	Accept(acceptedBatch database.Batch) error
+	// Reject is called when a block is rejected by the block manager
+	Reject() error
 }
-
-// LeafRequestConfig is the configuration to handle leaf requests
-// in the network and syncer
 type LeafRequestConfig struct {
 	// LeafType is the type of the leaf node
 	LeafType message.NodeType
@@ -109,10 +104,6 @@ type LeafRequestConfig struct {
 
 // Config is the configuration for the VM extension
 type Config struct {
-	// NetworkCodec is the codec manager to use
-	// for encoding and decoding network messages.
-	// It's required and should be non-nil
-	NetworkCodec codec.Manager
 	// SyncSummaryProvider is the sync summary provider to use
 	// for the VM to be used in syncer.
 	// It's required and should be non-nil
@@ -137,9 +128,6 @@ type Config struct {
 func (c *Config) Validate() error {
 	if c == nil {
 		return errNilConfig
-	}
-	if c.NetworkCodec == nil {
-		return errNilNetworkCodec
 	}
 	if c.SyncSummaryProvider == nil {
 		return errNilSyncSummaryProvider
