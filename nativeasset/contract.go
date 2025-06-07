@@ -43,7 +43,7 @@ func PackNativeAssetBalanceInput(address common.Address, assetID common.Hash) []
 // UnpackNativeAssetBalanceInput attempts to unpack [input] into the arguments to the native asset balance precompile
 func UnpackNativeAssetBalanceInput(input []byte) (common.Address, common.Hash, error) {
 	if len(input) != 52 {
-		return common.Address{}, common.Hash{}, fmt.Errorf("native asset balance input had unexpcted length %d", len(input))
+		return common.Address{}, common.Hash{}, fmt.Errorf("native asset balance input had unexpected length %d", len(input))
 	}
 	address := common.BytesToAddress(input[:20])
 	assetID := common.Hash{}
