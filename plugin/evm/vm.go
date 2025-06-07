@@ -396,6 +396,8 @@ func (vm *VM) Initialize(
 		return err
 	}
 
+	// vm.ChainConfig() should be available for wrapping VMs before vm.initializeChain()
+	vm.chainConfig = g.Config
 	vm.chainID = g.Config.ChainID
 
 	vm.ethConfig = ethconfig.NewDefaultConfig()
@@ -463,8 +465,6 @@ func (vm *VM) Initialize(
 			return err
 		}
 	}
-
-	vm.chainConfig = g.Config
 
 	// TODO: read size from settings
 	vm.mempool, err = atomictxpool.NewMempool(chainCtx, vm.sdkMetrics, defaultMempoolSize, vm.verifyTxAtTip)
