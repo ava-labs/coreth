@@ -40,7 +40,7 @@ type CodeSyncerConfig struct {
 	DB ethdb.Database
 }
 
-// codeSyncer syncs code bytes from the network in a seprate thread.
+// codeSyncer syncs code bytes from the network in a separate thread.
 // Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
 type codeSyncer struct {
 	lock sync.Mutex
