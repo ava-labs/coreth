@@ -112,8 +112,8 @@ func (b *wrappedBlock) Accept(context.Context) error {
 	if b.extension != nil {
 		// Apply any changes atomically with other pending changes to
 		// the vm's versionDB.
-		// OnAccept flushes the changes in the batch to the database.
-		return b.extension.OnAccept(vdbBatch)
+		// Accept flushes the changes in the batch to the database.
+		return b.extension.Accept(vdbBatch)
 	}
 
 	// If there is no extension, we still need to apply the changes to the versionDB
@@ -165,7 +165,7 @@ func (b *wrappedBlock) Reject(context.Context) error {
 	)
 
 	if b.extension != nil {
-		if err := b.extension.OnReject(); err != nil {
+		if err := b.extension.Reject(); err != nil {
 			return err
 		}
 	}
@@ -266,7 +266,10 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 	}
 
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
-	if b.extension != nil && (err != nil || !writes) {
+	// If this was not called with intention to writing to the database or
+	// got an error while inserting to blockchain, we may need to cleanup the extension.
+	// so that the extension can be garbage collected.
+	if doCleanup := err != nil || !writes; b.extension != nil && doCleanup {
 		b.extension.CleanupVerified()
 	}
 	return err

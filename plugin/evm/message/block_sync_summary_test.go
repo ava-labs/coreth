@@ -30,7 +30,7 @@ func TestMarshalBlockSyncSummary(t *testing.T) {
 		called = true
 		return block.StateSyncSkipped, nil
 	}
-	s, err := parser.ParseFromBytes(blockSyncSummary.Bytes(), acceptImplTest)
+	s, err := parser.Parse(blockSyncSummary.Bytes(), acceptImplTest)
 	require.NoError(t, err)
 	require.Equal(t, blockSyncSummary.GetBlockHash(), s.GetBlockHash())
 	require.Equal(t, blockSyncSummary.Height(), s.Height())

@@ -186,11 +186,11 @@ func (be *blockExtension) SemanticVerify() error {
 	return nil
 }
 
-// OnAccept is called when the block is accepted. This is called by the wrapper
+// Accept is called when the block is accepted. This is called by the wrapper
 // block manager's Accept method. The acceptedBatch contains the changes that
 // were made to the database as a result of accepting the block, and it's flushed
 // to the database in this method.
-func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
+func (be *blockExtension) Accept(acceptedBatch database.Batch) error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
@@ -199,7 +199,7 @@ func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(common.Hash(be.block.ID()))
+	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Accept
 		return err
@@ -208,9 +208,9 @@ func (be *blockExtension) OnAccept(acceptedBatch database.Batch) error {
 	return atomicState.Accept(acceptedBatch)
 }
 
-// OnReject is called when the block is rejected. This is called by the wrapper
+// Reject is called when the block is rejected. This is called by the wrapper
 // block manager's Reject method.
-func (be *blockExtension) OnReject() error {
+func (be *blockExtension) Reject() error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
@@ -219,7 +219,7 @@ func (be *blockExtension) OnReject() error {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
-	atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(common.Hash(be.block.ID()))
+	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
 		return err
@@ -230,7 +230,7 @@ func (be *blockExtension) OnReject() error {
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
 func (be *blockExtension) CleanupVerified() {
 	vm := be.blockExtender.vm
-	if atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
+	if atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
 }
@@ -246,7 +246,7 @@ func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 	b := be.block
 	blockHash := common.Hash(b.ID())
 	vm := be.blockExtender.vm
-	if vm.AtomicBackend().IsBonus(b.Height(), blockHash) {
+	if vm.AtomicBackend.IsBonus(b.Height(), blockHash) {
 		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
 		return nil
 	}

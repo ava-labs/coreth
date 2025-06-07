@@ -148,14 +148,14 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extens
 	lastAcceptedBlock := fetcher.LastAcceptedExtendedBlock()
 	lastAcceptedHeight := lastAcceptedBlock.Height()
 	for ancestor.Height() > lastAcceptedHeight {
-		extensionIntf := ancestor.GetBlockExtension()
-		extension, ok := extensionIntf.(atomic.AtomicBlockContext)
+		ancestorExtIntf := ancestor.GetBlockExtension()
+		ancestorExt, ok := ancestorExtIntf.(atomic.AtomicBlockContext)
 		if !ok {
-			return fmt.Errorf("expected block extension to be AtomicBlockContext but got %T", extensionIntf)
+			return fmt.Errorf("expected block extension to be AtomicBlockContext but got %T", ancestorExtIntf)
 		}
 		// If any of the atomic transactions in the ancestor conflict with [inputs]
 		// return an error.
-		for _, atomicTx := range extension.AtomicTxs() {
+		for _, atomicTx := range ancestorExt.AtomicTxs() {
 			if inputs.Overlaps(atomicTx.InputUTXOs()) {
 				return ErrConflictingAtomicInputs
 			}

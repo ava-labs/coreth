@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 
@@ -16,19 +15,6 @@ import (
 )
 
 var _ Syncable = (*BlockSyncSummary)(nil)
-
-// Codec is the codec manager that contains the codec for BlockSyncSummary and
-// other message types that are used in the network protocol. This is to ensure that the codec
-// version is consistent across all message types and includes the codec for BlockSyncSummary.
-var Codec codec.Manager
-
-func init() {
-	var err error
-	Codec, err = NewCodec(BlockSyncSummary{})
-	if err != nil {
-		panic(fmt.Errorf("failed to create codec manager: %w", err))
-	}
-}
 
 // BlockSyncSummary provides the information necessary to sync a node starting
 // at the given block.
@@ -43,6 +29,7 @@ type BlockSyncSummary struct {
 }
 
 func NewBlockSyncSummary(blockHash common.Hash, blockNumber uint64, blockRoot common.Hash) (*BlockSyncSummary, error) {
+	// We intentionally do not use the acceptImpl here and leave it for the parser to set.
 	summary := BlockSyncSummary{
 		BlockNumber: blockNumber,
 		BlockHash:   blockHash,

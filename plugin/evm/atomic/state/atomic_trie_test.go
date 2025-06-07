@@ -825,7 +825,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 	fromBytes := make([]byte, wrappers.LongLen)
 	binary.BigEndian.PutUint64(fromBytes, from)
 	iter, err := atomicTrie.Iterator(rootHash, fromBytes)
-	require.NoError(t, err)
+	require.NoError(t, err, "creating iterator")
 
 	// Generate map of the marshalled atomic operations on the interval [from, to]
 	// based on `operationsMap`.
@@ -836,7 +836,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 		}
 		for blockchainID, atomicRequests := range blockRequests {
 			b, err := codec.Marshal(0, atomicRequests)
-			require.NoError(t, err)
+			require.NoError(t, err, "marshaling atomic requests")
 			if requestsMap, exists := marshalledOperationsMap[height]; exists {
 				requestsMap[blockchainID] = b
 			} else {
@@ -861,7 +861,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 
 		blockchainID := iter.BlockchainID()
 		b, err := codec.Marshal(0, iter.AtomicOps())
-		require.NoError(t, err)
+		require.NoError(t, err, "marshaling atomic operations")
 		if requestsMap, exists := iteratorMarshalledOperationsMap[height]; exists {
 			requestsMap[blockchainID] = b
 		} else {
@@ -870,7 +870,7 @@ func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager,
 			iteratorMarshalledOperationsMap[height] = requestsMap
 		}
 	}
-	require.NoError(t, iter.Error())
+	require.NoError(t, iter.Error(), "iterator error")
 
 	assert.Equal(t, marshalledOperationsMap, iteratorMarshalledOperationsMap)
 }

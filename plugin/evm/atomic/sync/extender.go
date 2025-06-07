@@ -16,58 +16,62 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-var _ sync.Extender = (*AtomicSyncExtender)(nil)
+var _ sync.Extender = (*extender)(nil)
 
-type AtomicSyncExtender struct {
-	backend              *state.AtomicBackend
-	atomicTrie           *state.AtomicTrie
-	stateSyncRequestSize uint16
+type extender struct {
+	backend     *state.AtomicBackend
+	trie        *state.AtomicTrie
+	requestSize uint16 // maximum number of leaves to sync in a single request
 }
 
-// Initialize initializes the atomic sync extender with the atomic backend and atomic trie.
-func (a *AtomicSyncExtender) Initialize(backend *state.AtomicBackend, atomicTrie *state.AtomicTrie, stateSyncRequestSize uint16) {
+// Initialize initializes the sync extender with the backend and trie.
+func NewExtender() *extender {
+	return &extender{}
+}
+
+func (a *extender) Initialize(backend *state.AtomicBackend, trie *state.AtomicTrie, requestSize uint16) {
 	a.backend = backend
-	a.atomicTrie = atomicTrie
-	a.stateSyncRequestSize = stateSyncRequestSize
+	a.trie = trie
+	a.requestSize = requestSize
 }
 
-func (a *AtomicSyncExtender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, syncSummary message.Syncable) error {
-	atomicSyncSummary, ok := syncSummary.(*AtomicSyncSummary)
+func (a *extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, summary message.Syncable) error {
+	atomicSummary, ok := summary.(*Summary)
 	if !ok {
-		return fmt.Errorf("expected *AtomicSyncSummary, got %T", syncSummary)
+		return fmt.Errorf("expected *Summary, got %T", summary)
 	}
-	log.Info("atomic tx: sync starting", "root", atomicSyncSummary)
-	atomicSyncer, err := newAtomicSyncer(
+	log.Info("atomic sync starting", "summary", atomicSummary)
+	syncer, err := newSyncer(
 		client,
 		verDB,
-		a.atomicTrie,
-		atomicSyncSummary.AtomicRoot,
-		atomicSyncSummary.BlockNumber,
-		a.stateSyncRequestSize,
+		a.trie,
+		atomicSummary.AtomicRoot,
+		atomicSummary.BlockNumber,
+		a.requestSize,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic syncer: %w", err)
 	}
-	if err := atomicSyncer.Start(ctx); err != nil {
+	if err := syncer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start atomic syncer: %w", err)
 	}
-	err = <-atomicSyncer.Done()
-	log.Info("atomic tx: sync finished", "root", atomicSyncSummary.AtomicRoot, "err", err)
+	err = <-syncer.Done()
+	log.Info("atomic sync finished", "summary", atomicSummary, "err", err)
 	return err
 }
 
-func (a *AtomicSyncExtender) OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error {
+func (a *extender) OnFinishBeforeCommit(lastAcceptedHeight uint64, Summary message.Syncable) error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block when ApplyToSharedMemory
 	// is called.
 	if err := a.backend.MarkApplyToSharedMemoryCursor(lastAcceptedHeight); err != nil {
 		return fmt.Errorf("failed to mark apply to shared memory cursor before commit: %w", err)
 	}
-	a.backend.SetLastAccepted(syncSummary.GetBlockHash())
+	a.backend.SetLastAccepted(Summary.GetBlockHash())
 	return nil
 }
 
-func (a *AtomicSyncExtender) OnFinishAfterCommit(summaryHeight uint64) error {
+func (a *extender) OnFinishAfterCommit(summaryHeight uint64) error {
 	// the chain state is already restored, and, from this point on,
 	// the block synced to is the accepted block. The last operation
 	// is updating shared memory with the atomic trie.

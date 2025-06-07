@@ -21,7 +21,7 @@ type SummaryProvider interface {
 	StateSummaryAtBlock(ethBlock *types.Block) (block.StateSummary, error)
 }
 
-type stateSyncServer struct {
+type server struct {
 	chain *core.BlockChain
 
 	provider         SummaryProvider
@@ -33,8 +33,8 @@ type Server interface {
 	GetStateSummary(context.Context, uint64) (block.StateSummary, error)
 }
 
-func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
-	return &stateSyncServer{
+func NewServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
+	return &server{
 		chain:            chain,
 		syncableInterval: syncableInterval,
 		provider:         provider,
@@ -45,7 +45,7 @@ func SyncServer(chain *core.BlockChain, provider SummaryProvider, syncableInterv
 // State summary is calculated by the block nearest to last accepted
 // that is divisible by [syncableInterval]
 // If no summary is available, [database.ErrNotFound] must be returned.
-func (server *stateSyncServer) GetLastStateSummary(context.Context) (block.StateSummary, error) {
+func (server *server) GetLastStateSummary(context.Context) (block.StateSummary, error) {
 	lastHeight := server.chain.LastAcceptedBlock().NumberU64()
 	lastSyncSummaryNumber := lastHeight - lastHeight%server.syncableInterval
 
@@ -61,7 +61,7 @@ func (server *stateSyncServer) GetLastStateSummary(context.Context) (block.State
 // GetStateSummary implements StateSyncableVM and returns a summary corresponding
 // to the provided [height] if the node can serve state sync data for that key.
 // If not, [database.ErrNotFound] must be returned.
-func (server *stateSyncServer) GetStateSummary(_ context.Context, height uint64) (block.StateSummary, error) {
+func (server *server) GetStateSummary(_ context.Context, height uint64) (block.StateSummary, error) {
 	summaryBlock := server.chain.GetBlockByNumber(height)
 	if summaryBlock == nil ||
 		summaryBlock.NumberU64() > server.chain.LastAcceptedBlock().NumberU64() ||
@@ -79,7 +79,7 @@ func (server *stateSyncServer) GetStateSummary(_ context.Context, height uint64)
 	return summary, nil
 }
 
-func (server *stateSyncServer) stateSummaryAtHeight(height uint64) (block.StateSummary, error) {
+func (server *server) stateSummaryAtHeight(height uint64) (block.StateSummary, error) {
 	blk := server.chain.GetBlockByNumber(height)
 	if blk == nil {
 		return nil, fmt.Errorf("block not found for height (%d)", height)

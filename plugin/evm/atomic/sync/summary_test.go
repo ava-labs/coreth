@@ -15,32 +15,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMarshalAtomicSyncSummary(t *testing.T) {
-	atomicSyncSummary, err := NewAtomicSyncSummary(common.Hash{1}, 2, common.Hash{3}, common.Hash{4})
+func TestMarshalSummary(t *testing.T) {
+	atomicSummary, err := NewSummary(common.Hash{1}, 2, common.Hash{3}, common.Hash{4})
 	require.NoError(t, err)
 
-	require.Equal(t, common.Hash{1}, atomicSyncSummary.GetBlockHash())
-	require.Equal(t, uint64(2), atomicSyncSummary.Height())
-	require.Equal(t, common.Hash{3}, atomicSyncSummary.GetBlockRoot())
+	require.Equal(t, common.Hash{1}, atomicSummary.GetBlockHash())
+	require.Equal(t, uint64(2), atomicSummary.Height())
+	require.Equal(t, common.Hash{3}, atomicSummary.GetBlockRoot())
 
 	expectedBase64Bytes := "AAAAAAAAAAAAAgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-	require.Equal(t, expectedBase64Bytes, base64.StdEncoding.EncodeToString(atomicSyncSummary.Bytes()))
+	require.Equal(t, expectedBase64Bytes, base64.StdEncoding.EncodeToString(atomicSummary.Bytes()))
 	expectedID := ids.FromStringOrPanic("256pj4a3SBG5kervhxKfeKpNRcVR1xk5BzTpkTkybkM8uMPu6Q")
-	require.Equal(t, expectedID, atomicSyncSummary.ID())
+	require.Equal(t, expectedID, atomicSummary.ID())
 
-	parser := NewAtomicSyncSummaryParser()
+	parser := NewSummaryParser()
 	called := false
 	acceptImplTest := func(message.Syncable) (block.StateSyncMode, error) {
 		called = true
 		return block.StateSyncSkipped, nil
 	}
-	s, err := parser.ParseFromBytes(atomicSyncSummary.Bytes(), acceptImplTest)
+	s, err := parser.Parse(atomicSummary.Bytes(), acceptImplTest)
 	require.NoError(t, err)
-	require.Equal(t, atomicSyncSummary.GetBlockHash(), s.GetBlockHash())
-	require.Equal(t, atomicSyncSummary.Height(), s.Height())
-	require.Equal(t, atomicSyncSummary.GetBlockRoot(), s.GetBlockRoot())
-	require.Equal(t, atomicSyncSummary.AtomicRoot, s.(*AtomicSyncSummary).AtomicRoot)
-	require.Equal(t, atomicSyncSummary.Bytes(), s.Bytes())
+	require.Equal(t, atomicSummary.GetBlockHash(), s.GetBlockHash())
+	require.Equal(t, atomicSummary.Height(), s.Height())
+	require.Equal(t, atomicSummary.GetBlockRoot(), s.GetBlockRoot())
+	require.Equal(t, atomicSummary.AtomicRoot, s.(*Summary).AtomicRoot)
+	require.Equal(t, atomicSummary.Bytes(), s.Bytes())
 
 	mode, err := s.Accept(context.TODO())
 	require.NoError(t, err)
