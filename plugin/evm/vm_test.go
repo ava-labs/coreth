@@ -3665,7 +3665,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 
 	// Hack: test [onExtraStateChange] directly to ensure it catches the atomic gas limit error correctly.
 	onExtraStateChangeFn := tvm2.vm.extensionConfig.ConsensusCallbacks.OnExtraStateChange
-	if _, _, err := onExtraStateChangeFn(ethBlk2, nil, state, tvm2.vm.chainConfig); err == nil || !strings.Contains(err.Error(), "exceeds atomic gas limit") {
+	if _, _, err := onExtraStateChangeFn(ethBlk2, nil, state); err == nil || !strings.Contains(err.Error(), "exceeds atomic gas limit") {
 		t.Fatalf("Expected block to fail verification due to exceeded atomic gas limit, but found error: %v", err)
 	}
 }

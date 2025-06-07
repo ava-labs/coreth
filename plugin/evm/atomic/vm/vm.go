@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ava-labs/libevm/common"
@@ -192,7 +193,7 @@ func (vm *VM) Initialize(
 	// Atomic backend is available now, we can initialize structs that depend on it
 	syncProvider.Initialize(vm.AtomicBackend.AtomicTrie())
 	syncExtender.Initialize(vm.AtomicBackend, vm.AtomicBackend.AtomicTrie(), vm.Config().StateSyncRequestSize)
-	leafHandler.Initialize(vm.AtomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, networkCodec)
+	leafHandler.Initialize(vm.AtomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, message.Codec)
 
 	vm.SecpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
@@ -495,11 +496,12 @@ func (vm *VM) onFinalizeAndAssemble(
 	return vm.postBatchOnFinalizeAndAssemble(header, parent, state, txs)
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB, chainConfig *params.ChainConfig) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
+		chainConfig                = vm.ChainConfig()
 		// We cannot use chain config from InnerVM since it's not available when this function is called for the first time (bc.loadLastState).
 		rules      = chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
 		rulesExtra = *params.GetRulesExtra(rules)
