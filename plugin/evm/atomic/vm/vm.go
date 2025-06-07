@@ -34,7 +34,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ava-labs/libevm/common"
@@ -118,30 +117,24 @@ func (vm *VM) Initialize(
 	fujiExtDataHashes = nil
 	mainnetExtDataHashes = nil
 
-	networkCodec, err := message.NewCodec(sync.AtomicSyncSummary{})
-	if err != nil {
-		return fmt.Errorf("failed to create codec manager: %w", err)
-	}
-
 	// Create the atomic extension structs
 	// some of them need to be initialized after the inner VM is initialized
 	blockExtender := newBlockExtender(extDataHashes, vm)
-	syncExtender := &sync.AtomicSyncExtender{}
-	syncProvider := &sync.AtomicSummaryProvider{}
+	syncExtender := sync.NewExtender()
+	syncProvider := sync.NewSummaryProvider()
 	// Create and pass the leaf handler to the atomic extension
 	// it will be initialized after the inner VM is initialized
-	leafHandler := sync.NewAtomicLeafHandler()
+	leafHandler := sync.NewLeafHandler()
 	atomicLeafTypeConfig := &extension.LeafRequestConfig{
-		LeafType:   sync.AtomicTrieNode,
+		LeafType:   sync.TrieNode,
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
 
 	extensionConfig := &extension.Config{
-		NetworkCodec:               networkCodec,
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
 		BlockExtender:              blockExtender,
-		SyncableParser:             sync.NewAtomicSyncSummaryParser(),
+		SyncableParser:             sync.NewSummaryParser(),
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
@@ -171,6 +164,7 @@ func (vm *VM) Initialize(
 		bonusBlockHeights map[uint64]ids.ID
 	)
 	if vm.ctx.NetworkID == constants.MainnetID {
+		var err error
 		bonusBlockHeights, err = readMainnetBonusBlocks()
 		if err != nil {
 			return fmt.Errorf("failed to read mainnet bonus blocks: %w", err)
