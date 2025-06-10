@@ -76,6 +76,9 @@ func (b *wrappedBlock) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
 func (b *wrappedBlock) Accept(context.Context) error {
+	b.vm.lock.Lock()
+	defer b.vm.lock.Unlock()
+
 	vm := b.vm
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
@@ -157,6 +160,9 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *wrappedBlock) Reject(context.Context) error {
+	b.vm.lock.Lock()
+	defer b.vm.lock.Unlock()
+
 	blkID := b.ID()
 	log.Debug("rejecting block",
 		"hash", blkID.Hex(),
@@ -189,6 +195,9 @@ func (b *wrappedBlock) Timestamp() time.Time {
 
 // Verify implements the snowman.Block interface
 func (b *wrappedBlock) Verify(context.Context) error {
+	b.vm.lock.Lock()
+	defer b.vm.lock.Unlock()
+
 	return b.verify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: nil,
@@ -197,6 +206,9 @@ func (b *wrappedBlock) Verify(context.Context) error {
 
 // ShouldVerifyWithContext implements the block.WithVerifyContext interface
 func (b *wrappedBlock) ShouldVerifyWithContext(context.Context) (bool, error) {
+	b.vm.lock.Lock()
+	defer b.vm.lock.Unlock()
+
 	rules := b.vm.rules(b.ethBlock.Number(), b.ethBlock.Time())
 	predicates := rules.Predicaters
 	// Short circuit early if there are no predicates to verify
@@ -221,6 +233,9 @@ func (b *wrappedBlock) ShouldVerifyWithContext(context.Context) (bool, error) {
 
 // VerifyWithContext implements the block.WithVerifyContext interface
 func (b *wrappedBlock) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
+	b.vm.lock.Lock()
+	defer b.vm.lock.Unlock()
+
 	return b.verify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: proposerVMBlockCtx,
@@ -261,7 +276,7 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 	// Additionally, if a block is already in processing, then it has already passed verification and
 	// at this point we have checked the predicates are still valid in the different context so we
 	// can return nil.
-	if b.vm.State.IsProcessing(b.id) {
+	if b.vm.s.IsProcessing(b.id) {
 		return nil
 	}
 

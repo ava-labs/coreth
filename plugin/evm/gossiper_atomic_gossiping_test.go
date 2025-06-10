@@ -27,10 +27,11 @@ import (
 func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert := assert.New(t)
 
-	tvm := newVM(t, testVMConfig{})
+	tvm, cleanup := newVM(t, testVMConfig{})
 	defer func() {
 		assert.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 
 	nodeID := ids.GenerateTestNodeID()
 
@@ -112,10 +113,11 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	assert := assert.New(t)
 
-	tvm := newVM(t, testVMConfig{})
+	tvm, cleanup := newVM(t, testVMConfig{})
 	defer func() {
 		assert.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
+	defer cleanup()
 	mempool := tvm.vm.mempool
 
 	var (

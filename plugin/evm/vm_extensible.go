@@ -36,10 +36,14 @@ func (vm *VM) SetExtensionConfig(config *extension.Config) error {
 // All these methods below assumes that VM is already initialized
 
 func (vm *VM) GetExtendedBlock(ctx context.Context, blkID ids.ID) (extension.ExtendedBlock, error) {
+	return vm.getExtendedBlock(ctx, blkID)
+}
+
+func (vm *VM) getExtendedBlock(ctx context.Context, blkID ids.ID) (extension.ExtendedBlock, error) {
 	// Since each internal handler used by [vm.State] always returns a block
 	// with non-nil ethBlock value, GetBlockInternal should never return a
 	// (*Block) with a nil ethBlock value.
-	blk, err := vm.GetBlockInternal(ctx, blkID)
+	blk, err := vm.s.GetBlockInternal(ctx, blkID)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +52,7 @@ func (vm *VM) GetExtendedBlock(ctx context.Context, blkID ids.ID) (extension.Ext
 }
 
 func (vm *VM) LastAcceptedExtendedBlock() extension.ExtendedBlock {
-	lastAcceptedBlock := vm.LastAcceptedBlockInternal()
+	lastAcceptedBlock := vm.s.LastAcceptedBlockInternal()
 	if lastAcceptedBlock == nil {
 		return nil
 	}
@@ -74,5 +78,5 @@ func (vm *VM) AtomicBackend() *state.AtomicBackend {
 }
 
 func (vm *VM) AtomicMempool() *txpool.Mempool {
-	return vm.mempool
+	return vm.mempool.(*lockedMemPool).Mempool
 }

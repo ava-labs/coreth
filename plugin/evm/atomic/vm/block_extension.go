@@ -22,9 +22,9 @@ import (
 )
 
 var (
-	_ extension.BlockExtension  = (*blockExtension)(nil)
+	_ extension.BlockExtension  = (*BlockExtension)(nil)
 	_ extension.BlockExtender   = (*blockExtender)(nil)
-	_ atomic.AtomicBlockContext = (*blockExtension)(nil)
+	_ atomic.AtomicBlockContext = (*BlockExtension)(nil)
 )
 
 var (
@@ -38,7 +38,7 @@ type blockExtender struct {
 	vm            *VM
 }
 
-type blockExtension struct {
+type BlockExtension struct {
 	atomicTxs     []*atomic.Tx
 	blockExtender *blockExtender
 	block         extension.ExtendedBlock
@@ -70,7 +70,7 @@ func (be *blockExtender) NewBlockExtension(b extension.ExtendedBlock) (extension
 		return nil, err
 	}
 
-	return &blockExtension{
+	return &BlockExtension{
 		atomicTxs:     atomicTxs,
 		blockExtender: be,
 		block:         b,
@@ -79,7 +79,7 @@ func (be *blockExtender) NewBlockExtension(b extension.ExtendedBlock) (extension
 
 // SyntacticVerify checks the syntactic validity of the block. This is called by the wrapper
 // block manager's SyntacticVerify method.
-func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
+func (be *BlockExtension) SyntacticVerify(rules extras.Rules) error {
 	b := be.block
 	ethBlock := b.GetEthBlock()
 	blockExtender := be.blockExtender
@@ -169,7 +169,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 
 // SemanticVerify checks the semantic validity of the block. This is called by the wrapper
 // block manager's SemanticVerify method.
-func (be *blockExtension) SemanticVerify() error {
+func (be *BlockExtension) SemanticVerify() error {
 	vm := be.blockExtender.vm
 	if vm.IsBootstrapped() {
 		// Verify that the UTXOs named in import txs are present in shared
@@ -190,7 +190,7 @@ func (be *blockExtension) SemanticVerify() error {
 // block manager's Accept method. The acceptedBatch contains the changes that
 // were made to the database as a result of accepting the block, and it's flushed
 // to the database in this method.
-func (be *blockExtension) Accept(acceptedBatch database.Batch) error {
+func (be *BlockExtension) Accept(acceptedBatch database.Batch) error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
@@ -210,7 +210,7 @@ func (be *blockExtension) Accept(acceptedBatch database.Batch) error {
 
 // Reject is called when the block is rejected. This is called by the wrapper
 // block manager's Reject method.
-func (be *blockExtension) Reject() error {
+func (be *BlockExtension) Reject() error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
@@ -228,7 +228,7 @@ func (be *blockExtension) Reject() error {
 }
 
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
-func (be *blockExtension) CleanupVerified() {
+func (be *BlockExtension) CleanupVerified() {
 	vm := be.blockExtender.vm
 	if atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
@@ -236,13 +236,13 @@ func (be *blockExtension) CleanupVerified() {
 }
 
 // AtomicTxs returns the atomic transactions in this block.
-func (be *blockExtension) AtomicTxs() []*atomic.Tx {
+func (be *BlockExtension) AtomicTxs() []*atomic.Tx {
 	return be.atomicTxs
 }
 
 // verifyUTXOsPresent verifies all atomic UTXOs consumed by the block are
 // present in shared memory.
-func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
+func (be *BlockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 	b := be.block
 	blockHash := common.Hash(b.ID())
 	vm := be.blockExtender.vm

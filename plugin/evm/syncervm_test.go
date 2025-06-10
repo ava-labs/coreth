@@ -150,7 +150,6 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		genesisJSON,
 		nil,
 		[]byte(stateSyncDisabledConfigJSON),
-		vmSetup.syncerVM.toEngine,
 		[]*commonEng.Fx{},
 		appSender,
 	); err != nil {
@@ -163,7 +162,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		}
 	}()
 
-	if height := syncDisabledVM.LastAcceptedBlockInternal().Height(); height != 0 {
+	if height := syncDisabledVM.s.LastAcceptedBlockInternal().Height(); height != 0 {
 		t.Fatalf("Unexpected last accepted height: %d", height)
 	}
 
@@ -215,7 +214,6 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		genesisJSON,
 		nil,
 		[]byte(configJSON),
-		vmSetup.syncerVM.toEngine,
 		[]*commonEng.Fx{},
 		appSender,
 	); err != nil {
@@ -287,11 +285,12 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		}
 	)
 	configJSON := fmt.Sprintf(`{"commit-interval": %d, "state-sync-commit-interval": %d}`, test.syncableInterval, test.syncableInterval)
-	server := newVM(t, testVMConfig{
+	server, cleanup := newVM(t, testVMConfig{
 		utxos:      alloc,
 		configJSON: configJSON,
 	})
 	t.Cleanup(func() {
+		cleanup()
 		log.Info("Shutting down server VM")
 		require.NoError(server.vm.Shutdown(context.Background()))
 	})
@@ -360,17 +359,18 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	require.NoError(err)
 	internalBlock, err := server.vm.parseBlock(context.Background(), blockBytes)
 	require.NoError(err)
-	require.NoError(server.vm.State.SetLastAcceptedBlock(internalBlock))
+	require.NoError(server.vm.s.SetLastAcceptedBlock(internalBlock))
 
 	// initialise [syncerVM] with blank genesis state
 	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d, "commit-interval": %d}`, test.stateSyncMinBlocks, 4, test.syncableInterval)
-	syncer := newVM(t, testVMConfig{
+	syncer, cleanup := newVM(t, testVMConfig{
 		isSyncing:  true,
 		configJSON: stateSyncEnabledJSON,
 		utxos:      alloc,
 	})
 	shutdownOnceSyncerVM := &shutdownOnceVM{VM: syncer.vm}
 	t.Cleanup(func() {
+		cleanup()
 		require.NoError(shutdownOnceSyncerVM.Shutdown(context.Background()))
 	})
 	require.NoError(syncer.vm.SetState(context.Background(), snow.StateSyncing))
@@ -416,7 +416,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		fundedAccounts:       accounts,
 		syncerVM:             syncer.vm,
 		syncerDB:             syncer.db,
-		syncerEngineChan:     syncer.toEngine,
 		syncerAtomicMemory:   syncer.atomicMemory,
 		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
 	}
@@ -433,7 +432,6 @@ type syncVMSetup struct {
 
 	syncerVM             *VM
 	syncerDB             avalanchedatabase.Database
-	syncerEngineChan     <-chan commonEng.Message
 	syncerAtomicMemory   *avalancheatomic.Memory
 	shutdownOnceSyncerVM *shutdownOnceVM
 }
@@ -466,7 +464,6 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		includedAtomicTxs  = vmSetup.includedAtomicTxs
 		fundedAccounts     = vmSetup.fundedAccounts
 		syncerVM           = vmSetup.syncerVM
-		syncerEngineChan   = vmSetup.syncerEngineChan
 		syncerAtomicMemory = vmSetup.syncerAtomicMemory
 	)
 	// get last summary and test related methods
@@ -485,7 +482,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		return
 	}
 
-	msg := <-syncerEngineChan
+	msg, _ := syncerVM.SubscribeToEvents(context.Background(), 0)
 	require.Equal(commonEng.StateSyncDone, msg)
 
 	// If the test is expected to error, assert the correct error is returned and finish the test.
@@ -502,8 +499,8 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	// set [syncerVM] to bootstrapping and verify the last accepted block has been updated correctly
 	// and that we can bootstrap and process some blocks.
 	require.NoError(syncerVM.SetState(context.Background(), snow.Bootstrapping))
-	require.Equal(serverVM.LastAcceptedBlock().Height(), syncerVM.LastAcceptedBlock().Height(), "block height mismatch between syncer and server")
-	require.Equal(serverVM.LastAcceptedBlock().ID(), syncerVM.LastAcceptedBlock().ID(), "blockID mismatch between syncer and server")
+	require.Equal(serverVM.s.LastAcceptedBlock().Height(), syncerVM.s.LastAcceptedBlock().Height(), "block height mismatch between syncer and server")
+	require.Equal(serverVM.s.LastAcceptedBlock().ID(), syncerVM.s.LastAcceptedBlock().ID(), "blockID mismatch between syncer and server")
 	require.True(syncerVM.blockChain.HasState(syncerVM.blockChain.LastAcceptedBlock().Root()), "unavailable state for last accepted block")
 	assertSyncPerformedHeights(t, syncerVM.chaindb, map[uint64]struct{}{retrievedSummary.Height(): {}})
 
