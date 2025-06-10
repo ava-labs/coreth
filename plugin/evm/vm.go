@@ -480,11 +480,21 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 	vm.ethConfig.StateScheme = vm.config.StateScheme
 
-	// Firewood automatically prunes based on config
-	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme && vm.ethConfig.Pruning {
-		log.Warn("Pruning must be disabled for Firewood, setting to false")
-		vm.ethConfig.Pruning = false
-		vm.config.Pruning = false
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+		log.Warn("Firewood state scheme is enabled")
+		log.Warn("This is untested in production, use at your own risk")
+		// Firewood automatically prunes, we do not need to prune manually
+		if vm.config.Pruning {
+			log.Warn("Pruning must be disabled for Firewood, setting to false")
+			vm.ethConfig.Pruning = false
+			vm.config.Pruning = false
+		}
+		// Firewood does not support iterators, so the snapshot cannot be constructed
+		if vm.config.SnapshotCache > 0 {
+			log.Warn("Snapshot cache must be disabled for Firewood, setting to 0")
+			vm.ethConfig.SnapshotCache = 0
+			vm.config.SnapshotCache = 0
+		}
 	}
 
 	// Create directory for offline pruning
