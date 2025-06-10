@@ -84,7 +84,6 @@ type TrieDBConfig struct {
 	Revisions         uint
 	ReadCacheStrategy ffi.CacheStrategy
 	MetricsPort       uint16
-	Database          *Database
 }
 
 var Defaults = &TrieDBConfig{
@@ -96,12 +95,8 @@ var Defaults = &TrieDBConfig{
 }
 
 // Must take reference to allow closure - reuse any existing database for the same config.
-func (c *TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
-	if c.Database == nil {
-		c.Database = New(diskdb, c)
-		return c.Database
-	}
-	return c.Database
+func (c TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
+	return New(diskdb, &c)
 }
 
 type Database struct {
