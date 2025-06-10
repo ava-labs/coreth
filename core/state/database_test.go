@@ -104,11 +104,8 @@ func TestInsert(t *testing.T) {
 			addr := chooseAddr()
 			accHash := hashData(addr[:])
 
-			err = hashTr.DeleteAccount(addr)
-			require.NoError(t, err)
-
-			err = fwTr.DeleteAccount(addr)
-			require.NoError(t, err)
+			require.NoError(t, hashTr.DeleteAccount(addr))
+			require.NoError(t, fwTr.DeleteAccount(addr))
 			deleteAccount(addr)
 
 			fwKeys = append(fwKeys, accHash[:])
@@ -122,23 +119,19 @@ func TestInsert(t *testing.T) {
 			require.NoError(t, err)
 			hashStr, err := hashdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, hashTr)
 			require.NoError(t, err)
-			err = hashStr.DeleteStorage(storageKey.addr, storageKey.key[:])
-			require.NoError(t, err)
+			require.NoError(t, hashStr.DeleteStorage(storageKey.addr, storageKey.key[:]))
 
 			strRoot, set, err := hashStr.Commit(false)
 			require.NoError(t, err)
-			err = hashSet.Merge(set)
-			require.NoError(t, err)
+			require.NoError(t, hashSet.Merge(set))
 			acc.Root = strRoot
-			err = hashTr.UpdateAccount(storageKey.addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, hashTr.UpdateAccount(storageKey.addr, acc))
 
 			acc, err = fwTr.GetAccount(storageKey.addr)
 			require.NoError(t, err)
 			fwStr, err := fwdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, fwTr)
 			require.NoError(t, err)
-			err = fwStr.DeleteStorage(storageKey.addr, storageKey.key[:])
-			require.NoError(t, err)
+			require.NoError(t, fwStr.DeleteStorage(storageKey.addr, storageKey.key[:]))
 			// No need to update account or commit
 
 			deleteStorage(storageKey)
@@ -162,11 +155,9 @@ func TestInsert(t *testing.T) {
 			enc, err := rlp.EncodeToBytes(acc)
 			require.NoError(t, err)
 
-			err = hashTr.UpdateAccount(addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, hashTr.UpdateAccount(addr, acc))
 
-			err = fwTr.UpdateAccount(addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, fwTr.UpdateAccount(addr, acc))
 
 			addrs = append(addrs, addr)
 
@@ -181,14 +172,12 @@ func TestInsert(t *testing.T) {
 			acc.Nonce++
 			enc, err := rlp.EncodeToBytes(acc)
 			require.NoError(t, err)
-			err = hashTr.UpdateAccount(addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, hashTr.UpdateAccount(addr, acc))
 
 			acc, err = fwTr.GetAccount(addr)
 			require.NoError(t, err)
 			acc.Nonce++
-			err = fwTr.UpdateAccount(addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, fwTr.UpdateAccount(addr, acc))
 
 			fwKeys = append(fwKeys, accHash[:])
 			fwVals = append(fwVals, enc)
@@ -205,24 +194,20 @@ func TestInsert(t *testing.T) {
 			require.NoError(t, err)
 			hashStr, err := hashdb.OpenStorageTrie(ethRoot, addr, acc.Root, hashTr)
 			require.NoError(t, err)
-			err = hashStr.UpdateStorage(addr, key[:], val[:])
-			require.NoError(t, err)
+			require.NoError(t, hashStr.UpdateStorage(addr, key[:], val[:]))
 			storages = append(storages, storageKey)
 
 			strRoot, set, err := hashStr.Commit(false)
 			require.NoError(t, err)
-			err = hashSet.Merge(set)
-			require.NoError(t, err)
+			require.NoError(t, hashSet.Merge(set))
 			acc.Root = strRoot
-			err = hashTr.UpdateAccount(addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, hashTr.UpdateAccount(addr, acc))
 
 			acc, err = fwTr.GetAccount(addr)
 			require.NoError(t, err)
 			fwStr, err := fwdb.OpenStorageTrie(ethRoot, addr, acc.Root, fwTr)
 			require.NoError(t, err)
-			err = fwStr.UpdateStorage(addr, key[:], val[:])
-			require.NoError(t, err)
+			require.NoError(t, fwStr.UpdateStorage(addr, key[:], val[:]))
 			// no need to update account or commit
 
 			fwKeys = append(fwKeys, append(accHash[:], keyHash[:]...))
@@ -248,23 +233,19 @@ func TestInsert(t *testing.T) {
 			require.NoError(t, err)
 			hashStr, err := hashdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, hashTr)
 			require.NoError(t, err)
-			err = hashStr.UpdateStorage(storageKey.addr, storageKey.key[:], val[:])
-			require.NoError(t, err)
+			require.NoError(t, hashStr.UpdateStorage(storageKey.addr, storageKey.key[:], val[:]))
 
 			strRoot, set, err := hashStr.Commit(false)
 			require.NoError(t, err)
-			err = hashSet.Merge(set)
-			require.NoError(t, err)
+			require.NoError(t, hashSet.Merge(set))
 			acc.Root = strRoot
-			err = hashTr.UpdateAccount(storageKey.addr, acc)
-			require.NoError(t, err)
+			require.NoError(t, hashTr.UpdateAccount(storageKey.addr, acc))
 
 			acc, err = fwTr.GetAccount(storageKey.addr)
 			require.NoError(t, err)
 			fwStr, err := fwdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, fwTr)
 			require.NoError(t, err)
-			err = fwStr.UpdateStorage(storageKey.addr, storageKey.key[:], val[:])
-			require.NoError(t, err)
+			require.NoError(t, fwStr.UpdateStorage(storageKey.addr, storageKey.key[:], val[:]))
 
 			fwKeys = append(fwKeys, append(accHash[:], keyHash[:]...))
 			// UpdateStorage automatically encodes the value to rlp,
@@ -283,10 +264,8 @@ func TestInsert(t *testing.T) {
 		// Update HashDB
 		next, set, err := hashTr.Commit(true)
 		require.NoError(t, err)
-		err = hashSet.Merge(set)
-		require.NoError(t, err)
-		err = hashdb.TrieDB().Update(next, ethRoot, i, hashSet, nil)
-		require.NoError(t, err)
+		require.NoError(t, hashSet.Merge(set))
+		require.NoError(t, hashdb.TrieDB().Update(next, ethRoot, i, hashSet, nil))
 
 		// update firewood db
 		got, err := db.Update(fwKeys, fwVals)
@@ -297,10 +276,8 @@ func TestInsert(t *testing.T) {
 		fwRoot, set, err := fwTr.Commit(true)
 		require.NoError(t, err)
 		require.Equal(t, next, fwRoot)
-		err = fwSet.Merge(set)
-		require.NoError(t, err)
-		err = fwdb.TrieDB().Update(fwRoot, ethRoot, i, fwSet, nil)
-		require.NoError(t, err)
+		require.NoError(t, fwSet.Merge(set))
+		require.NoError(t, fwdb.TrieDB().Update(fwRoot, ethRoot, i, fwSet, nil))
 
 		ethRoot = next
 	}
