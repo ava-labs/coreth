@@ -23,12 +23,6 @@ import (
 	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
-var (
-	_ IFirewood = &ffi.Database{}
-	_ IProposal = &ffi.Proposal{}
-	_ IDbView   = &ffi.Revision{}
-)
-
 type ProposalContext struct {
 	// The actual proposal
 	Proposal *ffi.Proposal
@@ -40,41 +34,6 @@ type ProposalContext struct {
 	Parent *ProposalContext
 	// The children of the proposal
 	Children []*ProposalContext
-}
-
-// DbView is a view of the database at a given revision.
-type IDbView interface {
-	// Returns the data stored at the given key at this revision
-	Get(key []byte) ([]byte, error)
-}
-
-type IProposal interface {
-	// All proposals support read operations
-	IDbView
-	// Read the current root of the database.
-	Root() ([]byte, error)
-	// Propose takes a root and a set of keys-values and creates a new proposal
-	// and returns the new root.
-	// If values[i] is nil, the key is deleted.
-	Propose(keys [][]byte, values [][]byte) (*ffi.Proposal, error)
-	// Commit commits the proposal as a new revision
-	Commit() error
-	// Drop drops the proposal; this object may no longer be used after this call.
-	Drop() error
-}
-
-type IFirewood interface {
-	// Read the current root of the database.
-	Root() ([]byte, error)
-	// Propose takes a root and a set of keys-values and creates a new proposal
-	// and returns the new root.
-	// If values[i] is nil, the key is deleted.
-	Propose(keys [][]byte, values [][]byte) (*ffi.Proposal, error)
-	// Revision returns a new view that is a copy of the current database
-	// at this historical revision.
-	Revision(root []byte) (*ffi.Revision, error)
-	// Close closes the database and releases all resources.
-	Close() error
 }
 
 // Config contains the settings for database.
@@ -100,7 +59,7 @@ func (c TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverrid
 }
 
 type Database struct {
-	fwDisk IFirewood
+	fwDisk *ffi.Database  // The underlying Firewood database, used for storing proposals and revisions.
 	ethdb  ethdb.Database // The underlying disk database, used for storing genesis and the path.
 
 	proposalLock sync.RWMutex
@@ -549,7 +508,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 
 	// Check whether if we can propose from the database root.
 	var (
-		p   IProposal
+		p   *ffi.Proposal
 		err error
 	)
 	if db.proposalTree.Root == parentRoot {
