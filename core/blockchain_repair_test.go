@@ -517,6 +517,10 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
 
+	if scheme == customrawdb.FirewoodScheme && snapshots {
+		t.Skip("Firewood scheme does not support snapshots")
+	}
+
 	// Create a temporary persistent database
 	datadir := t.TempDir()
 
@@ -556,10 +560,6 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if snapshots {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
-	}
-	if scheme == customrawdb.FirewoodScheme && snapshots {
-		t.Log("Firewood scheme does not support snapshots")
-		return
 	}
 	chain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
