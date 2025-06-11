@@ -76,7 +76,7 @@ func TestInsert(t *testing.T) {
 	firewoodmemdb := rawdb.NewMemoryDatabase()
 	customrawdb.WriteDatabasePath(firewoodmemdb, tempdir)
 	config := &triedb.Config{}
-	fwCfg := &firewood.TrieDBConfig{
+	fwCfg := &firewood.Config{
 		FileName:          "coreth",
 		CleanCacheSize:    1024 * 1024 * 1024,
 		Revisions:         10,

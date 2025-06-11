@@ -310,7 +310,7 @@ func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config 
 		tempDir := t.TempDir()
 		// Set the temporary directory as the database path
 		require.NoError(t, customrawdb.WriteDatabasePath(db, tempDir))
-		fwCfg := firewood.TrieDBConfig{
+		fwCfg := firewood.Config{
 			FileName:          "firewood_genesis_test",
 			CleanCacheSize:    256 * 1024 * 1024,
 			Revisions:         10,

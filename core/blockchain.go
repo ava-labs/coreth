@@ -219,13 +219,13 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		}.BackendConstructor
 	}
 	if c.StateScheme == customrawdb.FirewoodScheme {
-		config.DBOverride = firewood.TrieDBConfig{
+		config.DBOverride = firewood.Config{
 			FileName:          "firewood_state",
 			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
 			Revisions:         max(10, uint(c.StateHistory)), // must be at least 2
 			ReadCacheStrategy: ffi.CacheAllReads,
-			MetricsPort:       0, // use any open port from OS
-		}.BackendConstructor // BackendConstructor is on the reference to allow closure
+			MetricsPort:       0, // TODO: read metrics. Currently disabled.
+		}.BackendConstructor
 	}
 	return config
 }

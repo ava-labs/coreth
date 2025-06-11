@@ -23,6 +23,8 @@ import (
 	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
+// ProposalContext represents a proposal in the Firewood database.
+// This tracks all outstanding proposals to allow dereferencing upon commit.
 type ProposalContext struct {
 	// The actual proposal
 	Proposal *ffi.Proposal
@@ -36,8 +38,7 @@ type ProposalContext struct {
 	Children []*ProposalContext
 }
 
-// Config contains the settings for database.
-type TrieDBConfig struct {
+type Config struct {
 	FileName          string
 	CleanCacheSize    int // Size of the clean cache in bytes
 	Revisions         uint
@@ -45,16 +46,16 @@ type TrieDBConfig struct {
 	MetricsPort       uint16
 }
 
-var Defaults = &TrieDBConfig{
+var Defaults = &Config{
 	FileName:          "firewood",
 	CleanCacheSize:    1024 * 1024, // 1MB
 	Revisions:         100,
-	ReadCacheStrategy: ffi.CacheBranchReads,
-	MetricsPort:       0, // Default metrics port
+	ReadCacheStrategy: ffi.CacheAllReads,
+	MetricsPort:       0, // No metrics by default
 }
 
 // Must take reference to allow closure - reuse any existing database for the same config.
-func (c TrieDBConfig) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
+func (c Config) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
 	return New(diskdb, &c)
 }
 
@@ -67,28 +68,24 @@ type Database struct {
 	proposalTree *ProposalContext
 }
 
-func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
-	if trieConfig == nil {
-		log.Error("firewood: no config provided")
-		return nil
+func New(diskdb ethdb.Database, config *Config) *Database {
+	if config == nil {
+		config = Defaults
 	}
 
-	config, path, err := validateConfig(diskdb, trieConfig)
+	fwConfig, path, err := validateConfig(diskdb, config)
 	if err != nil {
-		log.Error("firewood: error validating config", "error", err)
-		return nil
+		log.Crit("firewood: error validating config", "error", err)
 	}
 
-	fw, err := ffi.New(path, config)
+	fw, err := ffi.New(path, fwConfig)
 	if err != nil {
-		log.Error("firewood: error creating firewood database", "error", err)
-		return nil
+		log.Crit("firewood: error creating firewood database", "error", err)
 	}
 
 	currentRoot, err := fw.Root()
 	if err != nil {
-		log.Error("firewood: error getting current root", "error", err)
-		return nil
+		log.Crit("firewood: error getting current root", "error", err)
 	}
 
 	return &Database{
@@ -105,7 +102,7 @@ func New(diskdb ethdb.Database, trieConfig *TrieDBConfig) *Database {
 	}
 }
 
-func validateConfig(diskdb ethdb.Database, trieConfig *TrieDBConfig) (*ffi.Config, string, error) {
+func validateConfig(diskdb ethdb.Database, trieConfig *Config) (*ffi.Config, string, error) {
 	// Get the path from the database
 	path, err := customrawdb.ReadDatabasePath(diskdb)
 	if err != nil {
