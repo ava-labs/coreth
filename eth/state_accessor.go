@@ -189,6 +189,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 	return statedb, func() { tdb.Dereference(block.Root()) }, nil
 }
 
+// This is compatible with both PathDB and FirewoodDB schemes.
 func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), error) {
 	// Check if the requested state is available in the live chain.
 	statedb, err := eth.blockchain.StateAt(block.Root())
@@ -199,22 +200,6 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 	// Fully archive node in pbss will be implemented by relying
 	// on state history, but needs more work on top.
 	return nil, nil, errors.New("historical state not available in path scheme yet")
-}
-
-// firewoodState handles state retrieval for the firewood database scheme.
-// It provides safe access to historical state without altering the underlying database.
-func (eth *Ethereum) firewoodState(block *types.Block) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
-	// For firewood, we don't support re-executing historical blocks to grab state
-	// since firewood maintains its own revision history
-
-	// Check if the state is available in the live blockchain
-	if statedb, err = eth.blockchain.StateAt(block.Root()); err != nil {
-		return nil, nil, errors.New("state not available")
-	}
-
-	// For firewood, we don't need complex release logic since any proposal
-	// created from the statedb is ephemeral.
-	return statedb, noopReleaser, nil
 }
 
 // stateAtBlock retrieves the state database associated with a certain block.
@@ -241,12 +226,10 @@ func (eth *Ethereum) firewoodState(block *types.Block) (statedb *state.StateDB, 
 //     on disk.
 func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
 	// Check if we're using firewood backend by typecasting
-	if _, ok := eth.blockchain.TrieDB().Backend().(*firewood.Database); ok {
-		return eth.firewoodState(block)
-	}
+	_, isFirewood := eth.blockchain.TrieDB().Backend().(*firewood.Database)
 
-	// Fall back to scheme-based routing for other backends
-	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme {
+	// Use `hashState` if the state can be recomptued from the live database.
+	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme && !isFirewood {
 		return eth.hashState(ctx, block, reexec, base, readOnly, preferDisk)
 	}
 	return eth.pathState(block)

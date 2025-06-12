@@ -74,7 +74,7 @@ type TrieDB interface {
 }
 
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
-	// Firewood doesn't require monitoring
+	// Firewood doesn't require explicit pruning.
 	if config.Pruning && config.StateScheme != customrawdb.FirewoodScheme {
 		cm := &cappedMemoryTrieWriter{
 			TrieDB:           db,

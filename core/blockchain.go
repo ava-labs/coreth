@@ -222,7 +222,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		config.DBOverride = firewood.Config{
 			FileName:          "firewood_state",
 			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
-			Revisions:         max(16, uint(c.StateHistory)), // must be at least 2, sufficiently large for all tests
+			Revisions:         uint(c.StateHistory), // must be at least 2
 			ReadCacheStrategy: ffi.CacheAllReads,
 			MetricsPort:       0, // TODO: read metrics. Currently disabled.
 		}.BackendConstructor
@@ -242,6 +242,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
+	StateHistory:              16,
 	StateScheme:               rawdb.HashScheme,
 }
 

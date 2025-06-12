@@ -146,7 +146,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				// Find the genesis root hash
 				tempdb := rawdb.NewMemoryDatabase()
 				defer tempdb.Close()
-				tdb := triedb.NewDatabase(tempdb, triedb.HashDefaults)
+				tdb := triedb.NewDatabase(tempdb, triedb.HashDefaults) // this can still be a hash scheme because it only generates a gensis block
 				genesis, err := oldcustomg.Commit(db, tdb)
 				if err != nil {
 					t.Fatal(err)

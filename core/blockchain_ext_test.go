@@ -71,6 +71,10 @@ var tests = []ChainTest{
 		EmptyBlocksTest,
 	},
 	{
+		"EmptyAndNonemptyBlocks",
+		EmptyAndNonemptyBlocksTest,
+	},
+	{
 		"ReorgReInsert",
 		ReorgReInsertTest,
 	},
@@ -843,6 +847,45 @@ func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec
 }
 
 func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+	chainDB := rawdb.NewMemoryDatabase()
+
+	// Ensure that key1 has some funds in the genesis block.
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{},
+	}
+
+	blockchain, err := create(chainDB, gspec, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, 10, func(i int, gen *BlockGen) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert three blocks into the chain and accept only the first block.
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blockchain.DrainAcceptorQueue()
+
+	// Nothing to assert about the state
+	checkState := func(sdb *state.StateDB) error {
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
+}
+
+func EmptyAndNonemptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -886,7 +929,7 @@ func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis
 	}
 	blockchain.DrainAcceptorQueue()
 
-	// Nothing to assert about the state
+	// We expect results from block 3
 	checkState := func(sdb *state.StateDB) error {
 		nonce1 := sdb.GetNonce(addr1)
 		if nonce1 != 1 {

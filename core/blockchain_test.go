@@ -100,8 +100,11 @@ func createBlockChain(
 func TestFirewoodBlockChain(t *testing.T) {
 	for _, tt := range tests {
 		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
-			// Attempt to reuse any available database path
-			if path, err := customrawdb.ReadDatabasePath(db); err != nil || path == "" {
+			// If no database path has been persisted, set the path to a temporary test directory.
+			// Otherwise, make sure not to overwrite so that it re-uses any existing database.
+			if path, err := customrawdb.ReadDatabasePath(db); err != nil {
+				t.Fatalf("failed to read database path: %v", err)
+			} else if path == "" {
 				customrawdb.WriteDatabasePath(db, t.TempDir())
 			}
 			return createBlockChain(

@@ -99,7 +99,7 @@ func benchmarkTransactionTrace(b *testing.B, scheme string) {
 		Code:    []byte{},
 		Balance: big.NewInt(500000000000000),
 	}
-	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, scheme)
 	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it
