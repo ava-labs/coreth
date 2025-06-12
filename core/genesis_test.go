@@ -299,30 +299,26 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 }
 
 func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config {
-	if scheme == rawdb.HashScheme {
+	switch scheme {
+	case rawdb.HashScheme:
 		return triedb.HashDefaults
-	}
-	if scheme == rawdb.PathScheme {
+	case rawdb.PathScheme:
 		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
-	}
-	if scheme == customrawdb.FirewoodScheme {
+	case customrawdb.FirewoodScheme:
 		// Create a unique temporary directory for each test
-		tempDir := t.TempDir()
-		// Set the temporary directory as the database path
-		require.NoError(t, customrawdb.WriteDatabasePath(db, tempDir))
+		require.NoError(t, customrawdb.WriteDatabasePath(db, t.TempDir()))
 		fwCfg := firewood.Config{
 			FileName:          "firewood_genesis_test",
 			CleanCacheSize:    256 * 1024 * 1024,
-			Revisions:         10,
+			Revisions:         10, // Large enough for all tests
 			ReadCacheStrategy: ffi.CacheAllReads,
-			MetricsPort:       0, // use any open port from OS
+			MetricsPort:       0, // no metrics
 		}
-		trieCfg := &triedb.Config{}
-		trieCfg.DBOverride = fwCfg.BackendConstructor
-		return trieCfg
+		return &triedb.Config{DBOverride: fwCfg.BackendConstructor}
+	default:
+		t.Fatalf("unknown scheme %s", scheme)
 	}
-
-	return nil // should never happen
+	return nil
 }
 
 func TestVerkleGenesisCommit(t *testing.T) {

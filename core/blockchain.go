@@ -222,7 +222,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		config.DBOverride = firewood.Config{
 			FileName:          "firewood_state",
 			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
-			Revisions:         max(10, uint(c.StateHistory)), // must be at least 2
+			Revisions:         max(16, uint(c.StateHistory)), // must be at least 2, sufficiently large for all tests
 			ReadCacheStrategy: ffi.CacheAllReads,
 			MetricsPort:       0, // TODO: read metrics. Currently disabled.
 		}.BackendConstructor
@@ -381,6 +381,7 @@ func NewBlockChain(
 	}
 	// Open trie database with provided config
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
+
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.

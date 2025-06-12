@@ -246,15 +246,10 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexe
 	}
 
 	// Fall back to scheme-based routing for other backends
-	scheme := eth.blockchain.TrieDB().Scheme()
-	switch scheme {
-	case rawdb.HashScheme:
+	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme {
 		return eth.hashState(ctx, block, reexec, base, readOnly, preferDisk)
-	case rawdb.PathScheme:
-		return eth.pathState(block)
-	default:
-		return nil, nil, fmt.Errorf("unsupported trie database scheme: %s", scheme)
 	}
+	return eth.pathState(block)
 }
 
 // stateAtTransaction returns the execution environment of a certain transaction.

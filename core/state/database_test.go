@@ -28,6 +28,7 @@ func hashData(input []byte) common.Hash {
 	return crypto.Keccak256Hash(input)
 }
 
+// Adapted from Firewood's hash compatibility testing
 func TestInsert(t *testing.T) {
 	tempdir := t.TempDir()
 	file := path.Join(tempdir, "test.db")

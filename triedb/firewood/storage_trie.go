@@ -13,7 +13,7 @@ type StorageTrie struct {
 	storageRoot common.Hash
 }
 
-// NewStorageTrie creates a wrapper storage trie for the given account.
+// `NewStorageTrie` creates a wrapper storage trie for the given account.
 // The account trie handles all operations besides hashing.
 func NewStorageTrie(accountTrie *AccountTrie, storageRoot common.Hash) (*StorageTrie, error) {
 	return &StorageTrie{
@@ -23,12 +23,12 @@ func NewStorageTrie(accountTrie *AccountTrie, storageRoot common.Hash) (*Storage
 }
 
 // Actual commit is handled by the account trie.
-// Return the old storage root in case there was no change.
+// Return the old storage root as if there was no change.
 func (s *StorageTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	return s.storageRoot, nil, nil
 }
 
 // Hash implements state.Trie.
 func (s *StorageTrie) Hash() common.Hash {
-	return s.storageRoot // only used in statedb, we work around it.
+	return s.storageRoot // only used in statedb to populate a `StateAccount`
 }

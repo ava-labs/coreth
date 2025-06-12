@@ -22,13 +22,13 @@ var errNoReader = errors.New("reader unavailable")
 
 // AccountTrie implements state.Trie for managing account states.
 // There are several caveats to the current implementation:
-//  1. It is not thread-safe.
-//  2. After making any Update/Delete operations, no calls to `GetAccount` or `GetStorage`
-//     should be made. This is not yet guaranteed.
-//  3. `Commit` is not used as expected in the state package. Instead, it updates firewood's
-//     internal state to track the proposal
-//  4. The `Hash` method actually creates the proposal, since Firewood cannot calculate
-//     the hash of the trie without committing it. No changes can be made after this.
+//  1. After making any Update/Delete operations, no calls to `GetAccount` or `GetStorage`
+//     should be made. It should eventually be fixed (likely by using a persistent proposal).
+//  2. `Commit` is not used as expected in the state package. The `StorageTrie` doesn't return
+//     values, and we thus rely on the `AccountTrie`.
+//  3. The `Hash` method actually creates the proposal, since Firewood cannot calculate
+//     the hash of the trie without committing it. It is immediately dropped, and this
+//     can likely be optimized.
 type AccountTrie struct {
 	fw           *Database
 	parentRoot   common.Hash
