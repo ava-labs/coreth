@@ -40,9 +40,13 @@ else
   echo "creating new clone"
   git clone https://github.com/ava-labs/avalanchego.git "${AVALANCHEGO_CLONE_PATH}"
   cd "${AVALANCHEGO_CLONE_PATH}"
+  # This is done just for the e2e tests to pass until we merge the avalanchego PR
+  git fetch origin
+  git checkout origin/subscribeToEvents
 fi
 # Branch will be reset to $AVALANCHE_VERSION if it already exists
-git checkout -B "test-${AVALANCHE_VERSION}" "${AVALANCHE_VERSION}"
+# This is commented out just for the e2e tests to pass until we merge the avalanchego PR
+#git checkout -B "test-${AVALANCHE_VERSION}" "${AVALANCHE_VERSION}"
 
 echo "updating coreth dependency to point to ${CORETH_PATH}"
 go mod edit -replace "github.com/ava-labs/coreth=${CORETH_PATH}"
