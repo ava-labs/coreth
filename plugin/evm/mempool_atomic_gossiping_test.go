@@ -5,6 +5,8 @@ package evm
 
 import (
 	"context"
+	"github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
@@ -42,7 +44,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				importTxs := createImportTxOptions(t, tvm.vm, tvm.atomicMemory)
 				tx, conflictingTx = importTxs[0], importTxs[1]
 			} else {
-				exportTxs := createExportTxOptions(t, tvm.vm, tvm.toEngine, tvm.atomicMemory)
+				exportTxs := createExportTxOptions(t, tvm.vm, tvm.atomicMemory)
 				tx, conflictingTx = exportTxs[0], exportTxs[1]
 			}
 			txID := tx.ID()
@@ -60,7 +62,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			<-tvm.toEngine
+			require.Equal(t, common.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")

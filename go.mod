@@ -4,8 +4,8 @@ go 1.23.9
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
-	github.com/ava-labs/avalanchego v1.13.2-0.20250611151756-1a40195dc447
-	github.com/ava-labs/libevm v0.0.0-20250610142802-2672fbd7cdfc
+	github.com/ava-labs/avalanchego v1.13.2-0.20250611211054-3604ca5e02d4
+	github.com/ava-labs/libevm v1.13.14-0.2.0.release
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/fjl/gencodec v0.1.1
@@ -29,6 +29,7 @@ require (
 	github.com/urfave/cli/v2 v2.25.7
 	go.uber.org/goleak v1.3.0
 	go.uber.org/mock v0.5.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e
 	golang.org/x/sync v0.12.0
@@ -123,7 +124,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.22.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
