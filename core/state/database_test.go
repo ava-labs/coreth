@@ -76,15 +76,14 @@ func TestInsert(t *testing.T) {
 
 	firewoodmemdb := rawdb.NewMemoryDatabase()
 	customrawdb.WriteDatabasePath(firewoodmemdb, tempdir)
-	config := &triedb.Config{}
-	fwCfg := &firewood.Config{
+	fwCfg := firewood.Config{
 		FileName:          "coreth",
 		CleanCacheSize:    1024 * 1024 * 1024,
 		Revisions:         10,
 		ReadCacheStrategy: ffi.CacheAllReads,
 		MetricsPort:       0, // use any open port from OS
 	}
-	config.DBOverride = fwCfg.BackendConstructor // BackendConstructor is on the reference to allow closure
+	config := &triedb.Config{DBOverride: fwCfg.BackendConstructor}
 	fwdb := NewDatabaseWithConfig(firewoodmemdb, config)
 
 	ethRoot := types.EmptyRootHash
