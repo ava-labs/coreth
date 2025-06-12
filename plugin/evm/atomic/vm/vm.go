@@ -65,7 +65,6 @@ func (vm *VM) Initialize(
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
-	toEngine chan<- avalanchecommon.Message,
 	fxs []*avalanchecommon.Fx,
 	appSender avalanchecommon.AppSender,
 ) error {
@@ -117,7 +116,6 @@ func (vm *VM) Initialize(
 		genesisBytes,
 		upgradeBytes,
 		configBytes,
-		toEngine,
 		fxs,
 		appSender,
 	); err != nil {

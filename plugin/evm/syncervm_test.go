@@ -150,7 +150,6 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		genesisJSON,
 		nil,
 		[]byte(stateSyncDisabledConfigJSON),
-		vmSetup.syncerVM.toEngine,
 		[]*commonEng.Fx{},
 		appSender,
 	); err != nil {
@@ -215,7 +214,6 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		genesisJSON,
 		nil,
 		[]byte(configJSON),
-		vmSetup.syncerVM.toEngine,
 		[]*commonEng.Fx{},
 		appSender,
 	); err != nil {
@@ -416,7 +414,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 		fundedAccounts:       accounts,
 		syncerVM:             syncer.vm,
 		syncerDB:             syncer.db,
-		syncerEngineChan:     syncer.toEngine,
 		syncerAtomicMemory:   syncer.atomicMemory,
 		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
 	}
@@ -466,7 +463,6 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		includedAtomicTxs  = vmSetup.includedAtomicTxs
 		fundedAccounts     = vmSetup.fundedAccounts
 		syncerVM           = vmSetup.syncerVM
-		syncerEngineChan   = vmSetup.syncerEngineChan
 		syncerAtomicMemory = vmSetup.syncerAtomicMemory
 	)
 	// get last summary and test related methods
@@ -485,7 +481,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		return
 	}
 
-	msg := <-syncerEngineChan
+	msg := syncerVM.SubscribeToEvents(context.Background())
 	require.Equal(commonEng.StateSyncDone, msg)
 
 	// If the test is expected to error, assert the correct error is returned and finish the test.
