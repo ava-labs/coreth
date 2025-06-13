@@ -172,17 +172,31 @@ func (db *Database) Initialized(root common.Hash) bool {
 // It will not be committed until the Commit method is called.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Create key-value pairs for the nodes in bytes.
-	var keys [][]byte
-	var values [][]byte
+	var (
+		acctKeys      [][]byte
+		acctValues    [][]byte
+		storageKeys   [][]byte
+		storageValues [][]byte
+	)
 
 	flattenedNodes := nodes.Flatten()
 
 	for _, nodeset := range flattenedNodes {
 		for str, node := range nodeset {
-			keys = append(keys, []byte(str))
-			values = append(values, node.Blob)
+			if len(str) == common.HashLength {
+				// This is an account node.
+				acctKeys = append(acctKeys, []byte(str))
+				acctValues = append(acctValues, node.Blob)
+			} else {
+				storageKeys = append(storageKeys, []byte(str))
+				storageValues = append(storageValues, node.Blob)
+			}
 		}
 	}
+
+	// We need to do all storage operations first, so prefix-deletion works for accounts.
+	keys := append(storageKeys, acctKeys...)
+	values := append(storageValues, acctValues...)
 
 	// Firewood ffi does not accept empty proposals.
 	// StateDB guarantees this will never happen.
@@ -221,6 +235,15 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 		}
 		pCount++
 
+		currentRootBytes, err := p.Root()
+		if err != nil {
+			return fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
+		}
+		currentRoot := common.BytesToHash(currentRootBytes)
+		if root != currentRoot {
+			return fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+		}
+
 		// Store the proposal context.
 		pContext := &ProposalContext{
 			Proposal: p,
@@ -245,6 +268,16 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 			if err != nil {
 				return fmt.Errorf("firewood: error proposing from parent proposal %s", parent.Hex())
 			}
+
+			currentRootBytes, err := p.Root()
+			if err != nil {
+				return fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
+			}
+			currentRoot := common.BytesToHash(currentRootBytes)
+			if root != currentRoot {
+				return fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+			}
+
 			// Store the proposal context.
 			pContext := &ProposalContext{
 				Proposal: p,
@@ -357,7 +390,7 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	}
 	currentRoot := common.BytesToHash(currentRootBytes)
 	if currentRoot != root {
-		return fmt.Errorf("firewood: current root %s does not match committed root %s", currentRoot.Hex(), root.Hex())
+		return fmt.Errorf("firewood: current root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
 	}
 
 	if report {

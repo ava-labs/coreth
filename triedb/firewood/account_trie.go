@@ -21,12 +21,10 @@ import (
 var errNoReader = errors.New("reader unavailable")
 
 // AccountTrie implements state.Trie for managing account states.
-// There are several caveats to the current implementation:
-//  1. After making any Update/Delete operations, no calls to `GetAccount` or `GetStorage`
-//     should be made. It should eventually be fixed (likely by using a persistent proposal).
-//  2. `Commit` is not used as expected in the state package. The `StorageTrie` doesn't return
+// There are a couple caveats to the current implementation:
+//  1. `Commit` is not used as expected in the state package. The `StorageTrie` doesn't return
 //     values, and we thus rely on the `AccountTrie`.
-//  3. The `Hash` method actually creates the proposal, since Firewood cannot calculate
+//  2. The `Hash` method actually creates the proposal, since Firewood cannot calculate
 //     the hash of the trie without committing it. It is immediately dropped, and this
 //     can likely be optimized.
 type AccountTrie struct {
@@ -35,6 +33,7 @@ type AccountTrie struct {
 	root         common.Hash
 	reader       database.Reader
 	updateLock   sync.RWMutex
+	dirtyKeys    map[string][]byte // Store dirty changes
 	updateKeys   [][]byte
 	updateValues [][]byte
 	hasChanges   bool
@@ -49,6 +48,7 @@ func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
 		fw:         db,
 		parentRoot: root,
 		reader:     reader,
+		dirtyKeys:  make(map[string][]byte),
 		hasChanges: true, // Start with hasChanges true to allow computing the proposal hash
 	}, nil
 }
@@ -64,6 +64,20 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 
+	// First check if there's a pending update for this account
+	keyStr := string(key)
+	if updateValue, exists := a.dirtyKeys[keyStr]; exists {
+		// If the value is empty, it indicates deletion
+		if len(updateValue) == 0 {
+			return nil, nil
+		}
+		// Decode and return the updated account
+		acct := new(types.StateAccount)
+		err := rlp.DecodeBytes(updateValue, acct)
+		return acct, err
+	}
+
+	// No pending update found, read from the underlying reader
 	acctBytes, err := a.reader.Node(common.Hash{}, key, common.Hash{})
 	if err != nil {
 		return nil, err
@@ -90,8 +104,28 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 
 	acctKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	key = append(acctKey, storageKey...)
-	storageBytes, err := a.reader.Node(common.Hash{}, key, common.Hash{})
+	combinedKey := append(acctKey, storageKey...)
+
+	// If the account has been deleted, we should return nil
+	if val, exists := a.dirtyKeys[string(acctKey)]; exists && len(val) == 0 {
+		return nil, nil
+	}
+
+	// Check if there's a pending update for this storage slot
+	keyStr := string(combinedKey)
+	if updateValue, exists := a.dirtyKeys[keyStr]; exists {
+		// If the value is empty, it indicates deletion
+		if len(updateValue) == 0 {
+			return nil, nil
+		}
+		// Decode and return the updated storage value
+		var storageBytesDecoded []byte
+		err := rlp.DecodeBytes(updateValue, &storageBytesDecoded)
+		return storageBytesDecoded, err
+	}
+
+	// No pending update found, read from the underlying reader
+	storageBytes, err := a.reader.Node(common.Hash{}, combinedKey, common.Hash{})
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +153,7 @@ func (a *AccountTrie) UpdateAccount(addr common.Address, account *types.StateAcc
 	if err != nil {
 		return err
 	}
+	a.dirtyKeys[string(key)] = data
 	a.updateKeys = append(a.updateKeys, key)
 	a.updateValues = append(a.updateValues, data)
 	a.hasChanges = true // Mark that there are changes to commit
@@ -140,7 +175,9 @@ func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byt
 	if err != nil {
 		return err
 	}
+
 	// Queue the keys and values for later commit
+	a.dirtyKeys[string(newKey)] = data
 	a.updateKeys = append(a.updateKeys, newKey)
 	a.updateValues = append(a.updateValues, data)
 	a.hasChanges = true // Mark that there are changes to commit
@@ -157,8 +194,10 @@ func (a *AccountTrie) DeleteAccount(addr common.Address) error {
 
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	// Queue the key for deletion
+	a.dirtyKeys[string(key)] = []byte{}
 	a.updateKeys = append(a.updateKeys, key)
-	a.updateValues = append(a.updateValues, []byte{}) // nil value indicates deletion
+	a.updateValues = append(a.updateValues, []byte{}) // Empty value indicates deletion
+	a.hasChanges = true                               // Mark that there are changes to commit
 	return nil
 }
 
@@ -172,10 +211,11 @@ func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
 
 	acctKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	key = append(acctKey, storageKey...)
+	combinedKey := append(acctKey, storageKey...)
 	// Queue the key for deletion
-	a.updateKeys = append(a.updateKeys, key)
-	a.updateValues = append(a.updateValues, []byte{}) // nil value indicates deletion
+	a.dirtyKeys[string(combinedKey)] = []byte{}
+	a.updateKeys = append(a.updateKeys, combinedKey)
+	a.updateValues = append(a.updateValues, []byte{}) // Empty value indicates deletion
 	a.hasChanges = true                               // Mark that there are changes to commit
 	return nil
 }
@@ -199,7 +239,7 @@ func (a *AccountTrie) hash() (common.Hash, error) {
 			return common.Hash{}, err
 		}
 		a.root = root
-		a.hasChanges = false // Reset hasChanges after hashing
+		a.hasChanges = false // Avoid re-hashing until next update
 	}
 	return a.root, nil
 }
@@ -215,13 +255,14 @@ func (a *AccountTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, 
 		return common.Hash{}, nil, err
 	}
 
-	// Create the NodeSet. This will be sent to `Update` later.
+	// Create the NodeSet. This will be sent to `triedb.Update` later.
 	nodeset := trienode.NewNodeSet(a.parentRoot)
 	for i, key := range a.updateKeys {
 		nodeset.AddNode(key, &trienode.Node{
 			Blob: a.updateValues[i],
 		})
 	}
+
 	return hash, nodeset, nil
 }
 
@@ -238,12 +279,12 @@ func (a *AccountTrie) GetKey(_ []byte) []byte {
 
 // NodeIterator implements state.Trie.
 func (a *AccountTrie) NodeIterator(_ []byte) (trie.NodeIterator, error) {
-	return nil, errors.New("NodeIterator not implemented for AccountTrie")
+	return nil, errors.New("NodeIterator not implemented for Firewood")
 }
 
 // Prove implements state.Trie.
 func (a *AccountTrie) Prove(_ []byte, _ ethdb.KeyValueWriter) error {
-	return errors.New("Prove not implemented for AccountTrie")
+	return errors.New("Prove not implemented for Firewood")
 }
 
 func (a *AccountTrie) Copy() *AccountTrie {
@@ -252,17 +293,17 @@ func (a *AccountTrie) Copy() *AccountTrie {
 
 	// Create a new AccountTrie with the same root and reader
 	newTrie := &AccountTrie{
-		fw:           a.fw,
-		parentRoot:   a.parentRoot,
-		root:         a.root,
-		reader:       a.reader, // Share the same reader
-		hasChanges:   a.hasChanges,
-		updateKeys:   make([][]byte, len(a.updateKeys)),
-		updateValues: make([][]byte, len(a.updateValues)),
+		fw:         a.fw,
+		parentRoot: a.parentRoot,
+		root:       a.root,
+		reader:     a.reader, // Share the same reader
+		hasChanges: a.hasChanges,
+		dirtyKeys:  make(map[string][]byte, len(a.dirtyKeys)),
 	}
 
-	copy(newTrie.updateKeys, a.updateKeys)
-	copy(newTrie.updateValues, a.updateValues)
+	for k, v := range a.dirtyKeys {
+		newTrie.dirtyKeys[k] = append([]byte{}, v...)
+	}
 
 	return newTrie
 }

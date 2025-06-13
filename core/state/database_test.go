@@ -10,6 +10,7 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/triedb/firewood"
+	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -65,7 +66,11 @@ type merkleTrie struct {
 func newFuzzState(t *testing.T) *fuzzState {
 	r := require.New(t)
 
-	hashState := NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
+	hashState := NewDatabaseWithConfig(
+		rawdb.NewMemoryDatabase(),
+		&triedb.Config{
+			DBOverride: hashdb.Defaults.BackendConstructor,
+		})
 	ethRoot := types.EmptyRootHash
 	hashTr, err := hashState.OpenTrie(ethRoot)
 	r.NoError(err)
@@ -123,9 +128,7 @@ func (fs *fuzzState) commit() {
 			fs.require.NoError(err)
 			// If the account was deleted, we can skip updating the account's
 			// state root.
-			if acc == nil {
-				continue
-			}
+			fs.require.NotNil(acc)
 
 			acc.Root = accountStateRoot
 			fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
@@ -140,13 +143,12 @@ func (fs *fuzzState) commit() {
 		}
 
 		if updatedRoot != tr.lastRoot {
-			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, 0, mergedNodeSet, nil))
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil))
 			tr.lastRoot = updatedRoot
-			tr.openStorageTries = make(map[common.Address]Trie)
 		}
-
-		fs.require.NoError(tr.ethDatabase.TrieDB().Commit(updatedRoot, true))
-
+		tr.openStorageTries = make(map[common.Address]Trie)
+		fs.require.NoError(tr.ethDatabase.TrieDB().Commit(updatedRoot, true),
+			"expected hashdb root %s", fs.merkleTries[0].lastRoot.Hex())
 		tr.accountTrie, err = tr.ethDatabase.OpenTrie(tr.lastRoot)
 		fs.require.NoError(err)
 	}
@@ -211,6 +213,7 @@ func (fs *fuzzState) deleteAccount(accountIndex int) {
 	})
 	for _, tr := range fs.merkleTries {
 		fs.require.NoError(tr.accountTrie.DeleteAccount(deleteAddr))
+		delete(tr.openStorageTries, deleteAddr) // remove any open storage trie for the deleted account
 	}
 }
 
@@ -296,7 +299,7 @@ func (fs *fuzzState) deleteStorage(accountIndex int, storageIndexInput uint64) {
 }
 
 func FuzzTree(f *testing.F) {
-	for randSeed := range int64(5) {
+	for randSeed := range int64(10000) {
 		rand := rand.New(rand.NewSource(randSeed))
 		steps := make([]byte, 32)
 		_, err := rand.Read(steps)
