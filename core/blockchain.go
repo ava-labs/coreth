@@ -50,6 +50,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -66,6 +67,8 @@ import (
 
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
+
+	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
 // ====== If resolving merge conflicts ======
@@ -215,6 +218,15 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
+	if c.StateScheme == customrawdb.FirewoodScheme {
+		config.DBOverride = firewood.Config{
+			FileName:          "firewood_state",
+			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
+			Revisions:         uint(c.StateHistory), // must be at least 2
+			ReadCacheStrategy: ffi.CacheAllReads,
+			MetricsPort:       0, // TODO: read metrics. Currently disabled.
+		}.BackendConstructor
+	}
 	return config
 }
 
@@ -230,6 +242,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
+	StateHistory:              16,
 	StateScheme:               rawdb.HashScheme,
 }
 
@@ -238,6 +251,10 @@ var DefaultCacheConfig = &CacheConfig{
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
+	if config.StateScheme == customrawdb.FirewoodScheme {
+		config.SnapshotLimit = 0 // no snapshot allowed for firewood
+		config.Pruning = false   // firewood manages its own pruning
+	}
 	return &config
 }
 
