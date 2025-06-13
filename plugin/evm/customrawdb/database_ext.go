@@ -69,44 +69,37 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	// Check for custom scheme
 	if provided == FirewoodScheme {
-		// TODO: Check if the database is a firewood database
-		// Assume valid scheme for now
+		if diskScheme := rawdb.ReadStateScheme(disk); diskScheme != "" {
+			// Valid scheme on disk mismatched
+			return "", fmt.Errorf("State scheme %s already set on disk, can't use Firewood", diskScheme)
+		}
 		return FirewoodScheme, nil
 	}
 
 	// Check for eth scheme
-	scheme, err := rawdb.ParseStateScheme(provided, disk)
-	if err == nil {
-		// Found valid eth scheme
-		return scheme, nil
-	} else if rawdb.ReadStateScheme(disk) != "" {
-		// Valid scheme on disk mismatched
-		return scheme, err
-	}
-
-	return "", fmt.Errorf("Unknown state scheme %q", provided)
+	return rawdb.ParseStateScheme(provided, disk)
 }
 
-// WriteDatabasePath writes the path to the database files.
+// WriteChainDataPath writes the path to the database files.
 // This should only be written once.
-func WriteDatabasePath(db ethdb.KeyValueWriter, path string) error {
+func WriteChainDataPath(db ethdb.KeyValueWriter, path string) error {
 	// Check if the path is valid
 	if path == "" {
 		return fmt.Errorf("Invalid state path %q", path)
 	}
 
 	// Write the state path to the database
-	return db.Put(statePathKey, []byte(path))
+	return db.Put(chainDataPathKey, []byte(path))
 }
 
-// ReadDatabasePath reads the path to the database files.
-func ReadDatabasePath(db ethdb.KeyValueReader) (string, error) {
-	has, err := db.Has(statePathKey)
+// ReadChainDataPath reads the path to the database files.
+func ReadChainDataPath(db ethdb.KeyValueReader) (string, error) {
+	has, err := db.Has(chainDataPathKey)
 	if err != nil || !has {
 		return "", err
 	}
 	// Read the state path from the database
-	path, err := db.Get(statePathKey)
+	path, err := db.Get(chainDataPathKey)
 	if err != nil {
 		return "", err
 	}
@@ -114,20 +107,20 @@ func ReadDatabasePath(db ethdb.KeyValueReader) (string, error) {
 	return string(path), nil
 }
 
-// WriteGenesisRoot writes the genesis root to the database.
-func WriteGenesisRoot(db ethdb.KeyValueWriter, root common.Hash) error {
+// WriteFirewoodGenesisRoot writes the genesis root to the database.
+func WriteFirewoodGenesisRoot(db ethdb.KeyValueWriter, root common.Hash) error {
 	// Write the genesis root to the database
-	return db.Put(genesisRootKey, root[:])
+	return db.Put(firewoodGenesisRootKey, root[:])
 }
 
-// ReadGenesisRoot reads the genesis root from the database.
-func ReadGenesisRoot(db ethdb.KeyValueReader) (common.Hash, error) {
-	has, err := db.Has(genesisRootKey)
+// ReadFirewoodGenesisRoot reads the genesis root from the database.
+func ReadFirewoodGenesisRoot(db ethdb.KeyValueReader) (common.Hash, error) {
+	has, err := db.Has(firewoodGenesisRootKey)
 	if err != nil || !has {
 		return common.Hash{}, err
 	}
 	// Read the genesis root from the database
-	rootBytes, err := db.Get(genesisRootKey)
+	rootBytes, err := db.Get(firewoodGenesisRootKey)
 	if err != nil {
 		return common.Hash{}, err
 	}

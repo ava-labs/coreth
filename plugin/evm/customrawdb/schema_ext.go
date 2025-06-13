@@ -54,7 +54,7 @@ var (
 
 // Firewood keys
 var (
-	FirewoodScheme = "firewood"
-	statePathKey   = []byte("state_path")
-	genesisRootKey = []byte("genesis_root")
+	FirewoodScheme         = "firewood"
+	chainDataPathKey       = []byte("chain_data_path")
+	firewoodGenesisRootKey = []byte("firewood_genesis_root")
 )

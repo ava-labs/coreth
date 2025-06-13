@@ -306,7 +306,7 @@ func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config 
 		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
 	case customrawdb.FirewoodScheme:
 		// Create a unique temporary directory for each test
-		require.NoError(t, customrawdb.WriteDatabasePath(db, t.TempDir()))
+		require.NoError(t, customrawdb.WriteChainDataPath(db, t.TempDir()))
 		fwCfg := firewood.Config{
 			FileName:          "firewood_genesis_test",
 			CleanCacheSize:    256 * 1024 * 1024,

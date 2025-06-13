@@ -71,7 +71,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	if err != nil {
 		panic("failed to create temporary directory: " + err.Error())
 	}
-	if err := customrawdb.WriteDatabasePath(db, tempdir); err != nil {
+	if err := customrawdb.WriteChainDataPath(db, tempdir); err != nil {
 		panic("failed to set database path: " + err.Error())
 	}
 

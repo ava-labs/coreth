@@ -536,7 +536,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	defer db.Close() // Might double close, should be fine
 
 	// Set path for firewood
-	require.NoError(t, customrawdb.WriteDatabasePath(db, datadir))
+	require.NoError(t, customrawdb.WriteChainDataPath(db, datadir))
 
 	// Initialize a fresh chain
 	var (
@@ -631,7 +631,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	defer db.Close()
 
 	// Set path for firewood
-	require.NoError(customrawdb.WriteDatabasePath(db, datadir))
+	require.NoError(customrawdb.WriteChainDataPath(db, datadir))
 
 	newChain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)
 	if err != nil {

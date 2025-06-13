@@ -106,7 +106,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 
 func validateConfig(diskdb ethdb.Database, trieConfig *Config) (*ffi.Config, string, error) {
 	// Get the path from the database
-	path, err := customrawdb.ReadDatabasePath(diskdb)
+	path, err := customrawdb.ReadChainDataPath(diskdb)
 	if err != nil {
 		return nil, "", fmt.Errorf("unable to read database path: %w", err)
 	}
@@ -159,7 +159,7 @@ func (db *Database) Scheme() string {
 // Initialized indicates whether the root provided is the genesis root of the database.
 func (db *Database) Initialized(root common.Hash) bool {
 	// We store the genesis root in the rawdb, so we can check it.
-	genesisRoot, err := customrawdb.ReadGenesisRoot(db.ethdb)
+	genesisRoot, err := customrawdb.ReadFirewoodGenesisRoot(db.ethdb)
 	if err != nil {
 		log.Error("firewood: error reading genesis root", "error", err)
 		return false
@@ -266,32 +266,34 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	// We must create a new proposal for each one, since we don't know which one will be used.
 	for _, parentProposal := range possibleProposals {
 		// Check if the parent proposal is at the correct height.
-		if parentProposal.Block >= block-1 {
-			p, err := parentProposal.Proposal.Propose(keys, values)
-			if err != nil {
-				return fmt.Errorf("firewood: error proposing from parent proposal %s", parent.Hex())
-			}
-
-			currentRootBytes, err := p.Root()
-			if err != nil {
-				return fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
-			}
-			currentRoot := common.BytesToHash(currentRootBytes)
-			if root != currentRoot {
-				return fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
-			}
-
-			// Store the proposal context.
-			pContext := &ProposalContext{
-				Proposal: p,
-				Root:     root,
-				Block:    block,
-				Parent:   parentProposal,
-			}
-			db.proposalMap[root] = append(db.proposalMap[root], pContext)
-			parentProposal.Children = append(parentProposal.Children, pContext)
-			pCount++
+		// Consider the case that this parent proposal is actually a grandparent, with an empty block in between.
+		if parentProposal.Block < block-1 {
+			continue
 		}
+		p, err := parentProposal.Proposal.Propose(keys, values)
+		if err != nil {
+			return fmt.Errorf("firewood: error proposing from parent proposal %s", parent.Hex())
+		}
+
+		currentRootBytes, err := p.Root()
+		if err != nil {
+			return fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
+		}
+		currentRoot := common.BytesToHash(currentRootBytes)
+		if root != currentRoot {
+			return fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+		}
+
+		// Store the proposal context.
+		pContext := &ProposalContext{
+			Proposal: p,
+			Root:     root,
+			Block:    block,
+			Parent:   parentProposal,
+		}
+		db.proposalMap[root] = append(db.proposalMap[root], pContext)
+		parentProposal.Children = append(parentProposal.Children, pContext)
+		pCount++
 	}
 
 	// Check the number of proposals actually created.
@@ -376,7 +378,7 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 
 	// If this is the genesis root, store in rawdb.
 	if pCtx.Block == 0 {
-		if writeErr := customrawdb.WriteGenesisRoot(db.ethdb, root); writeErr != nil {
+		if writeErr := customrawdb.WriteFirewoodGenesisRoot(db.ethdb, root); writeErr != nil {
 			return fmt.Errorf("firewood: error writing genesis root %s: %w", root.Hex(), writeErr)
 		}
 		log.Info("Persisted genesis root in firewood", "root", root.Hex())

@@ -5,7 +5,6 @@ package firewood
 
 import (
 	"errors"
-	"sync"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
@@ -17,8 +16,6 @@ import (
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb/database"
 )
-
-var errNoReader = errors.New("reader unavailable")
 
 // AccountTrie implements state.Trie for managing account states.
 // There are a couple caveats to the current implementation:
@@ -32,7 +29,6 @@ type AccountTrie struct {
 	parentRoot   common.Hash
 	root         common.Hash
 	reader       database.Reader
-	updateLock   sync.RWMutex
 	dirtyKeys    map[string][]byte // Store dirty changes
 	updateKeys   [][]byte
 	updateValues [][]byte
@@ -55,13 +51,6 @@ func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
 
 // GetAccount implements state.Trie.
 func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
-	a.updateLock.RLock()
-	defer a.updateLock.RUnlock()
-
-	if a.reader == nil {
-		return nil, errNoReader
-	}
-
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 
 	// First check if there's a pending update for this account
@@ -72,42 +61,35 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 			return nil, nil
 		}
 		// Decode and return the updated account
-		acct := new(types.StateAccount)
-		err := rlp.DecodeBytes(updateValue, acct)
-		return acct, err
+		account := new(types.StateAccount)
+		err := rlp.DecodeBytes(updateValue, account)
+		return account, err
 	}
 
 	// No pending update found, read from the underlying reader
-	acctBytes, err := a.reader.Node(common.Hash{}, key, common.Hash{})
+	accountBytes, err := a.reader.Node(common.Hash{}, key, common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	if acctBytes == nil {
+	if accountBytes == nil {
 		return nil, nil
 	}
 
 	// Decode the account node
-	acct := new(types.StateAccount)
-	err = rlp.DecodeBytes(acctBytes, acct)
-	return acct, err
+	account := new(types.StateAccount)
+	err = rlp.DecodeBytes(accountBytes, account)
+	return account, err
 }
 
 // GetStorage implements state.Trie.
 func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
-	a.updateLock.RLock()
-	defer a.updateLock.RUnlock()
-
-	if a.reader == nil {
-		return nil, errNoReader
-	}
-
-	acctKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
+	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	combinedKey := append(acctKey, storageKey...)
+	combinedKey := append(accountKey, storageKey...)
 
 	// If the account has been deleted, we should return nil
-	if val, exists := a.dirtyKeys[string(acctKey)]; exists && len(val) == 0 {
+	if val, exists := a.dirtyKeys[string(accountKey)]; exists && len(val) == 0 {
 		return nil, nil
 	}
 
@@ -141,12 +123,6 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 
 // UpdateAccount implements state.Trie.
 func (a *AccountTrie) UpdateAccount(addr common.Address, account *types.StateAccount) error {
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
-	if a.reader == nil {
-		return errNoReader
-	}
-
 	// Queue the keys and values for later commit
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	data, err := rlp.EncodeToBytes(account)
@@ -162,15 +138,9 @@ func (a *AccountTrie) UpdateAccount(addr common.Address, account *types.StateAcc
 
 // UpdateStorage implements state.Trie.
 func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byte) error {
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
-	if a.reader == nil {
-		return errNoReader
-	}
-
-	acctKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
+	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	newKey := append(acctKey, storageKey...)
+	newKey := append(accountKey, storageKey...)
 	data, err := rlp.EncodeToBytes(value)
 	if err != nil {
 		return err
@@ -186,12 +156,6 @@ func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byt
 
 // DeleteAccount implements state.Trie.
 func (a *AccountTrie) DeleteAccount(addr common.Address) error {
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
-	if a.reader == nil {
-		return errNoReader
-	}
-
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	// Queue the key for deletion
 	a.dirtyKeys[string(key)] = []byte{}
@@ -203,15 +167,9 @@ func (a *AccountTrie) DeleteAccount(addr common.Address) error {
 
 // DeleteStorage implements state.Trie.
 func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
-	if a.reader == nil {
-		return errNoReader
-	}
-
-	acctKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
+	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	combinedKey := append(acctKey, storageKey...)
+	combinedKey := append(accountKey, storageKey...)
 	// Queue the key for deletion
 	a.dirtyKeys[string(combinedKey)] = []byte{}
 	a.updateKeys = append(a.updateKeys, combinedKey)
@@ -222,8 +180,6 @@ func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
 
 // Hash implements state.Trie.
 func (a *AccountTrie) Hash() common.Hash {
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
 	hash, err := a.hash()
 	if err != nil {
 		log.Error("Failed to hash account trie", "error", err)
@@ -246,9 +202,6 @@ func (a *AccountTrie) hash() (common.Hash, error) {
 
 // Commit implements state.Trie.
 func (a *AccountTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
-	a.updateLock.Lock()
-	defer a.updateLock.Unlock()
-
 	// Get the hash of the trie.
 	hash, err := a.hash()
 	if err != nil {
@@ -288,9 +241,6 @@ func (a *AccountTrie) Prove(_ []byte, _ ethdb.KeyValueWriter) error {
 }
 
 func (a *AccountTrie) Copy() *AccountTrie {
-	a.updateLock.RLock()
-	defer a.updateLock.RUnlock()
-
 	// Create a new AccountTrie with the same root and reader
 	newTrie := &AccountTrie{
 		fw:         a.fw,

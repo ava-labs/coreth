@@ -79,7 +79,7 @@ func newFuzzState(t *testing.T) *fuzzState {
 	})
 
 	firewoodMemdb := rawdb.NewMemoryDatabase()
-	r.NoError(customrawdb.WriteDatabasePath(firewoodMemdb, t.TempDir()))
+	r.NoError(customrawdb.WriteChainDataPath(firewoodMemdb, t.TempDir()))
 	firewoodState := NewDatabaseWithConfig(
 		firewoodMemdb,
 		&triedb.Config{
@@ -258,8 +258,7 @@ func (fs *fuzzState) addStorage(accountIndex int) {
 
 	for _, tr := range fs.merkleTries {
 		str := fs.openStorageTrie(addr, tr)
-		err := str.UpdateStorage(addr, key[:], val[:])
-		fs.require.NoError(err)
+		fs.require.NoError(str.UpdateStorage(addr, key[:], val[:]))
 	}
 
 	fs.currentStorageInputIndices[addr]++

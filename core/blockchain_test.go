@@ -102,10 +102,10 @@ func TestFirewoodBlockChain(t *testing.T) {
 		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 			// If no database path has been persisted, set the path to a temporary test directory.
 			// Otherwise, make sure not to overwrite so that it re-uses any existing database.
-			if path, err := customrawdb.ReadDatabasePath(db); err != nil {
+			if path, err := customrawdb.ReadChainDataPath(db); err != nil {
 				t.Fatalf("failed to read database path: %v", err)
 			} else if path == "" {
-				customrawdb.WriteDatabasePath(db, t.TempDir())
+				customrawdb.WriteChainDataPath(db, t.TempDir())
 			}
 			return createBlockChain(
 				db,
@@ -460,8 +460,8 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 func testUngracefulAsyncShutdown(t *testing.T, scheme string) {
 	var (
 		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
-			if path, err := customrawdb.ReadDatabasePath(db); err != nil || path == "" {
-				customrawdb.WriteDatabasePath(db, t.TempDir())
+			if path, err := customrawdb.ReadChainDataPath(db); err != nil || path == "" {
+				customrawdb.WriteChainDataPath(db, t.TempDir())
 			}
 			blockchain, err := createBlockChain(db, &CacheConfig{
 				TrieCleanLimit:            256,
@@ -668,7 +668,7 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 
 		// Initialize test chain
 		db := rawdb.NewMemoryDatabase()
-		if err := customrawdb.WriteDatabasePath(db, t.TempDir()); err != nil {
+		if err := customrawdb.WriteChainDataPath(db, t.TempDir()); err != nil {
 			t.Fatalf("failed to write database path: %v", err)
 		}
 		chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)

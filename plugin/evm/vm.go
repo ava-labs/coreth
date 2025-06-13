@@ -421,7 +421,7 @@ func (vm *VM) Initialize(
 
 	// Write where the database files are located to be used by any Firewood
 	// databases set up later.
-	if err := customrawdb.WriteDatabasePath(vm.chaindb, chainCtx.ChainDataDir); err != nil {
+	if err := customrawdb.WriteChainDataPath(vm.chaindb, chainCtx.ChainDataDir); err != nil {
 		return fmt.Errorf("failed to write database path: %w", err)
 	}
 

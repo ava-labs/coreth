@@ -82,7 +82,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, scheme string, gen
 		engine:      dummy.NewETHFaker(),
 		chaindb:     rawdb.NewMemoryDatabase(),
 	}
-	if err := customrawdb.WriteDatabasePath(backend.chaindb, t.TempDir()); err != nil {
+	if err := customrawdb.WriteChainDataPath(backend.chaindb, t.TempDir()); err != nil {
 		t.Fatalf("failed to set database path: %v", err)
 	}
 	// Generate blocks for testing
