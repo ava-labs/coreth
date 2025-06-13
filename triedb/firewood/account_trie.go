@@ -218,9 +218,8 @@ func (a *AccountTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, 
 	// Create the NodeSet. This will be sent to `Update` later.
 	nodeset := trienode.NewNodeSet(a.parentRoot)
 	for i, key := range a.updateKeys {
-		value := a.updateValues[i]
 		nodeset.AddNode(key, &trienode.Node{
-			Blob: value,
+			Blob: a.updateValues[i],
 		})
 	}
 	return hash, nodeset, nil

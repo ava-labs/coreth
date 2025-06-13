@@ -1,284 +1,355 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-
 package state
 
 import (
 	"encoding/binary"
 	"math/rand"
-	"path"
 	"slices"
 	"testing"
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/triedb/firewood"
-	ffi "github.com/ava-labs/firewood-go/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
-func hashData(input []byte) common.Hash {
-	return crypto.Keccak256Hash(input)
+const (
+	commit byte = iota
+	createAccount
+	updateAccount
+	deleteAccount
+	addStorage
+	updateStorage
+	deleteStorage
+	maxStep
+)
+
+var (
+	stepMap = map[byte]string{
+		commit:        "commit",
+		createAccount: "createAccount",
+		updateAccount: "updateAccount",
+		deleteAccount: "deleteAccount",
+		addStorage:    "addStorage",
+		updateStorage: "updateStorage",
+		deleteStorage: "deleteStorage",
+	}
+)
+
+type fuzzState struct {
+	require *require.Assertions
+
+	// current state
+	currentAddrs               []common.Address
+	currentStorageInputIndices map[common.Address]uint64
+	inputCounter               uint64
+	blockNumber                uint64
+
+	// pending changes to be committed
+	merkleTries []*merkleTrie
+}
+type merkleTrie struct {
+	ethDatabase      Database
+	accountTrie      Trie
+	openStorageTries map[common.Address]Trie
+	lastRoot         common.Hash
 }
 
-// Adapted from Firewood's hash compatibility testing
-func TestInsert(t *testing.T) {
-	tempdir := t.TempDir()
-	file := path.Join(tempdir, "test.db")
-	cfg := ffi.DefaultConfig()
-	cfg.Create = true
-	db, err := ffi.New(file, cfg)
-	require.NoError(t, err)
-	defer db.Close()
+func newFuzzState(t *testing.T) *fuzzState {
+	r := require.New(t)
 
-	type storageKey struct {
-		addr common.Address
-		key  common.Hash
-	}
-
-	rand := rand.New(rand.NewSource(0))
-
-	addrs := make([]common.Address, 0)
-	storages := make([]storageKey, 0)
-
-	chooseAddr := func() common.Address {
-		return addrs[rand.Intn(len(addrs))] //nolint:gosec
-	}
-
-	chooseStorage := func() storageKey {
-		return storages[rand.Intn(len(storages))] //nolint:gosec
-	}
-
-	deleteStorage := func(k storageKey) {
-		storages = slices.DeleteFunc(storages, func(s storageKey) bool {
-			return s == k
-		})
-	}
-
-	deleteAccount := func(addr common.Address) {
-		addrs = slices.DeleteFunc(addrs, func(a common.Address) bool {
-			return a == addr
-		})
-		storages = slices.DeleteFunc(storages, func(s storageKey) bool {
-			return s.addr == addr
-		})
-	}
-
-	hashmemdb := rawdb.NewMemoryDatabase()
-	hashdb := NewDatabaseWithConfig(hashmemdb, triedb.HashDefaults)
-
-	firewoodmemdb := rawdb.NewMemoryDatabase()
-	customrawdb.WriteDatabasePath(firewoodmemdb, tempdir)
-	fwCfg := firewood.Config{
-		FileName:          "coreth",
-		CleanCacheSize:    1024 * 1024 * 1024,
-		Revisions:         10,
-		ReadCacheStrategy: ffi.CacheAllReads,
-		MetricsPort:       0, // use any open port from OS
-	}
-	config := &triedb.Config{DBOverride: fwCfg.BackendConstructor}
-	fwdb := NewDatabaseWithConfig(firewoodmemdb, config)
-
+	hashState := NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), triedb.HashDefaults)
 	ethRoot := types.EmptyRootHash
+	hashTr, err := hashState.OpenTrie(ethRoot)
+	r.NoError(err)
+	t.Cleanup(func() {
+		r.NoError(hashState.TrieDB().Close())
+	})
 
-	for i := range uint64(10_000) {
-		hashTr, err := hashdb.OpenTrie(ethRoot)
-		require.NoError(t, err)
-		hashSet := trienode.NewMergedNodeSet()
+	firewoodMemdb := rawdb.NewMemoryDatabase()
+	r.NoError(customrawdb.WriteDatabasePath(firewoodMemdb, t.TempDir()))
+	firewoodState := NewDatabaseWithConfig(
+		firewoodMemdb,
+		&triedb.Config{
+			DBOverride: firewood.Defaults.BackendConstructor,
+		},
+	)
+	fwTr, err := firewoodState.OpenTrie(ethRoot)
+	r.NoError(err)
+	t.Cleanup(func() {
+		r.NoError(firewoodState.TrieDB().Close())
+	})
 
-		fwTr, err := fwdb.OpenTrie(ethRoot)
-		require.NoError(t, err)
-		fwSet := trienode.NewMergedNodeSet()
+	return &fuzzState{
+		merkleTries: []*merkleTrie{
+			&merkleTrie{
+				ethDatabase:      hashState,
+				accountTrie:      hashTr,
+				openStorageTries: make(map[common.Address]Trie),
+				lastRoot:         ethRoot,
+			},
+			&merkleTrie{
+				ethDatabase:      firewoodState,
+				accountTrie:      fwTr,
+				openStorageTries: make(map[common.Address]Trie),
+				lastRoot:         ethRoot,
+			},
+		},
+		currentStorageInputIndices: make(map[common.Address]uint64),
+		require:                    r,
+	}
+}
 
-		var fwKeys, fwVals [][]byte
-
-		switch {
-		case i%100 == 99: // delete acc
-			addr := chooseAddr()
-			accHash := hashData(addr[:])
-
-			require.NoError(t, hashTr.DeleteAccount(addr))
-			require.NoError(t, fwTr.DeleteAccount(addr))
-			deleteAccount(addr)
-
-			fwKeys = append(fwKeys, accHash[:])
-			fwVals = append(fwVals, []byte{})
-		case i%10 == 9: // delete storage
-			storageKey := chooseStorage()
-			accHash := hashData(storageKey.addr[:])
-			keyHash := hashData(storageKey.key[:])
-
-			acc, err := hashTr.GetAccount(storageKey.addr)
-			require.NoError(t, err)
-			hashStr, err := hashdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, hashTr)
-			require.NoError(t, err)
-			require.NoError(t, hashStr.DeleteStorage(storageKey.addr, storageKey.key[:]))
-
-			strRoot, set, err := hashStr.Commit(false)
-			require.NoError(t, err)
-			require.NoError(t, hashSet.Merge(set))
-			acc.Root = strRoot
-			require.NoError(t, hashTr.UpdateAccount(storageKey.addr, acc))
-
-			acc, err = fwTr.GetAccount(storageKey.addr)
-			require.NoError(t, err)
-			fwStr, err := fwdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, fwTr)
-			require.NoError(t, err)
-			require.NoError(t, fwStr.DeleteStorage(storageKey.addr, storageKey.key[:]))
-			// No need to update account or commit
-
-			deleteStorage(storageKey)
-			fwKeys = append(fwKeys, append(accHash[:], keyHash[:]...))
-			fwVals = append(fwVals, []byte{})
-
-			// We must also update the account (not for hash, but to be accurate)
-			fwKeys = append(fwKeys, accHash[:])
-			encodedVal, err := rlp.EncodeToBytes(acc)
-			require.NoError(t, err)
-			fwVals = append(fwVals, encodedVal)
-		case i%4 == 0: // add acc
-			addr := common.BytesToAddress(hashData(binary.BigEndian.AppendUint64(nil, i)).Bytes())
-			accHash := hashData(addr[:])
-			acc := &types.StateAccount{
-				Nonce:    1,
-				Balance:  uint256.NewInt(100),
-				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash[:],
+// commit writes the pending changes to both tries and clears the pending changes
+func (fs *fuzzState) commit() {
+	for _, tr := range fs.merkleTries {
+		mergedNodeSet := trienode.NewMergedNodeSet()
+		for addr, str := range tr.openStorageTries {
+			accountStateRoot, set, err := str.Commit(false)
+			fs.require.NoError(err)
+			// A no-op change returns a nil set, which will cause merge to panic.
+			if set != nil {
+				fs.require.NoError(mergedNodeSet.Merge(set))
 			}
-			enc, err := rlp.EncodeToBytes(acc)
-			require.NoError(t, err)
 
-			require.NoError(t, hashTr.UpdateAccount(addr, acc))
+			acc, err := tr.accountTrie.GetAccount(addr)
+			fs.require.NoError(err)
+			// If the account was deleted, we can skip updating the account's
+			// state root.
+			if acc == nil {
+				continue
+			}
 
-			require.NoError(t, fwTr.UpdateAccount(addr, acc))
-
-			addrs = append(addrs, addr)
-
-			fwKeys = append(fwKeys, accHash[:])
-			fwVals = append(fwVals, enc)
-		case i%4 == 1: // update acc
-			addr := chooseAddr()
-			accHash := hashData(addr[:])
-
-			acc, err := hashTr.GetAccount(addr)
-			require.NoError(t, err)
-			acc.Nonce++
-			enc, err := rlp.EncodeToBytes(acc)
-			require.NoError(t, err)
-			require.NoError(t, hashTr.UpdateAccount(addr, acc))
-
-			acc, err = fwTr.GetAccount(addr)
-			require.NoError(t, err)
-			acc.Nonce++
-			require.NoError(t, fwTr.UpdateAccount(addr, acc))
-
-			fwKeys = append(fwKeys, accHash[:])
-			fwVals = append(fwVals, enc)
-		case i%4 == 2: // add storage
-			addr := chooseAddr()
-			accHash := hashData(addr[:])
-			key := hashData(binary.BigEndian.AppendUint64(nil, i))
-			keyHash := hashData(key[:])
-
-			val := hashData(binary.BigEndian.AppendUint64(nil, i+1))
-			storageKey := storageKey{addr: addr, key: key}
-
-			acc, err := hashTr.GetAccount(addr)
-			require.NoError(t, err)
-			hashStr, err := hashdb.OpenStorageTrie(ethRoot, addr, acc.Root, hashTr)
-			require.NoError(t, err)
-			require.NoError(t, hashStr.UpdateStorage(addr, key[:], val[:]))
-			storages = append(storages, storageKey)
-
-			strRoot, set, err := hashStr.Commit(false)
-			require.NoError(t, err)
-			require.NoError(t, hashSet.Merge(set))
-			acc.Root = strRoot
-			require.NoError(t, hashTr.UpdateAccount(addr, acc))
-
-			acc, err = fwTr.GetAccount(addr)
-			require.NoError(t, err)
-			fwStr, err := fwdb.OpenStorageTrie(ethRoot, addr, acc.Root, fwTr)
-			require.NoError(t, err)
-			require.NoError(t, fwStr.UpdateStorage(addr, key[:], val[:]))
-			// no need to update account or commit
-
-			fwKeys = append(fwKeys, append(accHash[:], keyHash[:]...))
-			// UpdateStorage automatically encodes the value to rlp,
-			// so we need to encode prior to sending to firewood
-			encodedVal, err := rlp.EncodeToBytes(val[:])
-			require.NoError(t, err)
-			fwVals = append(fwVals, encodedVal)
-
-			// We must also update the account (not for hash, but to be accurate)
-			fwKeys = append(fwKeys, accHash[:])
-			encodedVal, err = rlp.EncodeToBytes(acc)
-			require.NoError(t, err)
-			fwVals = append(fwVals, encodedVal)
-		case i%4 == 3: // update storage
-			storageKey := chooseStorage()
-			accHash := hashData(storageKey.addr[:])
-			keyHash := hashData(storageKey.key[:])
-
-			val := hashData(binary.BigEndian.AppendUint64(nil, i+1))
-
-			acc, err := hashTr.GetAccount(storageKey.addr)
-			require.NoError(t, err)
-			hashStr, err := hashdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, hashTr)
-			require.NoError(t, err)
-			require.NoError(t, hashStr.UpdateStorage(storageKey.addr, storageKey.key[:], val[:]))
-
-			strRoot, set, err := hashStr.Commit(false)
-			require.NoError(t, err)
-			require.NoError(t, hashSet.Merge(set))
-			acc.Root = strRoot
-			require.NoError(t, hashTr.UpdateAccount(storageKey.addr, acc))
-
-			acc, err = fwTr.GetAccount(storageKey.addr)
-			require.NoError(t, err)
-			fwStr, err := fwdb.OpenStorageTrie(ethRoot, storageKey.addr, acc.Root, fwTr)
-			require.NoError(t, err)
-			require.NoError(t, fwStr.UpdateStorage(storageKey.addr, storageKey.key[:], val[:]))
-
-			fwKeys = append(fwKeys, append(accHash[:], keyHash[:]...))
-			// UpdateStorage automatically encodes the value to rlp,
-			// so we need to encode prior to sending to firewood
-			encodedVal, err := rlp.EncodeToBytes(val[:])
-			require.NoError(t, err)
-			fwVals = append(fwVals, encodedVal)
-
-			// We must also update the account (not for hash, but to be accurate)
-			fwKeys = append(fwKeys, accHash[:])
-			encodedVal, err = rlp.EncodeToBytes(acc)
-			require.NoError(t, err)
-			fwVals = append(fwVals, encodedVal)
+			acc.Root = accountStateRoot
+			fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
 		}
 
-		// Update HashDB
-		next, set, err := hashTr.Commit(true)
-		require.NoError(t, err)
-		require.NoError(t, hashSet.Merge(set))
-		require.NoError(t, hashdb.TrieDB().Update(next, ethRoot, i, hashSet, nil))
+		updatedRoot, set, err := tr.accountTrie.Commit(true)
+		fs.require.NoError(err)
 
-		// update firewood db
-		got, err := db.Update(fwKeys, fwVals)
-		require.NoError(t, err)
-		require.Equal(t, next[:], got)
+		// A no-op change returns a nil set, which will cause merge to panic.
+		if set != nil {
+			fs.require.NoError(mergedNodeSet.Merge(set))
+		}
 
-		// Update FirewoodDB
-		fwRoot, set, err := fwTr.Commit(true)
-		require.NoError(t, err)
-		require.Equal(t, next, fwRoot)
-		require.NoError(t, fwSet.Merge(set))
-		require.NoError(t, fwdb.TrieDB().Update(fwRoot, ethRoot, i, fwSet, nil))
+		if updatedRoot != tr.lastRoot {
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, 0, mergedNodeSet, nil))
+			tr.lastRoot = updatedRoot
+			tr.openStorageTries = make(map[common.Address]Trie)
+		}
 
-		ethRoot = next
+		fs.require.NoError(tr.ethDatabase.TrieDB().Commit(updatedRoot, true))
+
+		tr.accountTrie, err = tr.ethDatabase.OpenTrie(tr.lastRoot)
+		fs.require.NoError(err)
 	}
+	fs.blockNumber++
+
+	// After computing the new root for each trie, we can confirm that the hashing matches
+	expectedRoot := fs.merkleTries[0].lastRoot
+	for i, tr := range fs.merkleTries[1:] {
+		fs.require.Equalf(expectedRoot, tr.lastRoot,
+			"expected root %x, got %x for trie %d",
+			expectedRoot.Hex(), tr.lastRoot.Hex(), i,
+		)
+	}
+}
+
+// createAccount generates a new, unique account and adds it to both tries and the tracked
+// current state.
+func (fs *fuzzState) createAccount() {
+	fs.inputCounter++
+	addr := common.BytesToAddress(crypto.Keccak256Hash(binary.BigEndian.AppendUint64(nil, fs.inputCounter)).Bytes())
+	acc := &types.StateAccount{
+		Nonce:    1,
+		Balance:  uint256.NewInt(100),
+		Root:     types.EmptyRootHash,
+		CodeHash: types.EmptyCodeHash[:],
+	}
+	fs.currentAddrs = append(fs.currentAddrs, addr)
+
+	for _, tr := range fs.merkleTries {
+		fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
+	}
+}
+
+// selectAccount returns a random account and account hash for the provided index
+// assumes: addrIndex < len(tr.currentAddrs)
+func (fs *fuzzState) selectAccount(addrIndex int) common.Address {
+	return fs.currentAddrs[addrIndex]
+}
+
+// updateAccount selects a random account, increments its nonce, and adds the update
+// to the pending changes for both tries.
+func (fs *fuzzState) updateAccount(addrIndex int) {
+	addr := fs.selectAccount(addrIndex)
+
+	for _, tr := range fs.merkleTries {
+		acc, err := tr.accountTrie.GetAccount(addr)
+		fs.require.NoError(err)
+		fs.require.NotNil(acc)
+		acc.Nonce++
+		acc.CodeHash = crypto.Keccak256Hash(acc.CodeHash[:]).Bytes()
+		acc.Balance.Add(acc.Balance, uint256.NewInt(3))
+		fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
+	}
+}
+
+// deleteAccount selects a random account and deletes it from both tries and the tracked
+// current state.
+func (fs *fuzzState) deleteAccount(accountIndex int) {
+	deleteAddr := fs.selectAccount(accountIndex)
+	fs.currentAddrs = slices.DeleteFunc(fs.currentAddrs, func(addr common.Address) bool {
+		return deleteAddr == addr
+	})
+	for _, tr := range fs.merkleTries {
+		fs.require.NoError(tr.accountTrie.DeleteAccount(deleteAddr))
+	}
+}
+
+// openStorageTrie opens the storage trie for the provided account address.
+// Uses an already opened trie, if there's a pending update to the ethereum nested
+// storage trie.
+//
+// must maintain a map of currently open storage tries, so we can defer committing them
+// until commit as opposed to after each storage update.
+// This mimics the actual handling of state commitments in the EVM where storage tries are all committed immediately
+// before updating the account trie along with the updated storage trie roots:
+// https://github.com/ava-labs/libevm/blob/0bfe4a0380c86d7c9bf19fe84368b9695fcb96c7/core/state/statedb.go#L1155
+//
+// If we attempt to commit the storage tries after each operation, then attempting to re-open the storage trie
+// with an updated storage trie root from ethDatabase will fail since the storage trie root will not have been
+// persisted yet - leading to a missing trie node error.
+func (fs *fuzzState) openStorageTrie(addr common.Address, tr *merkleTrie) Trie {
+	storageTrie, ok := tr.openStorageTries[addr]
+	if ok {
+		return storageTrie
+	}
+
+	acc, err := tr.accountTrie.GetAccount(addr)
+	fs.require.NoError(err)
+	fs.require.NotNil(acc, addr.Hex())
+	storageTrie, err = tr.ethDatabase.OpenStorageTrie(tr.lastRoot, addr, acc.Root, tr.accountTrie)
+	fs.require.NoError(err)
+	tr.openStorageTries[addr] = storageTrie
+	return storageTrie
+}
+
+// addStorage selects an account and adds a new storage key-value pair to the account.
+func (fs *fuzzState) addStorage(accountIndex int) {
+	addr := fs.selectAccount(accountIndex)
+	// Increment storageInputIndices for the account and take the next input to generate
+	// a new storage key-value pair for the account.
+	fs.currentStorageInputIndices[addr]++
+	storageIndex := fs.currentStorageInputIndices[addr]
+	key := crypto.Keccak256Hash(binary.BigEndian.AppendUint64(nil, storageIndex))
+	keyHash := crypto.Keccak256Hash(key[:])
+	val := crypto.Keccak256Hash(keyHash[:])
+
+	for _, tr := range fs.merkleTries {
+		str := fs.openStorageTrie(addr, tr)
+		err := str.UpdateStorage(addr, key[:], val[:])
+		fs.require.NoError(err)
+	}
+
+	fs.currentStorageInputIndices[addr]++
+}
+
+// updateStorage selects an account and updates an existing storage key-value pair
+// note: this may "update" a key-value pair that doesn't exist if it was previously deleted.
+func (fs *fuzzState) updateStorage(accountIndex int, storageIndexInput uint64) {
+	addr := fs.selectAccount(accountIndex)
+	storageIndex := fs.currentStorageInputIndices[addr]
+	storageIndex %= storageIndexInput
+
+	storageKey := crypto.Keccak256Hash(binary.BigEndian.AppendUint64(nil, storageIndex))
+	storageKeyHash := crypto.Keccak256Hash(storageKey[:])
+	fs.inputCounter++
+	updatedValInput := binary.BigEndian.AppendUint64(storageKeyHash[:], fs.inputCounter)
+	updatedVal := crypto.Keccak256Hash(updatedValInput[:])
+
+	for _, tr := range fs.merkleTries {
+		str := fs.openStorageTrie(addr, tr)
+		fs.require.NoError(str.UpdateStorage(addr, storageKey[:], updatedVal[:]))
+	}
+}
+
+// deleteStorage selects an account and deletes an existing storage key-value pair
+// note: this may "delete" a key-value pair that doesn't exist if it was previously deleted.
+func (fs *fuzzState) deleteStorage(accountIndex int, storageIndexInput uint64) {
+	addr := fs.selectAccount(accountIndex)
+	storageIndex := fs.currentStorageInputIndices[addr]
+	storageIndex %= storageIndexInput
+	storageKey := crypto.Keccak256Hash(binary.BigEndian.AppendUint64(nil, storageIndex))
+
+	for _, tr := range fs.merkleTries {
+		str := fs.openStorageTrie(addr, tr)
+		fs.require.NoError(str.DeleteStorage(addr, storageKey[:]))
+	}
+}
+
+func FuzzTree(f *testing.F) {
+	for randSeed := range int64(5) {
+		rand := rand.New(rand.NewSource(randSeed))
+		steps := make([]byte, 32)
+		_, err := rand.Read(steps)
+		if err != nil {
+			f.Fatal(err)
+		}
+		f.Add(randSeed, steps)
+	}
+	f.Fuzz(func(t *testing.T, randSeed int64, byteSteps []byte) {
+		fuzzState := newFuzzState(t)
+		rand := rand.New(rand.NewSource(randSeed))
+
+		for range 10 {
+			fuzzState.createAccount()
+		}
+		fuzzState.commit()
+
+		const maxSteps = 1000
+		if len(byteSteps) > maxSteps {
+			byteSteps = byteSteps[:maxSteps]
+		}
+
+		for _, step := range byteSteps {
+			step = step % maxStep
+			t.Log(stepMap[step])
+			switch step {
+			case commit:
+				fuzzState.commit()
+			case createAccount:
+				fuzzState.createAccount()
+			case updateAccount:
+				if len(fuzzState.currentAddrs) > 0 {
+					fuzzState.updateAccount(rand.Intn(len(fuzzState.currentAddrs)))
+				}
+			case deleteAccount:
+				if len(fuzzState.currentAddrs) > 0 {
+					fuzzState.deleteAccount(rand.Intn(len(fuzzState.currentAddrs)))
+				}
+			case addStorage:
+				if len(fuzzState.currentAddrs) > 0 {
+					fuzzState.addStorage(rand.Intn(len(fuzzState.currentAddrs)))
+				}
+			case updateStorage:
+				if len(fuzzState.currentAddrs) > 0 {
+					fuzzState.updateStorage(rand.Intn(len(fuzzState.currentAddrs)), rand.Uint64())
+				}
+			case deleteStorage:
+				if len(fuzzState.currentAddrs) > 0 {
+					fuzzState.deleteStorage(rand.Intn(len(fuzzState.currentAddrs)), rand.Uint64())
+				}
+			default:
+				t.Fatalf("unknown step: %d", step)
+			}
+		}
+	})
 }

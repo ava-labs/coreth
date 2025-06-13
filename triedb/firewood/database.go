@@ -240,7 +240,7 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	// We must create a new proposal for each one, since we don't know which one will be used.
 	for _, parentProposal := range possibleProposals {
 		// Check if the parent proposal is at the correct height.
-		if parentProposal.Block == block-1 {
+		if parentProposal.Block >= block-1 {
 			p, err := parentProposal.Proposal.Propose(keys, values)
 			if err != nil {
 				return fmt.Errorf("firewood: error proposing from parent proposal %s", parent.Hex())
@@ -348,6 +348,16 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 			return fmt.Errorf("firewood: error writing genesis root %s: %w", root.Hex(), writeErr)
 		}
 		log.Info("Persisted genesis root in firewood", "root", root.Hex())
+	}
+
+	// Assert that the root of the database matches the committed proposal root.
+	currentRootBytes, err := db.fwDisk.Root()
+	if err != nil {
+		return fmt.Errorf("firewood: error getting current root after commit: %w", err)
+	}
+	currentRoot := common.BytesToHash(currentRootBytes)
+	if currentRoot != root {
+		return fmt.Errorf("firewood: current root %s does not match committed root %s", currentRoot.Hex(), root.Hex())
 	}
 
 	if report {
