@@ -23,6 +23,16 @@ import (
 	ffi "github.com/ava-labs/firewood-go/ffi"
 )
 
+var (
+	_ proposable = (*ffi.Database)(nil)
+	_ proposable = (*ffi.Proposal)(nil)
+)
+
+type proposable interface {
+	// Propose creates a new proposal from the current state with the given keys and values.
+	Propose(keys, values [][]byte) (*ffi.Proposal, error)
+}
+
 // ProposalContext represents a proposal in the Firewood database.
 // This tracks all outstanding proposals to allow dereferencing upon commit.
 type ProposalContext struct {
@@ -211,12 +221,17 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 
 // propose creates a new proposal for every possible parent with the given keys and values.
 // If the parent cannot be found, an error will be returned.
+//
 // We must create a new proposal for each parent proposal due to the possibility of duplicate state roots,
 // and each proposal being a diff layer. Additionally, if there are empty blocks, the height of the proposal
-// may not be correct.
+// may not be correct. This can only happen during bootstrapping, so we can assume that the parent proposal
+// is the root of the database, and it will be committed immediately after creation.
+//
 // Should only be accessed with the proposal lock held.
 func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, keys [][]byte, values [][]byte) error {
-	// Check if this proposal already exists. For reorgs, this could occur.
+	// Check if this proposal already exists.
+	// During deep reorgs, we may have already created this proposal.
+	// We must guarantee uniqueness of proposals.
 	if existingProposals, ok := db.proposalMap[root]; ok {
 		// If the proposal already exists, we can just return.
 		for _, existing := range existingProposals {
@@ -230,69 +245,49 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 	// Special case: if we are proposing on top of an empty proposal.
 	// This function will never be called in the case that no changes are made,
 	// so we must interpret this as a valid potential proposal.
-	pCount := 0
+	// However, we will immediately accept it afterwards.
 	if db.proposalTree.Root == parent {
-		p, err := db.fwDisk.Propose(keys, values)
+		log.Debug("firewood: proposing from database root", "root", root.Hex(), "height", block)
+		p, err := db.createProposal(db.fwDisk, keys, values, root)
 		if err != nil {
-			return fmt.Errorf("firewood: error proposing from root %s", parent.Hex())
+			return err
 		}
-		pCount++
-
-		currentRootBytes, err := p.Root()
-		if err != nil {
-			return fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
-		}
-		currentRoot := common.BytesToHash(currentRootBytes)
-		if root != currentRoot {
-			return fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
-		}
-
-		// Store the proposal context.
-		pContext := &ProposalContext{
+		pCtx := &ProposalContext{
 			Proposal: p,
 			Root:     root,
 			Block:    block,
 			Parent:   db.proposalTree,
 		}
-		db.proposalMap[root] = append(db.proposalMap[root], pContext)
-		db.proposalTree.Children = append(db.proposalTree.Children, pContext)
+		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
+		db.proposalTree.Children = append(db.proposalTree.Children, pCtx)
+		return nil
 	}
 
 	// If the parent is not the root of the database,
 	// we need to find all possible parent proposals.
+	pCount := 0
 	possibleProposals := db.proposalMap[parent]
 
 	// Find all proposals with the correct parent height.
 	// We must create a new proposal for each one, since we don't know which one will be used.
 	for _, parentProposal := range possibleProposals {
 		// Check if the parent proposal is at the correct height.
-		// Consider the case that this parent proposal is actually a grandparent, with an empty block in between.
-		if parentProposal.Block < block-1 {
+		if parentProposal.Block != block-1 {
 			continue
 		}
-		p, err := parentProposal.Proposal.Propose(keys, values)
+		log.Debug("firewood: proposing from parent proposal", "parent", parentProposal.Root.Hex(), "root", root.Hex(), "height", block)
+		p, err := db.createProposal(parentProposal.Proposal, keys, values, root)
 		if err != nil {
-			return fmt.Errorf("firewood: error proposing from parent proposal %s", parent.Hex())
+			return err
 		}
-
-		currentRootBytes, err := p.Root()
-		if err != nil {
-			return fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
-		}
-		currentRoot := common.BytesToHash(currentRootBytes)
-		if root != currentRoot {
-			return fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
-		}
-
-		// Store the proposal context.
-		pContext := &ProposalContext{
+		pCtx := &ProposalContext{
 			Proposal: p,
 			Root:     root,
 			Block:    block,
 			Parent:   parentProposal,
 		}
-		db.proposalMap[root] = append(db.proposalMap[root], pContext)
-		parentProposal.Children = append(parentProposal.Children, pContext)
+		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
+		parentProposal.Children = append(parentProposal.Children, pCtx)
 		pCount++
 	}
 
@@ -319,33 +314,36 @@ func (db *Database) Close() error {
 }
 
 // Commit persists a proposal as a revision to the database.
+//
+// Any time this is called, we expect either:
+//  1. The root is the same as the current root of the database (empty block during bootstrapping)
+//  2. We have created a valid propsal with that root, and it is of height +1 above the proposal tree root.
+//     Additionally, this should be unique.
+//
+// Afterward, we know that no other proposal at this height can be committed, so we can dereference all
+// children in the the other branches of the proposal tree.
 func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	// We need to lock the proposal tree to prevent concurrent writes.
 	var pCtx *ProposalContext
 	db.proposalLock.Lock()
+	defer db.proposalLock.Unlock()
 
-	// defer function handles all children cleanup and unlocking.
+	// On success, we should persist the genesis root as necessary, and dereference all children
+	// of the committed proposal.
 	defer func() {
 		if err != nil {
-			// Error case: just unlock and return
-			db.proposalLock.Unlock()
 			return
 		}
-
-		// Success case: update proposal tree before releasing lock
-		defer db.proposalLock.Unlock() // Must remain locked until cleanup is done
-		oldChildren := db.proposalTree.Children
-		db.proposalTree = pCtx
-		db.proposalTree.Parent = nil
-
-		db.removeProposalFromMap(pCtx)
-
-		for _, childCtx := range oldChildren {
-			// Don't dereference the recently commit proposal.
-			if childCtx != pCtx {
-				db.dereference(childCtx)
+		// If this is the genesis root, store in rawdb.
+		if pCtx.Block == 0 {
+			if writeErr := customrawdb.WriteFirewoodGenesisRoot(db.ethdb, root); writeErr != nil {
+				err = fmt.Errorf("firewood: error writing genesis root %s: %w", root.Hex(), writeErr)
+				return
 			}
+			log.Info("Persisted genesis root in firewood", "root", root.Hex())
 		}
+
+		db.cleanupCommittedProposal(pCtx)
 	}()
 
 	// Any empty block will not call `Update`, so the proposal will not be found.
@@ -361,7 +359,7 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 		if possible.Parent.Root == db.proposalTree.Root && possible.Parent.Block == db.proposalTree.Block {
 			// We found the proposal with the correct parent.
 			if pCtx != nil {
-				// TODO: Is this possible? If it is, a lot of additional handling is needed.
+				// This should never happen, as we ensure that we don't create duplicate proposals in `propose`.
 				return fmt.Errorf("firewood: multiple proposals found for %s", root.Hex())
 			}
 			pCtx = possible
@@ -376,14 +374,6 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 		return fmt.Errorf("firewood: error committing proposal %s", root.Hex())
 	}
 
-	// If this is the genesis root, store in rawdb.
-	if pCtx.Block == 0 {
-		if writeErr := customrawdb.WriteFirewoodGenesisRoot(db.ethdb, root); writeErr != nil {
-			return fmt.Errorf("firewood: error writing genesis root %s: %w", root.Hex(), writeErr)
-		}
-		log.Info("Persisted genesis root in firewood", "root", root.Hex())
-	}
-
 	// Assert that the root of the database matches the committed proposal root.
 	currentRootBytes, err := db.fwDisk.Root()
 	if err != nil {
@@ -395,11 +385,10 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	}
 
 	if report {
-		log.Info("Persisted trie from memory database", "node", root)
+		log.Info("Persisted proposal to firewood database", "root", root)
 	} else {
-		log.Debug("Persisted trie from memory database", "node", root)
+		log.Debug("Persisted proposal to firewood database", "root", root)
 	}
-
 	return nil
 }
 
@@ -422,10 +411,53 @@ func (db *Database) Reference(_ common.Hash, _ common.Hash) {
 // We cannot dereference at this call. Consider the following case:
 // Chain 1 has root A and root C
 // Chain 2 has root B and root C
-// We commit root A, and dereference root B and it's child.
+// We commit root A, and immediately dereference root B and its child.
 // Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
 // Thus, we recognize the single root C as the only proposal, and dereference it.
 func (db *Database) Dereference(root common.Hash) {
+}
+
+// Firewood does not support this.
+func (db *Database) Cap(limit common.StorageSize) error {
+	return nil
+}
+
+// createProposal creates a new proposal from the given layer
+func (db *Database) createProposal(layer proposable, keys, values [][]byte, root common.Hash) (*ffi.Proposal, error) {
+	p, err := layer.Propose(keys, values)
+	if err != nil {
+		return nil, fmt.Errorf("firewood: unable to create proposal for root %s: %w", root.Hex(), err)
+	}
+
+	currentRootBytes, err := p.Root()
+	if err != nil {
+		return nil, fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
+	}
+	currentRoot := common.BytesToHash(currentRootBytes)
+	if root != currentRoot {
+		return nil, fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+	}
+
+	// Store the proposal context.
+	return p, nil
+}
+
+// cleanupCommittedProposal dereferences the proposal and removes it from the proposal map.
+// It also recursively dereferences all children of the proposal.
+func (db *Database) cleanupCommittedProposal(pCtx *ProposalContext) {
+	oldChildren := db.proposalTree.Children
+	db.proposalTree = pCtx
+	db.proposalTree.Parent = nil
+
+	db.removeProposalFromMap(pCtx)
+
+	for _, childCtx := range oldChildren {
+		// Don't dereference the recently commit proposal.
+		// There is no chance that we have to "reparent" the proposal.
+		if childCtx != pCtx {
+			db.dereference(childCtx)
+		}
+	}
 }
 
 // Internally removes all references of the proposal from the database.
@@ -465,11 +497,6 @@ func (db *Database) removeProposalFromMap(pCtx *ProposalContext) {
 	} else {
 		db.proposalMap[pCtx.Root] = rootList
 	}
-}
-
-// Firewood does not support this.
-func (db *Database) Cap(limit common.StorageSize) error {
-	return nil
 }
 
 // proposalAtRoot returns any proposal at the given root.
