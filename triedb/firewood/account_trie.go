@@ -84,9 +84,11 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 
 // GetStorage implements state.Trie.
 func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
+	var combinedKey [2 * common.HashLength]byte
 	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	combinedKey := append(accountKey, storageKey...)
+	copy(combinedKey[:common.HashLength], accountKey)
+	copy(combinedKey[common.HashLength:], storageKey)
 
 	// If the account has been deleted, we should return nil
 	if val, exists := a.dirtyKeys[string(accountKey)]; exists && len(val) == 0 {
@@ -94,7 +96,7 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 	}
 
 	// Check if there's a pending update for this storage slot
-	keyStr := string(combinedKey)
+	keyStr := string(combinedKey[:])
 	if updateValue, exists := a.dirtyKeys[keyStr]; exists {
 		// If the value is empty, it indicates deletion
 		if len(updateValue) == 0 {
@@ -107,7 +109,7 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 	}
 
 	// No pending update found, read from the underlying reader
-	storageBytes, err := a.reader.Node(common.Hash{}, combinedKey, common.Hash{})
+	storageBytes, err := a.reader.Node(common.Hash{}, combinedKey[:], common.Hash{})
 	if err != nil {
 		return nil, err
 	}
@@ -138,17 +140,20 @@ func (a *AccountTrie) UpdateAccount(addr common.Address, account *types.StateAcc
 
 // UpdateStorage implements state.Trie.
 func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byte) error {
+	var combinedKey [2 * common.HashLength]byte
 	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	newKey := append(accountKey, storageKey...)
+	copy(combinedKey[:common.HashLength], accountKey)
+	copy(combinedKey[common.HashLength:], storageKey)
+
 	data, err := rlp.EncodeToBytes(value)
 	if err != nil {
 		return err
 	}
 
 	// Queue the keys and values for later commit
-	a.dirtyKeys[string(newKey)] = data
-	a.updateKeys = append(a.updateKeys, newKey)
+	a.dirtyKeys[string(combinedKey[:])] = data
+	a.updateKeys = append(a.updateKeys, combinedKey[:])
 	a.updateValues = append(a.updateValues, data)
 	a.hasChanges = true // Mark that there are changes to commit
 	return nil
@@ -167,12 +172,15 @@ func (a *AccountTrie) DeleteAccount(addr common.Address) error {
 
 // DeleteStorage implements state.Trie.
 func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
+	var combinedKey [2 * common.HashLength]byte
 	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	storageKey := crypto.Keccak256Hash(key).Bytes()
-	combinedKey := append(accountKey, storageKey...)
+	copy(combinedKey[:common.HashLength], accountKey)
+	copy(combinedKey[common.HashLength:], storageKey)
+
 	// Queue the key for deletion
-	a.dirtyKeys[string(combinedKey)] = []byte{}
-	a.updateKeys = append(a.updateKeys, combinedKey)
+	a.dirtyKeys[string(combinedKey[:])] = []byte{}
+	a.updateKeys = append(a.updateKeys, combinedKey[:])
 	a.updateValues = append(a.updateValues, []byte{}) // Empty value indicates deletion
 	a.hasChanges = true                               // Mark that there are changes to commit
 	return nil
@@ -243,16 +251,25 @@ func (a *AccountTrie) Prove(_ []byte, _ ethdb.KeyValueWriter) error {
 func (a *AccountTrie) Copy() *AccountTrie {
 	// Create a new AccountTrie with the same root and reader
 	newTrie := &AccountTrie{
-		fw:         a.fw,
-		parentRoot: a.parentRoot,
-		root:       a.root,
-		reader:     a.reader, // Share the same reader
-		hasChanges: a.hasChanges,
-		dirtyKeys:  make(map[string][]byte, len(a.dirtyKeys)),
+		fw:           a.fw,
+		parentRoot:   a.parentRoot,
+		root:         a.root,
+		reader:       a.reader, // Share the same reader
+		hasChanges:   a.hasChanges,
+		dirtyKeys:    make(map[string][]byte, len(a.dirtyKeys)),
+		updateKeys:   make([][]byte, len(a.updateKeys)),
+		updateValues: make([][]byte, len(a.updateValues)),
 	}
 
+	// Deep copy dirtyKeys map
 	for k, v := range a.dirtyKeys {
 		newTrie.dirtyKeys[k] = append([]byte{}, v...)
+	}
+
+	// Deep copy updateKeys and updateValues slices
+	for i := range a.updateKeys {
+		newTrie.updateKeys[i] = append([]byte{}, a.updateKeys[i]...)
+		newTrie.updateValues[i] = append([]byte{}, a.updateValues[i]...)
 	}
 
 	return newTrie
