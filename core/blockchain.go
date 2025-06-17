@@ -1825,15 +1825,15 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		if current.NumberU64() == 0 {
 			return errors.New("genesis state is missing")
 		}
+		_, err = bc.stateCache.OpenTrie(current.Root())
+		if err == nil {
+			break
+		}
 		parent := bc.GetBlock(current.ParentHash(), current.NumberU64()-1)
 		if parent == nil {
 			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
 		}
 		current = parent
-		_, err = bc.stateCache.OpenTrie(current.Root())
-		if err == nil {
-			break
-		}
 	}
 	if err != nil {
 		switch err.(type) {
