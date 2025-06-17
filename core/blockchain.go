@@ -1819,31 +1819,33 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
-	for i := 0; i < int(reexec); i++ {
-		// TODO: handle canceled context
+	// Only search history if necessary, otherwise use acceptor tip as the starting point
+	if _, err = bc.stateCache.OpenTrie(current.Root()); err != nil {
+		for i := 0; i < int(reexec); i++ {
+			// TODO: handle canceled context
 
-		if current.NumberU64() == 0 {
-			return errors.New("genesis state is missing")
+			if current.NumberU64() == 0 {
+				return errors.New("genesis state is missing")
+			}
+			parent := bc.GetBlock(current.ParentHash(), current.NumberU64()-1)
+			if parent == nil {
+				return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
+			}
+			current = parent
+			_, err = bc.stateCache.OpenTrie(current.Root())
+			if err == nil {
+				break
+			}
 		}
-		_, err = bc.stateCache.OpenTrie(current.Root())
-		if err == nil {
-			break
+		if err != nil {
+			switch err.(type) {
+			case *trie.MissingNodeError:
+				return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
+			default:
+				return err
+			}
 		}
-		parent := bc.GetBlock(current.ParentHash(), current.NumberU64()-1)
-		if parent == nil {
-			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
-		}
-		current = parent
 	}
-	if err != nil {
-		switch err.(type) {
-		case *trie.MissingNodeError:
-			return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
-		default:
-			return err
-		}
-	}
-
 	// State was available at historical point, regenerate
 	var (
 		start        = time.Now()
