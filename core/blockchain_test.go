@@ -71,6 +71,7 @@ var (
 		SnapshotLimit:             256,
 		AcceptorQueueLimit:        64,
 	}
+	schemes = []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme}
 )
 
 func newGwei(n int64) *big.Int {
@@ -94,6 +95,37 @@ func createBlockChain(
 		false,
 	)
 	return blockchain, err
+}
+
+func TestFirewoodBlockChain(t *testing.T) {
+	for _, tt := range tests {
+		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+			// If no database path has been persisted, set the path to a temporary test directory.
+			// Otherwise, make sure not to overwrite so that it re-uses any existing database.
+			if path, err := customrawdb.ReadChainDataPath(db); err != nil {
+				t.Fatalf("failed to read database path: %v", err)
+			} else if path == "" {
+				customrawdb.WriteChainDataPath(db, t.TempDir())
+			}
+			return createBlockChain(
+				db,
+				&CacheConfig{
+					TrieCleanLimit:     256,
+					Pruning:            true,
+					SnapshotLimit:      0, // Disable snapshots
+					AcceptorQueueLimit: 64,
+					StateScheme:        customrawdb.FirewoodScheme,
+					StateHistory:       100,
+				},
+				gspec,
+				lastAcceptedHash,
+			)
+		}
+		// Run the test with the temporary database
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, createFirewoodBlockChain)
+		})
+	}
 }
 
 func TestArchiveBlockChain(t *testing.T) {
@@ -419,8 +451,18 @@ func TestRepopulateMissingTries(t *testing.T) {
 }
 
 func TestUngracefulAsyncShutdown(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testUngracefulAsyncShutdown(t, scheme)
+		})
+	}
+}
+func testUngracefulAsyncShutdown(t *testing.T, scheme string) {
 	var (
 		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+			if path, err := customrawdb.ReadChainDataPath(db); err != nil || path == "" {
+				customrawdb.WriteChainDataPath(db, t.TempDir())
+			}
 			blockchain, err := createBlockChain(db, &CacheConfig{
 				TrieCleanLimit:            256,
 				TrieDirtyLimit:            256,
@@ -564,8 +606,11 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	testCanonicalHashMarker(t, rawdb.HashScheme)
-	testCanonicalHashMarker(t, rawdb.PathScheme)
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testCanonicalHashMarker(t, scheme)
+		})
+	}
 }
 
 func testCanonicalHashMarker(t *testing.T, scheme string) {
@@ -622,7 +667,11 @@ func testCanonicalHashMarker(t *testing.T, scheme string) {
 		}
 
 		// Initialize test chain
-		chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
+		db := rawdb.NewMemoryDatabase()
+		if err := customrawdb.WriteChainDataPath(db, t.TempDir()); err != nil {
+			t.Fatalf("failed to write database path: %v", err)
+		}
+		chain, err := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
 		if err != nil {
 			t.Fatalf("failed to create tester chain: %v", err)
 		}

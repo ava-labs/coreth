@@ -50,6 +50,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -67,6 +68,8 @@ import (
 
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
+
+	ffi "github.com/ava-labs/firewood-go-ethhash/ffi"
 )
 
 // ====== If resolving merge conflicts ======
@@ -216,6 +219,15 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
+	if c.StateScheme == customrawdb.FirewoodScheme {
+		config.DBOverride = firewood.Config{
+			FileName:          "firewood_state",
+			CleanCacheSize:    c.TrieCleanLimit * 1024 * 1024,
+			Revisions:         uint(c.StateHistory), // must be at least 2
+			ReadCacheStrategy: ffi.CacheAllReads,
+			MetricsPort:       0, // TODO: read metrics. Currently disabled.
+		}.BackendConstructor
+	}
 	return config
 }
 
@@ -231,6 +243,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
+	StateHistory:              16,
 	StateScheme:               rawdb.HashScheme,
 }
 
@@ -239,6 +252,10 @@ var DefaultCacheConfig = &CacheConfig{
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
+	if config.StateScheme == customrawdb.FirewoodScheme {
+		config.SnapshotLimit = 0 // no snapshot allowed for firewood
+		config.Pruning = false   // firewood manages its own pruning
+	}
 	return &config
 }
 
@@ -1721,10 +1738,16 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) commitWithSnap(
 	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
-	// blockHashes must be passed through [state.StateDB]'s Commit since snapshots
-	// are based on the block hash.
+	// We pass through block hashes to the Update calls to ensure that we can uniquely
+	// identify states despite identical state roots.
 	snapshotOpt := snapshot.WithBlockHashes(current.Hash(), current.ParentHash())
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(current.ParentHash(), current.Hash())
+	root, err := statedb.Commit(
+		current.NumberU64(),
+		bc.chainConfig.IsEIP158(current.Number()),
+		stateconf.WithSnapshotUpdateOpts(snapshotOpt),
+		stateconf.WithTrieDBUpdateOpts(triedbOpt),
+	)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1803,31 +1826,33 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
-	for i := 0; i < int(reexec); i++ {
-		// TODO: handle canceled context
+	// Only search history if necessary, otherwise use acceptor tip as the starting point
+	if _, err = bc.stateCache.OpenTrie(current.Root()); err != nil {
+		for i := 0; i < int(reexec); i++ {
+			// TODO: handle canceled context
 
-		if current.NumberU64() == 0 {
-			return errors.New("genesis state is missing")
+			if current.NumberU64() == 0 {
+				return errors.New("genesis state is missing")
+			}
+			parent := bc.GetBlock(current.ParentHash(), current.NumberU64()-1)
+			if parent == nil {
+				return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
+			}
+			current = parent
+			_, err = bc.stateCache.OpenTrie(current.Root())
+			if err == nil {
+				break
+			}
 		}
-		parent := bc.GetBlock(current.ParentHash(), current.NumberU64()-1)
-		if parent == nil {
-			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
-		}
-		current = parent
-		_, err = bc.stateCache.OpenTrie(current.Root())
-		if err == nil {
-			break
+		if err != nil {
+			switch err.(type) {
+			case *trie.MissingNodeError:
+				return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
+			default:
+				return err
+			}
 		}
 	}
-	if err != nil {
-		switch err.(type) {
-		case *trie.MissingNodeError:
-			return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
-		default:
-			return err
-		}
-	}
-
 	// State was available at historical point, regenerate
 	var (
 		start        = time.Now()
