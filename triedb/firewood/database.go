@@ -38,6 +38,7 @@ type proposable interface {
 // This tracks all outstanding proposals to allow dereferencing upon commit.
 type ProposalContext struct {
 	Proposal *ffi.Proposal
+	Hash     common.Hash // Corresponding block hash
 	Root     common.Hash
 	Block    uint64
 	Parent   *ProposalContext
@@ -180,7 +181,7 @@ func (db *Database) Initialized(root common.Hash) bool {
 
 // Update takes a root and a set of keys-values and creates a new proposal.
 // It will not be committed until the Commit method is called.
-func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set, _ ...stateconf.TrieDBUpdateOption) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set, opts ...stateconf.TrieDBUpdateOption) error {
 	// Create key-value pairs for the nodes in bytes.
 	var (
 		acctKeys      [][]byte
@@ -217,64 +218,58 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
-	return db.propose(root, parent, block, keys, values)
+	return db.propose(root, parent, block, keys, values, opts...)
 }
 
 // propose creates a new proposal for every possible parent with the given keys and values.
 // If the parent cannot be found, an error will be returned.
 //
-// We must create a new proposal for each parent proposal due to the possibility of duplicate state roots,
-// and each proposal being a diff layer. Additionally, if there are empty blocks, the height of the proposal
-// may not be correct. This can only happen during bootstrapping, so we can assume that the parent proposal
-// is the root of the database, and it will be committed immediately after creation.
+// We must create a new proposal for each possible parent proposal due to the possibility of duplicate state roots,
+// and each proposal being a diff layer. However, if the parent block hash is provided, we may be able to
+// break out of the loop early, since we can guarantee that the parent proposal is unique.
+// However, there are several cases in which we may not be able to identify the parent block hash.
+//  1. For the genesis block, we will not yet know the block hash, so we cannot store it.
+//  2. For block height 1, since we didn't store the genesis block hash, we will not have a parent hash.
+//  3. If the parent block was empty. We will never have been provided the hash, so we must guess the parent.
+//     However, this can only happen during bootstrapping and testing, so we must only ensure that we can support this case.
 //
 // Should only be accessed with the proposal lock held.
-func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, keys [][]byte, values [][]byte) error {
+func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint64, keys [][]byte, values [][]byte, opts ...stateconf.TrieDBUpdateOption) error {
+	// We require block hashes to be provided for all blocks except the genesis block.
+	parentHash, currentHash, ok := stateconf.ExtractTrieDBUpdatePayload(opts...)
+	if !ok && block >= 1 {
+		return fmt.Errorf("firewood: no block hash provided for block %d", block)
+	}
+
 	// Check if this proposal already exists.
 	// During deep reorgs, we may have already created this proposal.
 	// We must guarantee uniqueness of proposals.
 	if existingProposals, ok := db.proposalMap[root]; ok {
 		// If the proposal already exists, we can just return.
 		for _, existing := range existingProposals {
-			if existing.Parent.Root == parent && existing.Block == block {
+			if existing.Hash == currentHash {
 				return nil
 			}
 		}
 	}
 
-	// If the parent root is root of the database, we should propose from the db.
-	// Special case: if we are proposing on top of an empty proposal.
-	// This function will never be called in the case that no changes are made,
-	// so we must interpret this as a valid potential proposal.
-	// However, we will immediately accept it afterwards.
-	if db.proposalTree.Root == parent {
-		log.Debug("firewood: proposing from database root", "root", root.Hex(), "height", block)
-		p, err := db.createProposal(db.fwDisk, keys, values, root)
-		if err != nil {
-			return err
-		}
-		pCtx := &ProposalContext{
-			Proposal: p,
-			Root:     root,
-			Block:    block,
-			Parent:   db.proposalTree,
-		}
-		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
-		db.proposalTree.Children = append(db.proposalTree.Children, pCtx)
-		return nil
-	}
+	// Track the number of proposals created for this root.
+	// If we can find a parent proposal with the correct hash, we can break out of the loop early.
+	var (
+		safeBreak bool = false
+		pCount    int  = 0
+	)
 
-	// If the parent is not the root of the database,
-	// we need to find all possible parent proposals.
-	pCount := 0
-	possibleProposals := db.proposalMap[parent]
-
-	// Find all proposals with the correct parent height.
-	// We must create a new proposal for each one, since we don't know which one will be used.
-	for _, parentProposal := range possibleProposals {
-		// Check if the parent proposal is at the correct height.
-		if parentProposal.Block != block-1 {
-			continue
+	// Find the parent proposal with the correct hash.
+	// We make as few proposals as possible to guarantee that we have created on top of the correct parent proposal.
+	// We must iterate through in the case that the parent block was empty, or in the case that block height == 1.
+	for _, parentProposal := range db.proposalMap[parentRoot] {
+		// If we have complete information, we can ensure that the parent proposal is unique.
+		if ok && parentProposal.Hash != (common.Hash{}) {
+			if parentProposal.Hash != parentHash {
+				continue
+			}
+			safeBreak = true
 		}
 		log.Debug("firewood: proposing from parent proposal", "parent", parentProposal.Root.Hex(), "root", root.Hex(), "height", block)
 		p, err := db.createProposal(parentProposal.Proposal, keys, values, root)
@@ -283,6 +278,7 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 		}
 		pCtx := &ProposalContext{
 			Proposal: p,
+			Hash:     currentHash,
 			Root:     root,
 			Block:    block,
 			Parent:   parentProposal,
@@ -290,28 +286,46 @@ func (db *Database) propose(root common.Hash, parent common.Hash, block uint64, 
 		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
 		parentProposal.Children = append(parentProposal.Children, pCtx)
 		pCount++
+
+		// We found the exact parentProposal, so we can break out of the loop.
+		if safeBreak {
+			return nil
+		}
+	}
+
+	// If the parent root is root of the database, we should propose from the db.
+	// For this one case, we may be proposing on top of an empty proposal, so hashes aren't valid.
+	//
+	// Special case: if we are proposing on top of an empty proposal.
+	// This function will never be called in the case that no changes are made,
+	// so we must interpret this as a valid potential proposal.
+	// However, we will immediately accept it afterwards, since this can only happen during bootstrapping.
+	if db.proposalTree.Root == parentRoot {
+		log.Debug("firewood: proposing from database root", "root", root.Hex(), "height", block)
+		p, err := db.createProposal(db.fwDisk, keys, values, root)
+		if err != nil {
+			return err
+		}
+		pCtx := &ProposalContext{
+			Proposal: p,
+			Hash:     currentHash,
+			Root:     root,
+			Block:    block,
+			Parent:   db.proposalTree,
+		}
+		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
+		db.proposalTree.Children = append(db.proposalTree.Children, pCtx)
+		pCount++
 	}
 
 	// Check the number of proposals actually created.
 	if pCount == 0 {
-		return fmt.Errorf("firewood: no parent proposal found for %s at height %d", parent.Hex(), block-1)
+		return fmt.Errorf("firewood: no parent proposal found for %s at height %d", parentRoot.Hex(), block-1)
 	} else if pCount > 1 {
-		log.Debug("firewood: multiple parent proposals found for block", "parent", parent.Hex(), "root", root.Hex(), "height", block, "count", pCount)
+		log.Warn("firewood: multiple parent proposals found for block", "hash", currentHash, "parent", parentRoot.Hex(), "root", root.Hex(), "height", block, "count", pCount)
 	}
 
 	return nil
-}
-
-func (db *Database) Close() error {
-	db.proposalLock.Lock()
-	defer db.proposalLock.Unlock()
-
-	// We don't need to explicitly dereference the proposals, since they will be cleaned up
-	// within the firewood close method.
-	db.proposalMap = nil
-	db.proposalTree.Children = nil
-	// Close the database
-	return db.fwDisk.Close()
 }
 
 // Commit persists a proposal as a revision to the database.
@@ -351,7 +365,8 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	if root == db.proposalTree.Root {
 		log.Debug("firewood: empty block committed")
 		pCtx = db.proposalTree
-		pCtx.Block++ // Increment the block number, since no change is necessary.
+		pCtx.Block++              // Increment the block number, since no change is necessary.
+		pCtx.Hash = common.Hash{} // We don't know the unique identity of the empty block, so we should set it to zero.
 		return nil
 	}
 
@@ -421,6 +436,18 @@ func (db *Database) Dereference(root common.Hash) {
 // Firewood does not support this.
 func (db *Database) Cap(limit common.StorageSize) error {
 	return nil
+}
+
+func (db *Database) Close() error {
+	db.proposalLock.Lock()
+	defer db.proposalLock.Unlock()
+
+	// We don't need to explicitly dereference the proposals, since they will be cleaned up
+	// within the firewood close method.
+	db.proposalMap = nil
+	db.proposalTree.Children = nil
+	// Close the database
+	return db.fwDisk.Close()
 }
 
 // createProposal creates a new proposal from the given layer

@@ -1738,10 +1738,16 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) commitWithSnap(
 	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
-	// blockHashes must be passed through [state.StateDB]'s Commit since snapshots
-	// are based on the block hash.
+	// We pass through block hashes to the Update calls to ensure that we can uniquely
+	// identify states despite identical state roots.
 	snapshotOpt := snapshot.WithBlockHashes(current.Hash(), current.ParentHash())
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(current.ParentHash(), current.Hash())
+	root, err := statedb.Commit(
+		current.NumberU64(),
+		bc.chainConfig.IsEIP158(current.Number()),
+		stateconf.WithSnapshotUpdateOpts(snapshotOpt),
+		stateconf.WithTrieDBUpdateOpts(triedbOpt),
+	)
 	if err != nil {
 		return common.Hash{}, err
 	}
