@@ -170,3 +170,9 @@ func (b *blockBuilder) waitForTxEnqueue(ctx context.Context) commonEng.Message {
 		b.pendingSignal.Wait()
 	}
 }
+
+func (b *blockBuilder) wakeup() {
+	b.buildBlockLock.Lock()
+	defer b.buildBlockLock.Unlock()
+	b.pendingSignal.Broadcast()
+}

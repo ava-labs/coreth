@@ -1294,20 +1294,22 @@ func (vm *VM) SubscribeToEvents(ctx context.Context) commonEng.Message {
 		}
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
+
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func() {
+		cancel()
+		vm.builder.wakeup()
+	}()
 
 	pending := make(chan commonEng.Message, 1)
 
-	var wg sync.WaitGroup
-
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		pending <- vm.builder.waitForTxEnqueue(ctx)
 	}()
-
-	defer wg.Wait()
 
 	select {
 	case ss := <-vm.stateSyncDone:
@@ -1315,10 +1317,10 @@ func (vm *VM) SubscribeToEvents(ctx context.Context) commonEng.Message {
 	case pendingTx := <-pending:
 		return pendingTx
 	case <-ctx.Done():
-		vm.builder.pendingSignal.Broadcast()
+		vm.builder.wakeup()
 		return commonEng.Message(0)
 	case <-vm.shutdownChan:
-		vm.builder.pendingSignal.Broadcast()
+		vm.builder.wakeup()
 		return commonEng.Message(0)
 	}
 }
@@ -1890,9 +1892,9 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 }
 
 func (vm *VM) newImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
+	chainID ids.ID,               // chain to import from
+	to common.Address,            // Address of recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Keys to import the funds
 ) (*atomic.Tx, error) {
 	kc := secp256k1fx.NewKeychain()
@@ -1910,11 +1912,11 @@ func (vm *VM) newImportTx(
 
 // newExportTx returns a new ExportTx
 func (vm *VM) newExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
+	assetID ids.ID,               // AssetID of the tokens to export
+	amount uint64,                // Amount of tokens to export
+	chainID ids.ID,               // Chain to send the UTXOs to
+	to ids.ShortID,               // Address of chain recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*atomic.Tx, error) {
 	state, err := vm.blockChain.State()

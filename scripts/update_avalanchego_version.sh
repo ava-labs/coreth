@@ -25,7 +25,6 @@ if [[ -n "${GITHUB_TOKEN:-}" ]]; then
   # Using an auth token avoids being rate limited when run in CI
   CURL_ARGS+=(-H "Authorization: token ${GITHUB_TOKEN}")
 fi
-CURL_URL="https://api.github.com/repos/ava-labs/avalanchego/commits/${AVALANCHE_VERSION}"
 GIT_COMMIT=$("${CURL_ARGS[@]}" "https://api.github.com/repos/ava-labs/avalanchego/commits/${AVALANCHE_VERSION}")
 FULL_AVALANCHE_VERSION="$(grep -m1 '"sha":' <<< "${GIT_COMMIT}" | cut -d'"' -f4)"
 
