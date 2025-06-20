@@ -44,7 +44,7 @@ import (
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
-	ffi "github.com/ava-labs/firewood-go/ffi"
+	ffi "github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"

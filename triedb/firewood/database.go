@@ -20,7 +20,7 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
 
-	ffi "github.com/ava-labs/firewood-go/ffi"
+	ffi "github.com/ava-labs/firewood-go-ethhash/ffi"
 )
 
 var (
