@@ -223,7 +223,7 @@ type blockTraceTask struct {
 	results []*txTraceResult // Trace results procudes by the task
 }
 
-// blockTraceResult represets the results of tracing a single block when an entire
+// blockTraceResult represents the results of tracing a single block when an entire
 // chain is being traced.
 type blockTraceResult struct {
 	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
