@@ -247,7 +247,23 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 	if existingProposals, ok := db.proposalMap[root]; ok {
 		// If the proposal already exists, we can just return.
 		for _, existing := range existingProposals {
+			// We are already tracking this block.
 			if existing.Hash == currentHash {
+				return nil
+			}
+			// We already have this proposal, but should create a new context with the correct hash.
+			// This solves the case of a unique block hash, but the same underlying proposal.
+			if existing.Parent.Hash == parentHash && existing.Root == root && existing.Block == block {
+				log.Debug("firewood: proposal already exists, updating hash", "root", root.Hex(), "parent", parentRoot.Hex(), "block", block, "hash", currentHash.Hex())
+				pCtx := &ProposalContext{
+					Proposal: existing.Proposal,
+					Hash:     currentHash,
+					Root:     root,
+					Block:    block,
+					Parent:   existing.Parent,
+				}
+				db.proposalMap[root] = append(db.proposalMap[root], pCtx)
+				existing.Parent.Children = append(existing.Parent.Children, pCtx)
 				return nil
 			}
 		}
