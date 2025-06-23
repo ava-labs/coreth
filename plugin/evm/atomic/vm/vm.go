@@ -257,6 +257,8 @@ func (vm *VM) onBootstrapStarted() error {
 }
 
 func (vm *VM) onNormalOperationsStarted() error {
+	// TODO: consider removing this once atomic VM fully wraps inner VM
+	// as we can capture the bootstrapped state here
 	if vm.InnerVM.IsBootstrapped() {
 		return nil
 	}
