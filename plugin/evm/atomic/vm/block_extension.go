@@ -171,7 +171,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 // block manager's SemanticVerify method.
 func (be *blockExtension) SemanticVerify() error {
 	vm := be.blockExtender.vm
-	if vm.IsBootstrapped() {
+	if vm.InnerVM.IsBootstrapped() {
 		// Verify that the UTXOs named in import txs are present in shared
 		// memory.
 		//

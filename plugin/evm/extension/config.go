@@ -19,7 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
@@ -41,13 +41,10 @@ type ExtensibleVM interface {
 	// SetExtensionConfig sets the configuration for the VM extension
 	// Should be called before any other method and only once
 	SetExtensionConfig(config *Config) error
-
 	// NewClient returns a client to send messages with for the given protocol
 	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
-	// SetLastAcceptedBlock sets the last accepted block
-	SetLastAcceptedBlock(lastAcceptedBlock snowman.Block) error
 	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
 	GetExtendedBlock(context.Context, ids.ID) (ExtendedBlock, error)
 	// LastAcceptedExtendedBlock returns the last accepted VM block
@@ -58,8 +55,8 @@ type ExtensibleVM interface {
 	ChainConfig() *params.ChainConfig
 	// P2PValidators returns the validators for the network
 	P2PValidators() *p2p.Validators
-	// Ethereum returns the Ethereum client
-	Ethereum() *eth.Ethereum
+	// Blockchain returns the blockchain client
+	Blockchain() *core.BlockChain
 	// Config returns the configuration for the VM
 	Config() config.Config
 	// MetricRegistry returns the metric registry for the VM
