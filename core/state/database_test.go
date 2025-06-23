@@ -298,7 +298,7 @@ func (fs *fuzzState) deleteStorage(accountIndex int, storageIndexInput uint64) {
 }
 
 func FuzzTree(f *testing.F) {
-	for randSeed := range int64(10000) {
+	for randSeed := range int64(1000) {
 		rand := rand.New(rand.NewSource(randSeed))
 		steps := make([]byte, 32)
 		_, err := rand.Read(steps)

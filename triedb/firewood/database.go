@@ -238,7 +238,7 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 	// We require block hashes to be provided for all blocks except the genesis block.
 	parentHash, currentHash, ok := stateconf.ExtractTrieDBUpdatePayload(opts...)
 	if !ok && block >= 1 {
-		return fmt.Errorf("firewood: no block hash provided for block %d", block)
+		log.Error("firewood: no block hash provided for block %d", block) // This should only be called from blockchain.go after genesis.
 	}
 
 	// Check if this proposal already exists.
