@@ -37,12 +37,13 @@ type proposable interface {
 // ProposalContext represents a proposal in the Firewood database.
 // This tracks all outstanding proposals to allow dereferencing upon commit.
 type ProposalContext struct {
-	Proposal *ffi.Proposal
-	Hash     common.Hash // Corresponding block hash
-	Root     common.Hash
-	Block    uint64
-	Parent   *ProposalContext
-	Children []*ProposalContext
+	Proposal   *ffi.Proposal
+	Hashes     map[common.Hash]struct{} // All corresponding block hashes
+	ParentHash common.Hash              // The parent block hash, if known
+	Root       common.Hash
+	Block      uint64
+	Parent     *ProposalContext
+	Children   []*ProposalContext
 }
 
 type Config struct {
@@ -238,7 +239,7 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 	// We require block hashes to be provided for all blocks except the genesis block.
 	parentHash, currentHash, ok := stateconf.ExtractTrieDBUpdatePayload(opts...)
 	if !ok && block >= 1 {
-		log.Error("firewood: no block hash provided for block %d", block) // This should only be called from blockchain.go after genesis.
+		return fmt.Errorf("firewood: no block hash provided for block %d", block) // This should only be called from blockchain.go after genesis.
 	}
 
 	// Check if this proposal already exists.
@@ -248,22 +249,14 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 		// If the proposal already exists, we can just return.
 		for _, existing := range existingProposals {
 			// We are already tracking this block.
-			if existing.Hash == currentHash {
+			if _, exists := existing.Hashes[currentHash]; exists {
 				return nil
 			}
 			// We already have this proposal, but should create a new context with the correct hash.
 			// This solves the case of a unique block hash, but the same underlying proposal.
-			if existing.Parent.Hash == parentHash && existing.Root == root && existing.Block == block {
+			if existing.ParentHash == parentHash && existing.Root == root && existing.Block == block {
 				log.Debug("firewood: proposal already exists, updating hash", "root", root.Hex(), "parent", parentRoot.Hex(), "block", block, "hash", currentHash.Hex())
-				pCtx := &ProposalContext{
-					Proposal: existing.Proposal,
-					Hash:     currentHash,
-					Root:     root,
-					Block:    block,
-					Parent:   existing.Parent,
-				}
-				db.proposalMap[root] = append(db.proposalMap[root], pCtx)
-				existing.Parent.Children = append(existing.Parent.Children, pCtx)
+				existing.Hashes[currentHash] = struct{}{}
 				return nil
 			}
 		}
@@ -281,8 +274,8 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 	// We must iterate through in the case that the parent block was empty, or in the case that block height == 1.
 	for _, parentProposal := range db.proposalMap[parentRoot] {
 		// If we have complete information, we can ensure that the parent proposal is unique.
-		if ok && parentProposal.Hash != (common.Hash{}) {
-			if parentProposal.Hash != parentHash {
+		if ok && len(parentProposal.Hashes) > 0 {
+			if _, exists := parentProposal.Hashes[parentHash]; !exists {
 				continue
 			}
 			safeBreak = true
@@ -293,12 +286,14 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 			return err
 		}
 		pCtx := &ProposalContext{
-			Proposal: p,
-			Hash:     currentHash,
-			Root:     root,
-			Block:    block,
-			Parent:   parentProposal,
+			Proposal:   p,
+			Hashes:     map[common.Hash]struct{}{currentHash: {}},
+			ParentHash: parentHash,
+			Root:       root,
+			Block:      block,
+			Parent:     parentProposal,
 		}
+
 		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
 		parentProposal.Children = append(parentProposal.Children, pCtx)
 		pCount++
@@ -323,11 +318,12 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, block uint
 			return err
 		}
 		pCtx := &ProposalContext{
-			Proposal: p,
-			Hash:     currentHash,
-			Root:     root,
-			Block:    block,
-			Parent:   db.proposalTree,
+			Proposal:   p,
+			Hashes:     map[common.Hash]struct{}{currentHash: {}}, // This may be common.Hash{} for genesis blocks.
+			ParentHash: parentHash,
+			Root:       root,
+			Block:      block,
+			Parent:     db.proposalTree,
 		}
 		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
 		db.proposalTree.Children = append(db.proposalTree.Children, pCtx)
@@ -381,8 +377,8 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	if root == db.proposalTree.Root {
 		log.Debug("firewood: empty block committed")
 		pCtx = db.proposalTree
-		pCtx.Block++              // Increment the block number, since no change is necessary.
-		pCtx.Hash = common.Hash{} // We don't know the unique identity of the empty block, so we should set it to zero.
+		pCtx.Block++                                 // Increment the block number, since no change is necessary.
+		pCtx.Hashes = make(map[common.Hash]struct{}) // We don't know the unique identity of the empty block, so we should set it to an empty map.
 		return nil
 	}
 
