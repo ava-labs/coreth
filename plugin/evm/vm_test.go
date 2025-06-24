@@ -4060,7 +4060,6 @@ func TestSubscribeToEvents(t *testing.T) {
 		tvm := newVM(t, testVMConfig{
 			fork: &fork,
 		})
-		tvm.vm.ctx.Metrics = metrics.NewPrefixGatherer()
 		tvms = append(tvms, tvm)
 	}
 
@@ -4102,12 +4101,14 @@ func TestSubscribeToEvents(t *testing.T) {
 	}
 
 	for i, testCase := range []struct {
-		name string
-		tst  func(*VM, common.Address, *ecdsa.PrivateKey)
-		vm   *VM
+		name               string
+		shutdownUponFinish bool
+		tst                func(*VM, common.Address, *ecdsa.PrivateKey)
+		vm                 *VM
 	}{
 		{
-			name: "SubscribeToEvents with context cancelled returns 0",
+			name:               "SubscribeToEvents with context cancelled returns 0",
+			shutdownUponFinish: true,
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 				defer cancel()
@@ -4125,7 +4126,8 @@ func TestSubscribeToEvents(t *testing.T) {
 			},
 		},
 		{
-			name: "SubscribeToEvents returns when a transaction is added to the mempool",
+			name:               "SubscribeToEvents returns when a transaction is added to the mempool",
+			shutdownUponFinish: true,
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				if err != nil {
@@ -4148,7 +4150,8 @@ func TestSubscribeToEvents(t *testing.T) {
 			},
 		},
 		{
-			name: "SubscribeToEvents doesn't return once a block is built and accepted",
+			name:               "SubscribeToEvents doesn't return once a block is built and accepted",
+			shutdownUponFinish: true,
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				if err != nil {
@@ -4260,6 +4263,9 @@ func TestSubscribeToEvents(t *testing.T) {
 		address, key := prepareTest(t, tvms[i])
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.tst(tvms[i].vm, address, key)
+			if testCase.shutdownUponFinish {
+				tvms[i].vm.Shutdown(context.Background())
+			}
 		})
 	}
 }
