@@ -22,9 +22,12 @@ import (
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/eth/filters"
+	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/utils"
@@ -60,6 +63,7 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/core/types"
@@ -471,7 +475,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
 	require.NoError(t, err)
 	err = vm2Blk.Verify(context.Background())
-	require.ErrorIs(t, err, errMissingUTXOs)
+	require.ErrorIs(t, err, atomicvm.ErrMissingUTXOs)
 
 	// This should not result in a bad block since the missing UTXO should
 	// prevent InsertBlockManual from being called.
@@ -687,7 +691,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
 	}
 
-	ethBlk1 := blk1.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk1 := blk1.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	if ethBlk1Root := ethBlk1.Root(); !tvm.vm.blockChain.HasState(ethBlk1Root) {
 		t.Fatalf("Expected blk1 state root to not yet be pruned after blk2 was accepted because of tip buffer")
 	}
@@ -732,7 +736,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 	}
 
 	// State root should be committed when accepted tip on shutdown
-	ethBlk2 := blk2.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk2 := blk2.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	if ethBlk2Root := ethBlk2.Root(); !restartedVM.blockChain.HasState(ethBlk2Root) {
 		t.Fatalf("Expected blk2 state root to not be pruned after shutdown (last accepted tip should be committed)")
 	}
@@ -843,7 +847,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 		t.Fatal(err)
 	}
 
-	validEthBlock := validBlock.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	validEthBlock := validBlock.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 
 	rules := tvm.vm.currentRules()
 	var extraData []byte
@@ -877,8 +881,8 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomic.ErrConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomic.ErrConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomicvm.ErrConflictingAtomicInputs) {
+		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomicvm.ErrConflictingAtomicInputs, err)
 	}
 
 	if !rules.IsApricotPhase5 {
@@ -914,8 +918,8 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomic.ErrConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomic.ErrConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomicvm.ErrConflictingAtomicInputs) {
+		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomicvm.ErrConflictingAtomicInputs, err)
 	}
 }
 
@@ -1836,7 +1840,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 	tvm1.vm.eth.APIBackend.SetAllowUnfinalizedQueries(true)
 
 	blkBHeight := vm1BlkB.Height()
-	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 	if b := tvm1.vm.blockChain.GetBlockByNumber(blkBHeight); b.Hash() != blkBHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -1877,7 +1881,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatalf("Expected accepted block to be indexed by height, but found %s", blkID)
 	}
 
-	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 	if b := tvm1.vm.blockChain.GetBlockByNumber(blkBHeight); b.Hash() != blkCHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkCHash.Hex(), b.Hash().Hex())
 	}
@@ -2012,7 +2016,7 @@ func TestStickyPreference(t *testing.T) {
 	tvm1.vm.eth.APIBackend.SetAllowUnfinalizedQueries(true)
 
 	blkBHeight := vm1BlkB.Height()
-	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 	if b := tvm1.vm.blockChain.GetBlockByNumber(blkBHeight); b.Hash() != blkBHash {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -2061,14 +2065,14 @@ func TestStickyPreference(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error parsing block from vm2: %s", err)
 	}
-	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 
 	vm1BlkD, err := tvm1.vm.ParseBlock(context.Background(), vm2BlkD.Bytes())
 	if err != nil {
 		t.Fatalf("Unexpected error parsing block from vm2: %s", err)
 	}
 	blkDHeight := vm1BlkD.Height()
-	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 
 	// Should be no-ops
 	if err := vm1BlkC.Verify(context.Background()); err != nil {
@@ -2306,8 +2310,8 @@ func TestUncleBlock(t *testing.T) {
 	}
 
 	// Create uncle block from blkD
-	blkDEthBlock := vm2BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock
-	uncles := []*types.Header{vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Header()}
+	blkDEthBlock := vm2BlkD.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
+	uncles := []*types.Header{vm1BlkB.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Header()}
 	uncleBlockHeader := types.CopyHeader(blkDEthBlock.Header())
 	uncleBlockHeader.UncleHash = types.CalcUncleHash(uncles)
 
@@ -2320,7 +2324,7 @@ func TestUncleBlock(t *testing.T) {
 		customtypes.BlockExtData(blkDEthBlock),
 		false,
 	)
-	uncleBlock, err := tvm2.vm.newBlock(uncleEthBlock)
+	uncleBlock, err := wrapBlock(uncleEthBlock, tvm2.vm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2369,7 +2373,7 @@ func TestEmptyBlock(t *testing.T) {
 	}
 
 	// Create empty block from blkA
-	ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlock := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 
 	emptyEthBlock := customtypes.NewBlockWithExtData(
 		types.CopyHeader(ethBlock.Header()),
@@ -2385,15 +2389,15 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatalf("emptyEthBlock should not have any extra data")
 	}
 
-	emptyBlock, err := tvm.vm.newBlock(emptyEthBlock)
+	emptyBlock, err := wrapBlock(emptyEthBlock, tvm.vm)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := tvm.vm.ParseBlock(context.Background(), emptyBlock.Bytes()); !errors.Is(err, errEmptyBlock) {
+	if _, err := tvm.vm.ParseBlock(context.Background(), emptyBlock.Bytes()); !errors.Is(err, atomicvm.ErrEmptyBlock) {
 		t.Fatalf("VM should have failed with errEmptyBlock but got %s", err.Error())
 	}
-	if err := emptyBlock.Verify(context.Background()); !errors.Is(err, errEmptyBlock) {
+	if err := emptyBlock.Verify(context.Background()); !errors.Is(err, atomicvm.ErrEmptyBlock) {
 		t.Fatalf("block should have failed verification with errEmptyBlock but got %s", err.Error())
 	}
 }
@@ -2581,7 +2585,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatalf("Block failed verification on VM1: %s", err)
 	}
 
-	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkBHash := vm1BlkB.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 	if b := tvm1.vm.blockChain.CurrentBlock(); b.Hash() != blkBHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkBHash.Hex(), b.Hash().Hex())
 	}
@@ -2590,7 +2594,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkCHash := vm1BlkC.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 	if b := tvm1.vm.blockChain.CurrentBlock(); b.Hash() != blkCHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkCHash.Hex(), b.Hash().Hex())
 	}
@@ -2601,7 +2605,7 @@ func TestAcceptReorg(t *testing.T) {
 	if err := vm1BlkD.Accept(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkDHash := vm1BlkD.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 	if b := tvm1.vm.blockChain.CurrentBlock(); b.Hash() != blkDHash {
 		t.Fatalf("expected current block to have hash %s but got %s", blkDHash.Hex(), b.Hash().Hex())
 	}
@@ -2639,8 +2643,8 @@ func TestFutureBlock(t *testing.T) {
 	}
 
 	// Create empty block from blkA
-	internalBlkA := blkA.(*chain.BlockWrapper).Block.(*Block)
-	modifiedHeader := types.CopyHeader(internalBlkA.ethBlock.Header())
+	internalBlkA := blkA.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
+	modifiedHeader := types.CopyHeader(internalBlkA.GetEthBlock().Header())
 	// Set the VM's clock to the time of the produced block
 	tvm.vm.clock.Set(time.Unix(int64(modifiedHeader.Time), 0))
 	// Set the modified time to exceed the allowed future time
@@ -2652,11 +2656,11 @@ func TestFutureBlock(t *testing.T) {
 		nil,
 		nil,
 		new(trie.Trie),
-		customtypes.BlockExtData(internalBlkA.ethBlock),
+		customtypes.BlockExtData(internalBlkA.GetEthBlock()),
 		false,
 	)
 
-	futureBlock, err := tvm.vm.newBlock(modifiedBlock)
+	futureBlock, err := wrapBlock(modifiedBlock, tvm.vm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2823,7 +2827,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 	}
 
 	blkHeight := blk.Height()
-	blkHash := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock.Hash()
+	blkHash := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock().Hash()
 
 	tvm.vm.eth.APIBackend.SetAllowUnfinalizedQueries(true)
 
@@ -3146,7 +3150,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	if eBlockGasCost := customtypes.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
@@ -3205,7 +3209,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk = blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	if customtypes.BlockGasCost(ethBlk) == nil || customtypes.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
 		t.Fatalf("expected blockGasCost to be at least 100 but got %d", customtypes.BlockGasCost(ethBlk))
 	}
@@ -3318,7 +3322,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ethBlk := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	if eBlockGasCost := customtypes.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
 		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
 	}
@@ -3369,7 +3373,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ethBlk = blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlk = blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	if customtypes.BlockGasCost(ethBlk) == nil || customtypes.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
 		t.Fatalf("expected blockGasCost to be at least 100 but got %d", customtypes.BlockGasCost(ethBlk))
 	}
@@ -3510,7 +3514,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	atomicTxs := blk.(*chain.BlockWrapper).Block.(*Block).atomicTxs
+	atomicTxs := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetBlockExtension().(atomic.AtomicBlockContext).AtomicTxs()
 	assert.True(t, len(atomicTxs) == len(testKeys), "Conflict transactions should be out of the batch")
 	atomicTxIDs := set.Set[ids.ID]{}
 	for _, tx := range atomicTxs {
@@ -3570,7 +3574,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	atomicTxs := blk.(*chain.BlockWrapper).Block.(*Block).atomicTxs
+	atomicTxs := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetBlockExtension().(atomic.AtomicBlockContext).AtomicTxs()
 
 	// Need to ensure that not all of the transactions in the mempool are included in the block.
 	// This ensures that we hit the atomic gas limit while building the block before we hit the
@@ -3636,7 +3640,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	validEthBlock := blk1.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	validEthBlock := blk1.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 
 	extraData, err := atomic.Codec.Marshal(atomic.CodecVersion, []*atomic.Tx{importTx})
 	if err != nil {
@@ -3799,7 +3803,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 			}
 
 			// Modify the block to have a parent beacon root
-			ethBlock := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+			ethBlock := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 			header := types.CopyHeader(ethBlock.Header())
 			header.ParentBeaconRoot = test.beaconRoot
 			parentBeaconEthBlock := customtypes.NewBlockWithExtData(
@@ -3812,7 +3816,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				false,
 			)
 
-			parentBeaconBlock, err := tvm.vm.newBlock(parentBeaconEthBlock)
+			parentBeaconBlock, err := wrapBlock(parentBeaconEthBlock, tvm.vm)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -3874,10 +3878,181 @@ func TestNoBlobsAllowed(t *testing.T) {
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
 
 	// Verification should fail
-	vmBlock, err := vm.newBlock(blocks[0])
+	vmBlock, err := wrapBlock(blocks[0], vm)
 	require.NoError(err)
 	_, err = vm.ParseBlock(ctx, vmBlock.Bytes())
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = vmBlock.Verify(ctx)
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
+}
+
+func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
+	ctx := context.Background()
+	require := require.New(t)
+
+	importAmount := uint64(2_000_000_000_000_000) // 2M AVAX
+	fork := upgradetest.Fortuna
+	tvm := newVM(t, testVMConfig{
+		fork: &fork,
+		utxos: map[ids.ShortID]uint64{
+			testShortIDAddrs[0]: importAmount,
+		},
+	})
+	defer func() {
+		require.NoError(tvm.vm.Shutdown(ctx))
+	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	// Build a block consuming all of the available gas
+	var (
+		txs = make([]*types.Transaction, 2)
+		err error
+	)
+	for i := uint64(0); i < 2; i++ {
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			acp176.MinMaxCapacity,
+			big.NewInt(ap0.MinGasPrice),
+			[]byte{0xfe}, // invalid opcode consumes all gas
+		)
+		txs[i], err = types.SignTx(tx, types.NewEIP155Signer(tvm.vm.chainID), testKeys[0].ToECDSA())
+		require.NoError(err)
+	}
+
+	errs := tvm.vm.txPool.AddRemotesSync([]*types.Transaction{txs[0]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.toEngine
+	blk2, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk2.Verify(ctx))
+	require.NoError(blk2.Accept(ctx))
+
+	// Attempt to build a block consuming more than the current gas capacity
+	errs = tvm.vm.txPool.AddRemotesSync([]*types.Transaction{txs[1]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.toEngine
+	// Expect block building to fail due to insufficient gas capacity
+	_, err = tvm.vm.BuildBlock(ctx)
+	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
+
+	// Wait to fill block capacity and retry block builiding
+	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+
+	<-tvm.toEngine
+	blk3, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk3.Verify(ctx))
+	require.NoError(blk3.Accept(ctx))
+}
+
+func TestBuildBlockLargeTxStarvation(t *testing.T) {
+	ctx := context.Background()
+	require := require.New(t)
+
+	importAmount := uint64(2_000_000_000_000_000) // 2M AVAX
+	fork := upgradetest.Fortuna
+	tvm := newVM(t, testVMConfig{
+		fork: &fork,
+		utxos: map[ids.ShortID]uint64{
+			testShortIDAddrs[0]: importAmount,
+			testShortIDAddrs[1]: importAmount,
+		},
+	})
+	defer func() {
+		require.NoError(tvm.vm.Shutdown(ctx))
+	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	tvm.vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	importTx1, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	require.NoError(err)
+	require.NoError(tvm.vm.mempool.AddLocalTx(importTx1))
+
+	importTx2, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[1], initialBaseFee, []*secp256k1.PrivateKey{testKeys[1]})
+	require.NoError(err)
+	require.NoError(tvm.vm.mempool.AddLocalTx(importTx2))
+
+	<-tvm.toEngine
+	blk1, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk1.Verify(ctx))
+	require.NoError(tvm.vm.SetPreference(ctx, blk1.ID()))
+	require.NoError(blk1.Accept(ctx))
+
+	newHead := <-newTxPoolHeadChan
+	require.Equal(common.Hash(blk1.ID()), newHead.Head.Hash())
+
+	// Build a block consuming all of the available gas
+	var (
+		highGasPrice = big.NewInt(2 * ap0.MinGasPrice)
+		lowGasPrice  = big.NewInt(ap0.MinGasPrice)
+	)
+
+	// Refill capacity after distributing funds with import transactions
+	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+	maxSizeTxs := make([]*types.Transaction, 2)
+	for i := uint64(0); i < 2; i++ {
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			acp176.MinMaxCapacity,
+			highGasPrice,
+			[]byte{0xfe}, // invalid opcode consumes all gas
+		)
+		maxSizeTxs[i], err = types.SignTx(tx, types.NewEIP155Signer(tvm.vm.chainID), testKeys[0].ToECDSA())
+		require.NoError(err)
+	}
+
+	errs := tvm.vm.txPool.AddRemotesSync([]*types.Transaction{maxSizeTxs[0]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.toEngine
+	blk2, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk2.Verify(ctx))
+	require.NoError(blk2.Accept(ctx))
+
+	// Add a second transaction trying to consume the max guaranteed gas capacity at a higher gas price
+	errs = tvm.vm.txPool.AddRemotesSync([]*types.Transaction{maxSizeTxs[1]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	// Build a smaller transaction that consumes less gas at a lower price. Block building should
+	// fail and enforce waiting for more capacity to avoid starving the larger transaction.
+	tx := types.NewContractCreation(0, big.NewInt(0), 2_000_000, lowGasPrice, []byte{0xfe})
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(tvm.vm.chainID), testKeys[1].ToECDSA())
+	require.NoError(err)
+	errs = tvm.vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.toEngine
+	_, err = tvm.vm.BuildBlock(ctx)
+	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
+
+	// Wait to fill block capacity and retry block building
+	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+	<-tvm.toEngine
+	blk4, err := tvm.vm.BuildBlock(ctx)
+	require.NoError(err)
+	ethBlk4 := blk4.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+	actualTxs := ethBlk4.Transactions()
+	require.Len(actualTxs, 1)
+	require.Equal(maxSizeTxs[1].Hash(), actualTxs[0].Hash())
+
+	require.NoError(blk4.Verify(ctx))
+	require.NoError(blk4.Accept(ctx))
 }

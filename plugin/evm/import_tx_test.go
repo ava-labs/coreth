@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
@@ -471,7 +472,7 @@ func TestNewImportTx(t *testing.T) {
 		return tx
 	}
 	checkState := func(t *testing.T, vm *VM) {
-		txs := vm.LastAcceptedBlockInternal().(*Block).atomicTxs
+		txs := vm.LastAcceptedExtendedBlock().GetBlockExtension().(atomic.AtomicBlockContext).AtomicTxs()
 		if len(txs) != 1 {
 			t.Fatalf("Expected one import tx to be in the last accepted block, but found %d", len(txs))
 		}
@@ -1002,7 +1003,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				}
 				return tx
 			},
-			semanticVerifyErr: atomic.ErrAssetIDMismatch.Error(),
+			semanticVerifyErr: atomicvm.ErrAssetIDMismatch.Error(),
 		},
 		"insufficient AVAX funds": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -1223,9 +1224,9 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				return tx
 			},
 			checkState: func(t *testing.T, vm *VM) {
-				lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
+				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
-				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1268,9 +1269,9 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				return tx
 			},
 			checkState: func(t *testing.T, vm *VM) {
-				lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
+				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
-				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+				sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
