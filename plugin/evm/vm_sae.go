@@ -16,8 +16,8 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/avalanchego/vms/avm/blocks"
 	"github.com/ava-labs/strevm/adaptor"
+	"github.com/ava-labs/strevm/blocks"
 
 	corethdatabase "github.com/ava-labs/coreth/plugin/evm/database"
 	sae "github.com/ava-labs/strevm"
@@ -26,8 +26,7 @@ import (
 type vmInterface interface {
 	block.ChainVM
 	block.BuildBlockWithContextChainVM
-	block.WithVerifyContext
-	block.StateSyncableVM
+	// block.StateSyncableVM
 }
 
 var _ vmInterface = (*TransitionVM)(nil)
@@ -123,8 +122,6 @@ func (t *TransitionVM) afterAccept(ctx context.Context, block snowman.Block) err
 	t.postFork = adaptor.Convert[*blocks.Block](&saeWrapper{
 		VM: vm,
 	})
-
-	t.postFork = vm
 	// t.Set(t.postFork)
 	return nil
 }

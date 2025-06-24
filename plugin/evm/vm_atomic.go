@@ -87,17 +87,17 @@ func (a *AtomicVM) GetBlockIDAtHeight(ctx context.Context, height uint64) (ids.I
 	return a.Get().GetBlockIDAtHeight(ctx, height)
 }
 
-func (a *AtomicVM) GetLastStateSummary(ctx context.Context) (block.StateSummary, error) {
-	return a.Get().GetLastStateSummary(ctx)
-}
+// func (a *AtomicVM) GetLastStateSummary(ctx context.Context) (block.StateSummary, error) {
+// 	return a.Get().GetLastStateSummary(ctx)
+// }
 
-func (a *AtomicVM) GetOngoingSyncStateSummary(ctx context.Context) (block.StateSummary, error) {
-	return a.Get().GetOngoingSyncStateSummary(ctx)
-}
+// func (a *AtomicVM) GetOngoingSyncStateSummary(ctx context.Context) (block.StateSummary, error) {
+// 	return a.Get().GetOngoingSyncStateSummary(ctx)
+// }
 
-func (a *AtomicVM) GetStateSummary(ctx context.Context, summaryHeight uint64) (block.StateSummary, error) {
-	return a.Get().GetStateSummary(ctx, summaryHeight)
-}
+// func (a *AtomicVM) GetStateSummary(ctx context.Context, summaryHeight uint64) (block.StateSummary, error) {
+// 	return a.Get().GetStateSummary(ctx, summaryHeight)
+// }
 
 func (a *AtomicVM) HealthCheck(ctx context.Context) (interface{}, error) {
 	return a.Get().HealthCheck(ctx)
@@ -115,9 +115,9 @@ func (a *AtomicVM) ParseBlock(ctx context.Context, blockBytes []byte) (snowman.B
 	return a.Get().ParseBlock(ctx, blockBytes)
 }
 
-func (a *AtomicVM) ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error) {
-	return a.Get().ParseStateSummary(ctx, summaryBytes)
-}
+// func (a *AtomicVM) ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error) {
+// 	return a.Get().ParseStateSummary(ctx, summaryBytes)
+// }
 
 func (a *AtomicVM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	return a.Get().SetPreference(ctx, blkID)
@@ -131,9 +131,9 @@ func (a *AtomicVM) Shutdown(ctx context.Context) error {
 	return a.Get().Shutdown(ctx)
 }
 
-func (a *AtomicVM) StateSyncEnabled(ctx context.Context) (bool, error) {
-	return a.Get().StateSyncEnabled(ctx)
-}
+// func (a *AtomicVM) StateSyncEnabled(ctx context.Context) (bool, error) {
+// 	return a.Get().StateSyncEnabled(ctx)
+// }
 
 func (a *AtomicVM) Version(ctx context.Context) (string, error) {
 	return a.Get().Version(ctx)
