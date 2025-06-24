@@ -4060,6 +4060,7 @@ func TestSubscribeToEvents(t *testing.T) {
 		tvm := newVM(t, testVMConfig{
 			fork: &fork,
 		})
+		tvm.vm.ctx.Metrics = metrics.NewPrefixGatherer()
 		tvms = append(tvms, tvm)
 	}
 
