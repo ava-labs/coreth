@@ -328,8 +328,10 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 			log.Info("Persisted genesis root in firewood", "root", root.Hex())
 		}
 
-		// If we attempted to commit a proposal, but it failed, we must still dereference its children.
-		db.cleanupCommittedProposal(pCtx)
+		// If we attempted to commit a proposal, but it failed, we must dereference its children.
+		if pCtx != nil {
+			db.cleanupCommittedProposal(pCtx)
+		}
 	}()
 
 	// Find the proposal with the given root.
@@ -344,7 +346,7 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 		}
 	}
 	if pCtx == nil {
-		return fmt.Errorf("firewood: proposal not found for %s", root.Hex())
+		return fmt.Errorf("firewood: committable proposal not found for %s", root.Hex())
 	}
 
 	start := time.Now()
@@ -468,7 +470,6 @@ func (db *Database) cleanupCommittedProposal(pCtx *ProposalContext) {
 
 	for _, childCtx := range oldChildren {
 		// Don't dereference the recently commit proposal.
-		// There is no chance that we have to "reparent" the proposal.
 		if childCtx != pCtx {
 			db.dereference(childCtx)
 		}

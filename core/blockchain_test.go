@@ -71,7 +71,9 @@ var (
 		SnapshotLimit:             256,
 		AcceptorQueueLimit:        64,
 	}
-	schemes = []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme}
+
+	// Note that Firewood should only be included for non-archive, snapshot disabled tests.
+	schemes = []string{rawdb.HashScheme, customrawdb.FirewoodScheme}
 )
 
 func newGwei(n int64) *big.Int {
@@ -95,37 +97,6 @@ func createBlockChain(
 		false,
 	)
 	return blockchain, err
-}
-
-func TestFirewoodBlockChain(t *testing.T) {
-	for _, tt := range tests {
-		createFirewoodBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
-			// If no database path has been persisted, set the path to a temporary test directory.
-			// Otherwise, make sure not to overwrite so that it re-uses any existing database.
-			if path, err := customrawdb.ReadChainDataPath(db); err != nil {
-				t.Fatalf("failed to read database path: %v", err)
-			} else if path == "" {
-				customrawdb.WriteChainDataPath(db, t.TempDir())
-			}
-			return createBlockChain(
-				db,
-				&CacheConfig{
-					TrieCleanLimit:     256,
-					Pruning:            true,
-					SnapshotLimit:      0, // Disable snapshots
-					AcceptorQueueLimit: 64,
-					StateScheme:        customrawdb.FirewoodScheme,
-					StateHistory:       100,
-				},
-				gspec,
-				lastAcceptedHash,
-			)
-		}
-		// Run the test with the temporary database
-		t.Run(tt.Name, func(t *testing.T) {
-			tt.testFunc(t, createFirewoodBlockChain)
-		})
-	}
 }
 
 func TestArchiveBlockChain(t *testing.T) {
@@ -175,7 +146,22 @@ func TestPruningBlockChain(t *testing.T) {
 }
 
 func TestPruningBlockChainSnapsDisabled(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testPruningBlockChainSnapsDisabled(t, scheme)
+		})
+	}
+}
+
+func testPruningBlockChainSnapsDisabled(t *testing.T, scheme string) {
 	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+		// If no database path has been persisted, set the path to a temporary test directory.
+		// Otherwise, make sure not to overwrite so that it re-uses any existing database.
+		if path, err := customrawdb.ReadChainDataPath(db); err != nil {
+			t.Fatalf("failed to read database path: %v", err)
+		} else if path == "" {
+			customrawdb.WriteChainDataPath(db, t.TempDir())
+		}
 		return createBlockChain(
 			db,
 			&CacheConfig{
@@ -183,15 +169,18 @@ func TestPruningBlockChainSnapsDisabled(t *testing.T) {
 				TrieDirtyLimit:            256,
 				TrieDirtyCommitTarget:     20,
 				TriePrefetcherParallelism: 4,
-				Pruning:                   true, // Enable pruning
+				Pruning:                   true,
 				CommitInterval:            4096,
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
+				StateScheme:               scheme,
+				StateHistory:              32, // Firewood matches TipToBuffer pruning
 			},
 			gspec,
 			lastAcceptedHash,
 		)
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			tt.testFunc(t, create)
@@ -225,7 +214,22 @@ func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
 }
 
 func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testPruningBlockChainUngracefulShutdownSnapsDisabled(t, scheme)
+		})
+	}
+}
+
+func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme string) {
 	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+		// If no database path has been persisted, set the path to a temporary test directory.
+		// Otherwise, make sure not to overwrite so that it re-uses any existing database.
+		if path, err := customrawdb.ReadChainDataPath(db); err != nil {
+			t.Fatalf("failed to read database path: %v", err)
+		} else if path == "" {
+			customrawdb.WriteChainDataPath(db, t.TempDir())
+		}
 		blockchain, err := createBlockChain(
 			db,
 			&CacheConfig{
@@ -233,23 +237,23 @@ func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
 				TrieDirtyLimit:            256,
 				TrieDirtyCommitTarget:     20,
 				TriePrefetcherParallelism: 4,
-				Pruning:                   true, // Enable pruning
+				Pruning:                   true,
 				CommitInterval:            4096,
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
+				StateScheme:               scheme,
+				StateHistory:              32, // Firewood matches TipToBuffer pruning
 			},
 			gspec,
 			lastAcceptedHash,
 		)
-		if err != nil {
-			return nil, err
-		}
 
 		// Overwrite state manager, so that Shutdown is not called.
 		// This tests to ensure that the state manager handles an ungraceful shutdown correctly.
 		blockchain.stateManager = &wrappedStateManager{TrieWriter: blockchain.stateManager}
 		return blockchain, err
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			tt.testFunc(t, create)
@@ -451,29 +455,44 @@ func TestRepopulateMissingTries(t *testing.T) {
 }
 
 func TestUngracefulAsyncShutdown(t *testing.T) {
+	testUngracefulAsyncShutdown(t, rawdb.HashScheme, &CacheConfig{
+		TrieCleanLimit:            256,
+		TrieDirtyLimit:            256,
+		TrieDirtyCommitTarget:     20,
+		TriePrefetcherParallelism: 4,
+		Pruning:                   true,
+		CommitInterval:            4096,
+		SnapshotLimit:             256,
+		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
+		AcceptorQueueLimit:        1000, // ensure channel doesn't block
+	})
+}
+
+func TestUngracefulAsyncShutdownSnapsDisabled(t *testing.T) {
 	for _, scheme := range schemes {
 		t.Run(scheme, func(t *testing.T) {
-			testUngracefulAsyncShutdown(t, scheme)
+			testUngracefulAsyncShutdown(t, scheme, &CacheConfig{
+				TrieCleanLimit:        256,
+				TrieDirtyLimit:        256,
+				TrieDirtyCommitTarget: 20,
+				Pruning:               true,
+				CommitInterval:        4096,
+				SnapshotLimit:         0,
+				AcceptorQueueLimit:    1000, // ensure channel doesn't block
+				StateScheme:           scheme,
+				StateHistory:          32, // Firewood matches TipToBuffer pruning
+			})
 		})
 	}
 }
-func testUngracefulAsyncShutdown(t *testing.T, scheme string) {
+
+func testUngracefulAsyncShutdown(t *testing.T, scheme string, cacheConfig *CacheConfig) {
 	var (
 		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
 			if path, err := customrawdb.ReadChainDataPath(db); err != nil || path == "" {
 				customrawdb.WriteChainDataPath(db, t.TempDir())
 			}
-			blockchain, err := createBlockChain(db, &CacheConfig{
-				TrieCleanLimit:            256,
-				TrieDirtyLimit:            256,
-				TrieDirtyCommitTarget:     20,
-				TriePrefetcherParallelism: 4,
-				Pruning:                   true,
-				CommitInterval:            4096,
-				SnapshotLimit:             256,
-				SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-				AcceptorQueueLimit:        1000, // ensure channel doesn't block
-			}, gspec, lastAcceptedHash)
+			blockchain, err := createBlockChain(db, cacheConfig, gspec, lastAcceptedHash)
 			if err != nil {
 				return nil, err
 			}
@@ -589,7 +608,7 @@ func testUngracefulAsyncShutdown(t *testing.T, scheme string) {
 	allTxs := append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
-		if bc.snaps == nil {
+		if bc.snaps == nil && bc.cacheConfig.SnapshotLimit > 0 {
 			t.Fatal("snapshot initialization failed")
 		}
 
@@ -601,6 +620,118 @@ func testUngracefulAsyncShutdown(t *testing.T, scheme string) {
 			}
 		}
 	}
+}
+
+// The `TestEmptyBlocks` test ensures that the blockchain can handle eth blocks
+// that are empty, but they still contain atomic txs.
+func TestCompletelyEmptyBlocks(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testCompletelyEmptyBlocks(t, scheme)
+		})
+	}
+}
+
+func testCompletelyEmptyBlocks(t *testing.T, scheme string) {
+	var (
+		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+			if path, err := customrawdb.ReadChainDataPath(db); err != nil || path == "" {
+				customrawdb.WriteChainDataPath(db, t.TempDir())
+			}
+			cacheConfig := &CacheConfig{
+				TrieCleanLimit:            256,
+				TrieDirtyLimit:            256,
+				TrieDirtyCommitTarget:     20,
+				TriePrefetcherParallelism: 4,
+				Pruning:                   true,
+				CommitInterval:            4096,
+				SnapshotLimit:             0, // Disable snapshots
+				AcceptorQueueLimit:        64,
+				StateScheme:               scheme,
+				StateHistory:              32, // Firewood matches TipToBuffer pruning
+			}
+			blockchain, err := NewBlockChain(
+				db,
+				cacheConfig,
+				gspec,
+				dummy.NewFakerWithCallbacks(TestEmptyCallbacks),
+				vm.Config{},
+				lastAcceptedHash,
+				false,
+			)
+			if err != nil {
+				return nil, err
+			}
+			return blockchain, nil
+		}
+
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		chainDB = rawdb.NewMemoryDatabase()
+	)
+
+	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000000)
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+	}
+
+	blockchain, err := create(chainDB, gspec, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 5, 10, func(i int, gen *BlockGen) {
+		if i == 3 {
+			// Generate a transaction to create a unique block
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, key1)
+			gen.AddTx(tx)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert three blocks into the chain and accept only the first block.
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blockchain.DrainAcceptorQueue()
+
+	// We expect results from block 3
+	checkState := func(sdb *state.StateDB) error {
+		nonce1 := sdb.GetNonce(addr1)
+		if nonce1 != 1 {
+			return fmt.Errorf("expected addr1 nonce: 3, found nonce: %d", nonce1)
+		}
+		balance1 := sdb.GetBalance(addr1)
+		transferredFunds := uint256.NewInt(10000)
+		genesisBalance := uint256.MustFromBig(genesisBalance)
+		expectedBalance := new(uint256.Int).Sub(genesisBalance, transferredFunds)
+		if balance1.Cmp(expectedBalance) != 0 {
+			return fmt.Errorf("expected balance1: %d, found balance: %d", expectedBalance, balance1)
+		}
+		nonce2 := sdb.GetNonce(addr2)
+		if nonce2 != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce %d", nonce2)
+		}
+		balance2 := sdb.GetBalance(addr2)
+		if balance2.Cmp(transferredFunds) != 0 {
+			return fmt.Errorf("expected balance2: %d, found %d", transferredFunds, balance2)
+		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted

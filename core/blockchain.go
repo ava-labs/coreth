@@ -1861,6 +1861,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			}
 		}
 	}
+
 	// State was available at historical point, regenerate
 	var (
 		start        = time.Now()
@@ -1871,6 +1872,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	)
 	// Note: we add 1 since in each iteration, we attempt to re-execute the next block.
 	log.Info("Re-executing blocks to generate state for last accepted block", "from", current.NumberU64()+1, "to", origin)
+	var roots []common.Hash
 	for current.NumberU64() < origin {
 		// TODO: handle canceled context
 
@@ -1914,6 +1916,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root
+			roots = append(roots, root)
 			return nil
 		}, current.Hash()); err != nil {
 			return err
@@ -1929,7 +1932,13 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 	_, nodes, imgs := triedb.Size()
 	log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
-	if previousRoot != (common.Hash{}) {
+
+	// Firewood requires processing each root individually.
+	if _, ok := bc.triedb.Backend().(*firewood.Database); ok {
+		for _, root := range roots {
+			return triedb.Commit(root, true)
+		}
+	} else if previousRoot != (common.Hash{}) {
 		return triedb.Commit(previousRoot, true)
 	}
 	return nil

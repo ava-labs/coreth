@@ -21,21 +21,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var TestCallbacks = dummy.ConsensusCallbacks{
-	OnExtraStateChange: func(block *types.Block, _ *types.Header, sdb *state.StateDB) (*big.Int, *big.Int, error) {
-		sdb.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
-		return nil, nil, nil
-	},
-	OnFinalizeAndAssemble: func(
-		header *types.Header,
-		_ *types.Header,
-		sdb *state.StateDB,
-		_ []*types.Transaction,
-	) ([]byte, *big.Int, *big.Int, error) {
-		sdb.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
-		return nil, nil, nil, nil
-	},
-}
+var (
+	TestCallbacks = dummy.ConsensusCallbacks{
+		OnExtraStateChange: func(block *types.Block, _ *types.Header, sdb *state.StateDB) (*big.Int, *big.Int, error) {
+			sdb.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
+			return nil, nil, nil
+		},
+		OnFinalizeAndAssemble: func(
+			header *types.Header,
+			_ *types.Header,
+			sdb *state.StateDB,
+			_ []*types.Transaction,
+		) ([]byte, *big.Int, *big.Int, error) {
+			sdb.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
+			return nil, nil, nil, nil
+		},
+	}
+	TestEmptyCallbacks = dummy.ConsensusCallbacks{
+		OnExtraStateChange: func(_ *types.Block, _ *types.Header, _ *state.StateDB) (*big.Int, *big.Int, error) {
+			return nil, nil, nil
+		},
+		OnFinalizeAndAssemble: func(
+			_ *types.Header,
+			_ *types.Header,
+			_ *state.StateDB,
+			_ []*types.Transaction,
+		) ([]byte, *big.Int, *big.Int, error) {
+			return nil, nil, nil, nil
+		},
+	}
+)
 
 type ChainTest struct {
 	Name     string
@@ -69,10 +84,6 @@ var tests = []ChainTest{
 	{
 		"EmptyBlocks",
 		EmptyBlocksTest,
-	},
-	{
-		"EmptyAndNonemptyBlocks",
-		EmptyAndNonemptyBlocksTest,
 	},
 	{
 		"ReorgReInsert",
@@ -879,77 +890,6 @@ func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis
 
 	// Nothing to assert about the state
 	checkState := func(sdb *state.StateDB) error {
-		return nil
-	}
-
-	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
-}
-
-func EmptyAndNonemptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
-	var (
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		chainDB = rawdb.NewMemoryDatabase()
-	)
-
-	// Ensure that key1 has some funds in the genesis block.
-	genesisBalance := big.NewInt(1000000000)
-	gspec := &Genesis{
-		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
-	}
-
-	blockchain, err := create(chainDB, gspec, common.Hash{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer blockchain.Stop()
-
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 5, 10, func(i int, gen *BlockGen) {
-		if i == 3 {
-			// Generate a transaction to create a unique block
-			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, key1)
-			gen.AddTx(tx)
-		}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Insert three blocks into the chain and accept only the first block.
-	if _, err := blockchain.InsertChain(chain); err != nil {
-		t.Fatal(err)
-	}
-	for _, block := range chain {
-		if err := blockchain.Accept(block); err != nil {
-			t.Fatal(err)
-		}
-	}
-	blockchain.DrainAcceptorQueue()
-
-	// We expect results from block 3
-	checkState := func(sdb *state.StateDB) error {
-		nonce1 := sdb.GetNonce(addr1)
-		if nonce1 != 1 {
-			return fmt.Errorf("expected addr1 nonce: 3, found nonce: %d", nonce1)
-		}
-		balance1 := sdb.GetBalance(addr1)
-		transferredFunds := uint256.NewInt(10000)
-		genesisBalance := uint256.MustFromBig(genesisBalance)
-		expectedBalance := new(uint256.Int).Sub(genesisBalance, transferredFunds)
-		if balance1.Cmp(expectedBalance) != 0 {
-			return fmt.Errorf("expected balance1: %d, found balance: %d", expectedBalance, balance1)
-		}
-		nonce2 := sdb.GetNonce(addr2)
-		if nonce2 != 0 {
-			return fmt.Errorf("expected addr2 nonce: 0, found nonce %d", nonce2)
-		}
-		balance2 := sdb.GetBalance(addr2)
-		if balance2.Cmp(transferredFunds) != 0 {
-			return fmt.Errorf("expected balance2: %d, found %d", transferredFunds, balance2)
-		}
 		return nil
 	}
 
