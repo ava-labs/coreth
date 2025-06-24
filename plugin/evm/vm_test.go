@@ -4054,12 +4054,16 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 }
 
 func TestSubscribeToEvents(t *testing.T) {
-	prepareTest := func(t *testing.T) (*VM, common.Address, *ecdsa.PrivateKey) {
-		fork := upgradetest.ApricotPhase5
+	tvms := make([]*testVM, 0, 4)
+	for i := 0; i < 4; i++ {
+		fork := upgradetest.Latest
 		tvm := newVM(t, testVMConfig{
 			fork: &fork,
 		})
+		tvms = append(tvms, tvm)
+	}
 
+	prepareTest := func(t *testing.T, tvm *testVM) (common.Address, *ecdsa.PrivateKey) {
 		key := testKeys[0].ToECDSA()
 		address := testEthAddrs[0]
 
@@ -4093,12 +4097,13 @@ func TestSubscribeToEvents(t *testing.T) {
 		}}}}); err != nil {
 			t.Fatal(err)
 		}
-		return tvm.vm, address, key
+		return address, key
 	}
 
-	for _, testCase := range []struct {
+	for i, testCase := range []struct {
 		name string
 		tst  func(*VM, common.Address, *ecdsa.PrivateKey)
+		vm   *VM
 	}{
 		{
 			name: "SubscribeToEvents with context cancelled returns 0",
@@ -4251,9 +4256,9 @@ func TestSubscribeToEvents(t *testing.T) {
 			},
 		},
 	} {
-		tvm, address, key := prepareTest(t)
+		address, key := prepareTest(t, tvms[i])
 		t.Run(testCase.name, func(t *testing.T) {
-			testCase.tst(tvm, address, key)
+			testCase.tst(tvms[i].vm, address, key)
 		})
 	}
 }
