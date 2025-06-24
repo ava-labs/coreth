@@ -13,16 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/api/health"
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/genesis"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/ava-labs/libevm/log"
-	"github.com/go-cmd/cmd"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -44,71 +41,7 @@ func (s *SubnetSuite) SetBlockchainIDs(blockchainIDs map[string]string) {
 	s.blockchainIDs = blockchainIDs
 }
 
-// CreateSubnetsSuite creates subnets for given [genesisFiles], and registers a before suite that starts an AvalancheGo process to use for the e2e tests.
-// genesisFiles is a map of test aliases to genesis file paths.
-func CreateSubnetsSuite(genesisFiles map[string]string) *SubnetSuite {
-	require := require.New(ginkgo.GinkgoT())
-
-	// Keep track of the AvalancheGo external bash script, it is null for most
-	// processes except the first process that starts AvalancheGo
-	var startCmd *cmd.Cmd
-
-	// This is used to pass the blockchain IDs from the SynchronizedBeforeSuite() to the tests
-	var globalSuite SubnetSuite
-
-	// Our test suite runs in separate processes, ginkgo has
-	// SynchronizedBeforeSuite() which runs once, and its return value is passed
-	// over to each worker.
-	//
-	// Here an AvalancheGo node instance is started, and subnets are created for
-	// each test case. Each test case has its own subnet, therefore all tests
-	// can run in parallel without any issue.
-	//
-	_ = ginkgo.SynchronizedBeforeSuite(func() []byte {
-		ctx, cancel := context.WithTimeout(context.Background(), BootAvalancheNodeTimeout)
-		defer cancel()
-
-		wd, err := os.Getwd()
-		require.NoError(err)
-		log.Info("Starting AvalancheGo node", "wd", wd)
-		cmd, err := RunCommand("./scripts/run.sh")
-		require.NoError(err)
-		startCmd = cmd
-
-		// Assumes that startCmd will launch a node with HTTP Port at [utils.DefaultLocalNodeURI]
-		healthClient := health.NewClient(DefaultLocalNodeURI)
-		healthy, err := health.AwaitReady(ctx, healthClient, HealthCheckTimeout, nil)
-		require.NoError(err)
-		require.True(healthy)
-		log.Info("AvalancheGo node is healthy")
-
-		blockchainIDs := make(map[string]string)
-		for alias, file := range genesisFiles {
-			blockchainIDs[alias] = CreateNewSubnet(ctx, file)
-		}
-
-		blockchainIDsBytes, err := json.Marshal(blockchainIDs)
-		require.NoError(err)
-		return blockchainIDsBytes
-	}, func(ctx ginkgo.SpecContext, data []byte) {
-		blockchainIDs := make(map[string]string)
-		require.NoError(json.Unmarshal(data, &blockchainIDs))
-
-		globalSuite.SetBlockchainIDs(blockchainIDs)
-	})
-
-	// SynchronizedAfterSuite() takes two functions, the first runs after each test suite is done and the second
-	// function is executed once when all the tests are done. This function is used
-	// to gracefully shutdown the AvalancheGo node.
-	_ = ginkgo.SynchronizedAfterSuite(func() {}, func() {
-		require.NotNil(startCmd)
-		require.NoError(startCmd.Stop())
-	})
-
-	return &globalSuite
-}
-
-// CreateNewSubnet creates a new subnet and coreth blockchain with the given genesis file.
+// CreateNewSubnet creates a new subnet and subnet-evm blockchain with the given genesis file.
 // returns the ID of the new created blockchain.
 func CreateNewSubnet(ctx context.Context, genesisFilePath string) string {
 	require := require.New(ginkgo.GinkgoT())
@@ -142,11 +75,11 @@ func CreateNewSubnet(ctx context.Context, genesisFilePath string) string {
 	genesis := &core.Genesis{}
 	require.NoError(json.Unmarshal(genesisBytes, genesis))
 
-	log.Info("Creating new coreth blockchain", "genesis", genesis)
+	log.Info("Creating new subnet-evm blockchain", "genesis", genesis)
 	createChainTx, err := pWallet.IssueCreateChainTx(
 		createSubnetTx.ID(),
 		genesisBytes,
-		evm.ID,
+		subnetVMID,
 		nil,
 		"testChain",
 	)
