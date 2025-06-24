@@ -1759,6 +1759,14 @@ func (bc *BlockChain) commitWithSnap(
 			return common.Hash{}, err
 		}
 	}
+
+	// Because Firewood relies on tracking block hashes in a tree, we need to notify the
+	// database that this block is empty.
+	if _, ok := bc.triedb.Backend().(*firewood.Database); ok && root == parentRoot {
+		if err := bc.triedb.Update(root, parentRoot, current.NumberU64(), nil, nil, triedbOpt); err != nil {
+			return common.Hash{}, fmt.Errorf("failed to update trie for block %s: %w", current.Hash(), err)
+		}
+	}
 	return root, nil
 }
 

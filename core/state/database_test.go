@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
@@ -143,7 +144,8 @@ func (fs *fuzzState) commit() {
 		}
 
 		if updatedRoot != tr.lastRoot {
-			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil))
+			triedbopt := stateconf.WithTrieDBUpdatePayload(common.Hash{byte(fs.blockNumber - 1)}, common.Hash{byte(fs.blockNumber)})
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil), stateconf.WithTrieDBUpdateOpts(triedbopt))
 			tr.lastRoot = updatedRoot
 		}
 		tr.openStorageTries = make(map[common.Address]Trie)
