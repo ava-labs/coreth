@@ -275,7 +275,8 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 	// Since we were unable to find a parent proposal with the given parent hash,
 	// we must create a new proposal from the database root.
 	// Note that if this is block <= 1, we will not yet be tracking parent hashes, so we can skip this check.
-	if _, exists := db.proposalTree.Hashes[parentHash]; block > 1 && !exists {
+	// We must avoid the case in which we are reexecuting blocks upon startup, and haven't yet stored the parent block.
+	if _, exists := db.proposalTree.Hashes[parentHash]; db.proposalTree.Block != 0 && !exists {
 		return fmt.Errorf("firewood: parent hash %s not found for block %s at height %d", parentHash.Hex(), hash.Hex(), block)
 	} else if block <= 1 && db.proposalTree.Root != parentRoot {
 		return fmt.Errorf("firewood: parent root %s does not match proposal tree root %s for root %s at height %d", parentRoot.Hex(), db.proposalTree.Root.Hex(), root.Hex(), block)
