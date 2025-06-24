@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/libevm/common"
@@ -16,6 +17,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/trie/triestate"
 	"github.com/ava-labs/libevm/triedb"
@@ -27,6 +29,20 @@ import (
 var (
 	_ proposable = (*ffi.Database)(nil)
 	_ proposable = (*ffi.Proposal)(nil)
+
+	// FFI triedb operation metrics
+	ffiProposeCount         = metrics.GetOrRegisterCounter("firewood/triedb/propose/count", nil)
+	ffiProposeTimer         = metrics.GetOrRegisterCounter("firewood/triedb/propose/time", nil)
+	ffiCommitCount          = metrics.GetOrRegisterCounter("firewood/triedb/commit/count", nil)
+	ffiCommitTimer          = metrics.GetOrRegisterCounter("firewood/triedb/commit/time", nil)
+	ffiCleanupTimer         = metrics.GetOrRegisterCounter("firewood/triedb/cleanup/time", nil)
+	ffiOutstandingProposals = metrics.GetOrRegisterGauge("firewood/triedb/propose/outstanding", nil)
+
+	// FFI Trie operation metrics
+	ffiHashCount = metrics.GetOrRegisterCounter("firewood/triedb/hash/count", nil)
+	ffiHashTimer = metrics.GetOrRegisterCounter("firewood/triedb/hash/time", nil)
+	ffiReadCount = metrics.GetOrRegisterCounter("firewood/triedb/read/count", nil)
+	ffiReadTimer = metrics.GetOrRegisterCounter("firewood/triedb/read/time", nil)
 )
 
 type proposable interface {
@@ -302,11 +318,8 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	// On success, we should persist the genesis root as necessary, and dereference all children
 	// of the committed proposal.
 	defer func() {
-		if err != nil {
-			return
-		}
 		// If this is the genesis root, store in rawdb.
-		if pCtx.Block == 0 {
+		if err == nil && pCtx.Block == 0 {
 			if writeErr := customrawdb.WriteFirewoodGenesisRoot(db.ethdb, root); writeErr != nil {
 				err = fmt.Errorf("firewood: error writing genesis root %s: %w", root.Hex(), writeErr)
 				return
@@ -314,6 +327,7 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 			log.Info("Persisted genesis root in firewood", "root", root.Hex())
 		}
 
+		// If we attempted to commit a proposal, but it failed, we must still dereference its children.
 		db.cleanupCommittedProposal(pCtx)
 	}()
 
@@ -332,10 +346,14 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 		return fmt.Errorf("firewood: proposal not found for %s", root.Hex())
 	}
 
+	start := time.Now()
 	// Commit the proposal to the database.
 	if commitErr := pCtx.Proposal.Commit(); commitErr != nil {
 		return fmt.Errorf("firewood: error committing proposal %s: %w", root.Hex(), commitErr)
 	}
+	ffiCommitCount.Inc(1)
+	ffiCommitTimer.Inc(time.Since(start).Milliseconds())
+	ffiOutstandingProposals.Dec(1)
 
 	// Assert that the root of the database matches the committed proposal root.
 	currentRootBytes, err := db.fwDisk.Root()
@@ -399,15 +417,30 @@ func (db *Database) Close() error {
 
 // createProposal creates a new proposal from the given layer
 // If there are no changes, it will return nil.
-func (db *Database) createProposal(layer proposable, root common.Hash, keys, values [][]byte) (*ffi.Proposal, error) {
+func (db *Database) createProposal(layer proposable, root common.Hash, keys, values [][]byte) (p *ffi.Proposal, err error) {
+	// If there's an error after creating the proposal, we must drop it.
+	defer func() {
+		if err != nil && p != nil {
+			if dropErr := p.Drop(); dropErr != nil {
+				// We should still return the original error.
+				log.Error("firewood: error dropping proposal after error", "root", root.Hex(), "error", dropErr)
+			}
+			p = nil
+		}
+	}()
+
 	if len(keys) != len(values) {
 		return nil, fmt.Errorf("firewood: keys and values must have the same length, got %d keys and %d values", len(keys), len(values))
 	}
 
-	p, err := layer.Propose(keys, values)
+	start := time.Now()
+	p, err = layer.Propose(keys, values)
 	if err != nil {
 		return nil, fmt.Errorf("firewood: unable to create proposal for root %s: %w", root.Hex(), err)
 	}
+	ffiProposeCount.Inc(1)
+	ffiProposeTimer.Inc(time.Since(start).Milliseconds())
+	ffiOutstandingProposals.Inc(1)
 
 	currentRootBytes, err := p.Root()
 	if err != nil {
@@ -425,6 +458,7 @@ func (db *Database) createProposal(layer proposable, root common.Hash, keys, val
 // cleanupCommittedProposal dereferences the proposal and removes it from the proposal map.
 // It also recursively dereferences all children of the proposal.
 func (db *Database) cleanupCommittedProposal(pCtx *ProposalContext) {
+	start := time.Now()
 	oldChildren := db.proposalTree.Children
 	db.proposalTree = pCtx
 	db.proposalTree.Parent = nil
@@ -438,6 +472,7 @@ func (db *Database) cleanupCommittedProposal(pCtx *ProposalContext) {
 			db.dereference(childCtx)
 		}
 	}
+	ffiCleanupTimer.Inc(time.Since(start).Milliseconds())
 }
 
 // Internally removes all references of the proposal from the database.
@@ -454,10 +489,10 @@ func (db *Database) dereference(pCtx *ProposalContext) {
 	db.removeProposalFromMap(pCtx)
 
 	// Drop the proposal in the backend.
-	// ignore any error
 	if err := pCtx.Proposal.Drop(); err != nil {
 		log.Error("firewood: error dropping proposal", "root", pCtx.Root.Hex(), "error", err)
 	}
+	ffiOutstandingProposals.Dec(1)
 }
 
 // removeProposalFromMap removes the proposal from the proposal map.
@@ -528,8 +563,13 @@ type reader struct {
 // It defaults to using a revision if available.
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
 	// If we have a revision, we can use it to get the node.
+	// We don't need the lock in this case.
 	if reader.revision != nil {
-		return reader.revision.Get(path)
+		start := time.Now()
+		result, err := reader.revision.Get(path)
+		ffiReadCount.Inc(1)
+		ffiReadTimer.Inc(time.Since(start).Milliseconds())
+		return result, err
 	}
 
 	// The most likely path when the revision is nil is that the root is not committed yet.
@@ -537,7 +577,11 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 	defer reader.db.proposalLock.RUnlock()
 	prop := reader.db.proposalAtRoot(reader.root)
 	if prop != nil {
-		return prop.Get(path)
+		start := time.Now()
+		result, err := prop.Get(path)
+		ffiReadCount.Inc(1)
+		ffiReadTimer.Inc(time.Since(start).Milliseconds())
+		return result, err
 	}
 
 	// Assume that the root is now committed and we can use it for the lifetime of the reader.
@@ -546,7 +590,11 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 		return nil, fmt.Errorf("firewood: requested state root %s not found", reader.root.Hex())
 	}
 	reader.revision = rev
-	return rev.Get(path)
+	start := time.Now()
+	result, err := rev.Get(path)
+	ffiReadCount.Inc(1)
+	ffiReadTimer.Inc(time.Since(start).Milliseconds())
+	return result, err
 }
 
 // getProposalHash calculates the hash if the set of keys and values are
@@ -560,6 +608,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		p   *ffi.Proposal
 		err error
 	)
+	start := time.Now()
 	if db.proposalTree.Root == parentRoot {
 		// Propose from the database root.
 		p, err = db.fwDisk.Propose(keys, values)
@@ -581,6 +630,8 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 			return common.Hash{}, fmt.Errorf("firewood: error proposing from parent proposal %s: %v", parentRoot.Hex(), err)
 		}
 	}
+	ffiHashCount.Inc(1)
+	ffiHashTimer.Inc(time.Since(start).Milliseconds())
 
 	// We succesffuly created a proposal, so we must drop it after use.
 	defer p.Drop()

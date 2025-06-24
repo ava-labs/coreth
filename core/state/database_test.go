@@ -143,9 +143,13 @@ func (fs *fuzzState) commit() {
 			fs.require.NoError(mergedNodeSet.Merge(set))
 		}
 
-		if updatedRoot != tr.lastRoot {
-			triedbopt := stateconf.WithTrieDBUpdatePayload(common.Hash{byte(fs.blockNumber - 1)}, common.Hash{byte(fs.blockNumber)})
-			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil), stateconf.WithTrieDBUpdateOpts(triedbopt))
+		// HashDB/PathDB only allows updating the triedb if there have been changes.
+		if _, ok := tr.ethDatabase.TrieDB().Backend().(*firewood.Database); ok {
+			triedbopt := stateconf.WithTrieDBUpdatePayload(common.Hash{byte(int64(fs.blockNumber - 1))}, common.Hash{byte(int64(fs.blockNumber))})
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil, triedbopt))
+			tr.lastRoot = updatedRoot
+		} else if updatedRoot != tr.lastRoot {
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil))
 			tr.lastRoot = updatedRoot
 		}
 		tr.openStorageTries = make(map[common.Address]Trie)
