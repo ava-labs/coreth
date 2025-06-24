@@ -91,8 +91,7 @@ func CreateSubnetsSuite(genesisFiles map[string]string) *SubnetSuite {
 		return blockchainIDsBytes
 	}, func(ctx ginkgo.SpecContext, data []byte) {
 		blockchainIDs := make(map[string]string)
-		err := json.Unmarshal(data, &blockchainIDs)
-		require.NoError(err)
+		require.NoError(json.Unmarshal(data, &blockchainIDs))
 
 		globalSuite.SetBlockchainIDs(blockchainIDs)
 	})
