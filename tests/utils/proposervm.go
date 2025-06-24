@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/libevm/common"
@@ -53,18 +54,10 @@ func IssueTxsToActivateProposerVMFork(
 
 		// Wait for this transaction to be included in a block
 		receiptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		for {
-			if receiptCtx.Err() != nil {
-				cancel()
-				return receiptCtx.Err()
-			}
-			_, err := client.TransactionReceipt(receiptCtx, triggerTx.Hash())
-			if err == nil {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
+		defer cancel()
+		if _, err := bind.WaitMined(receiptCtx, client, triggerTx); err != nil {
+			return err
 		}
-		cancel()
 		nonce++
 	}
 
