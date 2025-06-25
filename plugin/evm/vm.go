@@ -798,25 +798,22 @@ func (vm *VM) initBlockBuilding() error {
 		Peers:      vm.config.PushRegossipNumPeers,
 	}
 
-	ethTxPushGossiper := vm.ethTxPushGossiper.Get()
-	if ethTxPushGossiper == nil {
-		ethTxPushGossiper, err = avalanchegossip.NewPushGossiper[*GossipEthTx](
-			ethTxGossipMarshaller,
-			ethTxPool,
-			vm.P2PValidators(),
-			ethTxGossipClient,
-			ethTxGossipMetrics,
-			pushGossipParams,
-			pushRegossipParams,
-			config.PushGossipDiscardedElements,
-			config.TxGossipTargetMessageSize,
-			vm.config.RegossipFrequency.Duration,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
-		}
-		vm.ethTxPushGossiper.Set(ethTxPushGossiper)
+	ethTxPushGossiper, err := avalanchegossip.NewPushGossiper[*GossipEthTx](
+		ethTxGossipMarshaller,
+		ethTxPool,
+		vm.P2PValidators(),
+		ethTxGossipClient,
+		ethTxGossipMetrics,
+		pushGossipParams,
+		pushRegossipParams,
+		config.PushGossipDiscardedElements,
+		config.TxGossipTargetMessageSize,
+		vm.config.RegossipFrequency.Duration,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize eth tx push gossiper: %w", err)
 	}
+	vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	vm.builder = vm.NewBlockBuilder(vm.toEngine, vm.extensionConfig.ExtraMempool)
@@ -1134,7 +1131,7 @@ func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error
 	} else if err != database.ErrNotFound {
 		return nil, atomic.Unknown, 0, err
 	}
-	tx, dropped, found := vm.atomicVM.Mempool.GetTx(txID)
+	tx, dropped, found := vm.atomicVM.AtomicMempool.GetTx(txID)
 	switch {
 	case found && dropped:
 		return tx, atomic.Dropped, 0, nil

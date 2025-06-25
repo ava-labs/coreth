@@ -49,8 +49,6 @@ type ExtensibleVM interface {
 	GetExtendedBlock(context.Context, ids.ID) (ExtendedBlock, error)
 	// LastAcceptedExtendedBlock returns the last accepted VM block
 	LastAcceptedExtendedBlock() ExtendedBlock
-	// IsBootstrapped returns true if the VM is bootstrapped
-	IsBootstrapped() bool
 	// ChainConfig returns the chain config for the VM
 	ChainConfig() *params.ChainConfig
 	// P2PValidators returns the validators for the network

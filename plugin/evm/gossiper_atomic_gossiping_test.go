@@ -75,7 +75,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
-	assert.True(tvm.vm.atomicVM.Mempool.Has(tx.ID()))
+	assert.True(tvm.vm.atomicVM.AtomicMempool.Has(tx.ID()))
 
 	tvm.vm.ctx.Lock.Unlock()
 
@@ -105,7 +105,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
-	assert.False(tvm.vm.atomicVM.Mempool.Has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
+	assert.False(tvm.vm.atomicVM.AtomicMempool.Has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
 }
 
 // show that txs already marked as invalid are not re-requested on gossiping
@@ -116,7 +116,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	defer func() {
 		assert.NoError(tvm.vm.Shutdown(context.Background()))
 	}()
-	mempool := tvm.vm.atomicVM.Mempool
+	mempool := tvm.vm.atomicVM.AtomicMempool
 
 	var (
 		txGossiped     int
@@ -175,7 +175,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// Conflicting tx must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	// This test adds it directly to the mempool + gossiper to simulate that.
-	tvm.vm.atomicVM.Mempool.AddRemoteTx(conflictingTx)
+	tvm.vm.atomicVM.AtomicMempool.AddRemoteTx(conflictingTx)
 	tvm.vm.atomicVM.AtomicTxPushGossiper.Add(conflictingTx)
 	time.Sleep(500 * time.Millisecond)
 

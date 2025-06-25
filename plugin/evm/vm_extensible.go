@@ -58,11 +58,6 @@ func (vm *VM) LastAcceptedExtendedBlock() extension.ExtendedBlock {
 	return lastAcceptedBlock.(*wrappedBlock)
 }
 
-// IsBootstrapped returns true if the VM has finished bootstrapping
-func (vm *VM) IsBootstrapped() bool {
-	return vm.bootstrapped.Get()
-}
-
 func (vm *VM) ChainConfig() *params.ChainConfig {
 	return vm.chainConfig
 }
