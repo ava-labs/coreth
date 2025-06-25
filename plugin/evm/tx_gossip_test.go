@@ -18,7 +18,6 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
@@ -67,7 +66,6 @@ func TestEthTxGossip(t *testing.T) {
 		genesisBytes,
 		nil,
 		nil,
-		make(chan common.Message),
 		nil,
 		responseSender,
 	))
@@ -197,7 +195,6 @@ func TestAtomicTxGossip(t *testing.T) {
 		genesisBytes,
 		nil,
 		nil,
-		make(chan common.Message),
 		nil,
 		responseSender,
 	))
@@ -329,7 +326,6 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 		genesisBytes,
 		nil,
 		nil,
-		make(chan common.Message),
 		nil,
 		sender,
 	))
@@ -385,7 +381,6 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 		genesisBytes,
 		nil,
 		nil,
-		make(chan common.Message),
 		nil,
 		sender,
 	))
@@ -449,7 +444,6 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		genesisBytes,
 		nil,
 		nil,
-		make(chan common.Message),
 		nil,
 		sender,
 	))
@@ -516,7 +510,6 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		genesisBytes,
 		nil,
 		nil,
-		make(chan common.Message),
 		nil,
 		sender,
 	))
