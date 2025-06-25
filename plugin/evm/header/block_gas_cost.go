@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/access"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/libevm/common"
@@ -46,7 +46,7 @@ func BlockGasCost(
 		timeElapsed = timestamp - parent.Time
 	}
 	return new(big.Int).SetUint64(BlockGasCostWithStep(
-		customtypes.GetHeaderExtra(parent).BlockGasCost,
+		access.GetHeaderExtra(parent).BlockGasCost,
 		step,
 		timeElapsed,
 	))
@@ -89,7 +89,7 @@ func EstimateRequiredTip(
 	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
-	extra := customtypes.GetHeaderExtra(header)
+	extra := access.GetHeaderExtra(header)
 	switch {
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil

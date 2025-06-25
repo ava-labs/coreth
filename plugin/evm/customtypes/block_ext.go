@@ -4,18 +4,12 @@
 package customtypes
 
 import (
-	"math/big"
 	"slices"
 
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
 )
-
-// SetBlockExtra sets the [BlockBodyExtra] `extra` in the [Block] `b`.
-func SetBlockExtra(b *ethtypes.Block, extra *BlockBodyExtra) {
-	extras.Block.Set(b, extra)
-}
 
 // BlockBodyExtra is a struct containing extra fields used by Avalanche
 // in the [Block] and [Body].
@@ -101,54 +95,9 @@ func (b *BlockBodyExtra) BlockRLPFieldPointersForDecoding(block *ethtypes.BlockR
 	}
 }
 
-func BlockExtData(b *ethtypes.Block) []byte {
-	if data := extras.Block.Get(b).ExtData; data != nil {
-		return *data
-	}
-	return nil
-}
-
-func BlockVersion(b *ethtypes.Block) uint32 {
-	return extras.Block.Get(b).Version
-}
-
-func BlockExtDataGasUsed(b *ethtypes.Block) *big.Int {
-	used := GetHeaderExtra(b.Header()).ExtDataGasUsed
-	if used == nil {
-		return nil
-	}
-	return new(big.Int).Set(used)
-}
-
-func BlockGasCost(b *ethtypes.Block) *big.Int {
-	cost := GetHeaderExtra(b.Header()).BlockGasCost
-	if cost == nil {
-		return nil
-	}
-	return new(big.Int).Set(cost)
-}
-
 func CalcExtDataHash(extdata []byte) common.Hash {
 	if len(extdata) == 0 {
 		return EmptyExtDataHash
 	}
 	return ethtypes.RLPHash(extdata)
-}
-
-func NewBlockWithExtData(
-	header *ethtypes.Header, txs []*ethtypes.Transaction, uncles []*ethtypes.Header, receipts []*ethtypes.Receipt,
-	hasher ethtypes.TrieHasher, extdata []byte, recalc bool,
-) *ethtypes.Block {
-	if recalc {
-		headerExtra := GetHeaderExtra(header)
-		headerExtra.ExtDataHash = CalcExtDataHash(extdata)
-	}
-	block := ethtypes.NewBlock(header, txs, uncles, receipts, hasher)
-	extdataCopy := make([]byte, len(extdata))
-	copy(extdataCopy, extdata)
-	extra := &BlockBodyExtra{
-		ExtData: &extdataCopy,
-	}
-	extras.Block.Set(block, extra)
-	return block
 }

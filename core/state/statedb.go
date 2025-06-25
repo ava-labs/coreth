@@ -31,7 +31,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/access"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
@@ -109,8 +109,8 @@ func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 		s.AddBalance(addr, new(uint256.Int)) // used to cause touch
 		return
 	}
-	if !ethstate.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	if !ethstate.GetExtra(s.StateDB, access.IsMultiCoinAccessor(), addr) {
+		ethstate.SetExtra(s.StateDB, access.IsMultiCoinAccessor(), addr, true)
 	}
 	newAmount := new(big.Int).Add(s.GetBalanceMultiCoin(addr, coinID), amount)
 	NormalizeCoinID(&coinID)
@@ -125,8 +125,8 @@ func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 	// Note: It's not needed to set the IsMultiCoin (extras) flag here, as this
 	// call would always be preceded by a call to AddBalanceMultiCoin, which would
 	// set the extra flag. Seems we should remove the redundant code.
-	if !ethstate.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	if !ethstate.GetExtra(s.StateDB, access.IsMultiCoinAccessor(), addr) {
+		ethstate.SetExtra(s.StateDB, access.IsMultiCoinAccessor(), addr, true)
 	}
 	newAmount := new(big.Int).Sub(s.GetBalanceMultiCoin(addr, coinID), amount)
 	NormalizeCoinID(&coinID)

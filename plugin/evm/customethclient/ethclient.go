@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/ethclient"
+	"github.com/ava-labs/coreth/plugin/evm/access"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 )
@@ -66,6 +67,6 @@ func (h *extBlockHook) OnBlockDecoded(raw json.RawMessage, block *types.Block) e
 		Version: body.Version,
 		ExtData: (*[]byte)(body.BlockExtraData),
 	}
-	customtypes.SetBlockExtra(block, extra)
+	access.SetBlockExtra(block, extra)
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/access"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -65,7 +66,7 @@ func (be *blockExtender) NewBlockExtension(b extension.ExtendedBlock) (extension
 	}
 	// Extract atomic transactions from the block
 	isApricotPhase5 := be.vm.chainConfigExtra().IsApricotPhase5(ethBlock.Time())
-	atomicTxs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(ethBlock), isApricotPhase5, atomic.Codec)
+	atomicTxs, err := atomic.ExtractAtomicTxs(access.BlockExtData(ethBlock), isApricotPhase5, atomic.Codec)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +90,11 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 	}
 	ethHeader := ethBlock.Header()
 	blockHash := ethBlock.Hash()
-	headerExtra := customtypes.GetHeaderExtra(ethHeader)
+	headerExtra := access.GetHeaderExtra(ethHeader)
 
 	if !rules.IsApricotPhase1 {
 		if blockExtender.extDataHashes != nil {
-			extData := customtypes.BlockExtData(ethBlock)
+			extData := access.BlockExtData(ethBlock)
 			extDataHash := customtypes.CalcExtDataHash(extData)
 			// If there is no extra data, check that there is no extra data in the hash map either to ensure we do not
 			// have a block that is unexpectedly missing extra data.
@@ -114,7 +115,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 
 	// Verify the ExtDataHash field
 	if rules.IsApricotPhase1 {
-		extraData := customtypes.BlockExtData(ethBlock)
+		extraData := access.BlockExtData(ethBlock)
 		hash := customtypes.CalcExtDataHash(extraData)
 		if headerExtra.ExtDataHash != hash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)

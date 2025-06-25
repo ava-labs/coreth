@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/access"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
@@ -328,7 +328,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 		return err
 	}
 
-	if version := customtypes.BlockVersion(b.ethBlock); version != 0 {
+	if version := access.BlockVersion(b.ethBlock); version != 0 {
 		return fmt.Errorf("invalid version: %d", version)
 	}
 
@@ -379,7 +379,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 		}
 	}
 
-	headerExtra := customtypes.GetHeaderExtra(ethHeader)
+	headerExtra := access.GetHeaderExtra(ethHeader)
 	if rulesExtra.IsApricotPhase4 {
 		switch {
 		// Make sure BlockGasCost is not nil

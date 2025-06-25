@@ -13,23 +13,6 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-// GetHeaderExtra returns the [HeaderExtra] from the given [Header].
-func GetHeaderExtra(h *ethtypes.Header) *HeaderExtra {
-	return extras.Header.Get(h)
-}
-
-// SetHeaderExtra sets the given [HeaderExtra] on the [Header].
-func SetHeaderExtra(h *ethtypes.Header, extra *HeaderExtra) {
-	extras.Header.Set(h, extra)
-}
-
-// WithHeaderExtra sets the given [HeaderExtra] on the [Header]
-// and returns the [Header] for chaining.
-func WithHeaderExtra(h *ethtypes.Header, extra *HeaderExtra) *ethtypes.Header {
-	SetHeaderExtra(h, extra)
-	return h
-}
-
 // HeaderExtra is a struct that contains extra fields used by Avalanche
 // in the block header.
 // This type uses [HeaderSerializable] to encode and decode the extra fields
@@ -100,7 +83,7 @@ func (h *HeaderExtra) PostCopy(dst *ethtypes.Header) {
 	if h.ExtDataGasUsed != nil {
 		cp.ExtDataGasUsed = new(big.Int).Set(h.ExtDataGasUsed)
 	}
-	SetHeaderExtra(dst, cp)
+	// SetHeaderExtra(dst, cp)
 }
 
 func (h *HeaderSerializable) updateFromEth(eth *ethtypes.Header) {
