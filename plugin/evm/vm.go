@@ -1151,8 +1151,8 @@ func newHandler(name string, service interface{}) (http.Handler, error) {
 	return server, server.RegisterService(service, name)
 }
 
-// CreateHandlers makes new http handlers that can handle API calls
-func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
+// NewHTTPHandler makes a new http handler that can handle API calls
+func (vm *VM) NewHTTPHandler(context.Context) (http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
 	if vm.config.HttpBodyLimit > 0 {
 		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
@@ -1208,11 +1208,18 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	)
 
 	vm.rpcHandlers = append(vm.rpcHandlers, handler)
-	return apis, nil
-}
 
-func (vm *VM) CreateHTTP2Handler(context.Context) (http.Handler, error) {
-	return nil, nil
+	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for route, api := range apis {
+			if !strings.HasSuffix(r.URL.Path, route) {
+				continue
+			}
+
+			api.ServeHTTP(w, r)
+		}
+	})
+
+	return mux, nil
 }
 
 /*
