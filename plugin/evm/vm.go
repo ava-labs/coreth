@@ -881,16 +881,16 @@ func (vm *VM) initBlockBuilding() error {
 	return nil
 }
 
-func (vm *VM) SubscribeToEvents(ctx context.Context) commonEng.Message {
+func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 	// Block building is not initialized yet, so we haven't finished syncing or bootstrapping.
 	if vm.builder == nil {
 		select {
 		case <-ctx.Done():
-			return 0
+			return 0, nil
 		case ss := <-vm.stateSyncDone:
-			return ss
+			return ss, nil
 		case <-vm.shutdownChan:
-			return 0
+			return 0, nil
 		case <-vm.finishedSyncing:
 			break
 		}
@@ -914,13 +914,13 @@ func (vm *VM) SubscribeToEvents(ctx context.Context) commonEng.Message {
 
 	select {
 	case ss := <-vm.stateSyncDone:
-		return ss
+		return ss, nil
 	case pendingTx := <-pending:
-		return pendingTx
+		return pendingTx, nil
 	case <-ctx.Done():
-		return commonEng.Message(0)
+		return commonEng.Message(0), nil
 	case <-vm.shutdownChan:
-		return commonEng.Message(0)
+		return commonEng.Message(0), nil
 	}
 }
 

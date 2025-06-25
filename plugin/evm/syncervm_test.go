@@ -480,7 +480,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 		return
 	}
 
-	msg := syncerVM.SubscribeToEvents(context.Background())
+	msg, _ := syncerVM.WaitForEvent(context.Background())
 	require.Equal(commonEng.StateSyncDone, msg)
 
 	// If the test is expected to error, assert the correct error is returned and finish the test.

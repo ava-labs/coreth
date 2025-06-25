@@ -181,6 +181,7 @@ type testVMConfig struct {
 }
 
 type testVM struct {
+	t            *testing.T
 	vm           *VM
 	db           *prefixdb.Database
 	atomicMemory *avalancheatomic.Memory
@@ -244,11 +245,18 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 	}
 
 	return &testVM{
+		t:            t,
 		vm:           vm,
 		db:           prefixedDB,
 		atomicMemory: atomicMemory,
 		appSender:    appSender,
 	}
+}
+
+func (vm *testVM) WaitForEvent(ctx context.Context) commonEng.Message {
+	msg, err := vm.vm.WaitForEvent(ctx)
+	require.NoError(vm.t, err)
+	return msg
 }
 
 // setupGenesis sets up the genesis
@@ -456,7 +464,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 	importTx, err := tvm1.vm.newImportTx(tvm1.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
 	require.NoError(t, tvm1.vm.atomicVM.AtomicMempool.AddLocalTx(importTx))
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 	blk, err := tvm1.vm.BuildBlock(context.Background())
 	require.NoError(t, err)
 
@@ -505,7 +513,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -556,7 +564,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk2, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -619,7 +627,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk1, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -659,7 +667,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk2, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -779,7 +787,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 			t.Fatal(err)
 		}
 
-		require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+		require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 		tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
 		blk, err := tvm.vm.BuildBlock(context.Background())
@@ -812,7 +820,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 		if err := tvm.vm.atomicVM.AtomicMempool.ForceAddTx(tx); err != nil {
 			t.Fatal(err)
 		}
-		require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+		require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 		tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
 		_, err = tvm.vm.BuildBlock(context.Background())
@@ -830,7 +838,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 	if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(importTxs[2]); err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
 
 	validBlock, err := tvm.vm.BuildBlock(context.Background())
@@ -1106,7 +1114,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1170,8 +1178,8 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1196,7 +1204,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1223,7 +1231,7 @@ func TestSetPreferenceRace(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -1336,7 +1344,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatalf("Failed to issue importTx0A: %s", err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk0, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1370,7 +1378,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk1, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1394,7 +1402,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk2, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1416,7 +1424,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	if err := tvm.vm.atomicVM.AtomicMempool.ForceAddTx(importTx0B); err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	_, err = tvm.vm.BuildBlock(context.Background())
 	if err == nil {
@@ -1475,7 +1483,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1563,7 +1571,7 @@ func TestReorgProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1627,7 +1635,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1652,7 +1660,7 @@ func TestReorgProtection(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1733,7 +1741,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1814,7 +1822,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1848,7 +1856,7 @@ func TestNonCanonicalAccept(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -1930,7 +1938,7 @@ func TestStickyPreference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -1994,7 +2002,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2024,7 +2032,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -2050,7 +2058,7 @@ func TestStickyPreference(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -2190,7 +2198,7 @@ func TestUncleBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2251,7 +2259,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2273,7 +2281,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
@@ -2299,7 +2307,7 @@ func TestUncleBlock(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
@@ -2361,7 +2369,7 @@ func TestEmptyBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2444,7 +2452,7 @@ func TestAcceptReorg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkA, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2507,7 +2515,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 
 	vm1BlkB, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2529,7 +2537,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 
 	vm2BlkC, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2556,7 +2564,7 @@ func TestAcceptReorg(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm2.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm2.WaitForEvent(context.Background()))
 
 	vm2BlkD, err := tvm2.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2631,7 +2639,7 @@ func TestFutureBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blkA, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2700,7 +2708,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2748,7 +2756,7 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err = tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2807,7 +2815,7 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2884,7 +2892,7 @@ func TestReissueAtomicTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blkA, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -2915,7 +2923,7 @@ func TestReissueAtomicTx(t *testing.T) {
 	// than [blkA] so that the block will be unique. This is necessary since we have marked [blkA]
 	// as Rejected.
 	time.Sleep(2 * time.Second)
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blkB, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -2969,7 +2977,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(exportTx1); err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	exportBlk1, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -2994,7 +3002,7 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 	if err := tvm.vm.atomicVM.AtomicMempool.ForceAddTx(exportTx2); err != nil {
 		t.Fatal(err)
 	}
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	_, err = tvm.vm.BuildBlock(context.Background())
 	if err == nil {
@@ -3055,7 +3063,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	if _, err := tvm.vm.BuildBlock(context.Background()); err == nil {
 		t.Fatalf("Unexpectedly created a block")
@@ -3127,7 +3135,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3190,7 +3198,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err = tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3299,7 +3307,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3354,7 +3362,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err = tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3429,7 +3437,7 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
@@ -3503,7 +3511,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 		tvm.vm.atomicVM.AtomicMempool.ForceAddTx(conflictTx)
 		conflictSets[index].Add(conflictTx.ID())
 	}
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	// Note: this only checks the path through OnFinalizeAndAssemble, we should make sure to add a test
 	// that verifies blocks received from the network will also fail verification
 	blk, err := tvm.vm.BuildBlock(context.Background())
@@ -3564,7 +3572,7 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 		}
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3627,7 +3635,7 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, tvm1.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm1.WaitForEvent(context.Background()))
 	blk1, err := tvm1.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -3682,7 +3690,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	importTx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	require.NoError(t, err)
 	require.NoError(t, tvm.vm.atomicVM.AtomicMempool.AddLocalTx(importTx))
-	require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	require.NoError(t, err)
@@ -3791,7 +3799,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -3922,7 +3930,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blk2, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -3934,7 +3942,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	// Expect block building to fail due to insufficient gas capacity
 	_, err = tvm.vm.BuildBlock(ctx)
 	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
@@ -3942,7 +3950,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	// Wait to fill block capacity and retry block builiding
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blk3, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -3978,7 +3986,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.NoError(err)
 	require.NoError(tvm.vm.atomicVM.AtomicMempool.AddLocalTx(importTx2))
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blk1, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -4014,7 +4022,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blk2, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 
@@ -4035,13 +4043,13 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.Len(errs, 1)
 	require.NoError(errs[0])
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	_, err = tvm.vm.BuildBlock(ctx)
 	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
 
 	// Wait to fill block capacity and retry block building
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 	blk4, err := tvm.vm.BuildBlock(ctx)
 	require.NoError(err)
 	ethBlk4 := blk4.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
@@ -4107,7 +4115,7 @@ func TestSubscribeToEvents(t *testing.T) {
 		vm                 *VM
 	}{
 		{
-			name:               "SubscribeToEvents with context cancelled returns 0",
+			name:               "WaitForEvent with context cancelled returns 0",
 			shutdownUponFinish: true,
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
@@ -4116,17 +4124,19 @@ func TestSubscribeToEvents(t *testing.T) {
 				var wg sync.WaitGroup
 				wg.Add(1)
 
-				// We run SubscribeToEvents in a goroutine to ensure it can be safely called concurrently.
+				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
 					defer wg.Done()
-					require.Equal(t, commonEng.Message(0), vm.SubscribeToEvents(ctx))
+					msg, err := vm.WaitForEvent(ctx)
+					require.NoError(t, err)
+					require.Equal(t, commonEng.Message(0), msg)
 				}()
 
 				wg.Wait()
 			},
 		},
 		{
-			name:               "SubscribeToEvents returns when a transaction is added to the mempool",
+			name:               "WaitForEvent returns when a transaction is added to the mempool",
 			shutdownUponFinish: true,
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
@@ -4139,10 +4149,12 @@ func TestSubscribeToEvents(t *testing.T) {
 
 				go func() {
 					defer wg.Done()
-					require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+					msg, err := vm.WaitForEvent(context.Background())
+					require.NoError(t, err)
+					require.Equal(t, commonEng.PendingTxs, msg)
 				}()
 
-				if err := vm.mempool.AddLocalTx(importTx); err != nil {
+				if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx); err != nil {
 					t.Fatal(err)
 				}
 
@@ -4150,7 +4162,7 @@ func TestSubscribeToEvents(t *testing.T) {
 			},
 		},
 		{
-			name:               "SubscribeToEvents doesn't return once a block is built and accepted",
+			name:               "WaitForEvent doesn't return once a block is built and accepted",
 			shutdownUponFinish: true,
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := vm.newImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
@@ -4158,7 +4170,7 @@ func TestSubscribeToEvents(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err := vm.mempool.AddLocalTx(importTx); err != nil {
+				if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx); err != nil {
 					t.Fatal(err)
 				}
 
@@ -4185,15 +4197,17 @@ func TestSubscribeToEvents(t *testing.T) {
 				var wg sync.WaitGroup
 				wg.Add(1)
 
-				// We run SubscribeToEvents in a goroutine to ensure it can be safely called concurrently.
+				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
 					defer wg.Done()
-					require.Equal(t, commonEng.Message(0), vm.SubscribeToEvents(ctx))
+					msg, err := vm.WaitForEvent(ctx)
+					require.NoError(t, err)
+					require.Equal(t, commonEng.Message(0), msg)
 				}()
 
 				wg.Wait()
 
-				t.Log("SubscribeToEvents returns when regular transactions are added to the mempool")
+				t.Log("WaitForEvent returns when regular transactions are added to the mempool")
 
 				txs := make([]*types.Transaction, 10)
 				for i := 0; i < 10; i++ {
@@ -4215,7 +4229,9 @@ func TestSubscribeToEvents(t *testing.T) {
 
 				go func() {
 					defer wg.Done()
-					require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+					msg, err := vm.WaitForEvent(context.Background())
+					require.NoError(t, err)
+					require.Equal(t, commonEng.PendingTxs, msg)
 				}()
 
 				wg.Wait()
@@ -4240,7 +4256,7 @@ func TestSubscribeToEvents(t *testing.T) {
 			},
 		},
 		{
-			name: "SubscribeToEvents returns 0 when VM is shutdown",
+			name: "WaitForEvent returns 0 when VM is shutdown",
 			tst: func(vm *VM, address common.Address, key *ecdsa.PrivateKey) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 				defer cancel()
@@ -4248,10 +4264,12 @@ func TestSubscribeToEvents(t *testing.T) {
 				var wg sync.WaitGroup
 				wg.Add(1)
 
-				// We run SubscribeToEvents in a goroutine to ensure it can be safely called concurrently.
+				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
 					defer wg.Done()
-					require.Equal(t, commonEng.Message(0), vm.SubscribeToEvents(ctx))
+					msg, err := vm.WaitForEvent(ctx)
+					require.NoError(t, err)
+					require.Equal(t, commonEng.Message(0), msg)
 				}()
 
 				vm.Shutdown(context.Background())

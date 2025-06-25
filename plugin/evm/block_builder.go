@@ -48,13 +48,13 @@ type blockBuilder struct {
 
 // NewBlockBuilder creates a new block builder. extraMempool is an optional mempool (can be nil) that
 // can be used to add transactions to the block builder, in addition to the txPool.
-func (vm *VM) NewBlockBuilder(notifyBuildBlockChan chan<- commonEng.Message, extraMempool extension.BuilderMempool) *blockBuilder {
+func (vm *VM) NewBlockBuilder(extraMempool extension.BuilderMempool) *blockBuilder {
 	b := &blockBuilder{
-		ctx:                  vm.ctx,
-		txPool:               vm.txPool,
-		extraMempool:         extraMempool,
-		shutdownChan:         vm.shutdownChan,
-		shutdownWg:           &vm.shutdownWg,
+		ctx:          vm.ctx,
+		txPool:       vm.txPool,
+		extraMempool: extraMempool,
+		shutdownChan: vm.shutdownChan,
+		shutdownWg:   &vm.shutdownWg,
 	}
 	b.pendingSignal = sync.Cond{L: &b.buildBlockLock}
 	b.handleBlockBuilding()

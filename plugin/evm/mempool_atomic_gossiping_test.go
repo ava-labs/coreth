@@ -63,7 +63,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
-			require.Equal(t, common.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+			require.Equal(t, common.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			has = mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")

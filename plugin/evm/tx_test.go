@@ -174,7 +174,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		t.Fatal(err)
 	}
 
-	require.Equal(t, common2.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(t, common2.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
 	blk, err := tvm.vm.BuildBlock(context.Background())

@@ -72,7 +72,9 @@ func createExportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 		t.Fatal(err)
 	}
 
-	require.Equal(t, commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+	msg, err := vm.WaitForEvent(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, commonEng.PendingTxs, msg)
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -391,7 +393,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1752,7 +1754,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1951,7 +1953,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			require.Equal(t, commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {

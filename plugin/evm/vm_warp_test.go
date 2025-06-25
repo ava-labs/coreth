@@ -107,7 +107,7 @@ func TestSendWarpMessage(t *testing.T) {
 	errs := tvm.vm.txPool.AddRemotesSync([]*types.Transaction{signedTx0})
 	require.NoError(errs[0])
 
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	require.NoError(err)
@@ -376,7 +376,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 		blockCtx.PChainHeight = minimumValidPChainHeight
 	}
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
-	require.Equal(commonEng.PendingTxs, tvm.vm.SubscribeToEvents(context.Background()))
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	warpBlock, err := tvm.vm.BuildBlockWithContext(context.Background(), blockCtx)
 	require.NoError(err)
@@ -657,7 +657,9 @@ func testReceiveWarpMessage(
 		PChainHeight: minimumValidPChainHeight,
 	}
 	vm.clock.Set(blockTime)
-	require.Equal(commonEng.PendingTxs, vm.SubscribeToEvents(context.Background()))
+	msg, err := vm.WaitForEvent(context.Background())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
 	block2, err := vm.BuildBlockWithContext(context.Background(), validProposerCtx)
 	require.NoError(err)
