@@ -53,13 +53,12 @@ type proposable interface {
 // ProposalContext represents a proposal in the Firewood database.
 // This tracks all outstanding proposals to allow dereferencing upon commit.
 type ProposalContext struct {
-	Proposal   *ffi.Proposal
-	Hashes     map[common.Hash]struct{} // All corresponding block hashes
-	ParentHash common.Hash              // The parent block hash, if known
-	Root       common.Hash
-	Block      uint64
-	Parent     *ProposalContext
-	Children   []*ProposalContext
+	Proposal *ffi.Proposal
+	Hashes   map[common.Hash]struct{} // All corresponding block hashes
+	Root     common.Hash
+	Block    uint64
+	Parent   *ProposalContext
+	Children []*ProposalContext
 }
 
 type Config struct {
@@ -217,7 +216,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 			}
 			// We already have this proposal, but should create a new context with the correct hash.
 			// This solves the case of a unique block hash, but the same underlying proposal.
-			if existing.ParentHash == parentHash && existing.Root == root && existing.Block == block {
+			if _, exists := existing.Parent.Hashes[parentHash]; exists && existing.Root == root && existing.Block == block {
 				log.Debug("firewood: proposal already exists, updating hash", "root", root.Hex(), "parent", parentRoot.Hex(), "block", block, "hash", hash.Hex())
 				existing.Hashes[hash] = struct{}{}
 				return nil
@@ -259,12 +258,11 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 			return err
 		}
 		pCtx := &ProposalContext{
-			Proposal:   p,
-			Hashes:     map[common.Hash]struct{}{hash: {}},
-			ParentHash: parentHash,
-			Root:       root,
-			Block:      block,
-			Parent:     parentProposal,
+			Proposal: p,
+			Hashes:   map[common.Hash]struct{}{hash: {}},
+			Root:     root,
+			Block:    block,
+			Parent:   parentProposal,
 		}
 
 		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
@@ -288,12 +286,11 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 		return err
 	}
 	pCtx := &ProposalContext{
-		Proposal:   p,
-		Hashes:     map[common.Hash]struct{}{hash: {}}, // This may be common.Hash{} for genesis blocks.
-		ParentHash: parentHash,
-		Root:       root,
-		Block:      block,
-		Parent:     db.proposalTree,
+		Proposal: p,
+		Hashes:   map[common.Hash]struct{}{hash: {}}, // This may be common.Hash{} for genesis blocks.
+		Root:     root,
+		Block:    block,
+		Parent:   db.proposalTree,
 	}
 	db.proposalMap[root] = append(db.proposalMap[root], pCtx)
 	db.proposalTree.Children = append(db.proposalTree.Children, pCtx)
@@ -516,84 +513,27 @@ func (db *Database) removeProposalFromMap(pCtx *ProposalContext) {
 	}
 }
 
-// proposalAtRoot returns any proposal at the given root.
-// If there are multiple proposals with the same root, it will return the first one.
-// If no proposal is found, it will return nil.
-func (db *Database) proposalAtRoot(root common.Hash) *ffi.Proposal {
-	// Check if the state root corresponds with a proposal.
-	proposals, ok := db.proposalMap[root]
-	if ok && len(proposals) > 0 {
-		// If there are multiple proposals with the same root, we can use the first one.
-		if len(proposals) > 1 {
-			log.Debug("Multiple proposals found for root", "root", root.Hex(), "count", len(proposals))
-		}
-		return proposals[0].Proposal
-	}
-
-	// No proposal found
-	return nil
-}
-
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
-	db.proposalLock.RLock()
-	defer db.proposalLock.RUnlock()
-	// Check if we can currently read the requested root
-	var rev *ffi.Revision
-	prop := db.proposalAtRoot(root)
-	if prop == nil {
-		var err error
-		rev, err = db.fwDisk.Revision(root.Bytes())
-		if err != nil {
-			return nil, fmt.Errorf("firewood: requested state root %s not found", root.Hex())
-		}
+	if _, err := db.fwDisk.GetFromRoot(root.Bytes(), []byte{}); err != nil {
+		return nil, fmt.Errorf("firewood: unable to retrieve from root %s: %w", root.Hex(), err)
 	}
-
-	return &reader{db: db, root: root, revision: rev}, nil
+	return &reader{db: db, root: root}, nil
 }
 
 // reader is a state reader of Database which implements the Reader interface.
 type reader struct {
-	db       *Database
-	root     common.Hash   // The root of the state this reader is reading.
-	revision *ffi.Revision // The revision at which this reader is created.
+	db   *Database
+	root common.Hash // The root of the state this reader is reading.
 }
 
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
 // It defaults to using a revision if available.
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
-	// If we have a revision, we can use it to get the node.
-	// We don't need the lock in this case.
-	if reader.revision != nil {
-		start := time.Now()
-		result, err := reader.revision.Get(path)
-		ffiReadCount.Inc(1)
-		ffiReadTimer.Inc(time.Since(start).Milliseconds())
-		return result, err
-	}
-
-	// The most likely path when the revision is nil is that the root is not committed yet.
-	reader.db.proposalLock.RLock()
-	defer reader.db.proposalLock.RUnlock()
-	prop := reader.db.proposalAtRoot(reader.root)
-	if prop != nil {
-		start := time.Now()
-		result, err := prop.Get(path)
-		ffiReadCount.Inc(1)
-		ffiReadTimer.Inc(time.Since(start).Milliseconds())
-		return result, err
-	}
-
-	// Assume that the root is now committed and we can use it for the lifetime of the reader.
-	rev, err := reader.db.fwDisk.Revision(reader.root.Bytes())
-	if err != nil || rev == nil {
-		return nil, fmt.Errorf("firewood: requested state root %s not found", reader.root.Hex())
-	}
-	reader.revision = rev
 	start := time.Now()
-	result, err := rev.Get(path)
+	result, err := reader.db.fwDisk.GetFromRoot(reader.root.Bytes(), path)
 	ffiReadCount.Inc(1)
 	ffiReadTimer.Inc(time.Since(start).Milliseconds())
 	return result, err
