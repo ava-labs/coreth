@@ -155,7 +155,10 @@ jobs:
         with:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
-          path: /tmp/e2e/warp/avalanchego
+          path: avalanchego
+      - name: Move AvalancheGo
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: mv avalanchego /tmp/e2e/warp/avalanchego
       - name: Build AvalancheGo and update Coreth dependency
         run: ./scripts/build_avalanchego_with_coreth.sh
         env:
@@ -165,7 +168,9 @@ jobs:
         with:
           repository: ava-labs/subnet-evm
           ref: master
-          path: /tmp/e2e/warp/subnet-evm
+          path: subnet-evm
+      - name: Move Subnet-EVM
+        run: mv subnet-evm /tmp/e2e/warp/subnet-evm
       - name: Build Subnet-EVM
         run: |
           cd /tmp/e2e/warp/subnet-evm
