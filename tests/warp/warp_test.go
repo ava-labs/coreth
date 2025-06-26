@@ -90,7 +90,7 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	// Run only once in the first ginkgo process
 
 	tc := e2e.NewTestContext()
-	nodes := utils.NewTmpnetNodes(tmpnet.DefaultNodeCount)
+	nodes := tmpnet.NewNodesOrPanic(tmpnet.DefaultNodeCount)
 
 	env := e2e.NewTestEnvironment(
 		tc,

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# This script updates the AvalancheGo dependency to point to the local Coreth path
-# Usage: ./update_avalanchego_dep.sh <coreth_path>
+# This script builds a new AvalancheGo binary with the Coreth dependency pointing to the local Coreth path
+# Usage: ./build_avalanchego_with_coreth.sh with optional AVALANCHEGO_VERSION and AVALANCHEGO_CLONE_PATH environment variables
 
-set -e
+set -euo pipefail
 
 # Coreth root directory
 CORETH_PATH=$(
