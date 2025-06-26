@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
+	syncervm "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
@@ -60,7 +61,7 @@ func TestSkipStateSync(t *testing.T) {
 		stateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
 		syncMode:           block.StateSyncSkipped,
 	}
-	vmSetup := createSyncServerAndClientVMs(t, test, parentsToGet)
+	vmSetup := createSyncServerAndClientVMs(t, test, syncervm.ParentsToFetch)
 
 	testSyncerVM(t, vmSetup, test)
 }
@@ -72,14 +73,14 @@ func TestStateSyncFromScratch(t *testing.T) {
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		syncMode:           block.StateSyncStatic,
 	}
-	vmSetup := createSyncServerAndClientVMs(t, test, parentsToGet)
+	vmSetup := createSyncServerAndClientVMs(t, test, syncervm.ParentsToFetch)
 
 	testSyncerVM(t, vmSetup, test)
 }
 
 func TestStateSyncFromScratchExceedParent(t *testing.T) {
 	rand.Seed(1)
-	numToGen := parentsToGet + uint64(32)
+	numToGen := syncervm.ParentsToFetch + uint64(32)
 	test := syncTest{
 		syncableInterval:   numToGen,
 		stateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -109,11 +110,8 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID, commonEng.ErrTimeout); err != nil {
 					panic(err)
 				}
-				cancel := syncerVM.StateSyncClient.(*stateSyncerClient).cancel
-				if cancel != nil {
-					cancel()
-				} else {
-					t.Fatal("state sync client not populated correctly")
+				if err := syncerVM.Client.Shutdown(); err != nil {
+					panic(err)
 				}
 			} else {
 				syncerVM.AppResponse(context.Background(), nodeID, requestID, response)
@@ -121,7 +119,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		},
 		expectedErr: context.Canceled,
 	}
-	vmSetup := createSyncServerAndClientVMs(t, test, parentsToGet)
+	vmSetup := createSyncServerAndClientVMs(t, test, syncervm.ParentsToFetch)
 
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, vmSetup, test)
@@ -169,7 +167,7 @@ func TestStateSyncToggleEnabledToDisabled(t *testing.T) {
 		t.Fatalf("Unexpected last accepted height: %d", height)
 	}
 
-	enabled, err := syncDisabledVM.StateSyncEnabled(context.Background())
+	enabled, err := syncDisabledVM.Client.StateSyncEnabled(context.Background())
 	assert.NoError(t, err)
 	assert.False(t, enabled, "sync should be disabled")
 
@@ -275,7 +273,7 @@ func TestVMShutdownWhileSyncing(t *testing.T) {
 		},
 		expectedErr: context.Canceled,
 	}
-	vmSetup = createSyncServerAndClientVMs(t, test, parentsToGet)
+	vmSetup = createSyncServerAndClientVMs(t, test, syncervm.ParentsToFetch)
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, vmSetup, test)
 }
@@ -312,7 +310,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 			// spend the UTXOs from shared memory
 			importTx, err = server.vm.newImportTx(server.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			require.NoError(err)
-			require.NoError(server.vm.mempool.AddLocalTx(importTx))
+			require.NoError(server.vm.atomicVM.AtomicMempool.AddLocalTx(importTx))
 		case 1:
 			// export some of the imported UTXOs to test exportTx is properly synced
 			exportTx, err = server.vm.newExportTx(
@@ -324,7 +322,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 				[]*secp256k1.PrivateKey{testKeys[0]},
 			)
 			require.NoError(err)
-			require.NoError(server.vm.mempool.AddLocalTx(exportTx))
+			require.NoError(server.vm.atomicVM.AtomicMempool.AddLocalTx(exportTx))
 		default: // Generate simple transfer transactions.
 			pk := testKeys[0].ToECDSA()
 			tx := types.NewTransaction(gen.TxNonce(testEthAddrs[0]), testEthAddrs[1], common.Big1, params.TxGas, initialBaseFee, nil)
@@ -337,7 +335,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// override serverAtomicTrie's commitInterval so the call to [serverAtomicTrie.Index]
 	// creates a commit at the height [syncableInterval]. This is necessary to support
 	// fetching a state summary.
-	serverAtomicTrie := server.vm.atomicBackend.AtomicTrie()
+	serverAtomicTrie := server.vm.atomicVM.AtomicBackend.AtomicTrie()
 	require.NoError(serverAtomicTrie.Commit(test.syncableInterval, serverAtomicTrie.LastAcceptedRoot()))
 	require.NoError(server.vm.versiondb.Commit())
 
@@ -363,9 +361,6 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	internalBlock, err := server.vm.parseBlock(context.Background(), blockBytes)
 	require.NoError(err)
 	require.NoError(server.vm.State.SetLastAcceptedBlock(internalBlock))
-
-	// patch syncableInterval for test
-	server.vm.StateSyncServer.(*stateSyncServer).syncableInterval = test.syncableInterval
 
 	// initialise [syncerVM] with blank genesis state
 	stateSyncEnabledJSON := fmt.Sprintf(`{"state-sync-enabled":true, "state-sync-min-blocks": %d, "tx-lookup-limit": %d, "commit-interval": %d}`, test.stateSyncMinBlocks, 4, test.syncableInterval)
@@ -494,7 +489,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	require.Equal(commonEng.StateSyncDone, msg)
 
 	// If the test is expected to error, assert the correct error is returned and finish the test.
-	err = syncerVM.StateSyncClient.Error()
+	err = syncerVM.Client.Error()
 	if test.expectedErr != nil {
 		require.ErrorIs(err, test.expectedErr)
 		// Note we re-open the database here to avoid a closed error when the test is for a shutdown VM.
@@ -653,7 +648,7 @@ func generateAndAcceptBlocks(t *testing.T, vm *VM, numBlocks int, gen func(int, 
 	_, _, err := core.GenerateChain(
 		vm.chainConfig,
 		vm.blockChain.LastAcceptedBlock(),
-		dummy.NewFakerWithCallbacks(vm.createConsensusCallbacks()),
+		dummy.NewFakerWithCallbacks(vm.extensionConfig.ConsensusCallbacks),
 		vm.chaindb,
 		numBlocks,
 		10,

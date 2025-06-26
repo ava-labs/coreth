@@ -22,6 +22,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
@@ -65,7 +66,7 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 
-	if err := vm.mempool.AddLocalTx(importTx); err != nil {
+	if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx); err != nil {
 		t.Fatal(err)
 	}
 
@@ -384,7 +385,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := tvm.vm.mempool.AddLocalTx(tx); err != nil {
+			if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
@@ -457,7 +458,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 		}
 	}()
 
-	parent := vm.LastAcceptedBlockInternal().(*Block)
+	parent := vm.LastAcceptedExtendedBlock()
 
 	key := testKeys[0]
 	addr := key.Address()
@@ -922,20 +923,20 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		backend := &atomic.VerifierBackend{
+		backend := &atomicvm.VerifierBackend{
 			Ctx:          vm.ctx,
-			Fx:           &vm.fx,
+			Fx:           &vm.atomicVM.Fx,
 			Rules:        test.rules,
 			Bootstrapped: vm.bootstrapped.Get(),
 			BlockFetcher: vm,
-			SecpCache:    vm.secpCache,
+			SecpCache:    vm.atomicVM.SecpCache,
 		}
 
 		t.Run(test.name, func(t *testing.T) {
 			tx := test.tx
 			exportTx := tx.UnsignedAtomicTx
 
-			err := exportTx.Visit(&atomic.SemanticVerifier{
+			err := exportTx.Visit(&atomicvm.SemanticVerifier{
 				Backend: backend,
 				Tx:      tx,
 				Parent:  parent,
@@ -1708,7 +1709,7 @@ func TestNewExportTx(t *testing.T) {
 				}
 			}()
 
-			parent := tvm.vm.LastAcceptedBlockInternal().(*Block)
+			parent := tvm.vm.LastAcceptedExtendedBlock()
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1745,7 +1746,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := tvm.vm.mempool.AddLocalTx(tx); err != nil {
+			if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1768,7 +1769,7 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = tvm.vm.LastAcceptedBlockInternal().(*Block)
+			parent = tvm.vm.LastAcceptedExtendedBlock()
 			exportAmount := uint64(5000000)
 
 			state, err := tvm.vm.blockChain.State()
@@ -1783,20 +1784,20 @@ func TestNewExportTx(t *testing.T) {
 
 			exportTx := tx.UnsignedAtomicTx
 
-			backend := &atomic.VerifierBackend{
+			backend := &atomicvm.VerifierBackend{
 				Ctx:          tvm.vm.ctx,
-				Fx:           &tvm.vm.fx,
+				Fx:           &tvm.vm.atomicVM.Fx,
 				Rules:        tvm.vm.currentRules(),
 				Bootstrapped: tvm.vm.bootstrapped.Get(),
 				BlockFetcher: tvm.vm,
-				SecpCache:    tvm.vm.secpCache,
+				SecpCache:    tvm.vm.atomicVM.SecpCache,
 			}
 
-			if err := exportTx.Visit(&atomic.SemanticVerifier{
+			if err := exportTx.Visit(&atomicvm.SemanticVerifier{
 				Backend: backend,
 				Tx:      tx,
 				Parent:  parent,
-				BaseFee: parent.ethBlock.BaseFee(),
+				BaseFee: parent.GetEthBlock().BaseFee(),
 			}); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
@@ -1877,7 +1878,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				}
 			}()
 
-			parent := tvm.vm.LastAcceptedBlockInternal().(*Block)
+			parent := tvm.vm.LastAcceptedExtendedBlock()
 			importAmount := uint64(50000000)
 			utxoID := avax.UTXOID{TxID: ids.GenerateTestID()}
 
@@ -1944,7 +1945,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := tvm.vm.mempool.AddRemoteTx(tx); err != nil {
+			if err := tvm.vm.atomicVM.AtomicMempool.AddRemoteTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1967,7 +1968,7 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			parent = tvm.vm.LastAcceptedBlockInternal().(*Block)
+			parent = tvm.vm.LastAcceptedExtendedBlock()
 			exportAmount := uint64(5000000)
 
 			testKeys0Addr := testKeys[0].EthAddress()
@@ -1987,20 +1988,20 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			}
 
 			exportTx := tx.UnsignedAtomicTx
-			backend := &atomic.VerifierBackend{
+			backend := &atomicvm.VerifierBackend{
 				Ctx:          tvm.vm.ctx,
-				Fx:           &tvm.vm.fx,
+				Fx:           &tvm.vm.atomicVM.Fx,
 				Rules:        tvm.vm.currentRules(),
 				Bootstrapped: tvm.vm.bootstrapped.Get(),
 				BlockFetcher: tvm.vm,
-				SecpCache:    tvm.vm.secpCache,
+				SecpCache:    tvm.vm.atomicVM.SecpCache,
 			}
 
-			if err := exportTx.Visit(&atomic.SemanticVerifier{
+			if err := exportTx.Visit(&atomicvm.SemanticVerifier{
 				Backend: backend,
 				Tx:      tx,
 				Parent:  parent,
-				BaseFee: parent.ethBlock.BaseFee(),
+				BaseFee: parent.GetEthBlock().BaseFee(),
 			}); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
