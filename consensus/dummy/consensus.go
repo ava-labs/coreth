@@ -59,7 +59,6 @@ type (
 		block *types.Block,
 		parent *types.Header,
 		statedb *state.StateDB,
-		config *params.ChainConfig,
 	) (
 		blockFeeContribution *big.Int,
 		extDataGasUsed *big.Int,
@@ -372,7 +371,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		err                          error
 	)
 	if eng.cb.OnExtraStateChange != nil {
-		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state, chain.Config())
+		contribution, extDataGasUsed, err = eng.cb.OnExtraStateChange(block, parent, state)
 		if err != nil {
 			return err
 		}

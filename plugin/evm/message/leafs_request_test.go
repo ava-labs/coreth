@@ -33,7 +33,7 @@ func TestMarshalLeafsRequest(t *testing.T) {
 		Start:    startBytes,
 		End:      endBytes,
 		Limit:    1024,
-		NodeType: NodeType(1),
+		NodeType: StateTrieNode,
 	}
 
 	base64LeafsRequest := "AAAAAAAAAAAAAAAAAAAAAABpbSBST09UaW5nIGZvciB5YQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIFL9/AchgmVPFj9fD5piHXKVZsdNEAN8TXu7BAfR4sZJAAAAIIGFWthoHQ2G0ekeABZ5OctmlNLEIqzSCKAHKTlIf2mZBAAB"

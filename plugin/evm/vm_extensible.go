@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
@@ -60,6 +61,10 @@ func (vm *VM) LastAcceptedExtendedBlock() extension.ExtendedBlock {
 // IsBootstrapped returns true if the VM has finished bootstrapping
 func (vm *VM) IsBootstrapped() bool {
 	return vm.bootstrapped.Get()
+}
+
+func (vm *VM) ChainConfig() *params.ChainConfig {
+	return vm.chainConfig
 }
 
 func (vm *VM) Ethereum() *eth.Ethereum {

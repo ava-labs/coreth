@@ -132,31 +132,25 @@ func (vm *VM) Initialize(
 	fujiExtDataHashes = nil
 	mainnetExtDataHashes = nil
 
-	networkCodec, err := message.NewCodec(atomicsync.AtomicSyncSummary{})
-	if err != nil {
-		return fmt.Errorf("failed to create codec manager: %w", err)
-	}
-
 	// Create the atomic extension structs
 	// some of them need to be initialized after the inner VM is initialized
 	blockExtender := newBlockExtender(extDataHashes, vm)
-	syncExtender := &atomicsync.AtomicSyncExtender{}
-	syncProvider := &atomicsync.AtomicSummaryProvider{}
+	syncExtender := atomicsync.NewExtender()
+	syncProvider := atomicsync.NewSummaryProvider()
 	// Create and pass the leaf handler to the atomic extension
 	// it will be initialized after the inner VM is initialized
-	leafHandler := atomicsync.NewAtomicLeafHandler()
+	leafHandler := atomicsync.NewLeafHandler()
 	atomicLeafTypeConfig := &extension.LeafRequestConfig{
-		LeafType:   atomicsync.AtomicTrieNode,
+		LeafType:   atomicsync.TrieNode,
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
 	vm.Mempool = &txpool.Mempool{}
 
 	extensionConfig := &extension.Config{
-		NetworkCodec:               networkCodec,
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
 		BlockExtender:              blockExtender,
-		SyncableParser:             atomicsync.NewAtomicSyncSummaryParser(),
+		SyncableParser:             atomicsync.NewSummaryParser(),
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
@@ -183,7 +177,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Now we can initialize the mempool and so
-	err = vm.Mempool.Initialize(chainCtx, vm.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
+	err := vm.Mempool.Initialize(chainCtx, vm.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -193,6 +187,7 @@ func (vm *VM) Initialize(
 		bonusBlockHeights map[uint64]ids.ID
 	)
 	if vm.ctx.NetworkID == constants.MainnetID {
+		var err error
 		bonusBlockHeights, err = readMainnetBonusBlocks()
 		if err != nil {
 			return fmt.Errorf("failed to read mainnet bonus blocks: %w", err)
@@ -220,7 +215,7 @@ func (vm *VM) Initialize(
 	// Atomic backend is available now, we can initialize structs that depend on it
 	syncProvider.Initialize(vm.AtomicBackend.AtomicTrie())
 	syncExtender.Initialize(vm.AtomicBackend, vm.AtomicBackend.AtomicTrie(), vm.Config().StateSyncRequestSize)
-	leafHandler.Initialize(vm.AtomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, networkCodec)
+	leafHandler.Initialize(vm.AtomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, message.Codec)
 
 	vm.SecpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
@@ -672,11 +667,12 @@ func (vm *VM) onFinalizeAndAssemble(
 	return vm.postBatchOnFinalizeAndAssemble(header, parent, state, txs)
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB, chainConfig *params.ChainConfig) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
 		header                     = block.Header()
+		chainConfig                = vm.ChainConfig()
 		// We cannot use chain config from InnerVM since it's not available when this function is called for the first time (bc.loadLastState).
 		rules      = chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
 		rulesExtra = *params.GetRulesExtra(rules)

@@ -26,19 +26,19 @@ func (h *uninitializedHandler) OnLeafsRequest(ctx context.Context, nodeID ids.No
 }
 
 // atomicLeafHandler is a wrapper around handlers.LeafRequestHandler that allows for initialization after creation
-type atomicLeafHandler struct {
+type leafHandler struct {
 	handlers.LeafRequestHandler
 }
 
 // NewAtomicLeafHandler returns a new uninitialzied atomicLeafHandler that can be later initialized
-func NewAtomicLeafHandler() *atomicLeafHandler {
-	return &atomicLeafHandler{
+func NewLeafHandler() *leafHandler {
+	return &leafHandler{
 		LeafRequestHandler: &uninitializedHandler{},
 	}
 }
 
 // Initialize initializes the atomicLeafHandler with the provided atomicTrieDB, trieKeyLength, and networkCodec
-func (a *atomicLeafHandler) Initialize(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) {
+func (a *leafHandler) Initialize(atomicTrieDB *triedb.Database, trieKeyLength int, networkCodec codec.Manager) {
 	handlerStats := stats.GetOrRegisterHandlerStats(metrics.Enabled)
 	a.LeafRequestHandler = handlers.NewLeafsRequestHandler(atomicTrieDB, trieKeyLength, nil, networkCodec, handlerStats)
 }
