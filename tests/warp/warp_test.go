@@ -20,7 +20,6 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
@@ -33,6 +32,7 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 
+	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/cmd/simulator/key"
 	"github.com/ava-labs/coreth/cmd/simulator/load"
 	"github.com/ava-labs/coreth/cmd/simulator/metrics"
@@ -90,7 +90,7 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	// Run only once in the first ginkgo process
 
 	tc := e2e.NewTestContext()
-	nodes := utils.NewTmpnetNodes(tmpnet.DefaultNodeCount)
+	nodes := tmpnet.NewNodesOrPanic(tmpnet.DefaultNodeCount)
 
 	env := e2e.NewTestEnvironment(
 		tc,
@@ -266,20 +266,6 @@ func (w *warpTest) initClients() {
 	}
 }
 
-func (w *warpTest) getBlockHashAndNumberFromTxReceipt(ctx context.Context, client *ethclient.Client, tx *types.Transaction) (common.Hash, uint64) {
-	// This uses the coreth client to fetch a block from Coreth (when testing the C-Chain), so we use this
-	// workaround to get the correct block hash. Note the client recalculates the block hash locally, which results
-	// in a different block hash due to small differences in the block format.
-	require := require.New(ginkgo.GinkgoT())
-	for {
-		require.NoError(ctx.Err())
-		receipt, err := client.TransactionReceipt(ctx, tx.Hash())
-		if err == nil {
-			return receipt.BlockHash, receipt.BlockNumber.Uint64()
-		}
-	}
-}
-
 func (w *warpTest) sendMessageFromSendingSubnet() {
 	tc := e2e.NewTestContext()
 	ctx := tc.DefaultContext()
@@ -310,7 +296,10 @@ func (w *warpTest) sendMessageFromSendingSubnet() {
 	ginkgo.GinkgoLogr.Info("Waiting for transaction to be accepted")
 	receiptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	blockHash, blockNumber := w.getBlockHashAndNumberFromTxReceipt(receiptCtx, client, signedTx)
+	receipt, err := bind.WaitMined(receiptCtx, client, signedTx)
+	require.NoError(err)
+	blockHash := receipt.BlockHash
+	blockNumber := receipt.BlockNumber.Uint64()
 
 	ginkgo.GinkgoLogr.Info("Constructing warp block hash unsigned message", "blockHash", blockHash)
 	w.blockID = ids.ID(blockHash) // Set blockID to construct a warp message containing a block hash payload later
@@ -396,7 +385,7 @@ func (w *warpTest) aggregateSignaturesViaAPI() {
 		totalWeight += validator.Weight
 	}
 
-	log.Info("Aggregating signatures from validator set", "numValidators", len(warpValidators), "totalWeight", totalWeight)
+	ginkgo.GinkgoLogr.Info("Aggregating signatures from validator set", "numValidators", len(warpValidators), "totalWeight", totalWeight)
 	apiSignatureGetter := NewAPIFetcher(warpAPIs)
 	signatureResult, err := aggregator.New(apiSignatureGetter, warpValidators, totalWeight).AggregateSignatures(ctx, w.addressedCallUnsignedMessage, 100)
 	require.NoError(err)
@@ -473,7 +462,9 @@ func (w *warpTest) deliverAddressedCallToReceivingSubnet() {
 	ginkgo.GinkgoLogr.Info("Waiting for transaction to be accepted")
 	receiptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	blockHash, _ := w.getBlockHashAndNumberFromTxReceipt(receiptCtx, client, signedTx)
+	receipt, err := bind.WaitMined(receiptCtx, client, signedTx)
+	require.NoError(err)
+	blockHash := receipt.BlockHash
 
 	ginkgo.GinkgoLogr.Info("Fetching relevant warp logs and receipts from new block")
 	logs, err := client.FilterLogs(ctx, ethereum.FilterQuery{
@@ -482,7 +473,6 @@ func (w *warpTest) deliverAddressedCallToReceivingSubnet() {
 	})
 	require.NoError(err)
 	require.Len(logs, 0)
-	receipt, err := client.TransactionReceipt(ctx, signedTx.Hash())
 	require.NoError(err)
 	require.Equal(receipt.Status, types.ReceiptStatusSuccessful)
 }
@@ -522,7 +512,9 @@ func (w *warpTest) deliverBlockHashPayload() {
 	ginkgo.GinkgoLogr.Info("Waiting for transaction to be accepted")
 	receiptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	blockHash, _ := w.getBlockHashAndNumberFromTxReceipt(receiptCtx, client, signedTx)
+	receipt, err := bind.WaitMined(receiptCtx, client, signedTx)
+	require.NoError(err)
+	blockHash := receipt.BlockHash
 	ginkgo.GinkgoLogr.Info("Fetching relevant warp logs and receipts from new block")
 	logs, err := client.FilterLogs(ctx, ethereum.FilterQuery{
 		BlockHash: &blockHash,
@@ -530,7 +522,6 @@ func (w *warpTest) deliverBlockHashPayload() {
 	})
 	require.NoError(err)
 	require.Len(logs, 0)
-	receipt, err := client.TransactionReceipt(ctx, signedTx.Hash())
 	require.NoError(err)
 	require.Equal(receipt.Status, types.ReceiptStatusSuccessful)
 }

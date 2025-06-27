@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -31,7 +32,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				err := tvm.vm.Shutdown(context.Background())
 				assert.NoError(err)
 			}()
-			mempool := tvm.vm.mempool
+			mempool := tvm.vm.atomicVM.AtomicMempool
 
 			// generate a valid and conflicting tx
 			var (
@@ -48,13 +49,13 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			conflictingTxID := conflictingTx.ID()
 
 			// add a tx to the mempool
-			err := tvm.vm.mempool.AddLocalTx(tx)
+			err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx)
 			assert.NoError(err)
 			has := mempool.Has(txID)
 			assert.True(has, "valid tx not recorded into mempool")
 
 			// try to add a conflicting tx
-			err = tvm.vm.mempool.AddLocalTx(conflictingTx)
+			err = tvm.vm.atomicVM.AtomicMempool.AddLocalTx(conflictingTx)
 			assert.ErrorIs(err, atomictxpool.ErrConflictingAtomicTx)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
@@ -69,10 +70,13 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			assert.NoError(err, "could not build block out of mempool")
 
-			evmBlk, ok := blk.(*chain.BlockWrapper).Block.(*Block)
+			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
 			assert.True(ok, "unknown block type")
 
-			assert.Equal(txID, evmBlk.atomicTxs[0].ID(), "block does not include expected transaction")
+			blockExtension, ok := wrappedBlock.GetBlockExtension().(atomic.AtomicBlockContext)
+			assert.True(ok, "unknown block extension type")
+
+			assert.Equal(txID, blockExtension.AtomicTxs()[0].ID(), "block does not include expected transaction")
 
 			has = mempool.Has(txID)
 			assert.True(has, "tx should stay in mempool until block is accepted")

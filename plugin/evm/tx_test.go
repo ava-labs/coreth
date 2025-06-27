@@ -15,6 +15,7 @@ import (
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -113,16 +114,16 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		baseFee = initialBaseFee
 	}
 
-	lastAcceptedBlock := tvm.vm.LastAcceptedBlockInternal().(*Block)
-	backend := &atomic.VerifierBackend{
+	lastAcceptedBlock := tvm.vm.LastAcceptedExtendedBlock()
+	backend := &atomicvm.VerifierBackend{
 		Ctx:          tvm.vm.ctx,
-		Fx:           &tvm.vm.fx,
+		Fx:           &tvm.vm.atomicVM.Fx,
 		Rules:        rules,
 		Bootstrapped: tvm.vm.bootstrapped.Get(),
 		BlockFetcher: tvm.vm,
-		SecpCache:    tvm.vm.secpCache,
+		SecpCache:    tvm.vm.atomicVM.SecpCache,
 	}
-	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
+	if err := tx.UnsignedAtomicTx.Visit(&atomicvm.SemanticVerifier{
 		Backend: backend,
 		Tx:      tx,
 		Parent:  lastAcceptedBlock,
@@ -141,7 +142,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +168,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		}
 	}
 
-	if err := tvm.vm.mempool.AddLocalTx(tx); err != nil {
+	if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
 	<-tvm.toEngine

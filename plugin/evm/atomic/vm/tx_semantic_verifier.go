@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package vm
 
 import (
 	"context"
@@ -11,17 +11,18 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 )
 
-var _ Visitor = (*SemanticVerifier)(nil)
+var _ atomic.Visitor = (*SemanticVerifier)(nil)
 
 var (
 	ErrAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
@@ -31,8 +32,10 @@ var (
 )
 
 type BlockFetcher interface {
-	LastAcceptedBlockInternal() snowman.Block
-	GetBlockInternal(context.Context, ids.ID) (snowman.Block, error)
+	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
+	GetExtendedBlock(context.Context, ids.ID) (extension.ExtendedBlock, error)
+	// LastAcceptedExtendedBlock returns the last accepted VM block
+	LastAcceptedExtendedBlock() extension.ExtendedBlock
 }
 
 type VerifierBackend struct {
@@ -47,13 +50,13 @@ type VerifierBackend struct {
 // SemanticVerifier is a visitor that checks the semantic validity of atomic transactions.
 type SemanticVerifier struct {
 	Backend *VerifierBackend
-	Tx      *Tx
-	Parent  AtomicBlockContext
+	Tx      *atomic.Tx
+	Parent  extension.ExtendedBlock
 	BaseFee *big.Int
 }
 
 // ImportTx verifies this transaction is valid.
-func (s *SemanticVerifier) ImportTx(utx *UnsignedImportTx) error {
+func (s *SemanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 	backend := s.Backend
 	ctx := backend.Ctx
 	rules := backend.Rules
@@ -71,7 +74,7 @@ func (s *SemanticVerifier) ImportTx(utx *UnsignedImportTx) error {
 		if err != nil {
 			return err
 		}
-		txFee, err := CalculateDynamicFee(gasUsed, s.BaseFee)
+		txFee, err := atomic.CalculateDynamicFee(gasUsed, s.BaseFee)
 		if err != nil {
 			return err
 		}
@@ -116,7 +119,7 @@ func (s *SemanticVerifier) ImportTx(utx *UnsignedImportTx) error {
 		utxoBytes := allUTXOBytes[i]
 
 		utxo := &avax.UTXO{}
-		if _, err := Codec.Unmarshal(utxoBytes, utxo); err != nil {
+		if _, err := atomic.Codec.Unmarshal(utxoBytes, utxo); err != nil {
 			return fmt.Errorf("failed to unmarshal UTXO: %w", err)
 		}
 
@@ -140,14 +143,19 @@ func (s *SemanticVerifier) ImportTx(utx *UnsignedImportTx) error {
 // or any of its ancestor blocks going back to the last accepted block in its ancestry. If [ancestor] is
 // accepted, then nil will be returned immediately.
 // If the ancestry of [ancestor] cannot be fetched, then [errRejectedParent] may be returned.
-func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor AtomicBlockContext) error {
+func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extension.ExtendedBlock) error {
 	fetcher := backend.BlockFetcher
-	lastAcceptedBlock := fetcher.LastAcceptedBlockInternal()
+	lastAcceptedBlock := fetcher.LastAcceptedExtendedBlock()
 	lastAcceptedHeight := lastAcceptedBlock.Height()
 	for ancestor.Height() > lastAcceptedHeight {
+		ancestorExtIntf := ancestor.GetBlockExtension()
+		ancestorExt, ok := ancestorExtIntf.(atomic.AtomicBlockContext)
+		if !ok {
+			return fmt.Errorf("expected block extension to be AtomicBlockContext but got %T", ancestorExtIntf)
+		}
 		// If any of the atomic transactions in the ancestor conflict with [inputs]
 		// return an error.
-		for _, atomicTx := range ancestor.AtomicTxs() {
+		for _, atomicTx := range ancestorExt.AtomicTxs() {
 			if inputs.Overlaps(atomicTx.InputUTXOs()) {
 				return ErrConflictingAtomicInputs
 			}
@@ -162,13 +170,9 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor Atomic
 		// will be missing.
 		// If the ancestor is processing, then the block may have
 		// been verified.
-		nextAncestorIntf, err := fetcher.GetBlockInternal(context.TODO(), nextAncestorID)
+		nextAncestor, err := fetcher.GetExtendedBlock(context.TODO(), nextAncestorID)
 		if err != nil {
 			return errRejectedParent
-		}
-		nextAncestor, ok := nextAncestorIntf.(AtomicBlockContext)
-		if !ok {
-			return fmt.Errorf("ancestor block %s had unexpected type %T", nextAncestor.ID(), nextAncestorIntf)
 		}
 		ancestor = nextAncestor
 	}
@@ -177,7 +181,7 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor Atomic
 }
 
 // ExportTx verifies this transaction is valid.
-func (s *SemanticVerifier) ExportTx(utx *UnsignedExportTx) error {
+func (s *SemanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
 	backend := s.Backend
 	ctx := backend.Ctx
 	rules := backend.Rules
@@ -195,7 +199,7 @@ func (s *SemanticVerifier) ExportTx(utx *UnsignedExportTx) error {
 		if err != nil {
 			return err
 		}
-		txFee, err := CalculateDynamicFee(gasUsed, s.BaseFee)
+		txFee, err := atomic.CalculateDynamicFee(gasUsed, s.BaseFee)
 		if err != nil {
 			return err
 		}

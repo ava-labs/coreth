@@ -20,7 +20,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	wallet "github.com/ava-labs/avalanchego/wallet/subnet/primary"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/go-cmd/cmd"
 	"github.com/onsi/ginkgo/v2"
@@ -108,7 +107,7 @@ func CreateSubnetsSuite(genesisFiles map[string]string) *SubnetSuite {
 	return &globalSuite
 }
 
-// CreateNewSubnet creates a new subnet and coreth blockchain with the given genesis file.
+// CreateNewSubnet creates a new subnet and Subnet-EVM blockchain with the given genesis file.
 // returns the ID of the new created blockchain.
 func CreateNewSubnet(ctx context.Context, genesisFilePath string) string {
 	require := require.New(ginkgo.GinkgoT())
@@ -142,11 +141,11 @@ func CreateNewSubnet(ctx context.Context, genesisFilePath string) string {
 	genesis := &core.Genesis{}
 	require.NoError(json.Unmarshal(genesisBytes, genesis))
 
-	log.Info("Creating new coreth blockchain", "genesis", genesis)
+	log.Info("Creating new Subnet-EVM blockchain", "genesis", genesis)
 	createChainTx, err := pWallet.IssueCreateChainTx(
 		createSubnetTx.ID(),
 		genesisBytes,
-		evm.ID,
+		subnetVMID,
 		nil,
 		"testChain",
 	)
