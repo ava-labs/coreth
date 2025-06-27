@@ -41,7 +41,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/predicate"
-	"github.com/ava-labs/coreth/tests"
 	"github.com/ava-labs/coreth/tests/utils"
 	warpBackend "github.com/ava-labs/coreth/warp"
 	ethereum "github.com/ava-labs/libevm"
@@ -50,8 +49,6 @@ import (
 
 var (
 	flagVars *e2e.FlagVars
-
-	repoRootPath = tests.GetRepoRootPath("tests/warp")
 
 	cChainSubnetDetails *Subnet
 
