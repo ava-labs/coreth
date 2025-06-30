@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/eth/gasprice"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/miner"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
 )
 
@@ -57,7 +58,7 @@ var DefaultConfig = NewDefaultConfig()
 func NewDefaultConfig() Config {
 	return Config{
 		NetworkId:                 0, // enable auto configuration of networkID == chainID
-		StateHistory:              32,
+		StateHistory:              params.FullImmutabilityThreshold,
 		TrieCleanCache:            512,
 		TrieDirtyCache:            256,
 		TrieDirtyCommitTarget:     20,
