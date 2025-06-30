@@ -34,7 +34,8 @@ func init() {
 		c.RegisterType(CodeResponse{}),
 	)
 
-	// Warp request types are skipped
+	// Deprecated Warp request/responde types are skipped
+ // See https://github.com/ava-labs/coreth/pull/999
 	c.SkipRegistrations(3)
 
 	Codec.RegisterCodec(Version, c)
