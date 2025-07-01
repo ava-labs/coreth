@@ -170,7 +170,7 @@ func testPruningBlockChainSnapsDisabled(t *testing.T, scheme string) {
 				TrieDirtyLimit:            256,
 				TrieDirtyCommitTarget:     20,
 				TriePrefetcherParallelism: 4,
-				Pruning:                   true,
+				Pruning:                   true, // Enable pruning
 				CommitInterval:            4096,
 				StateHistory:              32,
 				SnapshotLimit:             0, // Disable snapshots
@@ -181,7 +181,6 @@ func testPruningBlockChainSnapsDisabled(t *testing.T, scheme string) {
 			lastAcceptedHash,
 		)
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			tt.testFunc(t, create)
@@ -238,7 +237,7 @@ func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme s
 				TrieDirtyLimit:            256,
 				TrieDirtyCommitTarget:     20,
 				TriePrefetcherParallelism: 4,
-				Pruning:                   true,
+				Pruning:                   true, // Enable pruning
 				CommitInterval:            4096,
 				StateHistory:              32,
 				SnapshotLimit:             0, // Disable snapshots
@@ -248,13 +247,15 @@ func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme s
 			gspec,
 			lastAcceptedHash,
 		)
+		if err != nil {
+			return nil, err
+		}
 
 		// Overwrite state manager, so that Shutdown is not called.
 		// This tests to ensure that the state manager handles an ungraceful shutdown correctly.
 		blockchain.stateManager = &wrappedStateManager{TrieWriter: blockchain.stateManager}
 		return blockchain, err
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			tt.testFunc(t, create)
@@ -740,7 +741,7 @@ func testCompletelyEmptyBlocks(t *testing.T, scheme string) {
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	for _, scheme := range schemes {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testCanonicalHashMarker(t, scheme)
 		})

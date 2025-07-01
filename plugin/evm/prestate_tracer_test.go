@@ -25,7 +25,10 @@ import (
 
 func TestPrestateWithDiffModeANTTracer(t *testing.T) {
 	for _, scheme := range schemes {
-		testPrestateDiffTracer("prestateTracer", "prestate_tracer_ant", t, scheme)
+		t.Run(scheme, func(t *testing.T) {
+			t.Parallel()
+			testPrestateDiffTracer("prestateTracer", "prestate_tracer_ant", t, scheme)
+		})
 	}
 }
 

@@ -252,9 +252,9 @@ var DefaultCacheConfig = &CacheConfig{
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
+	// TODO: remove this once if Firewood supports snapshots
 	if config.StateScheme == customrawdb.FirewoodScheme {
 		config.SnapshotLimit = 0 // no snapshot allowed for firewood
-		config.Pruning = false   // firewood manages its own pruning
 	}
 	return &config
 }

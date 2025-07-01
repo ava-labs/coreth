@@ -97,9 +97,9 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, scheme string, gen
 		TrieDirtyLimit:            256,
 		TriePrefetcherParallelism: 4,
 		SnapshotLimit:             128,
-		Pruning:                   false, // Archive mode
+		Pruning:                   true,
 		StateScheme:               scheme,
-		StateHistory:              100, // more than enough for firewood in these tests
+		StateHistory:              100, // Sufficient history for testing
 	}
 	if scheme == customrawdb.FirewoodScheme {
 		cacheConfig.SnapshotLimit = 0 // Firewood does not support snapshots

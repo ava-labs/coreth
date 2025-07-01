@@ -44,7 +44,6 @@ import (
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
-	ffi "github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -70,7 +69,7 @@ func TestGenesisBlockForTesting(t *testing.T) {
 }
 
 func TestSetupGenesis(t *testing.T) {
-	for _, scheme := range schemes {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testSetupGenesis(t, scheme)
 		})
@@ -142,18 +141,17 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with ApricotPhase1 transition at 90.
 				// Advance to block #4, past the ApricotPhase1 transition block of customg.
-
-				// Find the genesis root hash
 				tempdb := rawdb.NewMemoryDatabase()
 				defer tempdb.Close()
-				tdb := triedb.NewDatabase(tempdb, triedb.HashDefaults) // this can still be a hash scheme because it only generates a gensis block
+				tdb := triedb.NewDatabase(tempdb, triedb.HashDefaults)
 				genesis, err := oldcustomg.Commit(db, tdb)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				_ = newDbConfig(t, db, scheme) // need side-effect of creating temp directory for firewood
-
+				if err := customrawdb.WriteChainDataPath(db, t.TempDir()); err != nil {
+					t.Fatal(err)
+				}
 				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, dummy.NewFullFaker(), vm.Config{}, genesis.Hash(), false)
 				defer bc.Stop()
 
@@ -307,14 +305,7 @@ func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config 
 	case customrawdb.FirewoodScheme:
 		// Create a unique temporary directory for each test
 		require.NoError(t, customrawdb.WriteChainDataPath(db, t.TempDir()))
-		fwCfg := firewood.Config{
-			FileName:          "firewood_genesis_test",
-			CleanCacheSize:    256 * 1024 * 1024,
-			Revisions:         10, // Large enough for all tests
-			ReadCacheStrategy: ffi.CacheAllReads,
-			MetricsPort:       0, // no metrics
-		}
-		return &triedb.Config{DBOverride: fwCfg.BackendConstructor}
+		return &triedb.Config{DBOverride: firewood.Defaults.BackendConstructor}
 	default:
 		t.Fatalf("unknown scheme %s", scheme)
 	}

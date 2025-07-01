@@ -258,13 +258,14 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 	}
 }
 
+// Firewood cannot yet be run with an empty config.
 func getConfig(scheme, otherConfig string) string {
 	innerConfig := otherConfig
 	if scheme == customrawdb.FirewoodScheme {
 		if len(innerConfig) > 0 {
 			innerConfig += ", "
 		}
-		innerConfig += fmt.Sprintf(`"state-scheme": "%s", "snapshot-cache": 0`, customrawdb.FirewoodScheme)
+		innerConfig += fmt.Sprintf(`"state-scheme": "%s", "snapshot-cache": 0, "pruning-enabled": true`, customrawdb.FirewoodScheme)
 	}
 
 	return fmt.Sprintf(`{%s}`, innerConfig)
@@ -434,34 +435,36 @@ func TestVMUpgrades(t *testing.T) {
 	}
 
 	schemes := schemes
-	for _, scheme := range schemes {
-		for _, test := range genesisTests {
-			t.Run(fmt.Sprintf("%s %s", test.fork.String(), scheme), func(t *testing.T) {
-				require := require.New(t)
+	for _, test := range genesisTests {
+		t.Run(test.fork.String(), func(t *testing.T) {
+			for _, scheme := range schemes {
+				t.Run(scheme, func(t *testing.T) {
+					require := require.New(t)
 
-				vm := newVM(t, testVMConfig{
-					fork:       &test.fork,
-					configJSON: getConfig(scheme, ""),
-				}).vm
-				defer func() {
-					require.NoError(vm.Shutdown(context.Background()))
-				}()
+					vm := newVM(t, testVMConfig{
+						fork:       &test.fork,
+						configJSON: getConfig(scheme, ""),
+					}).vm
+					defer func() {
+						require.NoError(vm.Shutdown(context.Background()))
+					}()
 
-				require.Equal(test.expectedGasPrice, vm.txPool.GasTip())
+					require.Equal(test.expectedGasPrice, vm.txPool.GasTip())
 
-				// Verify that the genesis is correctly managed.
-				lastAcceptedID, err := vm.LastAccepted(context.Background())
-				require.NoError(err)
-				require.Equal(ids.ID(vm.genesisHash), lastAcceptedID)
+					// Verify that the genesis is correctly managed.
+					lastAcceptedID, err := vm.LastAccepted(context.Background())
+					require.NoError(err)
+					require.Equal(ids.ID(vm.genesisHash), lastAcceptedID)
 
-				genesisBlk, err := vm.GetBlock(context.Background(), lastAcceptedID)
-				require.NoError(err)
-				require.Zero(genesisBlk.Height())
+					genesisBlk, err := vm.GetBlock(context.Background(), lastAcceptedID)
+					require.NoError(err)
+					require.Zero(genesisBlk.Height())
 
-				_, err = vm.ParseBlock(context.Background(), genesisBlk.Bytes())
-				require.NoError(err)
-			})
-		}
+					_, err = vm.ParseBlock(context.Background(), genesisBlk.Bytes())
+					require.NoError(err)
+				})
+			}
+		})
 	}
 }
 
@@ -978,143 +981,147 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 	kc := secp256k1fx.NewKeychain(testKeys...)
 
 	for _, scheme := range schemes {
-		for name, issueTxs := range map[string]func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
-			"single UTXO override": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
-				utxo, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
-				tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
-				if err != nil {
-					t.Fatal(err)
-				}
-				tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo})
-				if err != nil {
-					t.Fatal(err)
-				}
+		t.Run(scheme, func(t *testing.T) {
+			for name, issueTxs := range map[string]func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
+				"single UTXO override": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+					utxo, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo})
+					if err != nil {
+						t.Fatal(err)
+					}
+					tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo})
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx1); err != nil {
-					t.Fatal(err)
-				}
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx2); err != nil {
-					t.Fatal(err)
-				}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx1); err != nil {
+						t.Fatal(err)
+					}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx2); err != nil {
+						t.Fatal(err)
+					}
 
-				return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
-			},
-			"one of two UTXOs overrides": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
-				utxo1, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
-				utxo2, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
-				tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
-				if err != nil {
-					t.Fatal(err)
-				}
-				tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo1})
-				if err != nil {
-					t.Fatal(err)
-				}
+					return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
+				},
+				"one of two UTXOs overrides": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+					utxo1, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					utxo2, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					tx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
+					if err != nil {
+						t.Fatal(err)
+					}
+					tx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(common.Big2, initialBaseFee), kc, []*avax.UTXO{utxo1})
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx1); err != nil {
-					t.Fatal(err)
-				}
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx2); err != nil {
-					t.Fatal(err)
-				}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx1); err != nil {
+						t.Fatal(err)
+					}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(tx2); err != nil {
+						t.Fatal(err)
+					}
 
-				return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
-			},
-			"hola": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
-				utxo1, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
-				utxo2, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
-				if err != nil {
-					t.Fatal(err)
-				}
+					return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
+				},
+				"hola": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+					utxo1, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					utxo2, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				importTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1})
-				if err != nil {
-					t.Fatal(err)
-				}
+					importTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, kc, []*avax.UTXO{utxo1})
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				importTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(3), initialBaseFee), kc, []*avax.UTXO{utxo2})
-				if err != nil {
-					t.Fatal(err)
-				}
+					importTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(3), initialBaseFee), kc, []*avax.UTXO{utxo2})
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				reissuanceTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(2), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx1); err != nil {
-					t.Fatal(err)
-				}
+					reissuanceTx1, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(2), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx1); err != nil {
+						t.Fatal(err)
+					}
 
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx2); err != nil {
-					t.Fatal(err)
-				}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx2); err != nil {
+						t.Fatal(err)
+					}
 
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(reissuanceTx1); !errors.Is(err, atomictxpool.ErrConflictingAtomicTx) {
-					t.Fatalf("Expected to fail with err: %s, but found err: %s", atomictxpool.ErrConflictingAtomicTx, err)
-				}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(reissuanceTx1); !errors.Is(err, atomictxpool.ErrConflictingAtomicTx) {
+						t.Fatalf("Expected to fail with err: %s, but found err: %s", atomictxpool.ErrConflictingAtomicTx, err)
+					}
 
-				assert.True(t, vm.atomicVM.AtomicMempool.Has(importTx1.ID()))
-				assert.True(t, vm.atomicVM.AtomicMempool.Has(importTx2.ID()))
-				assert.False(t, vm.atomicVM.AtomicMempool.Has(reissuanceTx1.ID()))
+					assert.True(t, vm.atomicVM.AtomicMempool.Has(importTx1.ID()))
+					assert.True(t, vm.atomicVM.AtomicMempool.Has(importTx2.ID()))
+					assert.False(t, vm.atomicVM.AtomicMempool.Has(reissuanceTx1.ID()))
 
-				reissuanceTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(4), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := vm.atomicVM.AtomicMempool.AddLocalTx(reissuanceTx2); err != nil {
-					t.Fatal(err)
-				}
+					reissuanceTx2, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, testEthAddrs[0], new(big.Int).Mul(big.NewInt(4), initialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := vm.atomicVM.AtomicMempool.AddLocalTx(reissuanceTx2); err != nil {
+						t.Fatal(err)
+					}
 
-				return []*atomic.Tx{reissuanceTx2}, []*atomic.Tx{importTx1, importTx2}
-			},
-		} {
-			t.Run(fmt.Sprintf("%s %s", name, scheme), func(t *testing.T) {
-				fork := upgradetest.ApricotPhase5
-				tvm := newVM(t, testVMConfig{
-					fork:       &fork,
-					configJSON: getConfig(scheme, ""),
+					return []*atomic.Tx{reissuanceTx2}, []*atomic.Tx{importTx1, importTx2}
+				},
+			} {
+				t.Run(name, func(t *testing.T) {
+					fork := upgradetest.ApricotPhase5
+					tvm := newVM(t, testVMConfig{
+						fork:       &fork,
+						configJSON: getConfig(scheme, ""),
+					})
+					issuedTxs, evictedTxs := issueTxs(t, tvm.vm, tvm.atomicMemory)
+
+					for i, tx := range issuedTxs {
+						_, issued := tvm.vm.atomicVM.AtomicMempool.GetPendingTx(tx.ID())
+						assert.True(t, issued, "expected issued tx at index %d to be issued", i)
+					}
+
+					for i, tx := range evictedTxs {
+						_, discarded, _ := tvm.vm.atomicVM.AtomicMempool.GetTx(tx.ID())
+						assert.True(t, discarded, "expected discarded tx at index %d to be discarded", i)
+					}
 				})
-				issuedTxs, evictedTxs := issueTxs(t, tvm.vm, tvm.atomicMemory)
-
-				for i, tx := range issuedTxs {
-					_, issued := tvm.vm.atomicVM.AtomicMempool.GetPendingTx(tx.ID())
-					assert.True(t, issued, "expected issued tx at index %d to be issued", i)
-				}
-
-				for i, tx := range evictedTxs {
-					_, discarded, _ := tvm.vm.atomicVM.AtomicMempool.GetTx(tx.ID())
-					assert.True(t, discarded, "expected discarded tx at index %d to be discarded", i)
-				}
-			})
-		}
+			}
+		})
 	}
 }
 
 func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
-	for _, scheme := range schemes {
-		for _, fork := range []upgradetest.Fork{
-			upgradetest.ApricotPhase1,
-			upgradetest.ApricotPhase2,
-			upgradetest.ApricotPhase3,
-			upgradetest.ApricotPhase4,
-			upgradetest.ApricotPhase5,
-		} {
-			t.Run(fmt.Sprintf("%s %s", fork.String(), scheme), func(t *testing.T) {
-				testConflictingImportTxs(t, fork, scheme)
-			})
-		}
+	for _, fork := range []upgradetest.Fork{
+		upgradetest.ApricotPhase1,
+		upgradetest.ApricotPhase2,
+		upgradetest.ApricotPhase3,
+		upgradetest.ApricotPhase4,
+		upgradetest.ApricotPhase5,
+	} {
+		t.Run(fork.String(), func(t *testing.T) {
+			for _, scheme := range schemes {
+				t.Run(scheme, func(t *testing.T) {
+					testConflictingImportTxs(t, fork, scheme)
+				})
+			}
+		})
 	}
 }
 
