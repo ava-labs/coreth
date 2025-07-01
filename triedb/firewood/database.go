@@ -525,12 +525,15 @@ type reader struct {
 
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
-// It defaults to using a revision if available.
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
+	// This function relies on Firewood's internal locking to ensure concurrent reads are safe.
+	// This is safe even if a proposal is being committed concurrently.
 	start := time.Now()
 	result, err := reader.db.fwDisk.GetFromRoot(reader.root.Bytes(), path)
-	ffiReadCount.Inc(1)
-	ffiReadTimer.Inc(time.Since(start).Milliseconds())
+	if metrics.EnabledExpensive {
+		ffiReadCount.Inc(1)
+		ffiReadTimer.Inc(time.Since(start).Milliseconds())
+	}
 	return result, err
 }
 

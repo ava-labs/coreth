@@ -98,6 +98,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, scheme string, gen
 		TriePrefetcherParallelism: 4,
 		SnapshotLimit:             128,
 		Pruning:                   true,
+		CommitInterval:            4096,
 		StateScheme:               scheme,
 		StateHistory:              100, // Sufficient history for testing
 	}
