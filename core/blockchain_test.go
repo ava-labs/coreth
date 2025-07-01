@@ -68,6 +68,7 @@ var (
 		TriePrefetcherParallelism: 4,
 		Pruning:                   true, // Enable pruning
 		CommitInterval:            4096,
+		StateHistory:              32,
 		SnapshotLimit:             256,
 		AcceptorQueueLimit:        64,
 	}
@@ -171,10 +172,10 @@ func testPruningBlockChainSnapsDisabled(t *testing.T, scheme string) {
 				TriePrefetcherParallelism: 4,
 				Pruning:                   true,
 				CommitInterval:            4096,
+				StateHistory:              32,
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
 				StateScheme:               scheme,
-				StateHistory:              32, // Firewood matches TipToBuffer pruning
 			},
 			gspec,
 			lastAcceptedHash,
@@ -239,10 +240,10 @@ func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme s
 				TriePrefetcherParallelism: 4,
 				Pruning:                   true,
 				CommitInterval:            4096,
+				StateHistory:              32,
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
 				StateScheme:               scheme,
-				StateHistory:              32, // Firewood matches TipToBuffer pruning
 			},
 			gspec,
 			lastAcceptedHash,
@@ -275,6 +276,7 @@ func TestEnableSnapshots(t *testing.T) {
 				TriePrefetcherParallelism: 4,
 				Pruning:                   true, // Enable pruning
 				CommitInterval:            4096,
+				StateHistory:              32,
 				SnapshotLimit:             snapLimit,
 				AcceptorQueueLimit:        64,
 			},
@@ -465,6 +467,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 		SnapshotLimit:             256,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
 		AcceptorQueueLimit:        1000, // ensure channel doesn't block
+		StateHistory:              32,
 	})
 }
 
@@ -480,7 +483,7 @@ func TestUngracefulAsyncShutdownSnapsDisabled(t *testing.T) {
 				SnapshotLimit:         0,
 				AcceptorQueueLimit:    1000, // ensure channel doesn't block
 				StateScheme:           scheme,
-				StateHistory:          32, // Firewood matches TipToBuffer pruning
+				StateHistory:          32,
 			})
 		})
 	}
@@ -648,7 +651,7 @@ func testCompletelyEmptyBlocks(t *testing.T, scheme string) {
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
 				StateScheme:               scheme,
-				StateHistory:              32, // Firewood matches TipToBuffer pruning
+				StateHistory:              32,
 			}
 			blockchain, err := NewBlockChain(
 				db,
@@ -866,6 +869,7 @@ func TestTxLookupBlockChain(t *testing.T) {
 		Pruning:                   true,
 		CommitInterval:            4096,
 		SnapshotLimit:             256,
+		StateHistory:              32,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
 		AcceptorQueueLimit:        64,   // ensure channel doesn't block
 		TransactionHistory:        5,
@@ -888,6 +892,7 @@ func TestTxLookupSkipIndexingBlockChain(t *testing.T) {
 		TriePrefetcherParallelism: 4,
 		Pruning:                   true,
 		CommitInterval:            4096,
+		StateHistory:              32,
 		SnapshotLimit:             256,
 		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
 		AcceptorQueueLimit:        64,   // ensure channel doesn't block
