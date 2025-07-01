@@ -200,7 +200,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 
 	// We require block hashes to be provided for all blocks except the genesis block.
 	parentHash, hash, ok := stateconf.ExtractTrieDBUpdatePayload(opts...)
-	if !ok && block >= 1 {
+	if !ok {
 		return fmt.Errorf("firewood: no block hash provided for block %d", block)
 	}
 
@@ -216,7 +216,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 			}
 			// We already have this proposal, but should create a new context with the correct hash.
 			// This solves the case of a unique block hash, but the same underlying proposal.
-			if _, exists := existing.Parent.Hashes[parentHash]; exists && existing.Root == root && existing.Block == block {
+			if _, exists := existing.Parent.Hashes[parentHash]; exists {
 				log.Debug("firewood: proposal already exists, updating hash", "root", root.Hex(), "parent", parentRoot.Hex(), "block", block, "hash", hash.Hex())
 				existing.Hashes[hash] = struct{}{}
 				return nil
@@ -233,12 +233,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 //
 // To avoid having to create a new proposal for each valid state root, the block hashes are
 // provided to ensure uniqueness. When this method is called, we can guarantee that the proposalContext
-// must be created and tracked. There are two edge cases for using the block hash:
-//
-// 1. For the genesis block, we will not yet know the block hash, so we cannot store it.
-// 2. For block height 1, since we didn't store the genesis block hash, we will not have a parent hash.
-//
-// Note that if the keys and values are empty, this will not create a proposal in Firewood, but only provide tracking.
+// must be created and tracked.
 //
 // Should only be accessed with the proposal lock held.
 func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash common.Hash, parentHash common.Hash, block uint64, keys [][]byte, values [][]byte) error {
@@ -272,11 +267,10 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 
 	// Since we were unable to find a parent proposal with the given parent hash,
 	// we must create a new proposal from the database root.
-	// Note that if this is block <= 1, we will not yet be tracking parent hashes, so we can skip this check.
 	// We must avoid the case in which we are reexecuting blocks upon startup, and haven't yet stored the parent block.
 	if _, exists := db.proposalTree.Hashes[parentHash]; db.proposalTree.Block != 0 && !exists {
 		return fmt.Errorf("firewood: parent hash %s not found for block %s at height %d", parentHash.Hex(), hash.Hex(), block)
-	} else if block <= 1 && db.proposalTree.Root != parentRoot {
+	} else if db.proposalTree.Root != parentRoot {
 		return fmt.Errorf("firewood: parent root %s does not match proposal tree root %s for root %s at height %d", parentRoot.Hex(), db.proposalTree.Root.Hex(), root.Hex(), block)
 	}
 
