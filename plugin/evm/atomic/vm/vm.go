@@ -48,6 +48,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/utils/rpc"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
@@ -363,7 +364,7 @@ func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, erro
 	// 	return nil, err
 	// }
 	apis := make(map[string]http.Handler)
-	avaxAPI, err := utils.NewRPCHandler("avax", &AvaxAPI{vm})
+	avaxAPI, err := rpc.NewHandler("avax", &AvaxAPI{vm})
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
 	}
