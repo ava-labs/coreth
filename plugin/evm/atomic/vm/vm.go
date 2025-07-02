@@ -77,23 +77,21 @@ type VM struct {
 	extension.InnerVM
 	ctx *snow.Context
 
-	// TODO: unexport these fields
-	SecpCache *secp256k1.RecoverCache
-	Fx        secp256k1fx.Fx
+	secpCache *secp256k1.RecoverCache
+	fx        secp256k1fx.Fx
 	baseCodec codec.Registry
-	Mempool   *txpool.Mempool
+	mempool   *txpool.Mempool
 
 	// [atomicTxRepository] maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
-	// TODO: unexport these fields
-	AtomicTxRepository *atomicstate.AtomicRepository
+	atomicTxRepository *atomicstate.AtomicRepository
 	// [atomicBackend] abstracts verification and processing of atomic transactions
-	AtomicBackend *atomicstate.AtomicBackend
+	atomicBackend *atomicstate.AtomicBackend
 
 	atomicTxGossipHandler p2p.Handler
-	AtomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
-	AtomicTxPullGossiper  avalanchegossip.Gossiper
+	atomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
+	atomicTxPullGossiper  avalanchegossip.Gossiper
 
 	// [cancel] may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
@@ -145,7 +143,7 @@ func (vm *VM) Initialize(
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
-	vm.Mempool = &txpool.Mempool{}
+	vm.mempool = &txpool.Mempool{}
 
 	extensionConfig := &extension.Config{
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
@@ -154,7 +152,7 @@ func (vm *VM) Initialize(
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
-		ExtraMempool:               vm.Mempool,
+		ExtraMempool:               vm.mempool,
 		Clock:                      &vm.clock,
 	}
 	if err := vm.SetExtensionConfig(extensionConfig); err != nil {
@@ -177,7 +175,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Now we can initialize the mempool and so
-	err := vm.Mempool.Initialize(chainCtx, vm.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
+	err := vm.mempool.Initialize(chainCtx, vm.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
@@ -199,13 +197,13 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return fmt.Errorf("failed to read last accepted block: %w", err)
 	}
-	vm.AtomicTxRepository, err = atomicstate.NewAtomicTxRepository(vm.VersionDB(), atomic.Codec, lastAcceptedHeight)
+	vm.atomicTxRepository, err = atomicstate.NewAtomicTxRepository(vm.VersionDB(), atomic.Codec, lastAcceptedHeight)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic repository: %w", err)
 	}
-	vm.AtomicBackend, err = atomicstate.NewAtomicBackend(
+	vm.atomicBackend, err = atomicstate.NewAtomicBackend(
 		vm.ctx.SharedMemory, bonusBlockHeights,
-		vm.AtomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
+		vm.atomicTxRepository, lastAcceptedHeight, lastAcceptedHash,
 		vm.Config().CommitInterval,
 	)
 	if err != nil {
@@ -213,17 +211,17 @@ func (vm *VM) Initialize(
 	}
 
 	// Atomic backend is available now, we can initialize structs that depend on it
-	syncProvider.Initialize(vm.AtomicBackend.AtomicTrie())
-	syncExtender.Initialize(vm.AtomicBackend, vm.AtomicBackend.AtomicTrie(), vm.Config().StateSyncRequestSize)
-	leafHandler.Initialize(vm.AtomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, message.Codec)
+	syncProvider.Initialize(vm.atomicBackend.AtomicTrie())
+	syncExtender.Initialize(vm.atomicBackend, vm.atomicBackend.AtomicTrie(), vm.Config().StateSyncRequestSize)
+	leafHandler.Initialize(vm.atomicBackend.AtomicTrie().TrieDB(), atomicstate.TrieKeyLength, message.Codec)
 
-	vm.SecpCache = secp256k1.NewRecoverCache(secpCacheSize)
+	vm.secpCache = secp256k1.NewRecoverCache(secpCacheSize)
 
 	// so [vm.baseCodec] is a dummy codec use to fulfill the secp256k1fx VM
 	// interface. The fx will register all of its types, which can be safely
 	// ignored by the VM's codec.
 	vm.baseCodec = linearcodec.NewDefault()
-	return vm.Fx.Initialize(vm)
+	return vm.fx.Initialize(vm)
 }
 
 func (vm *VM) SetState(ctx context.Context, state snow.State) error {
@@ -238,20 +236,18 @@ func (vm *VM) SetState(ctx context.Context, state snow.State) error {
 		}
 	}
 
-	// TODO: uncomment this once atomic VM fully wraps inner VM
-	// return vm.InnerVM.SetState(ctx, state)
-	return nil
+	return vm.InnerVM.SetState(ctx, state)
 }
 
 func (vm *VM) onBootstrapStarted() error {
-	return vm.Fx.Bootstrapping()
+	return vm.fx.Bootstrapping()
 }
 
 func (vm *VM) onNormalOperationsStarted() error {
 	if vm.IsBootstrapped() {
 		return nil
 	}
-	if err := vm.Fx.Bootstrapped(); err != nil {
+	if err := vm.fx.Bootstrapped(); err != nil {
 		return err
 	}
 
@@ -274,9 +270,9 @@ func (vm *VM) onNormalOperationsStarted() error {
 		Peers:      vm.Config().PushRegossipNumPeers,
 	}
 
-	vm.AtomicTxPushGossiper, err = avalanchegossip.NewPushGossiper[*atomic.Tx](
+	vm.atomicTxPushGossiper, err = avalanchegossip.NewPushGossiper[*atomic.Tx](
 		&atomicTxGossipMarshaller,
-		vm.Mempool,
+		vm.mempool,
 		vm.P2PValidators(),
 		atomicTxGossipClient,
 		atomicTxGossipMetrics,
@@ -293,7 +289,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 	vm.atomicTxGossipHandler = gossip.NewTxGossipHandler[*atomic.Tx](
 		vm.ctx.Log,
 		&atomicTxGossipMarshaller,
-		vm.Mempool,
+		vm.mempool,
 		atomicTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
@@ -308,13 +304,13 @@ func (vm *VM) onNormalOperationsStarted() error {
 	atomicTxPullGossiper := avalanchegossip.NewPullGossiper[*atomic.Tx](
 		vm.ctx.Log,
 		&atomicTxGossipMarshaller,
-		vm.Mempool,
+		vm.mempool,
 		atomicTxGossipClient,
 		atomicTxGossipMetrics,
 		config.TxGossipPollSize,
 	)
 
-	vm.AtomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
+	vm.atomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
 		Gossiper:   atomicTxPullGossiper,
 		NodeID:     vm.ctx.NodeID,
 		Validators: vm.P2PValidators(),
@@ -322,13 +318,13 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.AtomicTxPushGossiper, vm.Config().PushGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPushGossiper, vm.Config().PushGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.AtomicTxPullGossiper, vm.Config().PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, vm.atomicTxPullGossiper, vm.Config().PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
@@ -350,12 +346,10 @@ func (vm *VM) Shutdown(context.Context) error {
 }
 
 func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, error) {
-	// TODO: uncomment this once atomic VM fully wraps inner VM
-	// apis, err := vm.InnerVM.CreateHandlers(ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	apis := make(map[string]http.Handler)
+	apis, err := vm.InnerVM.CreateHandlers(ctx)
+	if err != nil {
+		return nil, err
+	}
 	avaxAPI, err := utils.NewHandler("avax", &AvaxAPI{vm})
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service for AVAX API due to %w", err)
@@ -408,26 +402,13 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // Note: VerifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-// TODO: unexport this function
 func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
 	parent, err := vm.InnerVM.GetExtendedBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
 	}
-	atomicBackend := &VerifierBackend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.Fx,
-		Rules:        rules,
-		Bootstrapped: vm.IsBootstrapped(),
-		BlockFetcher: vm,
-		SecpCache:    vm.SecpCache,
-	}
-	if err := tx.UnsignedAtomicTx.Visit(&SemanticVerifier{
-		Backend: atomicBackend,
-		Tx:      tx,
-		Parent:  parent,
-		BaseFee: baseFee,
-	}); err != nil {
+	atomicBackend := newVerifierBackend(vm, rules)
+	if err := atomicBackend.SemanticVerify(tx, parent, baseFee); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
@@ -454,28 +435,16 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := &VerifierBackend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.Fx,
-		Rules:        rules,
-		Bootstrapped: vm.IsBootstrapped(),
-		BlockFetcher: vm,
-		SecpCache:    vm.SecpCache,
-	}
+	atomicBackend := newVerifierBackend(vm, rules)
 
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
-		if err := utx.Visit(&SemanticVerifier{
-			Backend: atomicBackend,
-			Tx:      atomicTx,
-			Parent:  ancestor,
-			BaseFee: baseFee,
-		}); err != nil {
+		if err := atomicBackend.SemanticVerify(atomicTx, ancestor, baseFee); err != nil {
 			return fmt.Errorf("invalid block due to failed semantic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
 		if inputs.Overlaps(txInputs) {
-			return ErrConflictingAtomicInputs
+			return errConflictingAtomicInputs
 		}
 		inputs.Union(txInputs)
 	}
@@ -500,7 +469,7 @@ func (vm *VM) createConsensusCallbacks() dummy.ConsensusCallbacks {
 
 func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.StateDB, txs []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
 	for {
-		tx, exists := vm.Mempool.NextTx()
+		tx, exists := vm.mempool.NextTx()
 		if !exists {
 			break
 		}
@@ -513,7 +482,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 		if err := vm.verifyTx(tx, header.ParentHash, header.BaseFee, state, rules); err != nil {
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx from mempool on failed verification", "txID", tx.ID(), "err", err)
-			vm.Mempool.DiscardCurrentTx(tx.ID())
+			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
 			continue
 		}
@@ -523,7 +492,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 			// Discard the transaction from the mempool and error if the transaction
 			// cannot be marshalled. This should never happen.
 			log.Debug("discarding tx due to unmarshal err", "txID", tx.ID(), "err", err)
-			vm.Mempool.DiscardCurrentTx(tx.ID())
+			vm.mempool.DiscardCurrentTx(tx.ID())
 			return nil, nil, nil, fmt.Errorf("failed to marshal atomic transaction %s due to %w", tx.ID(), err)
 		}
 		var contribution, gasUsed *big.Int
@@ -538,7 +507,7 @@ func (vm *VM) preBatchOnFinalizeAndAssemble(header *types.Header, state *state.S
 
 	if len(txs) == 0 {
 		// this could happen due to the async logic of geth tx pool
-		return nil, nil, nil, ErrEmptyBlock
+		return nil, nil, nil, errEmptyBlock
 	}
 
 	return nil, nil, nil, nil
@@ -566,7 +535,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 	}
 
 	for {
-		tx, exists := vm.Mempool.NextTx()
+		tx, exists := vm.mempool.NextTx()
 		if !exists {
 			break
 		}
@@ -574,7 +543,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		// Ensure that adding [tx] to the block will not exceed the block size soft limit.
 		txSize := len(tx.SignedBytes())
 		if size+txSize > targetAtomicTxsSize {
-			vm.Mempool.CancelCurrentTx(tx.ID())
+			vm.mempool.CancelCurrentTx(tx.ID())
 			break
 		}
 
@@ -593,7 +562,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 		// ensure `gasUsed + batchGasUsed` doesn't exceed `atomicGasLimit`
 		if totalGasUsed := new(big.Int).Add(batchGasUsed, txGasUsed); !utils.BigLessOrEqualUint64(totalGasUsed, atomicGasLimit) {
 			// Send [tx] back to the mempool's tx heap.
-			vm.Mempool.CancelCurrentTx(tx.ID())
+			vm.mempool.CancelCurrentTx(tx.ID())
 			break
 		}
 
@@ -605,7 +574,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 			// block will most likely be accepted.
 			// Discard the transaction from the mempool on failed verification.
 			log.Debug("discarding tx due to overlapping input utxos", "txID", tx.ID())
-			vm.Mempool.DiscardCurrentTx(tx.ID())
+			vm.mempool.DiscardCurrentTx(tx.ID())
 			continue
 		}
 
@@ -616,7 +585,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 			// Note: prior to this point, we have not modified [state] so there is no need to
 			// revert to a snapshot if we discard the transaction prior to this point.
 			log.Debug("discarding tx from mempool due to failed verification", "txID", tx.ID(), "err", err)
-			vm.Mempool.DiscardCurrentTx(tx.ID())
+			vm.mempool.DiscardCurrentTx(tx.ID())
 			state.RevertToSnapshot(snapshot)
 			continue
 		}
@@ -637,7 +606,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 			// If we fail to marshal the batch of atomic transactions for any reason,
 			// discard the entire set of current transactions.
 			log.Debug("discarding txs due to error marshaling atomic transactions", "err", err)
-			vm.Mempool.DiscardCurrentTxs()
+			vm.mempool.DiscardCurrentTxs()
 			return nil, nil, nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 		}
 		return atomicTxBytes, batchContribution, batchGasUsed, nil
@@ -647,7 +616,7 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 	// then the block is empty and should be considered invalid.
 	if len(txs) == 0 {
 		// this could happen due to the async logic of geth tx pool
-		return nil, nil, nil, ErrEmptyBlock
+		return nil, nil, nil, errEmptyBlock
 	}
 
 	// If there are no atomic transactions, but there is a non-zero number of regular transactions, then
@@ -684,8 +653,8 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 	}
 
 	// If [atomicBackend] is nil, the VM is still initializing and is reprocessing accepted blocks.
-	if vm.AtomicBackend != nil {
-		if vm.AtomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
+	if vm.atomicBackend != nil {
+		if vm.atomicBackend.IsBonus(block.NumberU64(), block.Hash()) {
 			log.Info("skipping atomic tx verification on bonus block", "block", block.Hash())
 		} else {
 			// Verify [txs] do not conflict with themselves or ancestor blocks.
@@ -697,7 +666,7 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		//
 		// Note: The atomic trie canonically contains the duplicate operations
 		// from any bonus blocks.
-		_, err := vm.AtomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
+		_, err := vm.atomicBackend.InsertTxs(block.Hash(), block.NumberU64(), block.ParentHash(), txs)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -752,13 +721,13 @@ func (vm *VM) BuildBlockWithContext(ctx context.Context, proposerVMBlockCtx *blo
 	case err == nil:
 		// Marks the current transactions from the mempool as being successfully issued
 		// into a block.
-		vm.Mempool.IssueCurrentTxs()
+		vm.mempool.IssueCurrentTxs()
 	case errors.Is(err, vmerrors.ErrGenerateBlockFailed), errors.Is(err, vmerrors.ErrBlockVerificationFailed):
 		log.Debug("cancelling txs due to error generating block", "err", err)
-		vm.Mempool.CancelCurrentTxs()
+		vm.mempool.CancelCurrentTxs()
 	case errors.Is(err, vmerrors.ErrWrapBlockFailed):
 		log.Debug("discarding txs due to error making new block", "err", err)
-		vm.Mempool.DiscardCurrentTxs()
+		vm.mempool.DiscardCurrentTxs()
 	}
 	return blk, err
 }
@@ -778,17 +747,15 @@ func (vm *VM) currentRules() extras.Rules {
 	return vm.rules(header.Number, header.Time)
 }
 
-// TODO: these should be unexported after test refactor is done
-
 // getAtomicTx returns the requested transaction, status, and height.
 // If the status is Unknown, then the returned transaction will be nil.
-func (vm *VM) GetAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
-	if tx, height, err := vm.AtomicTxRepository.GetByTxID(txID); err == nil {
+func (vm *VM) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error) {
+	if tx, height, err := vm.atomicTxRepository.GetByTxID(txID); err == nil {
 		return tx, atomic.Accepted, height, nil
 	} else if err != avalanchedatabase.ErrNotFound {
 		return nil, atomic.Unknown, 0, err
 	}
-	tx, dropped, found := vm.Mempool.GetTx(txID)
+	tx, dropped, found := vm.mempool.GetTx(txID)
 	switch {
 	case found && dropped:
 		return tx, atomic.Dropped, 0, nil
