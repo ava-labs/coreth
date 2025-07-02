@@ -1,12 +1,10 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+package vm
 
 import (
-	"context"
 	"math/big"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,7 +13,6 @@ import (
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -64,7 +61,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func(t *testing.T) atomic.UnsignedAtomicTx
-	rules       extras.Rules
+	rules       *extras.Rules
 	expectedErr string
 }
 
@@ -72,7 +69,7 @@ type atomicTxVerifyTest struct {
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
 	atomicTx := test.generate(t)
-	err := atomicTx.Verify(test.ctx, test.rules)
+	err := atomicTx.Verify(test.ctx, *test.rules)
 	if len(test.expectedErr) == 0 {
 		require.NoError(err)
 	} else {
@@ -96,109 +93,6 @@ type atomicTxTest struct {
 	// fork to use for the VM rules and genesis
 	// If this is left empty, [upgradetest.NoUpgrades], will be used
 	fork upgradetest.Fork
-}
-
-func executeTxTest(t *testing.T, test atomicTxTest) {
-	tvm := newVM(t, testVMConfig{
-		isSyncing: test.bootstrapping,
-		fork:      &test.fork,
-	})
-	rules := tvm.vm.currentRules()
-
-	tx := test.setup(t, tvm.vm, tvm.atomicMemory)
-
-	var baseFee *big.Int
-	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
-	switch {
-	case rules.IsApricotPhase3:
-		baseFee = initialBaseFee
-	}
-
-	lastAcceptedBlock := tvm.vm.LastAcceptedExtendedBlock()
-	backend := &atomicvm.VerifierBackend{
-		Ctx:          tvm.vm.ctx,
-		Fx:           &tvm.vm.atomicVM.Fx,
-		Rules:        rules,
-		Bootstrapped: tvm.vm.bootstrapped.Get(),
-		BlockFetcher: tvm.vm,
-		SecpCache:    tvm.vm.atomicVM.SecpCache,
-	}
-	if err := tx.UnsignedAtomicTx.Visit(&atomicvm.SemanticVerifier{
-		Backend: backend,
-		Tx:      tx,
-		Parent:  lastAcceptedBlock,
-		BaseFee: baseFee,
-	}); len(test.semanticVerifyErr) == 0 && err != nil {
-		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
-	} else if len(test.semanticVerifyErr) != 0 {
-		if err == nil {
-			t.Fatalf("SemanticVerify unexpectedly returned a nil error. Expected err: %s", test.semanticVerifyErr)
-		}
-		if !strings.Contains(err.Error(), test.semanticVerifyErr) {
-			t.Fatalf("Expected SemanticVerify to fail due to %s, but failed with: %s", test.semanticVerifyErr, err)
-		}
-		// If SemanticVerify failed for the expected reason, return early
-		return
-	}
-
-	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.UnsignedAtomicTx.EVMStateTransfer(tvm.vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
-		t.Fatalf("EVMStateTransfer failed unexpectedly due to: %s", err)
-	} else if len(test.evmStateTransferErr) != 0 {
-		if err == nil {
-			t.Fatalf("EVMStateTransfer unexpectedly returned a nil error. Expected err: %s", test.evmStateTransferErr)
-		}
-		if !strings.Contains(err.Error(), test.evmStateTransferErr) {
-			t.Fatalf("Expected SemanticVerify to fail due to %s, but failed with: %s", test.evmStateTransferErr, err)
-		}
-		// If EVMStateTransfer failed for the expected reason, return early
-		return
-	}
-
-	if test.bootstrapping {
-		// If this test simulates processing txs during bootstrapping (where some verification is skipped),
-		// initialize the block building goroutines normally initialized in SetState(snow.NormalOps).
-		// This ensures that the VM can build a block correctly during the test.
-		if err := tvm.vm.initBlockBuilding(); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
-		t.Fatal(err)
-	}
-	<-tvm.toEngine
-
-	// If we've reached this point, we expect to be able to build and verify the block without any errors
-	blk, err := tvm.vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); len(test.acceptErr) == 0 && err != nil {
-		t.Fatalf("Accept failed unexpectedly due to: %s", err)
-	} else if len(test.acceptErr) != 0 {
-		if err == nil {
-			t.Fatalf("Accept unexpectedly returned a nil error. Expected err: %s", test.acceptErr)
-		}
-		if !strings.Contains(err.Error(), test.acceptErr) {
-			t.Fatalf("Expected Accept to fail due to %s, but failed with: %s", test.acceptErr, err)
-		}
-		// If Accept failed for the expected reason, return early
-		return
-	}
-
-	if test.checkState != nil {
-		test.checkState(t, tvm.vm)
-	}
 }
 
 func TestEVMOutputCompare(t *testing.T) {
