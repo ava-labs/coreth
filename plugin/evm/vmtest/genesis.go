@@ -64,6 +64,15 @@ func init() {
 // GenesisJSON returns the JSON representation of the genesis block
 // for the given chain configuration, with pre-funded accounts.
 func GenesisJSON(cfg *params.ChainConfig) string {
+	g := NewTestGenesis(cfg)
+	b, err := json.Marshal(g)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
+func NewTestGenesis(cfg *params.ChainConfig) *core.Genesis {
 	g := new(core.Genesis)
 	g.Difficulty = big.NewInt(0)
 	g.GasLimit = 0x5f5e100
@@ -85,16 +94,11 @@ func GenesisJSON(cfg *params.ChainConfig) string {
 	}
 
 	// Fund the test keys
-	var b []byte
 	for _, ethAddr := range TestEthAddrs {
 		g.Alloc[ethAddr] = types.Account{Balance: InitialFund}
 	}
 
-	b, err := json.Marshal(g)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
+	return g
 }
 
 func NewPrefundedGenesis(

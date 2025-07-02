@@ -2106,26 +2106,21 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require := require.New(t)
 
 	fork := upgradetest.Fortuna
+	amount := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(4000))
+	genesis := vmtest.NewTestGenesis(vmtest.ForkToChainConfig[fork])
+	for _, addr := range vmtest.TestEthAddrs {
+		genesis.Alloc[addr] = types.Account{Balance: amount}
+	}
+	genesisBytes, err := json.Marshal(genesis)
+	require.NoError(err)
+
 	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:        &fork,
+		GenesisJSON: string(genesisBytes),
 	})
 	defer func() {
 		require.NoError(vm.Shutdown(ctx))
 	}()
-
-	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
-	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
-
-	<-tvm.ToEngine
-	blk1, err := vm.BuildBlock(ctx)
-	require.NoError(err)
-
-	require.NoError(blk1.Verify(ctx))
-	require.NoError(vm.SetPreference(ctx, blk1.ID()))
-	require.NoError(blk1.Accept(ctx))
-
-	newHead := <-newTxPoolHeadChan
-	require.Equal(common.Hash(blk1.ID()), newHead.Head.Hash())
 
 	// Build a block consuming all of the available gas
 	var (
@@ -2133,7 +2128,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 		lowGasPrice  = big.NewInt(ap0.MinGasPrice)
 	)
 
-	// Refill capacity after distributing funds with import transactions
+	// Refill capacity
 	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 	maxSizeTxs := make([]*types.Transaction, 2)
 	for i := uint64(0); i < 2; i++ {
@@ -2144,6 +2139,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 			highGasPrice,
 			[]byte{0xfe}, // invalid opcode consumes all gas
 		)
+		var err error
 		maxSizeTxs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 		require.NoError(err)
 	}
