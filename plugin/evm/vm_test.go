@@ -21,8 +21,10 @@ import (
 
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/metrics/metricstest"
+	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
@@ -60,12 +62,7 @@ var (
 )
 
 func defaultExtensions() (*extension.Config, error) {
-	codecManager, err := message.NewCodec(message.BlockSyncSummary{})
-	if err != nil {
-		return nil, err
-	}
 	return &extension.Config{
-		NetworkCodec:        codecManager,
 		SyncSummaryProvider: &message.BlockSyncSummaryProvider{},
 		SyncableParser:      &message.BlockSyncSummaryParser{},
 		ConsensusCallbacks: dummy.ConsensusCallbacks{
@@ -2038,4 +2035,158 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
 	err = extendedBlock.Verify(ctx)
 	require.ErrorContains(err, "blobs not enabled on avalanche networks")
+}
+
+func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
+	ctx := context.Background()
+	require := require.New(t)
+
+	fork := upgradetest.Fortuna
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
+		Fork: &fork,
+	})
+	defer func() {
+		require.NoError(vm.Shutdown(ctx))
+	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	// Build a block consuming all of the available gas
+	var (
+		txs = make([]*types.Transaction, 2)
+		err error
+	)
+	for i := uint64(0); i < 2; i++ {
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			acp176.MinMaxCapacity,
+			big.NewInt(ap0.MinGasPrice),
+			[]byte{0xfe}, // invalid opcode consumes all gas
+		)
+		txs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		require.NoError(err)
+	}
+
+	errs := vm.txPool.AddRemotesSync([]*types.Transaction{txs[0]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.ToEngine
+	blk2, err := vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk2.Verify(ctx))
+	require.NoError(blk2.Accept(ctx))
+
+	// Attempt to build a block consuming more than the current gas capacity
+	errs = vm.txPool.AddRemotesSync([]*types.Transaction{txs[1]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.ToEngine
+	// Expect block building to fail due to insufficient gas capacity
+	_, err = vm.BuildBlock(ctx)
+	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
+
+	// Wait to fill block capacity and retry block builiding
+	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+
+	<-tvm.ToEngine
+	blk3, err := vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk3.Verify(ctx))
+	require.NoError(blk3.Accept(ctx))
+}
+
+func TestBuildBlockLargeTxStarvation(t *testing.T) {
+	ctx := context.Background()
+	require := require.New(t)
+
+	fork := upgradetest.Fortuna
+	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
+		Fork: &fork,
+	})
+	defer func() {
+		require.NoError(vm.Shutdown(ctx))
+	}()
+
+	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
+	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
+
+	<-tvm.ToEngine
+	blk1, err := vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk1.Verify(ctx))
+	require.NoError(vm.SetPreference(ctx, blk1.ID()))
+	require.NoError(blk1.Accept(ctx))
+
+	newHead := <-newTxPoolHeadChan
+	require.Equal(common.Hash(blk1.ID()), newHead.Head.Hash())
+
+	// Build a block consuming all of the available gas
+	var (
+		highGasPrice = big.NewInt(2 * ap0.MinGasPrice)
+		lowGasPrice  = big.NewInt(ap0.MinGasPrice)
+	)
+
+	// Refill capacity after distributing funds with import transactions
+	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+	maxSizeTxs := make([]*types.Transaction, 2)
+	for i := uint64(0); i < 2; i++ {
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			acp176.MinMaxCapacity,
+			highGasPrice,
+			[]byte{0xfe}, // invalid opcode consumes all gas
+		)
+		maxSizeTxs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		require.NoError(err)
+	}
+
+	errs := vm.txPool.AddRemotesSync([]*types.Transaction{maxSizeTxs[0]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.ToEngine
+	blk2, err := vm.BuildBlock(ctx)
+	require.NoError(err)
+
+	require.NoError(blk2.Verify(ctx))
+	require.NoError(blk2.Accept(ctx))
+
+	// Add a second transaction trying to consume the max guaranteed gas capacity at a higher gas price
+	errs = vm.txPool.AddRemotesSync([]*types.Transaction{maxSizeTxs[1]})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	// Build a smaller transaction that consumes less gas at a lower price. Block building should
+	// fail and enforce waiting for more capacity to avoid starving the larger transaction.
+	tx := types.NewContractCreation(0, big.NewInt(0), 2_000_000, lowGasPrice, []byte{0xfe})
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[1].ToECDSA())
+	require.NoError(err)
+	errs = vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})
+	require.Len(errs, 1)
+	require.NoError(errs[0])
+
+	<-tvm.ToEngine
+	_, err = vm.BuildBlock(ctx)
+	require.ErrorIs(err, miner.ErrInsufficientGasCapacityToBuild)
+
+	// Wait to fill block capacity and retry block building
+	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+	<-tvm.ToEngine
+	blk4, err := vm.BuildBlock(ctx)
+	require.NoError(err)
+	ethBlk4 := blk4.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+	actualTxs := ethBlk4.Transactions()
+	require.Len(actualTxs, 1)
+	require.Equal(maxSizeTxs[1].Hash(), actualTxs[0].Hash())
+
+	require.NoError(blk4.Verify(ctx))
+	require.NoError(blk4.Accept(ctx))
 }

@@ -16,7 +16,7 @@ type Syncable interface {
 }
 
 type SyncableParser interface {
-	ParseFromBytes(summaryBytes []byte, acceptImpl AcceptImplFn) (Syncable, error)
+	Parse(summaryBytes []byte, acceptImpl AcceptImplFn) (Syncable, error)
 }
 
 type AcceptImplFn func(Syncable) (block.StateSyncMode, error)

@@ -417,9 +417,6 @@ func (vm *VM) Initialize(
 	vm.chainConfig = g.Config
 
 	vm.networkCodec = message.Codec
-	if vm.extensionConfig.NetworkCodec != nil {
-		vm.networkCodec = vm.extensionConfig.NetworkCodec
-	}
 	vm.Network, err = network.NewNetwork(vm.ctx, appSender, vm.networkCodec, vm.config.MaxOutboundActiveRequests, vm.sdkMetrics)
 	if err != nil {
 		return fmt.Errorf("failed to create network: %w", err)
@@ -575,10 +572,11 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 			}.BackendConstructor,
 		},
 	)
-	var leafHandlerConfigs []*extension.LeafRequestConfig
-	syncStats := handlerstats.GetOrRegisterHandlerStats(metrics.Enabled)
+	leafHandlers := make(LeafHandlers)
+	leafMetricsNames := make(map[message.NodeType]string)
 	// register default leaf request handler for state trie
-	leafHandlerConfigs = append(leafHandlerConfigs, &extension.LeafRequestConfig{
+	syncStats := handlerstats.GetOrRegisterHandlerStats(metrics.Enabled)
+	stateLeafRequestConfig := &extension.LeafRequestConfig{
 		LeafType:   message.StateTrieNode,
 		MetricName: "sync_state_trie_leaves",
 		Handler: handlers.NewLeafsRequestHandler(evmTrieDB,
@@ -586,19 +584,16 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 			vm.blockChain, vm.networkCodec,
 			syncStats,
 		),
-	})
+	}
+	leafHandlers[stateLeafRequestConfig.LeafType] = stateLeafRequestConfig.Handler
+	leafMetricsNames[stateLeafRequestConfig.LeafType] = stateLeafRequestConfig.MetricName
 
-	if vm.extensionConfig.ExtraSyncLeafHandlerConfig != nil {
-		leafHandlerConfigs = append(leafHandlerConfigs, vm.extensionConfig.ExtraSyncLeafHandlerConfig)
+	extraLeafConfig := vm.extensionConfig.ExtraSyncLeafHandlerConfig
+	if extraLeafConfig != nil {
+		leafHandlers[extraLeafConfig.LeafType] = extraLeafConfig.Handler
+		leafMetricsNames[extraLeafConfig.LeafType] = extraLeafConfig.MetricName
 	}
 
-	leafHandlers := make(LeafHandlers, len(leafHandlerConfigs))
-	for _, leafConfig := range leafHandlerConfigs {
-		if _, exists := leafHandlers[leafConfig.LeafType]; exists {
-			return fmt.Errorf("duplicate leaf type %v", leafConfig.LeafType)
-		}
-		leafHandlers[leafConfig.LeafType] = leafConfig.Handler
-	}
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
@@ -609,7 +604,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	)
 	vm.Network.SetRequestHandler(networkHandler)
 
-	vm.Server = vmsync.SyncServer(vm.blockChain, vm.extensionConfig.SyncSummaryProvider, vm.config.StateSyncCommitInterval)
+	vm.Server = vmsync.NewServer(vm.blockChain, vm.extensionConfig.SyncSummaryProvider, vm.config.StateSyncCommitInterval)
 	stateSyncEnabled := vm.stateSyncEnabled(lastAcceptedHeight)
 	// parse nodeIDs from state sync IDs in vm config
 	var stateSyncIDs []ids.NodeID
@@ -626,10 +621,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	}
 
 	// Initialize the state sync client
-	leafMetricsNames := make(map[message.NodeType]string, len(leafHandlerConfigs))
-	for _, leafConfig := range leafHandlerConfigs {
-		leafMetricsNames[leafConfig.LeafType] = leafConfig.MetricName
-	}
+
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
 		Chain: vm.eth,
 		State: vm.State,
@@ -642,18 +634,18 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 				BlockParser:      vm,
 			},
 		),
-		Enabled:              stateSyncEnabled,
-		SkipResume:           vm.config.StateSyncSkipResume,
-		StateSyncMinBlocks:   vm.config.StateSyncMinBlocks,
-		StateSyncRequestSize: vm.config.StateSyncRequestSize,
-		LastAcceptedHeight:   lastAcceptedHeight, // TODO clean up how this is passed around
-		ChaindDB:             vm.chaindb,
-		VerDB:                vm.versiondb,
-		MetadataDB:           vm.metadataDB,
-		ToEngine:             vm.toEngine,
-		Acceptor:             vm,
-		SyncableParser:       vm.extensionConfig.SyncableParser,
-		SyncExtender:         vm.extensionConfig.SyncExtender,
+		Enabled:            stateSyncEnabled,
+		SkipResume:         vm.config.StateSyncSkipResume,
+		MinBlocks:          vm.config.StateSyncMinBlocks,
+		RequestSize:        vm.config.StateSyncRequestSize,
+		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
+		ChaindDB:           vm.chaindb,
+		VerDB:              vm.versiondb,
+		MetadataDB:         vm.metadataDB,
+		ToEngine:           vm.toEngine,
+		Acceptor:           vm,
+		Parser:             vm.extensionConfig.SyncableParser,
+		Extender:           vm.extensionConfig.SyncExtender,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume

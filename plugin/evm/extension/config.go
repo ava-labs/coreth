@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -33,7 +33,6 @@ import (
 
 var (
 	errNilConfig              = errors.New("nil extension config")
-	errNilNetworkCodec        = errors.New("nil network codec")
 	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
 	errNilSyncableParser      = errors.New("nil syncable parser")
 )
@@ -55,9 +54,10 @@ type ExtensibleVM interface {
 	LastAcceptedExtendedBlock() ExtendedBlock
 	// IsBootstrapped returns true if the VM is bootstrapped
 	IsBootstrapped() bool
-
 	// P2PValidators returns the validators for the network
 	P2PValidators() *p2p.Validators
+	// ChainConfig returns the chain config for the VM
+	ChainConfig() *params.ChainConfig
 	// Ethereum returns the Ethereum client
 	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM
@@ -106,12 +106,12 @@ type BlockExtension interface {
 	// and should be cleaned up due to error or verification runs under non-write mode. This
 	// does not return an error because the block has already been verified.
 	CleanupVerified()
-	// OnAccept is called when a block is accepted by the block manager. OnAccept takes a
+	// Accept is called when a block is accepted by the block manager. Accept takes a
 	// database.Batch that contains the changes that were made to the database as a result
 	// of accepting the block. The changes in the batch should be flushed to the database in this method.
-	OnAccept(acceptedBatch database.Batch) error
-	// OnReject is called when a block is rejected by the block manager
-	OnReject() error
+	Accept(acceptedBatch database.Batch) error
+	// Reject is called when a block is rejected by the block manager
+	Reject() error
 }
 
 // BuilderMempool is a mempool that's used in the block builder
@@ -136,10 +136,6 @@ type LeafRequestConfig struct {
 
 // Config is the configuration for the VM extension
 type Config struct {
-	// NetworkCodec is the codec manager to use
-	// for encoding and decoding network messages.
-	// It's required and should be non-nil
-	NetworkCodec codec.Manager
 	// ConsensusCallbacks is the consensus callbacks to use
 	// for the VM to be used in consensus engine.
 	// Callback functions can be nil.
@@ -171,9 +167,6 @@ type Config struct {
 func (c *Config) Validate() error {
 	if c == nil {
 		return errNilConfig
-	}
-	if c.NetworkCodec == nil {
-		return errNilNetworkCodec
 	}
 	if c.SyncSummaryProvider == nil {
 		return errNilSyncSummaryProvider

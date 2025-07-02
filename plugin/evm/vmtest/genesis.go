@@ -33,6 +33,7 @@ var (
 	TestEthAddrs     []common.Address // testEthAddrs[i] corresponds to testKeys[i]
 	TestShortIDAddrs []ids.ShortID
 	InitialBaseFee   = big.NewInt(ap3.InitialBaseFee)
+	InitialFund      = new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
 
 	ForkToChainConfig = map[upgradetest.Fork]*params.ChainConfig{
 		upgradetest.NoUpgrades:        params.TestLaunchConfig,
@@ -80,15 +81,13 @@ func GenesisJSON(cfg *params.ChainConfig) string {
 	// with warp messages.
 	if params.GetExtra(cfg).IsDurango(0) {
 		addr := common.HexToAddress("0x99b9DEA54C48Dfea6aA9A4Ca4623633EE04ddbB5")
-		balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
-		g.Alloc[addr] = types.Account{Balance: balance}
+		g.Alloc[addr] = types.Account{Balance: InitialFund}
 	}
 
 	// Fund the test keys
 	var b []byte
 	for _, ethAddr := range TestEthAddrs {
-		balance := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(10))
-		g.Alloc[ethAddr] = types.Account{Balance: balance}
+		g.Alloc[ethAddr] = types.Account{Balance: InitialFund}
 	}
 
 	b, err := json.Marshal(g)
