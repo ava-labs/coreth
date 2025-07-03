@@ -223,8 +223,6 @@ type VM struct {
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB database.Database
 
-	toEngine chan<- commonEng.Message
-
 	builder *blockBuilder
 
 	clock *mockable.Clock
@@ -238,11 +236,15 @@ type VM struct {
 	network.Network
 	networkCodec codec.Manager
 
+	finishedSyncing chan struct{}
+
 	// Metrics
 	sdkMetrics *prometheus.Registry
 
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
+
+	stateSyncDone chan commonEng.Message
 
 	logger corethlog.Logger
 	// State sync server and client
@@ -271,7 +273,6 @@ func (vm *VM) Initialize(
 	genesisBytes []byte,
 	_ []byte,
 	configBytes []byte,
-	toEngine chan<- commonEng.Message,
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
@@ -283,7 +284,7 @@ func (vm *VM) Initialize(
 	// See https://github.com/ava-labs/coreth/pull/998 for the resolution of this TODO.
 	if vm.atomicVM == nil {
 		vm.atomicVM = atomicvm.WrapVM(vm)
-		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, toEngine, nil, appSender); err != nil {
+		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, nil, appSender); err != nil {
 			return fmt.Errorf("failed to initialize atomic VM: %w", err)
 		}
 		return nil
@@ -341,7 +342,6 @@ func (vm *VM) Initialize(
 	// Enable debug-level metrics that might impact runtime performance
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
 
-	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
 	if err := vm.initializeMetrics(); err != nil {
@@ -481,6 +481,10 @@ func (vm *VM) Initialize(
 	// Add p2p warp message warpHandler
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
+
+	vm.finishedSyncing = make(chan struct{})
+
+	vm.stateSyncDone = make(chan commonEng.Message, 1)
 
 	return vm.initializeStateSync(lastAcceptedHeight)
 }
@@ -643,8 +647,9 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	// Initialize the state sync client
 
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
-		Chain: vm.eth,
-		State: vm.State,
+		StateSyncDone: vm.stateSyncDone,
+		Chain:         vm.eth,
+		State:         vm.State,
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.Network,
@@ -662,7 +667,6 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		ChaindDB:           vm.chaindb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
-		ToEngine:           vm.toEngine,
 		Acceptor:           vm,
 		Parser:             vm.extensionConfig.SyncableParser,
 		Extender:           vm.extensionConfig.SyncExtender,
@@ -803,8 +807,11 @@ func (vm *VM) initBlockBuilding() error {
 	vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	vm.builder = vm.NewBlockBuilder(vm.toEngine, vm.extensionConfig.ExtraMempool)
+	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool)
 	vm.builder.awaitSubmittedTxs()
+	defer func() {
+		close(vm.finishedSyncing)
+	}()
 
 	vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
@@ -861,6 +868,57 @@ func (vm *VM) initBlockBuilding() error {
 	return nil
 }
 
+func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
+	// Block building is not initialized yet, so we haven't finished syncing or bootstrapping.
+	if vm.builder == nil {
+		select {
+		case <-ctx.Done():
+			return 0, nil
+		case ss := <-vm.stateSyncDone:
+			return ss, nil
+		case <-vm.shutdownChan:
+			return 0, nil
+		case <-vm.finishedSyncing:
+			break
+		}
+	}
+
+	pending := make(chan commonEng.Message, 1)
+	errors := make(chan error, 1)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	go func() {
+		defer wg.Done()
+		msg, err := vm.builder.waitForTxEnqueue(ctx)
+		if err != nil {
+			errors <- err
+			return
+		}
+		pending <- msg
+	}()
+
+	defer wg.Wait()
+	defer vm.builder.wakeup()
+	defer cancel()
+
+	select {
+	case err := <-errors:
+		return commonEng.Message(0), err
+	case ss := <-vm.stateSyncDone:
+		return ss, nil
+	case pendingTx := <-pending:
+		return pendingTx, nil
+	case <-ctx.Done():
+		return commonEng.Message(0), ctx.Err()
+	case <-vm.shutdownChan:
+		return commonEng.Message(0), nil
+	}
+}
+
 // Shutdown implements the snowman.ChainVM interface
 func (vm *VM) Shutdown(context.Context) error {
 	if vm.ctx == nil {
@@ -868,6 +926,7 @@ func (vm *VM) Shutdown(context.Context) error {
 	}
 	if vm.cancel != nil {
 		vm.cancel()
+		vm.cancel = nil
 	}
 	vm.Network.Shutdown()
 	if err := vm.Client.Shutdown(); err != nil {
