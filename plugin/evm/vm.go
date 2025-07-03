@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/coreth/network"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
@@ -358,6 +359,12 @@ func (vm *VM) Initialize(
 		}
 	}
 
+	// Write where the database files are located to be used by any Firewood
+	// databases set up later.
+	if err := customrawdb.WriteChainDataPath(vm.chaindb, chainCtx.ChainDataDir); err != nil {
+		return fmt.Errorf("failed to write database path: %w", err)
+	}
+
 	g, err := parseGenesis(chainCtx, genesisBytes)
 	if err != nil {
 		return err
@@ -425,6 +432,24 @@ func (vm *VM) Initialize(
 	vm.ethConfig.StateHistory = vm.config.StateHistory
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	vm.ethConfig.StateScheme = vm.config.StateScheme
+
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+		log.Warn("Firewood state scheme is enabled")
+		log.Warn("This is untested in production, use at your own risk")
+		// Firewood only supports pruning for now.
+		if !vm.config.Pruning {
+			return errors.New("Pruning must be enabled for Firewood")
+		}
+		// Firewood does not support iterators, so the snapshot cannot be constructed
+		if vm.config.SnapshotCache > 0 {
+			return errors.New("Snapshot cache must be disabled for Firewood")
+		}
+
+		if vm.config.OfflinePruning {
+			return errors.New("Offline pruning is not supported for Firewood")
+		}
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -584,14 +609,18 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
-	evmTrieDB := triedb.NewDatabase(
-		vm.chaindb,
-		&triedb.Config{
-			DBOverride: hashdb.Config{
-				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			}.BackendConstructor,
-		},
-	)
+	// However, Firewood does not support multiple TrieDBs, so we use the same one.
+	evmTrieDB := vm.eth.BlockChain().TrieDB()
+	if vm.ethConfig.StateScheme != customrawdb.FirewoodScheme {
+		evmTrieDB = triedb.NewDatabase(
+			vm.chaindb,
+			&triedb.Config{
+				DBOverride: hashdb.Config{
+					CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
+				}.BackendConstructor,
+			},
+		)
+	}
 	leafHandlers := make(LeafHandlers)
 	leafMetricsNames := make(map[message.NodeType]string)
 	// register default leaf request handler for state trie
