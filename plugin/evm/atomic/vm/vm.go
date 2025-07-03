@@ -418,8 +418,8 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
 	}
-	atomicBackend := NewVerifierBackend(vm, rules)
-	if err := atomicBackend.SemanticVerify(tx, parent, baseFee); err != nil {
+	verifierBackend := NewVerifierBackend(vm, rules)
+	if err := verifierBackend.SemanticVerify(tx, parent, baseFee); err != nil {
 		return err
 	}
 	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, state)
@@ -446,11 +446,11 @@ func (vm *VM) verifyTxs(txs []*atomic.Tx, parentHash common.Hash, baseFee *big.I
 	// Ensure each tx in [txs] doesn't conflict with any other atomic tx in
 	// a processing ancestor block.
 	inputs := set.Set[ids.ID]{}
-	atomicBackend := NewVerifierBackend(vm, rules)
+	verifierBackend := NewVerifierBackend(vm, rules)
 
 	for _, atomicTx := range txs {
 		utx := atomicTx.UnsignedAtomicTx
-		if err := atomicBackend.SemanticVerify(atomicTx, ancestor, baseFee); err != nil {
+		if err := verifierBackend.SemanticVerify(atomicTx, ancestor, baseFee); err != nil {
 			return fmt.Errorf("invalid block due to failed semantic verify: %w at height %d", err, height)
 		}
 		txInputs := utx.InputUTXOs()
