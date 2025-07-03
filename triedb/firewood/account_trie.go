@@ -103,9 +103,8 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 			return nil, nil
 		}
 		// Decode and return the updated storage value
-		var storageBytesDecoded []byte
-		err := rlp.DecodeBytes(updateValue, &storageBytesDecoded)
-		return storageBytesDecoded, err
+		_, decoded, _, err := rlp.Split(updateValue)
+		return decoded, err
 	}
 
 	// No pending update found, read from the underlying reader
@@ -118,9 +117,8 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 	}
 
 	// Decode the storage value
-	var storageBytesDecoded []byte
-	err = rlp.DecodeBytes(storageBytes, &storageBytesDecoded)
-	return storageBytesDecoded, err
+	_, decoded, _, err := rlp.Split(storageBytes)
+	return decoded, err
 }
 
 // UpdateAccount implements state.Trie.
@@ -191,6 +189,7 @@ func (a *AccountTrie) Hash() common.Hash {
 	hash, err := a.hash()
 	if err != nil {
 		log.Error("Failed to hash account trie", "error", err)
+		return common.Hash{}
 	}
 	return hash
 }

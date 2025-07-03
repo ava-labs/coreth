@@ -58,6 +58,7 @@ type fuzzState struct {
 	merkleTries []*merkleTrie
 }
 type merkleTrie struct {
+	name             string
 	ethDatabase      Database
 	accountTrie      Trie
 	openStorageTries map[common.Address]Trie
@@ -96,12 +97,14 @@ func newFuzzState(t *testing.T) *fuzzState {
 	return &fuzzState{
 		merkleTries: []*merkleTrie{
 			&merkleTrie{
+				name:             "hash",
 				ethDatabase:      hashState,
 				accountTrie:      hashTr,
 				openStorageTries: make(map[common.Address]Trie),
 				lastRoot:         ethRoot,
 			},
 			&merkleTrie{
+				name:             "firewood",
 				ethDatabase:      firewoodState,
 				accountTrie:      fwTr,
 				openStorageTries: make(map[common.Address]Trie),
@@ -119,44 +122,44 @@ func (fs *fuzzState) commit() {
 		mergedNodeSet := trienode.NewMergedNodeSet()
 		for addr, str := range tr.openStorageTries {
 			accountStateRoot, set, err := str.Commit(false)
-			fs.require.NoError(err)
+			fs.require.NoError(err, "failed to commit storage trie for account %s in %s", addr.Hex(), tr.name)
 			// A no-op change returns a nil set, which will cause merge to panic.
 			if set != nil {
-				fs.require.NoError(mergedNodeSet.Merge(set))
+				fs.require.NoError(mergedNodeSet.Merge(set), "failed to merge storage trie nodeset for account %s in %s", addr.Hex(), tr.name)
 			}
 
 			acc, err := tr.accountTrie.GetAccount(addr)
-			fs.require.NoError(err)
+			fs.require.NoError(err, "failed to get account %s in %s", addr.Hex(), tr.name)
 			// If the account was deleted, we can skip updating the account's
 			// state root.
-			fs.require.NotNil(acc)
+			fs.require.NotNil(acc, "account %s is nil in %s", addr.Hex(), tr.name)
 
 			acc.Root = accountStateRoot
-			fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
+			fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc), "failed to update account %s in %s", addr.Hex(), tr.name)
 		}
 
 		updatedRoot, set, err := tr.accountTrie.Commit(true)
-		fs.require.NoError(err)
+		fs.require.NoError(err, "failed to commit account trie in %s", tr.name)
 
 		// A no-op change returns a nil set, which will cause merge to panic.
 		if set != nil {
-			fs.require.NoError(mergedNodeSet.Merge(set))
+			fs.require.NoError(mergedNodeSet.Merge(set), "failed to merge account trie nodeset in %s", tr.name)
 		}
 
 		// HashDB/PathDB only allows updating the triedb if there have been changes.
 		if _, ok := tr.ethDatabase.TrieDB().Backend().(*firewood.Database); ok {
 			triedbopt := stateconf.WithTrieDBUpdatePayload(common.Hash{byte(int64(fs.blockNumber - 1))}, common.Hash{byte(int64(fs.blockNumber))})
-			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil, triedbopt))
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil, triedbopt), "failed to update triedb in %s", tr.name)
 			tr.lastRoot = updatedRoot
 		} else if updatedRoot != tr.lastRoot {
-			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil))
+			fs.require.NoError(tr.ethDatabase.TrieDB().Update(updatedRoot, tr.lastRoot, fs.blockNumber, mergedNodeSet, nil), "failed to update triedb in %s", tr.name)
 			tr.lastRoot = updatedRoot
 		}
 		tr.openStorageTries = make(map[common.Address]Trie)
 		fs.require.NoError(tr.ethDatabase.TrieDB().Commit(updatedRoot, true),
-			"expected hashdb root %s", fs.merkleTries[0].lastRoot.Hex())
+			"failed to commit %s: expected hashdb root %s", tr.name, fs.merkleTries[0].lastRoot.Hex())
 		tr.accountTrie, err = tr.ethDatabase.OpenTrie(tr.lastRoot)
-		fs.require.NoError(err)
+		fs.require.NoError(err, "failed to reopen account trie for %s", tr.name)
 	}
 	fs.blockNumber++
 
@@ -164,8 +167,8 @@ func (fs *fuzzState) commit() {
 	expectedRoot := fs.merkleTries[0].lastRoot
 	for i, tr := range fs.merkleTries[1:] {
 		fs.require.Equalf(expectedRoot, tr.lastRoot,
-			"expected root %x, got %x for trie %d",
-			expectedRoot.Hex(), tr.lastRoot.Hex(), i,
+			"root mismatch for %s: expected %x, got %x (trie index %d)",
+			tr.name, expectedRoot.Hex(), tr.lastRoot.Hex(), i,
 		)
 	}
 }
@@ -184,7 +187,7 @@ func (fs *fuzzState) createAccount() {
 	fs.currentAddrs = append(fs.currentAddrs, addr)
 
 	for _, tr := range fs.merkleTries {
-		fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
+		fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc), "failed to create account %s in %s", addr.Hex(), tr.name)
 	}
 }
 
@@ -201,12 +204,12 @@ func (fs *fuzzState) updateAccount(addrIndex int) {
 
 	for _, tr := range fs.merkleTries {
 		acc, err := tr.accountTrie.GetAccount(addr)
-		fs.require.NoError(err)
-		fs.require.NotNil(acc)
+		fs.require.NoError(err, "failed to get account %s for update in %s", addr.Hex(), tr.name)
+		fs.require.NotNil(acc, "account %s is nil for update in %s", addr.Hex(), tr.name)
 		acc.Nonce++
 		acc.CodeHash = crypto.Keccak256Hash(acc.CodeHash[:]).Bytes()
 		acc.Balance.Add(acc.Balance, uint256.NewInt(3))
-		fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc))
+		fs.require.NoError(tr.accountTrie.UpdateAccount(addr, acc), "failed to update account %s in %s", addr.Hex(), tr.name)
 	}
 }
 
@@ -218,7 +221,7 @@ func (fs *fuzzState) deleteAccount(accountIndex int) {
 		return deleteAddr == addr
 	})
 	for _, tr := range fs.merkleTries {
-		fs.require.NoError(tr.accountTrie.DeleteAccount(deleteAddr))
+		fs.require.NoError(tr.accountTrie.DeleteAccount(deleteAddr), "failed to delete account %s in %s", deleteAddr.Hex(), tr.name)
 		delete(tr.openStorageTries, deleteAddr) // remove any open storage trie for the deleted account
 	}
 }
@@ -243,10 +246,10 @@ func (fs *fuzzState) openStorageTrie(addr common.Address, tr *merkleTrie) Trie {
 	}
 
 	acc, err := tr.accountTrie.GetAccount(addr)
-	fs.require.NoError(err)
-	fs.require.NotNil(acc, addr.Hex())
+	fs.require.NoError(err, "failed to get account %s for storage trie in %s", addr.Hex(), tr.name)
+	fs.require.NotNil(acc, "account %s not found in %s", addr.Hex(), tr.name)
 	storageTrie, err = tr.ethDatabase.OpenStorageTrie(tr.lastRoot, addr, acc.Root, tr.accountTrie)
-	fs.require.NoError(err)
+	fs.require.NoError(err, "failed to open storage trie for %s in %s", addr.Hex(), tr.name)
 	tr.openStorageTries[addr] = storageTrie
 	return storageTrie
 }
@@ -264,7 +267,7 @@ func (fs *fuzzState) addStorage(accountIndex int) {
 
 	for _, tr := range fs.merkleTries {
 		str := fs.openStorageTrie(addr, tr)
-		fs.require.NoError(str.UpdateStorage(addr, key[:], val[:]))
+		fs.require.NoError(str.UpdateStorage(addr, key[:], val[:]), "failed to add storage for account %s in %s", addr.Hex(), tr.name)
 	}
 
 	fs.currentStorageInputIndices[addr]++
@@ -285,7 +288,7 @@ func (fs *fuzzState) updateStorage(accountIndex int, storageIndexInput uint64) {
 
 	for _, tr := range fs.merkleTries {
 		str := fs.openStorageTrie(addr, tr)
-		fs.require.NoError(str.UpdateStorage(addr, storageKey[:], updatedVal[:]))
+		fs.require.NoError(str.UpdateStorage(addr, storageKey[:], updatedVal[:]), "failed to update storage for account %s in %s", addr.Hex(), tr.name)
 	}
 }
 
@@ -299,7 +302,7 @@ func (fs *fuzzState) deleteStorage(accountIndex int, storageIndexInput uint64) {
 
 	for _, tr := range fs.merkleTries {
 		str := fs.openStorageTrie(addr, tr)
-		fs.require.NoError(str.DeleteStorage(addr, storageKey[:]))
+		fs.require.NoError(str.DeleteStorage(addr, storageKey[:]), "failed to delete storage for account %s in %s", addr.Hex(), tr.name)
 	}
 }
 
