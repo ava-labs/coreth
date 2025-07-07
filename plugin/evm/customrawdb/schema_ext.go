@@ -52,8 +52,4 @@ var (
 	syncPerformedKeyLength = len(syncPerformedPrefix) + wrappers.LongLen
 )
 
-// Firewood keys
-var (
-	FirewoodScheme         = "firewood"
-	firewoodGenesisRootKey = []byte("firewood_genesis_root")
-)
+var FirewoodScheme = "firewood"
