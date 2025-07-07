@@ -8,7 +8,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/libevm/common"
@@ -81,11 +80,12 @@ func newFuzzState(t *testing.T) *fuzzState {
 	})
 
 	firewoodMemdb := rawdb.NewMemoryDatabase()
-	r.NoError(customrawdb.WriteChainDataPath(firewoodMemdb, t.TempDir()))
+	fwCfg := firewood.Defaults
+	fwCfg.FilePath = t.TempDir() // Use a temporary directory for the Firewood
 	firewoodState := NewDatabaseWithConfig(
 		firewoodMemdb,
 		&triedb.Config{
-			DBOverride: firewood.Defaults.BackendConstructor,
+			DBOverride: fwCfg.BackendConstructor,
 		},
 	)
 	fwTr, err := firewoodState.OpenTrie(ethRoot)

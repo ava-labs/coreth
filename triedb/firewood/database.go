@@ -70,6 +70,7 @@ type Config struct {
 	MetricsPort       uint16
 }
 
+// Note that `FilePath` is not specificied, and must always be set by the user.
 var Defaults = &Config{
 	FileName:          "firewood",
 	CleanCacheSize:    1024 * 1024, // 1MB
