@@ -33,3 +33,9 @@ func (s *StorageTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, 
 func (s *StorageTrie) Hash() common.Hash {
 	return s.storageRoot // only used in statedb to populate a `StateAccount`
 }
+
+// Copy should never be called on a storage trie, as it is just a wrapper around the account trie.
+// Each storage trie should be re-opened with the account trie separately.
+func (s *StorageTrie) Copy() *StorageTrie {
+	return nil
+}

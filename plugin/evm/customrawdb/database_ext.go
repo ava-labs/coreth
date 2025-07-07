@@ -79,33 +79,6 @@ func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	return rawdb.ParseStateScheme(provided, disk)
 }
 
-// WriteChainDataPath writes the path to the database files.
-// This should only be written once.
-func WriteChainDataPath(db ethdb.KeyValueWriter, path string) error {
-	// Check if the path is valid
-	if path == "" {
-		return fmt.Errorf("Invalid state path %q", path)
-	}
-
-	// Write the state path to the database
-	return db.Put(chainDataPathKey, []byte(path))
-}
-
-// ReadChainDataPath reads the path to the database files.
-func ReadChainDataPath(db ethdb.KeyValueReader) (string, error) {
-	has, err := db.Has(chainDataPathKey)
-	if err != nil || !has {
-		return "", err
-	}
-	// Read the state path from the database
-	path, err := db.Get(chainDataPathKey)
-	if err != nil {
-		return "", err
-	}
-
-	return string(path), nil
-}
-
 // WriteFirewoodGenesisRoot writes the genesis root to the database.
 func WriteFirewoodGenesisRoot(db ethdb.KeyValueWriter, root common.Hash) error {
 	// Write the genesis root to the database

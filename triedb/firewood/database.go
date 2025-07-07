@@ -62,6 +62,7 @@ type ProposalContext struct {
 }
 
 type Config struct {
+	FilePath          string // Path to the directory where the Firewood database will be stored
 	FileName          string
 	CleanCacheSize    int // Size of the clean cache in bytes
 	Revisions         uint
@@ -103,7 +104,7 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 		config = Defaults
 	}
 
-	fwConfig, path, err := validateConfig(diskdb, config)
+	fwConfig, path, err := validateConfig(config)
 	if err != nil {
 		log.Crit("firewood: error validating config", "error", err)
 	}
@@ -128,26 +129,20 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	}
 }
 
-func validateConfig(diskdb ethdb.Database, trieConfig *Config) (*ffi.Config, string, error) {
-	// Get the path from the database
-	path, err := customrawdb.ReadChainDataPath(diskdb)
-	if err != nil {
-		return nil, "", fmt.Errorf("unable to read database path: %w", err)
-	}
-
+func validateConfig(trieConfig *Config) (*ffi.Config, string, error) {
 	// Check that the directory exists
-	info, err := os.Stat(path)
+	info, err := os.Stat(trieConfig.FilePath)
 	if err != nil {
 		return nil, "", fmt.Errorf("error checking database path: %w", err)
 	} else if !info.IsDir() {
-		return nil, "", fmt.Errorf("database path is not a directory: %s", path)
+		return nil, "", fmt.Errorf("database path is not a directory: %s", trieConfig.FilePath)
 	}
 
 	// Append the filename to the path
 	if trieConfig.FileName == "" {
 		return nil, "", errors.New("no filename provided")
 	}
-	path = filepath.Join(path, trieConfig.FileName)
+	path := filepath.Join(trieConfig.FilePath, trieConfig.FileName)
 
 	// Check if the file exists
 	info, err = os.Stat(path)
@@ -176,6 +171,10 @@ func validateConfig(diskdb ethdb.Database, trieConfig *Config) (*ffi.Config, str
 // Scheme returns the scheme of the database.
 // This is only used in some API calls
 // and in StateDB to avoid iterating through deleted storage tries.
+// WARNING: If cherry-picking anything from upstream that uses this,
+// it must be overwritten to use something like:
+// `_, ok := db.(*Database); if !ok { return "" }`
+// to recognize the Firewood database.
 func (db *Database) Scheme() string {
 	return rawdb.HashScheme
 }

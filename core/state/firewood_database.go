@@ -42,7 +42,7 @@ func (db *firewoodAccessorDb) CopyTrie(t Trie) Trie {
 	case *firewood.AccountTrie:
 		return t.Copy()
 	case *firewood.StorageTrie:
-		return nil // The storage trie just wraps the account trie, so we don't need to copy it separately.
+		return nil // The storage trie just wraps the account trie, so we must re-open it separately.
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
