@@ -203,7 +203,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 
 	// Check if this proposal already exists.
 	// During reorgs, we may have already created this proposal.
-	// Additinoally, we may have already created this proposal with a different block hash.
+	// Additionally, we may have already created this proposal with a different block hash.
 	if existingProposals, ok := db.proposalMap[root]; ok {
 		for _, existing := range existingProposals {
 			// If the block hash is already tracked, we can skip proposing this again.
