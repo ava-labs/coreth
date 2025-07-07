@@ -190,15 +190,16 @@ func (db *Database) Initialized(root common.Hash) bool {
 // It will not be committed until the Commit method is called.
 // This function should be called even if there are no changes to the state to ensure proper tracking of block hashes.
 func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, _ *triestate.Set, opts ...stateconf.TrieDBUpdateOption) error {
-	db.proposalLock.Lock()
-	defer db.proposalLock.Unlock()
-
 	// We require block hashes to be provided for all blocks in production.
 	// However, many tests cannot reasonably provide a block hash for genesis, so we allow it to be omitted.
 	parentHash, hash, ok := stateconf.ExtractTrieDBUpdatePayload(opts...)
 	if !ok {
 		log.Error("firewood: no block hash provided for block %d", block)
 	}
+
+	// The rest of the operations except key-value arranging must occur with a lock
+	db.proposalLock.Lock()
+	defer db.proposalLock.Unlock()
 
 	// Check if this proposal already exists.
 	// During reorgs, we may have already created this proposal.
