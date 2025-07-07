@@ -64,8 +64,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 }
 
 // ParseStateSchemeExt parses the state scheme from the provided string.
-// It checks the rawdb package for HashDB or PathDB schemes.
-// If it's neither of those, it checks to see if the string is set to FirewoodScheme.
 func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	// Check for custom scheme
 	if provided == FirewoodScheme {
@@ -73,10 +71,11 @@ func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 			// Valid scheme on disk mismatched
 			return "", fmt.Errorf("State scheme %s already set on disk, can't use Firewood", diskScheme)
 		}
+		// If no conflicting scheme is found, is valid.
 		return FirewoodScheme, nil
 	}
 
-	// Check for eth scheme
+	// Check for valid eth scheme
 	return rawdb.ParseStateScheme(provided, disk)
 }
 

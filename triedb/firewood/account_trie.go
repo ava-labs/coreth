@@ -57,6 +57,7 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 	keyStr := string(key)
 	if updateValue, exists := a.dirtyKeys[keyStr]; exists {
 		// If the value is empty, it indicates deletion
+		// Invariant: All encoded values have length > 0
 		if len(updateValue) == 0 {
 			return nil, nil
 		}
@@ -84,16 +85,16 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 
 // GetStorage implements state.Trie.
 func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
-	var combinedKey [2 * common.HashLength]byte
-	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
-	storageKey := crypto.Keccak256Hash(key).Bytes()
-	copy(combinedKey[:common.HashLength], accountKey)
-	copy(combinedKey[common.HashLength:], storageKey)
-
 	// If the account has been deleted, we should return nil
+	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	if val, exists := a.dirtyKeys[string(accountKey)]; exists && len(val) == 0 {
 		return nil, nil
 	}
+
+	var combinedKey [2 * common.HashLength]byte
+	storageKey := crypto.Keccak256Hash(key).Bytes()
+	copy(combinedKey[:common.HashLength], accountKey)
+	copy(combinedKey[common.HashLength:], storageKey)
 
 	// Check if there's a pending update for this storage slot
 	keyStr := string(combinedKey[:])
@@ -109,11 +110,8 @@ func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error
 
 	// No pending update found, read from the underlying reader
 	storageBytes, err := a.reader.Node(common.Hash{}, combinedKey[:], common.Hash{})
-	if err != nil {
+	if err != nil || storageBytes == nil {
 		return nil, err
-	}
-	if storageBytes == nil {
-		return nil, nil
 	}
 
 	// Decode the storage value
