@@ -879,9 +879,11 @@ func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 		pending <- msg
 	}()
 
-	defer wg.Wait()
-	defer vm.builder.wakeup()
-	defer cancel()
+	defer func() {
+		cancel()
+		vm.builder.wakeup()
+		wg.Wait()
+	}()
 
 	select {
 	case err := <-errors:
