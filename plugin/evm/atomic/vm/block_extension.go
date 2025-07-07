@@ -171,7 +171,7 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 // block manager's SemanticVerify method.
 func (be *blockExtension) SemanticVerify() error {
 	vm := be.blockExtender.vm
-	if vm.IsBootstrapped() {
+	if vm.bootstrapped.Get() {
 		// Verify that the UTXOs named in import txs are present in shared
 		// memory.
 		//
@@ -194,12 +194,12 @@ func (be *blockExtension) Accept(acceptedBatch database.Batch) error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Remove the accepted transaction from the mempool
-		vm.AtomicMempool().RemoveTx(tx)
+		vm.AtomicMempool.RemoveTx(tx)
 	}
 
 	// Update VM state for atomic txs in this block. This includes updating the
 	// atomic tx repo, atomic trie, and shared memory.
-	atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(common.Hash(be.block.ID()))
+	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Accept
 		return err
@@ -214,12 +214,12 @@ func (be *blockExtension) Reject() error {
 	vm := be.blockExtender.vm
 	for _, tx := range be.atomicTxs {
 		// Re-issue the transaction in the mempool, continue even if it fails
-		vm.AtomicMempool().RemoveTx(tx)
-		if err := vm.AtomicMempool().AddRemoteTx(tx); err != nil {
+		vm.AtomicMempool.RemoveTx(tx)
+		if err := vm.AtomicMempool.AddRemoteTx(tx); err != nil {
 			log.Debug("Failed to re-issue transaction in rejected block", "txID", tx.ID(), "err", err)
 		}
 	}
-	atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(common.Hash(be.block.ID()))
+	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(common.Hash(be.block.ID()))
 	if err != nil {
 		// should never occur since [b] must be verified before calling Reject
 		return err
@@ -230,7 +230,7 @@ func (be *blockExtension) Reject() error {
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
 func (be *blockExtension) CleanupVerified() {
 	vm := be.blockExtender.vm
-	if atomicState, err := vm.AtomicBackend().GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
+	if atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
 		atomicState.Reject()
 	}
 }
@@ -246,7 +246,7 @@ func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 	b := be.block
 	blockHash := common.Hash(b.ID())
 	vm := be.blockExtender.vm
-	if vm.AtomicBackend().IsBonus(b.Height(), blockHash) {
+	if vm.AtomicBackend.IsBonus(b.Height(), blockHash) {
 		log.Info("skipping atomic tx verification on bonus block", "block", blockHash)
 		return nil
 	}
@@ -258,7 +258,7 @@ func (be *blockExtension) verifyUTXOsPresent(atomicTxs []*atomic.Tx) error {
 		if err != nil {
 			return err
 		}
-		if _, err := vm.ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
+		if _, err := vm.Ctx.SharedMemory.Get(chainID, requests.RemoveRequests); err != nil {
 			return fmt.Errorf("%w: %s", ErrMissingUTXOs, err)
 		}
 	}

@@ -30,7 +30,6 @@ jobs:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
           path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -62,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-22.04, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
@@ -72,7 +71,6 @@ jobs:
           repository: ${{ github.event.inputs.avalanchegoRepo }}
           ref: ${{ github.event.inputs.avalanchegoBranch }}
           path: avalanchego
-          token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
@@ -81,10 +79,6 @@ jobs:
         run: |
           go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
           go mod tidy
-      - name: Set timeout on Windows # Windows UT run slower and need a longer timeout
-        shell: bash
-        if: matrix.os == 'windows-latest'
-        run: echo "TIMEOUT=1200s" >> "$GITHUB_ENV"
       - run: go mod download
         shell: bash
       - name: go mod tidy
@@ -128,10 +122,49 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
+      - name: Build AvalancheGo and update Coreth dependency
+        run: ./scripts/build_avalanchego_with_coreth.sh
       - name: Run e2e tests
-        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@049b5859a039f3d8a76b8b6fff9e7b3e9506ac99
+        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@ce450499b7d7c3f7b8927185b6a7b778856a702e
         with:
           run: ./scripts/tests.e2e.sh
+          run_env: AVALANCHEGO_CLONE_PATH=avalanchego
+          prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
+          prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
+          loki_username: ${{ secrets.LOKI_ID || '' }}
+          loki_password: ${{ secrets.LOKI_PASSWORD || '' }}
+  e2e_warp:
+    name: e2e warp tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.avalanchegoRepo }}
+          ref: ${{ github.event.inputs.avalanchegoBranch }}
+          path: avalanchego
+      - name: Move AvalancheGo
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: mv avalanchego /tmp/e2e/warp/avalanchego
+      - name: Build AvalancheGo and update Coreth dependency
+        run: ./scripts/build_avalanchego_with_coreth.sh
+        env:
+          AVALANCHEGO_CLONE_PATH: /tmp/e2e/warp/avalanchego
+      - name: Run Warp E2E Tests
+        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@ce450499b7d7c3f7b8927185b6a7b778856a702e
+        with:
+          run: ./scripts/run_ginkgo_warp.sh
+          run_env: AVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego/build
+          artifact_prefix: warp
           prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
           prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
           loki_username: ${{ secrets.LOKI_ID || '' }}
