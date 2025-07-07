@@ -78,27 +78,3 @@ func ParseStateSchemeExt(provided string, disk ethdb.Database) (string, error) {
 	// Check for valid eth scheme
 	return rawdb.ParseStateScheme(provided, disk)
 }
-
-// WriteFirewoodGenesisRoot writes the genesis root to the database.
-func WriteFirewoodGenesisRoot(db ethdb.KeyValueWriter, root common.Hash) error {
-	// Write the genesis root to the database
-	return db.Put(firewoodGenesisRootKey, root[:])
-}
-
-// ReadFirewoodGenesisRoot reads the genesis root from the database.
-func ReadFirewoodGenesisRoot(db ethdb.KeyValueReader) (common.Hash, error) {
-	has, err := db.Has(firewoodGenesisRootKey)
-	if err != nil || !has {
-		return common.Hash{}, err
-	}
-	// Read the genesis root from the database
-	rootBytes, err := db.Get(firewoodGenesisRootKey)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	if len(rootBytes) != common.HashLength {
-		return common.Hash{}, fmt.Errorf("Invalid genesis root length %d", len(rootBytes))
-	}
-
-	return common.BytesToHash(rootBytes), nil
-}

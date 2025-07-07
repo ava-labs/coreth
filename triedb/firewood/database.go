@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
@@ -182,13 +181,9 @@ func (db *Database) Scheme() string {
 
 // Initialized indicates whether the root provided is the genesis root of the database.
 func (db *Database) Initialized(root common.Hash) bool {
-	// We store the genesis root in the rawdb, so we can check it.
-	genesisRoot, err := customrawdb.ReadFirewoodGenesisRoot(db.ethdb)
-	if err != nil {
-		log.Error("firewood: error reading genesis root", "error", err)
-		return false
-	}
-	return genesisRoot == root
+	// If the database is open, then the file is necessarily initialized.
+	// TODO: This would be more informative to have a flag to check that we've state synced later.
+	return db.fwDisk != nil
 }
 
 // Update takes a root and a set of keys-values and creates a new proposal.
@@ -311,15 +306,6 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	// On success, we should persist the genesis root as necessary, and dereference all children
 	// of the committed proposal.
 	defer func() {
-		// If this is the genesis root, store in rawdb.
-		if err == nil && pCtx.Block == 0 {
-			if writeErr := customrawdb.WriteFirewoodGenesisRoot(db.ethdb, root); writeErr != nil {
-				err = fmt.Errorf("firewood: error writing genesis root %s: %w", root.Hex(), writeErr)
-				return
-			}
-			log.Info("Persisted genesis root in firewood", "root", root.Hex())
-		}
-
 		// If we attempted to commit a proposal, but it failed, we must dereference its children.
 		if pCtx != nil {
 			db.cleanupCommittedProposal(pCtx)
