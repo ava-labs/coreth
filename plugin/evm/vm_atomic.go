@@ -103,8 +103,8 @@ func (a *AtomicVM) HealthCheck(ctx context.Context) (interface{}, error) {
 	return a.Get().HealthCheck(ctx)
 }
 
-func (a *AtomicVM) Initialize(ctx context.Context, chainCtx *snow.Context, db database.Database, genesisBytes []byte, upgradeBytes []byte, configBytes []byte, toEngine chan<- common.Message, fxs []*common.Fx, appSender common.AppSender) error {
-	return a.Get().Initialize(ctx, chainCtx, db, genesisBytes, upgradeBytes, configBytes, toEngine, fxs, appSender)
+func (a *AtomicVM) Initialize(ctx context.Context, chainCtx *snow.Context, db database.Database, genesisBytes []byte, upgradeBytes []byte, configBytes []byte, fxs []*common.Fx, appSender common.AppSender) error {
+	return a.Get().Initialize(ctx, chainCtx, db, genesisBytes, upgradeBytes, configBytes, fxs, appSender)
 }
 
 func (a *AtomicVM) LastAccepted(ctx context.Context) (ids.ID, error) {
@@ -121,6 +121,10 @@ func (a *AtomicVM) ParseBlock(ctx context.Context, blockBytes []byte) (snowman.B
 
 func (a *AtomicVM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	return a.Get().SetPreference(ctx, blkID)
+}
+
+func (a *AtomicVM) WaitForEvent(ctx context.Context) (common.Message, error) {
+	return a.Get().WaitForEvent(ctx)
 }
 
 func (a *AtomicVM) SetState(ctx context.Context, state snow.State) error {

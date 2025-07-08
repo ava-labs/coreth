@@ -40,7 +40,6 @@ type TransitionVM struct {
 	genesisBytes []byte
 	upgradeBytes []byte
 	configBytes  []byte
-	toEngine     chan<- common.Message
 	fxs          []*common.Fx
 	appSender    common.AppSender
 
@@ -54,7 +53,7 @@ type saeWrapper struct {
 	*sae.VM
 }
 
-func (*saeWrapper) Initialize(context.Context, *snow.Context, database.Database, []byte, []byte, []byte, chan<- common.Message, []*common.Fx, common.AppSender) error {
+func (*saeWrapper) Initialize(context.Context, *snow.Context, database.Database, []byte, []byte, []byte, []*common.Fx, common.AppSender) error {
 	return errors.New("unexpected call to saeWrapper.Initialize")
 }
 
@@ -65,11 +64,10 @@ func (t *TransitionVM) Initialize(
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
-	toEngine chan<- common.Message,
 	fxs []*common.Fx,
 	appSender common.AppSender,
 ) error {
-	if err := t.preFork.Initialize(ctx, chainCtx, db, genesisBytes, upgradeBytes, configBytes, toEngine, fxs, appSender); err != nil {
+	if err := t.preFork.Initialize(ctx, chainCtx, db, genesisBytes, upgradeBytes, configBytes, fxs, appSender); err != nil {
 		return fmt.Errorf("initializing preFork VM: %w", err)
 	}
 	t.Set(t.preFork)
@@ -79,7 +77,6 @@ func (t *TransitionVM) Initialize(
 	t.genesisBytes = genesisBytes
 	t.upgradeBytes = upgradeBytes
 	t.configBytes = configBytes
-	t.toEngine = toEngine
 	t.fxs = fxs
 	t.appSender = appSender
 
