@@ -861,7 +861,7 @@ func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 		}
 	}
 
-	return vm.builder.waitForEvent(ctx)
+	return builder.waitForEvent(ctx)
 }
 
 // Shutdown implements the snowman.ChainVM interface
