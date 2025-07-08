@@ -65,7 +65,6 @@ type Config struct {
 	CleanCacheSize    int // Size of the clean cache in bytes
 	Revisions         uint
 	ReadCacheStrategy ffi.CacheStrategy
-	MetricsPort       uint16
 }
 
 // Note that `FilePath` is not specificied, and must always be set by the user.
@@ -73,7 +72,6 @@ var Defaults = &Config{
 	CleanCacheSize:    1024 * 1024, // 1MB
 	Revisions:         100,
 	ReadCacheStrategy: ffi.CacheAllReads,
-	MetricsPort:       0, // Disable metrics by default
 }
 
 func (c Config) BackendConstructor(_ ethdb.Database) triedb.DBOverride {
@@ -153,7 +151,6 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 		NodeCacheEntries:  uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		Revisions:         trieConfig.Revisions,
 		ReadCacheStrategy: trieConfig.ReadCacheStrategy,
-		MetricsPort:       trieConfig.MetricsPort,
 	}
 
 	return config, nil
