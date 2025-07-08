@@ -5,6 +5,7 @@ package state
 import (
 	"encoding/binary"
 	"math/rand"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -81,7 +82,7 @@ func newFuzzState(t *testing.T) *fuzzState {
 
 	firewoodMemdb := rawdb.NewMemoryDatabase()
 	fwCfg := firewood.Defaults
-	fwCfg.FilePath = t.TempDir() // Use a temporary directory for the Firewood
+	fwCfg.FilePath = filepath.Join(t.TempDir(), "firewood") // Use a temporary directory for the Firewood
 	firewoodState := NewDatabaseWithConfig(
 		firewoodMemdb,
 		&triedb.Config{

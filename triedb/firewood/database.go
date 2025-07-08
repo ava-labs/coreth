@@ -4,7 +4,6 @@
 package firewood
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
@@ -61,8 +61,7 @@ type ProposalContext struct {
 }
 
 type Config struct {
-	FilePath          string // Path to the directory where the Firewood database will be stored
-	FileName          string
+	FilePath          string
 	CleanCacheSize    int // Size of the clean cache in bytes
 	Revisions         uint
 	ReadCacheStrategy ffi.CacheStrategy
@@ -71,24 +70,20 @@ type Config struct {
 
 // Note that `FilePath` is not specificied, and must always be set by the user.
 var Defaults = &Config{
-	FileName:          "firewood",
 	CleanCacheSize:    1024 * 1024, // 1MB
 	Revisions:         100,
 	ReadCacheStrategy: ffi.CacheAllReads,
 	MetricsPort:       0, // Disable metrics by default
 }
 
-// Must take reference to allow closure - reuse any existing database for the same config.
-func (c Config) BackendConstructor(diskdb ethdb.Database) triedb.DBOverride {
-	return New(diskdb, &c)
+func (c Config) BackendConstructor(_ ethdb.Database) triedb.DBOverride {
+	return New(&c)
 }
 
 type Database struct {
-	fwDisk *ffi.Database  // The underlying Firewood database, used for storing proposals and revisions.
-	ethdb  ethdb.Database // The underlying disk database, used for storing genesis and the path.
-
+	fwDisk       *ffi.Database // The underlying Firewood database, used for storing proposals and revisions.
 	proposalLock sync.RWMutex
-	// proposalMap provides O(1) access to all proposals stored in the proposalTree
+	// proposalMap provides O(1) access by state root to all proposals stored in the proposalTree
 	proposalMap map[common.Hash][]*ProposalContext
 	// The proposal tree tracks the structure of the current proposals, and which proposals are children of which.
 	// This is used to ensure that we can dereference proposals correctly and commit the correct ones
@@ -99,17 +94,17 @@ type Database struct {
 
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
-func New(diskdb ethdb.Database, config *Config) *Database {
+func New(config *Config) *Database {
 	if config == nil {
 		config = Defaults
 	}
 
-	fwConfig, path, err := validateConfig(config)
+	fwConfig, err := validatePath(config)
 	if err != nil {
 		log.Crit("firewood: error validating config", "error", err)
 	}
 
-	fw, err := ffi.New(path, fwConfig)
+	fw, err := ffi.New(config.FilePath, fwConfig)
 	if err != nil {
 		log.Crit("firewood: error creating firewood database", "error", err)
 	}
@@ -121,7 +116,6 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 
 	return &Database{
 		fwDisk:      fw,
-		ethdb:       diskdb,
 		proposalMap: make(map[common.Hash][]*ProposalContext),
 		proposalTree: &ProposalContext{
 			Root: common.Hash(currentRoot),
@@ -129,30 +123,27 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	}
 }
 
-func validateConfig(trieConfig *Config) (*ffi.Config, string, error) {
-	// Check that the directory exists
-	info, err := os.Stat(trieConfig.FilePath)
-	if err != nil {
-		return nil, "", fmt.Errorf("error checking database path: %w", err)
-	} else if !info.IsDir() {
-		return nil, "", fmt.Errorf("database path is not a directory: %s", trieConfig.FilePath)
+func validatePath(trieConfig *Config) (*ffi.Config, error) {
+	if trieConfig.FilePath == "" {
+		return nil, fmt.Errorf("firewood database file path must be set")
 	}
 
-	// Append the filename to the path
-	if trieConfig.FileName == "" {
-		return nil, "", errors.New("no filename provided")
+	// Check that the directory exists
+	dir := filepath.Dir(trieConfig.FilePath)
+	info, err := os.Stat(dir)
+	if err != nil {
+		return nil, fmt.Errorf("error checking database directory: %w", err)
 	}
-	path := filepath.Join(trieConfig.FilePath, trieConfig.FileName)
 
 	// Check if the file exists
-	info, err = os.Stat(path)
+	info, err = os.Stat(trieConfig.FilePath)
 	exists := false
 	if err == nil {
 		if info.IsDir() {
-			return nil, "", fmt.Errorf("database file path is a directory: %s", path)
+			return nil, fmt.Errorf("database file path is a directory: %s", trieConfig.FilePath)
 		}
 		// File exists
-		log.Info("Database file found", "path", path)
+		log.Info("Database file found", "path", trieConfig.FilePath)
 		exists = true
 	}
 
@@ -165,7 +156,7 @@ func validateConfig(trieConfig *Config) (*ffi.Config, string, error) {
 		MetricsPort:       trieConfig.MetricsPort,
 	}
 
-	return config, path, nil
+	return config, nil
 }
 
 // Scheme returns the scheme of the database.
@@ -179,11 +170,16 @@ func (db *Database) Scheme() string {
 	return rawdb.HashScheme
 }
 
-// Initialized indicates whether the root provided is the genesis root of the database.
-func (db *Database) Initialized(root common.Hash) bool {
-	// If the database is open, then the file is necessarily initialized.
-	// TODO: This would be more informative to have a flag to check that we've state synced later.
-	return db.fwDisk != nil
+// Initialized checks whether a non-empty genesis block has been written.
+func (db *Database) Initialized(_ common.Hash) bool {
+	rootBytes, err := db.fwDisk.Root()
+	if err != nil {
+		log.Error("firewood: error getting current root", "error", err)
+		return false
+	}
+	root := common.BytesToHash(rootBytes)
+	// If the current root isn't empty, then unless the database is empty, we have a genesis block recorded.
+	return root != types.EmptyRootHash
 }
 
 // Update takes a root and a set of keys-values and creates a new proposal.
