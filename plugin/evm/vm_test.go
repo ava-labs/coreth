@@ -727,7 +727,6 @@ func TestBuildEthTxBlock(t *testing.T) {
 		[]byte(genesisJSON(forkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(`{"pruning-enabled":true}`),
-
 		[]*commonEng.Fx{},
 		nil,
 	); err != nil {
@@ -3721,7 +3720,6 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 		genesis,
 		[]byte{},
 		config,
-
 		[]*commonEng.Fx{},
 		tvm.appSender))
 	require.NoError(t, reinitVM.Shutdown(context.Background()))
@@ -4114,8 +4112,8 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, context.DeadlineExceeded, err)
-					require.Equal(t, commonEng.Message(0), msg)
+					require.ErrorIs(t, err, context.DeadlineExceeded)
+					require.Zero(t, msg)
 				}()
 
 				wg.Wait()
@@ -4137,9 +4135,7 @@ func TestWaitForEvent(t *testing.T) {
 					require.Equal(t, commonEng.PendingTxs, msg)
 				}()
 
-				if err := atomicVM.AtomicMempool.AddLocalTx(importTx); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, atomicVM.AtomicMempool.AddLocalTx(importTx))
 
 				wg.Wait()
 			},
@@ -4159,9 +4155,7 @@ func TestWaitForEvent(t *testing.T) {
 
 				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 
-				if err := blk.Accept(context.Background()); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, blk.Accept(context.Background()))
 
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 				defer cancel()
@@ -4173,8 +4167,8 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, context.DeadlineExceeded, err)
-					require.Equal(t, commonEng.Message(0), msg)
+					require.ErrorIs(t, err, context.DeadlineExceeded)
+					require.Zero(t, msg)
 				}()
 
 				wg.Wait()
@@ -4233,9 +4227,7 @@ func TestWaitForEvent(t *testing.T) {
 
 				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 
-				if err := blk.Accept(context.Background()); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, blk.Accept(context.Background()))
 
 				txs := make([]*types.Transaction, 10)
 				for i := 0; i < 10; i++ {
@@ -4258,19 +4250,19 @@ func TestWaitForEvent(t *testing.T) {
 					msg, err := vm.WaitForEvent(context.Background())
 					require.NoError(t, err)
 					require.Equal(t, commonEng.PendingTxs, msg)
-					require.True(t, time.Since(lastBuildBlockTime) >= minBlockBuildingRetryDelay)
+					require.GreaterOrEqual(t, time.Since(lastBuildBlockTime), minBlockBuildingRetryDelay)
 				}()
 
 				wg.Wait()
 			},
 		},
 	} {
-		fork := upgradetest.Latest
-		tvm := newVM(t, testVMConfig{
-			fork: &fork,
-		})
-		address, key := populateAtomicMemory(t, tvm)
 		t.Run(testCase.name, func(t *testing.T) {
+			fork := upgradetest.Latest
+			tvm := newVM(t, testVMConfig{
+				fork: &fork,
+			})
+			address, key := populateAtomicMemory(t, tvm)
 			testCase.testCase(t, tvm.vm, tvm.atomicVM, address, key)
 			tvm.vm.Shutdown(context.Background())
 		})

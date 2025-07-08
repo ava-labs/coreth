@@ -74,8 +74,8 @@ func (b *blockBuilder) needToBuild() bool {
 	return size > 0 || (b.extraMempool != nil && b.extraMempool.PendingLen() > 0)
 }
 
-// markBuilding notifies a block is expected to be built.
-func (b *blockBuilder) markBuilding() {
+// signalCanBuild notifies a block is expected to be built.
+func (b *blockBuilder) signalCanBuild() {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
 	b.pendingSignal.Broadcast()
@@ -103,10 +103,10 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 			select {
 			case <-txSubmitChan:
 				log.Trace("New tx detected, trying to generate a block")
-				b.markBuilding()
+				b.signalCanBuild()
 			case <-extraChan:
 				log.Trace("New extra Tx detected, trying to generate a block")
-				b.markBuilding()
+				b.signalCanBuild()
 			case <-b.shutdownChan:
 				return
 			}
@@ -114,36 +114,41 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 	})
 }
 
+// waitForEvent waits until a block needs to be built.
+// It returns only after at least [minBlockBuildingRetryDelay] passed from the last time a block was built.
 func (b *blockBuilder) waitForEvent(ctx context.Context) (commonEng.Message, error) {
-	b.buildBlockLock.Lock()
-
-	for !b.needToBuild() {
-		if err := b.pendingSignal.Wait(ctx); err != nil {
-			b.buildBlockLock.Unlock()
-			return 0, err
-		}
+	lastBuildTime, err := b.waitForNeedToBuild(ctx)
+	if err != nil {
+		return 0, err
 	}
-
-	// We may only build a block minBlockBuildingRetryDelay after the last block time we have built a block.
-	var remainingTimeUntilNextBuild time.Duration
-
-	timeSinceLastBuildTime := time.Since(b.lastBuildTime)
+	timeSinceLastBuildTime := time.Since(lastBuildTime)
 	if b.lastBuildTime.IsZero() || timeSinceLastBuildTime >= minBlockBuildingRetryDelay {
-		b.ctx.Log.Debug("Last time we built a block was too long ago, no need to wait",
-			zap.Duration("time_since_last_block_build", timeSinceLastBuildTime))
-	} else {
-		remainingTimeUntilNextBuild = minBlockBuildingRetryDelay - timeSinceLastBuildTime
-		b.ctx.Log.Debug("Last time we built a block was not long ago, waiting",
-			zap.Duration("time_to_wait_until_next_block_build", remainingTimeUntilNextBuild))
+		b.ctx.Log.Debug("Last time we built a block was long enough ago, no need to wait",
+			zap.Duration("timeSinceLastBuildTime", timeSinceLastBuildTime),
+		)
+		return commonEng.PendingTxs, nil
 	}
-
-	// We unlock to prevent 'markBuilding' from waiting.
-	b.buildBlockLock.Unlock()
-
+	timeUntilNextBuild := minBlockBuildingRetryDelay - timeSinceLastBuildTime
+	b.ctx.Log.Debug("Last time we built a block was too recent, waiting",
+		zap.Duration("timeUntilNextBuild", timeUntilNextBuild),
+	)
 	select {
 	case <-ctx.Done():
 		return 0, ctx.Err()
-	case <-time.After(remainingTimeUntilNextBuild):
+	case <-time.After(timeUntilNextBuild):
 		return commonEng.PendingTxs, nil
 	}
+}
+
+// waitForNeedToBuild waits until needToBuild returns true.
+// It returns the last time a block was built.
+func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, error) {
+	b.buildBlockLock.Lock()
+	defer b.buildBlockLock.Unlock()
+	for !b.needToBuild() {
+		if err := b.pendingSignal.Wait(ctx); err != nil {
+			return time.Time{}, err
+		}
+	}
+	return b.lastBuildTime, nil
 }
