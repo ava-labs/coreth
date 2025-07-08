@@ -229,7 +229,6 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		[]byte(config.genesisJSON),
 		nil,
 		[]byte(config.configJSON),
-
 		nil,
 		appSender,
 	), "error initializing vm")
@@ -4068,17 +4067,8 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.NoError(blk4.Accept(ctx))
 }
 
-func TestSubscribeToEvents(t *testing.T) {
-	tvms := make([]*testVM, 0, 4)
-	for i := 0; i < 4; i++ {
-		fork := upgradetest.Latest
-		tvm := newVM(t, testVMConfig{
-			fork: &fork,
-		})
-		tvms = append(tvms, tvm)
-	}
-
-	prepareTest := func(t *testing.T, tvm *testVM) (common.Address, *ecdsa.PrivateKey) {
+func TestWaitForEvent(t *testing.T) {
+	populateAtomicMemory := func(t *testing.T, tvm *testVM) (common.Address, *ecdsa.PrivateKey) {
 		key := testKeys[0].ToECDSA()
 		address := testEthAddrs[0]
 
@@ -4097,34 +4087,30 @@ func TestSubscribeToEvents(t *testing.T) {
 			},
 		}
 		utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		xChainSharedMemory := tvm.atomicMemory.NewSharedMemory(tvm.vm.ctx.XChainID)
 		inputID := utxo.InputID()
-		if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{tvm.vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
+		require.NoError(t, xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{tvm.vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 			Key:   inputID[:],
 			Value: utxoBytes,
 			Traits: [][]byte{
 				testKeys[0].Address().Bytes(),
 			},
-		}}}}); err != nil {
-			t.Fatal(err)
-		}
+		}}}}))
+
 		return address, key
 	}
 
-	for i, testCase := range []struct {
+	for _, testCase := range []struct {
 		name               string
 		shutdownUponFinish bool
-		tst                func(*VM, *atomicvm.VM, common.Address, *ecdsa.PrivateKey)
-		vm                 *VM
+		testCase           func(*testing.T, *VM, *atomicvm.VM, common.Address, *ecdsa.PrivateKey)
 	}{
 		{
 			name:               "WaitForEvent with context cancelled returns 0",
 			shutdownUponFinish: true,
-			tst: func(vm *VM, _ *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, _ *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 				defer cancel()
 
@@ -4145,11 +4131,9 @@ func TestSubscribeToEvents(t *testing.T) {
 		{
 			name:               "WaitForEvent returns when a transaction is added to the mempool",
 			shutdownUponFinish: true,
-			tst: func(vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
 				var wg sync.WaitGroup
 				wg.Add(1)
@@ -4171,28 +4155,18 @@ func TestSubscribeToEvents(t *testing.T) {
 		{
 			name:               "WaitForEvent doesn't return once a block is built and accepted",
 			shutdownUponFinish: true,
-			tst: func(vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
-				if err := atomicVM.AtomicMempool.AddLocalTx(importTx); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, atomicVM.AtomicMempool.AddLocalTx(importTx))
 
 				blk, err := vm.BuildBlock(context.Background())
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
-				if err := blk.Verify(context.Background()); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, blk.Verify(context.Background()))
 
-				if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 
 				if err := blk.Accept(context.Background()); err != nil {
 					t.Fatal(err)
@@ -4220,16 +4194,13 @@ func TestSubscribeToEvents(t *testing.T) {
 				for i := 0; i < 10; i++ {
 					tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(3*ap0.MinGasPrice), nil)
 					signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), key)
-					if err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, err)
+
 					txs[i] = signedTx
 				}
 				errs := vm.txPool.Add(txs, false, false)
-				for i, err := range errs {
-					if err != nil {
-						t.Fatalf("Failed to add tx at index %d: %s", i, err)
-					}
+				for _, err := range errs {
+					require.NoError(t, err)
 				}
 
 				wg.Add(1)
@@ -4245,52 +4216,24 @@ func TestSubscribeToEvents(t *testing.T) {
 
 				// Build a block again to wipe out the subscription
 				blk, err = vm.BuildBlock(context.Background())
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
-				if err := blk.Verify(context.Background()); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, blk.Verify(context.Background()))
 
-				if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 
-				if err := blk.Accept(context.Background()); err != nil {
-					t.Fatal(err)
-				}
-			},
-		},
-		{
-			name: "WaitForEvent returns 0 when VM is shutdown",
-			tst: func(vm *VM, _ *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
-				defer cancel()
-
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, errShuttingDownVM, err)
-					require.Equal(t, commonEng.Message(0), msg)
-				}()
-
-				vm.Shutdown(context.Background())
-
-				wg.Wait()
+				require.NoError(t, blk.Accept(context.Background()))
 			},
 		},
 	} {
-		address, key := prepareTest(t, tvms[i])
+		fork := upgradetest.Latest
+		tvm := newVM(t, testVMConfig{
+			fork: &fork,
+		})
+		address, key := populateAtomicMemory(t, tvm)
 		t.Run(testCase.name, func(t *testing.T) {
-			testCase.tst(tvms[i].vm, tvms[i].atomicVM, address, key)
-			if testCase.shutdownUponFinish {
-				tvms[i].vm.Shutdown(context.Background())
-			}
+			testCase.testCase(t, tvm.vm, tvm.atomicVM, address, key)
+			tvm.vm.Shutdown(context.Background())
 		})
 	}
 }

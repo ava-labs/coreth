@@ -222,7 +222,10 @@ type VM struct {
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB database.Database
 
-	builder *blockBuilder
+	// builderLock is used to synchronize access to the block builder,
+	// as it is uninitialized at first and is only initialized when onNormalOperationsStarted is called.
+	builderLock sync.Mutex
+	builder     *blockBuilder
 
 	clock *mockable.Clock
 
@@ -235,15 +238,13 @@ type VM struct {
 	network.Network
 	networkCodec codec.Manager
 
-	finishedSyncing chan struct{}
-
 	// Metrics
 	sdkMetrics *prometheus.Registry
 
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
 
-	stateSyncDone chan commonEng.Message
+	stateSyncDone chan struct{}
 
 	logger corethlog.Logger
 	// State sync server and client
@@ -465,9 +466,7 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
-	vm.finishedSyncing = make(chan struct{})
-
-	vm.stateSyncDone = make(chan commonEng.Message, 1)
+	vm.stateSyncDone = make(chan struct{})
 
 	return vm.initializeStateSync(lastAcceptedHeight)
 }
@@ -785,11 +784,10 @@ func (vm *VM) initBlockBuilding() error {
 	vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
+	vm.builderLock.Lock()
 	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool)
 	vm.builder.awaitSubmittedTxs()
-	defer func() {
-		close(vm.finishedSyncing)
-	}()
+	vm.builderLock.Unlock()
 
 	vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
@@ -847,56 +845,23 @@ func (vm *VM) initBlockBuilding() error {
 }
 
 func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
+	vm.builderLock.Lock()
+	builder := vm.builder
+	vm.builderLock.Unlock()
+
 	// Block building is not initialized yet, so we haven't finished syncing or bootstrapping.
-	if vm.builder == nil {
+	if builder == nil {
 		select {
 		case <-ctx.Done():
-			return 0, nil
-		case ss := <-vm.stateSyncDone:
-			return ss, nil
+			return 0, ctx.Err()
+		case <-vm.stateSyncDone:
+			return commonEng.StateSyncDone, nil
 		case <-vm.shutdownChan:
-			return 0, nil
-		case <-vm.finishedSyncing:
-			break
+			return commonEng.Message(0), errShuttingDownVM
 		}
 	}
 
-	pending := make(chan commonEng.Message, 1)
-	errors := make(chan error, 1)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	ctx, cancel := context.WithCancel(ctx)
-
-	go func() {
-		defer wg.Done()
-		msg, err := vm.builder.waitForTxEnqueue(ctx)
-		if err != nil {
-			errors <- err
-			return
-		}
-		pending <- msg
-	}()
-
-	defer func() {
-		cancel()
-		vm.builder.wakeup()
-		wg.Wait()
-	}()
-
-	select {
-	case err := <-errors:
-		return commonEng.Message(0), err
-	case ss := <-vm.stateSyncDone:
-		return ss, nil
-	case pendingTx := <-pending:
-		return pendingTx, nil
-	case <-ctx.Done():
-		return commonEng.Message(0), ctx.Err()
-	case <-vm.shutdownChan:
-		return commonEng.Message(0), errShuttingDownVM
-	}
+	return vm.builder.waitForEvent(ctx)
 }
 
 // Shutdown implements the snowman.ChainVM interface
