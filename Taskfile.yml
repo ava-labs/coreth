@@ -20,6 +20,10 @@ tasks:
     desc: Compile Coreth binary with git commit and static linking flags
     cmd: ./scripts/build.sh # ci.yml
 
+  build-avalanchego-with-coreth:
+    desc: Build AvalancheGo binary with Coreth dependency pointing to local Coreth path
+    cmd: ./scripts/build_avalanchego_with_coreth.sh # ci.yml
+
   build-test:
     desc: Run all Go tests with retry logic for flaky tests, race detection, and coverage reporting
     cmd: ./scripts/build_test.sh # ci.yml
@@ -97,6 +101,10 @@ tasks:
   shellcheck:
     desc: Run shellcheck static analysis on all shell scripts with version management
     cmd: ./scripts/shellcheck.sh # ci.yml
+
+  test-e2e:
+    desc: Run AvalancheGo e2e tests from target version against current state of coreth
+    cmd: ./scripts/tests.e2e.sh # ci.yml
 
   test-e2e-warp:
     desc: Run end-to-end warp tests using Ginkgo test framework
