@@ -4216,6 +4216,54 @@ func TestWaitForEvent(t *testing.T) {
 				require.NoError(t, blk.Accept(context.Background()))
 			},
 		},
+		{
+			name: "WaitForEvent waits some time after a block is built",
+			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+				require.NoError(t, err)
+
+				require.NoError(t, atomicVM.AtomicMempool.AddLocalTx(importTx))
+
+				lastBuildBlockTime := time.Now()
+
+				blk, err := vm.BuildBlock(context.Background())
+				require.NoError(t, err)
+
+				require.NoError(t, blk.Verify(context.Background()))
+
+				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+
+				if err := blk.Accept(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+
+				txs := make([]*types.Transaction, 10)
+				for i := 0; i < 10; i++ {
+					tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(3*ap0.MinGasPrice), nil)
+					signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainID), key)
+					require.NoError(t, err)
+
+					txs[i] = signedTx
+				}
+				errs := vm.txPool.Add(txs, false, false)
+				for _, err := range errs {
+					require.NoError(t, err)
+				}
+
+				var wg sync.WaitGroup
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+					msg, err := vm.WaitForEvent(context.Background())
+					require.NoError(t, err)
+					require.Equal(t, commonEng.PendingTxs, msg)
+					require.True(t, time.Since(lastBuildBlockTime) >= minBlockBuildingRetryDelay)
+				}()
+
+				wg.Wait()
+			},
+		},
 	} {
 		fork := upgradetest.Latest
 		tvm := newVM(t, testVMConfig{
