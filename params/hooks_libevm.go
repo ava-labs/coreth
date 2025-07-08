@@ -46,7 +46,7 @@ func (r RulesExtra) MinimumGasConsumption(x uint64) uint64 {
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -58,7 +58,7 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
