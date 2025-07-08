@@ -61,17 +61,19 @@ type ProposalContext struct {
 }
 
 type Config struct {
-	FilePath          string
-	CleanCacheSize    int // Size of the clean cache in bytes
-	Revisions         uint
-	ReadCacheStrategy ffi.CacheStrategy
+	FilePath             string
+	CleanCacheSize       int  // Size of the clean cache in bytes
+	FreeListCacheEntries uint // Number of free list entries to cache
+	Revisions            uint
+	ReadCacheStrategy    ffi.CacheStrategy
 }
 
 // Note that `FilePath` is not specificied, and must always be set by the user.
 var Defaults = &Config{
-	CleanCacheSize:    1024 * 1024, // 1MB
-	Revisions:         100,
-	ReadCacheStrategy: ffi.CacheAllReads,
+	CleanCacheSize:       1024 * 1024, // 1MB
+	FreeListCacheEntries: 40_000,
+	Revisions:            100,
+	ReadCacheStrategy:    ffi.CacheAllReads,
 }
 
 func (c Config) BackendConstructor(_ ethdb.Database) triedb.DBOverride {
@@ -99,17 +101,17 @@ func New(config *Config) *Database {
 
 	fwConfig, err := validatePath(config)
 	if err != nil {
-		log.Crit("firewood: error validating config", "error", err)
+		fmt.Println("firewood: error validating config", "error", err)
 	}
 
 	fw, err := ffi.New(config.FilePath, fwConfig)
 	if err != nil {
-		log.Crit("firewood: error creating firewood database", "error", err)
+		fmt.Println("firewood: error creating firewood database", "error", err)
 	}
 
 	currentRoot, err := fw.Root()
 	if err != nil {
-		log.Crit("firewood: error getting current root", "error", err)
+		fmt.Println("firewood: error getting current root", "error", err)
 	}
 
 	return &Database{
@@ -147,10 +149,11 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 
 	// Create the Firewood config from the provided config.
 	config := &ffi.Config{
-		Create:            !exists,                               // Use any existing file
-		NodeCacheEntries:  uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
-		Revisions:         trieConfig.Revisions,
-		ReadCacheStrategy: trieConfig.ReadCacheStrategy,
+		Create:               !exists,                               // Use any existing file
+		NodeCacheEntries:     uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
+		FreeListCacheEntries: trieConfig.FreeListCacheEntries,
+		Revisions:            trieConfig.Revisions,
+		ReadCacheStrategy:    trieConfig.ReadCacheStrategy,
 	}
 
 	return config, nil
