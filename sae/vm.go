@@ -10,9 +10,10 @@ import (
 	avalanchedb "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	corethdb "github.com/ava-labs/coreth/plugin/evm/database"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	sae "github.com/ava-labs/strevm"
 )
@@ -37,13 +38,13 @@ func (vm *vm) Initialize(
 	if err := json.Unmarshal(genesisBytes, genesis); err != nil {
 		return err
 	}
-	sdb := state.NewDatabase(ethdb)
-	chainConfig, genesisHash, err := core.SetupGenesisBlock(ethdb, sdb.TrieDB(), genesis)
+	sdb := state.NewDatabase(ethDB)
+	chainConfig, genesisHash, err := core.SetupGenesisBlock(ethDB, sdb.TrieDB(), genesis)
 	if err != nil {
 		return err
 	}
 
-	batch := ethdb.NewBatch()
+	batch := ethDB.NewBatch()
 	// Being both the "head" and "finalized" block is a requirement of [Config].
 	rawdb.WriteHeadBlockHash(batch, genesisHash)
 	rawdb.WriteFinalizedBlockHash(batch, genesisHash)
@@ -51,25 +52,23 @@ func (vm *vm) Initialize(
 		return err
 	}
 
-	vm, err := New(
+	vm.VM, err = sae.New(
 		ctx,
-		Config{
-			Hooks:       s.Hooks,
+		sae.Config{
+			Hooks: &hooks{
+				ctx:         chainContext,
+				chainConfig: chainConfig,
+				mempool:     nil, // TODO: populate me
+			},
 			ChainConfig: chainConfig,
-			DB:          ethdb,
-			LastSynchronousBlock: LastSynchronousBlock{
+			DB:          ethDB,
+			LastSynchronousBlock: sae.LastSynchronousBlock{
 				Hash:        genesisHash,
-				Target:      genesisBlockGasTarget,
+				Target:      acp176.MinTargetPerSecond,
 				ExcessAfter: 0,
 			},
-			ToEngine: toEngine,
-			SnowCtx:  chainCtx,
-			Now:      s.Now,
+			SnowCtx: chainContext,
 		},
 	)
-	if err != nil {
-		return err
-	}
-	s.VM = vm
-	return nil
+	return err
 }
