@@ -4103,13 +4103,11 @@ func TestWaitForEvent(t *testing.T) {
 	}
 
 	for _, testCase := range []struct {
-		name               string
-		shutdownUponFinish bool
-		testCase           func(*testing.T, *VM, *atomicvm.VM, common.Address, *ecdsa.PrivateKey)
+		name     string
+		testCase func(*testing.T, *VM, *atomicvm.VM, common.Address, *ecdsa.PrivateKey)
 	}{
 		{
-			name:               "WaitForEvent with context cancelled returns 0",
-			shutdownUponFinish: true,
+			name: "WaitForEvent with context cancelled returns 0",
 			testCase: func(t *testing.T, vm *VM, _ *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 				defer cancel()
@@ -4129,8 +4127,7 @@ func TestWaitForEvent(t *testing.T) {
 			},
 		},
 		{
-			name:               "WaitForEvent returns when a transaction is added to the mempool",
-			shutdownUponFinish: true,
+			name: "WaitForEvent returns when a transaction is added to the mempool",
 			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				require.NoError(t, err)
@@ -4153,8 +4150,7 @@ func TestWaitForEvent(t *testing.T) {
 			},
 		},
 		{
-			name:               "WaitForEvent doesn't return once a block is built and accepted",
-			shutdownUponFinish: true,
+			name: "WaitForEvent doesn't return once a block is built and accepted",
 			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				require.NoError(t, err)
