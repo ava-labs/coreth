@@ -130,13 +130,12 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 
 	// Check that the directory exists
 	dir := filepath.Dir(trieConfig.FilePath)
-	info, err := os.Stat(dir)
-	if err != nil {
-		return nil, fmt.Errorf("error checking database directory: %w", err)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("error creating database directory: %w", err)
 	}
 
 	// Check if the file exists
-	info, err = os.Stat(trieConfig.FilePath)
+	info, err := os.Stat(trieConfig.FilePath)
 	exists := false
 	if err == nil {
 		if info.IsDir() {
