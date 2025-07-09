@@ -46,7 +46,7 @@ var (
 type hooks struct {
 	ctx         *snow.Context
 	chainConfig *params.ChainConfig
-	mempool     *atomictxpool.Mempool
+	mempool     *atomictxpool.Txs
 }
 
 func (h *hooks) GasTarget(parent *types.Block) gas.Gas {
@@ -199,7 +199,7 @@ func packAtomicTxs(
 	avaxAssetID ids.ID,
 	baseFee *big.Int,
 	ancestorInputUTXOs set.Set[ids.ID],
-	mempool *atomictxpool.Mempool,
+	mempool *atomictxpool.Txs,
 ) ([]*atomic.Tx, error) {
 	var (
 		cumulativeSize int

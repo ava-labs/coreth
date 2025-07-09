@@ -6,17 +6,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	avalanchedb "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	corethdb "github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	sae "github.com/ava-labs/strevm"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+const atomicMempoolSize = 4096 // number of transactions
 
 type vm struct {
 	*sae.VM // Populated by [vm.Initialize]
@@ -28,7 +33,7 @@ func (vm *vm) Initialize(
 	db avalanchedb.Database,
 	genesisBytes []byte,
 	configBytes []byte,
-	upgradeBytes []byte,
+	_ []byte,
 	_ []*common.Fx,
 	appSender common.AppSender,
 ) error {
@@ -52,13 +57,23 @@ func (vm *vm) Initialize(
 		return err
 	}
 
+	// TODO: Fix metrics
+	mempoolTxs, err := txpool.NewTxs(
+		chainContext,
+		prometheus.NewRegistry(),
+		atomicMempoolSize,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mempool: %w", err)
+	}
+
 	vm.VM, err = sae.New(
 		ctx,
 		sae.Config{
 			Hooks: &hooks{
 				ctx:         chainContext,
 				chainConfig: chainConfig,
-				mempool:     nil, // TODO: populate me
+				mempool:     mempoolTxs,
 			},
 			ChainConfig: chainConfig,
 			DB:          ethDB,
