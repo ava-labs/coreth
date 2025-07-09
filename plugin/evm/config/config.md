@@ -113,7 +113,6 @@ The names used in this configuration flag have been updated in Coreth `v0.8.14`.
 
 The mapping of deprecated values and their updated equivalent follows:
 
-
 |Deprecated                      |Use instead         |
 |--------------------------------|--------------------|
 |public-eth                      |eth                 |
@@ -129,6 +128,7 @@ The mapping of deprecated values and their updated equivalent follows:
 |internal-private-debug          |internal-debug      |
 |internal-public-account         |internal-account    |
 |internal-private-personal       |internal-personal   |
+
 </Callout>
 
 <Callout title="Note">
@@ -589,6 +589,14 @@ If `true`, allow users to unlock accounts in unsafe HTTP environment. Defaults t
 
 ## Database
 
+### `state-scheme`
+
+_String_
+
+Can be one of `hash` or `firewood`. Defaults to `hash`.
+
+__WARNING__: `firewood` scheme is untested in production.
+
 ### `trie-clean-cache`
 
 _Integer_
@@ -618,8 +626,6 @@ Max concurrent disk reads trie pre-fetcher should perform at once. Defaults to `
 _Integer_
 
 Size of the snapshot disk layer clean cache (in MBs). Should be a multiple of `64`. Defaults to `256`.
-
-
 
 ### `acceptor-queue-limit`
 
@@ -681,7 +687,7 @@ If `true`, clears the warp database on startup. Defaults to `false`.
 
 _Boolean_
 
-If `true`, offline pruning will run on startup and block until it completes (approximately one hour on Mainnet). This will reduce the size of the database by deleting old trie nodes. **While performing offline pruning, your node will not be able to process blocks and will be considered offline.** While ongoing, the pruning process consumes a small amount of additional disk space (for deletion markers and the bloom filter). For more information see [here.](https://build.avax.network/docs/nodes/maintain/reduce-disk-usage#disk-space-considerations)
+If `true`, offline pruning will run on startup and block until it completes (approximately one hour on Mainnet). This will reduce the size of the database by deleting old trie nodes. __While performing offline pruning, your node will not be able to process blocks and will be considered offline.__ While ongoing, the pruning process consumes a small amount of additional disk space (for deletion markers and the bloom filter). For more information see [here.](https://build.avax.network/docs/nodes/maintain/reduce-disk-usage#disk-space-considerations)
 
 Since offline pruning deletes old state data, this should not be run on nodes that need to support archival API requests.
 
