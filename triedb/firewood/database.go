@@ -132,28 +132,30 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 	dir := filepath.Dir(trieConfig.FilePath)
 	info, err := os.Stat(dir)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if os.IsNotExist(err) {
+			log.Info("Database directory not found, creating", "path", dir)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return nil, fmt.Errorf("error creating database directory: %w", err)
+			}
+		} else {
 			return nil, fmt.Errorf("error checking database directory: %w", err)
-		}
-		log.Info("Database directory not found, creating", "path", dir)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, fmt.Errorf("error creating database directory: %w", err)
 		}
 	}
 
 	// Check if the file exists
 	info, err = os.Stat(trieConfig.FilePath)
 	exists := false
-	if err == nil {
+	switch {
+	case err == nil:
 		if info.IsDir() {
 			return nil, fmt.Errorf("database file path is a directory: %s", trieConfig.FilePath)
 		}
 		// File exists
 		log.Info("Database file found", "path", trieConfig.FilePath)
 		exists = true
-	}
-
-	if err != nil && !os.IsNotExist(err) {
+	case os.IsNotExist(err):
+		log.Info("Database file not found, will create", "path", trieConfig.FilePath)
+	default:
 		return nil, fmt.Errorf("unknown error checking database file: %w", err)
 	}
 
