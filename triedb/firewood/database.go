@@ -101,17 +101,17 @@ func New(config *Config) *Database {
 
 	fwConfig, err := validatePath(config)
 	if err != nil {
-		fmt.Println("firewood: error validating config", "error", err)
+		log.Crit("firewood: error validating config", "error", err)
 	}
 
 	fw, err := ffi.New(config.FilePath, fwConfig)
 	if err != nil {
-		fmt.Println("firewood: error creating firewood database", "error", err)
+		log.Crit("firewood: error creating firewood database", "error", err)
 	}
 
 	currentRoot, err := fw.Root()
 	if err != nil {
-		fmt.Println("firewood: error getting current root", "error", err)
+		log.Crit("firewood: error getting current root", "error", err)
 	}
 
 	return &Database{
@@ -145,6 +145,8 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 		// File exists
 		log.Info("Database file found", "path", trieConfig.FilePath)
 		exists = true
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("unknown error checking database file: %w", err)
 	}
 
 	// Create the Firewood config from the provided config.
