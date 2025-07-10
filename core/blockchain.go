@@ -223,6 +223,10 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		}.BackendConstructor
 	}
 	if c.StateScheme == customrawdb.FirewoodScheme {
+		// ChainDataDir may not be set during some tests, where this path won't be called.
+		if c.ChainDataDir == "" {
+			log.Crit("Chain data directory must be specified for Firewood")
+		}
 		config.DBOverride = firewood.Config{
 			FilePath:             filepath.Join(c.ChainDataDir, "firewood_state"),
 			CleanCacheSize:       c.TrieCleanLimit * 1024 * 1024,
