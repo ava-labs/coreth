@@ -7,6 +7,7 @@ package registry
 // Force imports of each precompile to ensure each precompile's init function runs and registers itself
 // with the registry.
 import (
+	_ "github.com/ava-labs/coreth/precompile/contracts/p256verify"
 	_ "github.com/ava-labs/coreth/precompile/contracts/warp"
 	// ADD PRECOMPILES BELOW
 	// _ "github.com/ava-labs/coreth/precompile/contracts/newprecompile"
@@ -16,6 +17,7 @@ import (
 // Note: it is important that none of these addresses conflict with each other or any other precompiles
 // in /coreth/contracts/contracts/**.
 
-// WarpMessengerAddress = common.HexToAddress("0x0200000000000000000000000000000000000005")
+// WarpMessengerAddress  = common.HexToAddress("0x0200000000000000000000000000000000000005")
+// P256VerifyAddress     = common.HexToAddress("0x0200000000000000000000000000000000000006")
 // ADD PRECOMPILES BELOW
-// NewPrecompileAddress = common.HexToAddress("0x02000000000000000000000000000000000000??")
+// NewPrecompileAddress  = common.HexToAddress("0x02000000000000000000000000000000000000??")
