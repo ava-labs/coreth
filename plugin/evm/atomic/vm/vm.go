@@ -30,6 +30,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/state"
@@ -147,7 +148,12 @@ func (vm *VM) Initialize(
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
-	vm.AtomicMempool = &txpool.Mempool{}
+
+	// TODO: Fix the metrics creation
+	mempoolTxs, err := txpool.NewTxs(chainCtx, prometheus.NewRegistry(), defaultMempoolSize)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mempool: %w", err)
+	}
 
 	extensionConfig := &extension.Config{
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
@@ -156,7 +162,7 @@ func (vm *VM) Initialize(
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
-		ExtraMempool:               vm.AtomicMempool,
+		ExtraMempool:               mempoolTxs,
 		Clock:                      &vm.clock,
 	}
 	if err := vm.InnerVM.SetExtensionConfig(extensionConfig); err != nil {
@@ -178,10 +184,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Now we can initialize the mempool and so
-	err := vm.AtomicMempool.Initialize(chainCtx, vm.InnerVM.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
-	if err != nil {
-		return fmt.Errorf("failed to initialize mempool: %w", err)
-	}
+	vm.AtomicMempool = txpool.NewMempool(mempoolTxs, vm.verifyTxAtTip)
 
 	// initialize bonus blocks on mainnet
 	var (
