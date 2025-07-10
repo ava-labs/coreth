@@ -10,10 +10,12 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -37,8 +39,8 @@ type PrecompileTest struct {
 	// precompile's configurator.
 	// If nil, Configure will not be called.
 	Config precompileconfig.Config
-	// BeforeHook is called before the precompile is called.
-	BeforeHook func(t testing.TB, state *extstate.TestStateDB)
+	// Predicates that the precompile should have access to.
+	Predicates [][]byte
 	// SetupBlockContext sets the expected calls on MockBlockContext for the test execution.
 	SetupBlockContext func(*contract.MockBlockContext)
 	// AfterHook is called after the precompile is called.
@@ -62,7 +64,9 @@ type PrecompileRunparams struct {
 }
 
 func (test PrecompileTest) Run(t *testing.T, module modules.Module) {
-	state := extstate.NewTest(t)
+	state := newTestStateDB(t, map[common.Address][][]byte{
+		module.Address: test.Predicates,
+	})
 	runParams := test.setup(t, module, state)
 
 	if runParams.Input != nil {
@@ -81,15 +85,11 @@ func (test PrecompileTest) Run(t *testing.T, module modules.Module) {
 	}
 }
 
-func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *extstate.TestStateDB) PrecompileRunparams {
+func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *testStateDB) PrecompileRunparams {
 	t.Helper()
 	contractAddress := module.Address
 
 	ctrl := gomock.NewController(t)
-
-	if test.BeforeHook != nil {
-		test.BeforeHook(t, state)
-	}
 
 	chainConfig := test.ChainConfig
 	if chainConfig == nil {
@@ -140,4 +140,30 @@ func RunPrecompileTests(t *testing.T, module modules.Module, contractTests map[s
 			test.Run(t, module)
 		})
 	}
+}
+
+// testStateDB allows for mocking the predicate storage slots without calling
+// Prepare on the statedb.
+type testStateDB struct {
+	*extstate.StateDB
+
+	predicateStorageSlots map[common.Address][][]byte
+}
+
+func newTestStateDB(t testing.TB, predicateStorageSlots map[common.Address][][]byte) *testStateDB {
+	db := rawdb.NewMemoryDatabase()
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	require.NoError(t, err)
+	return &testStateDB{
+		StateDB:               extstate.New(statedb),
+		predicateStorageSlots: predicateStorageSlots,
+	}
+}
+
+func (s *testStateDB) GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool) {
+	predicates, exists := s.predicateStorageSlots[address]
+	if !exists || index >= len(predicates) {
+		return nil, false
+	}
+	return predicates[index], true
 }
