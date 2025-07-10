@@ -14,7 +14,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/core/extstate/extstatetest"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/precompiletest"
 	"github.com/ava-labs/coreth/predicate"
@@ -78,7 +78,7 @@ func TestGetBlockchainID(t *testing.T) {
 		},
 	}
 
-	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, tests)
 }
 
 func TestSendWarpMessage(t *testing.T) {
@@ -173,7 +173,7 @@ func TestSendWarpMessage(t *testing.T) {
 		},
 	}
 
-	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, tests)
 }
 
 func TestGetVerifiedWarpMessage(t *testing.T) {
@@ -201,7 +201,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message success": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -231,7 +231,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -254,7 +254,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{{}, warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -284,7 +284,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{{}, warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -319,7 +319,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message success readOnly": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -361,7 +361,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message out of gas for base cost": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost - 1,
@@ -371,7 +371,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message out of gas": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -384,7 +384,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message invalid predicate packing": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessage.Bytes()})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -397,7 +397,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message invalid warp message": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{predicate.PackPredicate([]byte{1, 2, 3})})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -410,7 +410,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		"get message invalid addressed payload": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpMsg },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				unsignedMessage, err := avalancheWarp.NewUnsignedMessage(networkID, sourceChainID, []byte{1, 2, 3}) // Invalid addressed payload
 				require.NoError(t, err)
 				warpMessage, err := avalancheWarp.NewMessage(unsignedMessage, &avalancheWarp.BitSetSignature{})
@@ -458,7 +458,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 		},
 	}
 
-	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, tests)
 }
 
 func TestGetVerifiedWarpBlockHash(t *testing.T) {
@@ -482,7 +482,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message success": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -511,7 +511,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -534,7 +534,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{{}, warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -563,7 +563,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 				require.NoError(t, err)
 				return input
 			},
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{{}, warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -598,7 +598,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message success readOnly": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -639,7 +639,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message out of gas for base cost": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost - 1,
@@ -649,7 +649,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message out of gas": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessagePredicateBytes})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -662,7 +662,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message invalid predicate packing": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{warpMessage.Bytes()})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -675,7 +675,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message invalid warp message": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				state.SetPredicateStorageSlots(ContractAddress, [][]byte{predicate.PackPredicate([]byte{1, 2, 3})})
 			},
 			SetupBlockContext: func(mbc *contract.MockBlockContext) {
@@ -688,7 +688,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		"get message invalid block hash payload": {
 			Caller:  callerAddr,
 			InputFn: func(t testing.TB) []byte { return getVerifiedWarpBlockHash },
-			BeforeHook: func(t testing.TB, state contract.StateDB) {
+			BeforeHook: func(t testing.TB, state *extstate.TestStateDB) {
 				unsignedMessage, err := avalancheWarp.NewUnsignedMessage(networkID, sourceChainID, []byte{1, 2, 3}) // Invalid block hash payload
 				require.NoError(t, err)
 				warpMessage, err := avalancheWarp.NewMessage(unsignedMessage, &avalancheWarp.BitSetSignature{})
@@ -736,7 +736,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 		},
 	}
 
-	precompiletest.RunPrecompileTests(t, Module, extstatetest.NewTestStateDB, tests)
+	precompiletest.RunPrecompileTests(t, Module, tests)
 }
 
 func TestPackEvents(t *testing.T) {

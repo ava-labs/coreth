@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -37,7 +38,7 @@ type PrecompileTest struct {
 	// If nil, Configure will not be called.
 	Config precompileconfig.Config
 	// BeforeHook is called before the precompile is called.
-	BeforeHook func(t testing.TB, state contract.StateDB)
+	BeforeHook func(t testing.TB, state *extstate.TestStateDB)
 	// SetupBlockContext sets the expected calls on MockBlockContext for the test execution.
 	SetupBlockContext func(*contract.MockBlockContext)
 	// AfterHook is called after the precompile is called.
@@ -60,7 +61,8 @@ type PrecompileRunparams struct {
 	ReadOnly        bool
 }
 
-func (test PrecompileTest) Run(t *testing.T, module modules.Module, state contract.StateDB) {
+func (test PrecompileTest) Run(t *testing.T, module modules.Module) {
+	state := extstate.NewTest(t)
 	runParams := test.setup(t, module, state)
 
 	if runParams.Input != nil {
@@ -79,7 +81,7 @@ func (test PrecompileTest) Run(t *testing.T, module modules.Module, state contra
 	}
 }
 
-func (test PrecompileTest) setup(t testing.TB, module modules.Module, state contract.StateDB) PrecompileRunparams {
+func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *extstate.TestStateDB) PrecompileRunparams {
 	t.Helper()
 	contractAddress := module.Address
 
@@ -130,76 +132,12 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state cont
 	}
 }
 
-func (test PrecompileTest) Bench(b *testing.B, module modules.Module, state contract.StateDB) {
-	runParams := test.setup(b, module, state)
-
-	if runParams.Input == nil {
-		b.Skip("Skipping precompile benchmark due to nil input (used for configuration tests)")
-	}
-
-	stateDB := runParams.AccessibleState.GetStateDB()
-	snapshot := stateDB.Snapshot()
-
-	ret, remainingGas, err := module.Contract.Run(runParams.AccessibleState, runParams.Caller, runParams.ContractAddress, runParams.Input, runParams.SuppliedGas, runParams.ReadOnly)
-	if len(test.ExpectedErr) != 0 {
-		require.ErrorContains(b, err, test.ExpectedErr)
-	} else {
-		require.NoError(b, err)
-	}
-	require.Equal(b, uint64(0), remainingGas)
-	require.Equal(b, test.ExpectedRes, ret)
-
-	if test.AfterHook != nil {
-		test.AfterHook(b, state)
-	}
-
-	b.ReportAllocs()
-	start := time.Now()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		// Revert to the previous snapshot and take a new snapshot, so we can reset the state after execution
-		stateDB.RevertToSnapshot(snapshot)
-		snapshot = stateDB.Snapshot()
-
-		// Ignore return values for benchmark
-		_, _, _ = module.Contract.Run(runParams.AccessibleState, runParams.Caller, runParams.ContractAddress, runParams.Input, runParams.SuppliedGas, runParams.ReadOnly)
-	}
-	b.StopTimer()
-
-	elapsed := uint64(time.Since(start))
-	if elapsed < 1 {
-		elapsed = 1
-	}
-	gasUsed := runParams.SuppliedGas * uint64(b.N)
-	b.ReportMetric(float64(runParams.SuppliedGas), "gas/op")
-	// Keep it as uint64, multiply 100 to get two digit float later
-	mgasps := (100 * 1000 * gasUsed) / elapsed
-	b.ReportMetric(float64(mgasps)/100, "mgas/s")
-
-	// Execute the test one final time to ensure that if our RevertToSnapshot logic breaks such that each run is actually failing or resulting in unexpected behavior
-	// the benchmark should catch the error here.
-	stateDB.RevertToSnapshot(snapshot)
-	ret, remainingGas, err = module.Contract.Run(runParams.AccessibleState, runParams.Caller, runParams.ContractAddress, runParams.Input, runParams.SuppliedGas, runParams.ReadOnly)
-	if len(test.ExpectedErr) != 0 {
-		require.ErrorContains(b, err, test.ExpectedErr)
-	} else {
-		require.NoError(b, err)
-	}
-	require.Equal(b, uint64(0), remainingGas)
-	require.Equal(b, test.ExpectedRes, ret)
-
-	if test.AfterHook != nil {
-		test.AfterHook(b, state)
-	}
-}
-
-func RunPrecompileTests(t *testing.T, module modules.Module, newStateDB func(t testing.TB) contract.StateDB, contractTests map[string]PrecompileTest) {
+func RunPrecompileTests(t *testing.T, module modules.Module, contractTests map[string]PrecompileTest) {
 	t.Helper()
 
 	for name, test := range contractTests {
 		t.Run(name, func(t *testing.T) {
-			test.Run(t, module, newStateDB(t))
+			test.Run(t, module)
 		})
 	}
 }
