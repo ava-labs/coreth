@@ -160,6 +160,7 @@ func checkBlockChainState(
 		t.Fatalf("Check state failed for original blockchain due to: %s", err)
 	}
 
+	// Firewood needs a new directory to force the creation of a new database.
 	extraCfg := params.GetExtra(gspec.Config)
 	oldPath := extraCfg.SnowCtx.ChainDataDir
 	newPath := t.TempDir()

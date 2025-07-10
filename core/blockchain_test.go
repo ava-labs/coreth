@@ -73,7 +73,7 @@ var (
 		AcceptorQueueLimit:        64,
 	}
 
-	// Note that Firewood should only be included for non-archive, snapshot disabled tests.
+	// Firewood should only be included for non-archive, snapshot disabled tests.
 	schemes = []string{rawdb.HashScheme, customrawdb.FirewoodScheme}
 )
 
@@ -617,7 +617,9 @@ func testUngracefulAsyncShutdown(t *testing.T, scheme string, cacheConfig *Cache
 	}
 }
 
-// The `TestEmptyBlocks` test ensures that the blockchain can handle eth blocks
+// TestCompletelyEmptyBlocks tests that the blockchain correctly handles successive
+// duplicate state roots with no txs.
+// The other `TestEmptyBlocks` test ensures that the blockchain can handle eth blocks
 // that are empty, but they still contain atomic txs.
 func TestCompletelyEmptyBlocks(t *testing.T) {
 	for _, scheme := range schemes {
