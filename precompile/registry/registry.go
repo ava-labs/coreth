@@ -18,6 +18,6 @@ import (
 // in /coreth/contracts/contracts/**.
 
 // WarpMessengerAddress  = common.HexToAddress("0x0200000000000000000000000000000000000005")
-// P256VerifyAddress     = common.HexToAddress("0x0200000000000000000000000000000000000006")
+// P256VerifyAddress     = common.HexToAddress("0x0000000000000000000000000000000000000100")
 // ADD PRECOMPILES BELOW
 // NewPrecompileAddress  = common.HexToAddress("0x02000000000000000000000000000000000000??")

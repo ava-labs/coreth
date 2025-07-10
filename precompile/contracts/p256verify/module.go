@@ -20,7 +20,7 @@ var _ contract.Configurator = (*configurator)(nil)
 const ConfigKey = "p256verifyConfig"
 
 // ContractAddress is the address of the p256verify precompile contract
-var ContractAddress = common.HexToAddress("0x0200000000000000000000000000000000000006")
+var ContractAddress = common.HexToAddress("0x0000000000000000000000000000000000000100")
 
 // Module is the precompile module. It is used to register the precompile contract.
 var Module = modules.Module{
