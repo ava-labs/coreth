@@ -39,40 +39,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// StateDB structs within the ethereum protocol are used to store anything
-// within the merkle trie. StateDBs take care of caching and storing
-// nested states. It's the general query interface to retrieve:
-//
-// * Contracts
-// * Accounts
-//
-// Once the state is committed, tries cached in stateDB (including account
-// trie, storage tries) will no longer be functional. A new state instance
-// must be created with new root and updated database for accessing post-
-// commit states.
-type StateDB struct {
-	*ethstate.StateDB
+type StateDB = ethstate.StateDB
 
-	// The tx context
-	txHash common.Hash
-
-	// Some fields remembered as they are used in tests
-	db    Database
-	snaps ethstate.SnapshotTree
-}
-
-// New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps ethstate.SnapshotTree) (*StateDB, error) {
-	stateDB, err := ethstate.New(root, db, snaps)
-	if err != nil {
-		return nil, err
-	}
-	return &StateDB{
-		StateDB: stateDB,
-		db:      db,
-		snaps:   snaps,
-	}, nil
-}
+var New = ethstate.New
 
 type workerPool struct {
 	*utils.BoundedWorkers
@@ -127,28 +96,6 @@ func SubBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common
 	newAmount := new(big.Int).Sub(GetBalanceMultiCoin(s, addr, coinID), amount)
 	NormalizeCoinID(&coinID)
 	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
-}
-
-// SetTxContext sets the current transaction hash and index which are
-// used when the EVM emits new state logs. It should be invoked before
-// transaction execution.
-func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
-	s.txHash = thash
-	s.StateDB.SetTxContext(thash, ti)
-}
-
-// GetTxHash returns the current tx hash on the StateDB set by SetTxContext.
-func (s *StateDB) GetTxHash() common.Hash {
-	return s.txHash
-}
-
-func (s *StateDB) Copy() *StateDB {
-	return &StateDB{
-		StateDB: s.StateDB.Copy(),
-		db:      s.db,
-		snaps:   s.snaps,
-		txHash:  s.txHash,
-	}
 }
 
 // NormalizeCoinID ORs the 0th bit of the first byte in
