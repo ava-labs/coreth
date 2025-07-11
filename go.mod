@@ -180,3 +180,4 @@ require (
 )
 
 replace github.com/ava-labs/strevm => /Users/stephen/go/src/github.com/ava-labs/strevm
+replace github.com/ava-labs/libevm => /Users/stephen/go/src/github.com/ava-labs/libevm
