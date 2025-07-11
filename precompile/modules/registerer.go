@@ -30,6 +30,11 @@ var (
 			Start: common.HexToAddress("0x0300000000000000000000000000000000000000"),
 			End:   common.HexToAddress("0x03000000000000000000000000000000000000ff"),
 		},
+		// Individual reserved address for p256verify precompile
+		{
+			Start: common.HexToAddress("0x0000000000000000000000000000000000000100"),
+			End:   common.HexToAddress("0x0000000000000000000000000000000000000100"),
+		},
 	}
 )
 
