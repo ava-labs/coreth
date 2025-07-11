@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	ethstate "github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
 )
 
@@ -53,8 +54,7 @@ type StateDB struct {
 	*ethstate.StateDB
 
 	// The tx context
-	thash   common.Hash
-	txIndex int
+	txHash common.Hash
 
 	// Some fields remembered as they are used in tests
 	db    Database
@@ -92,64 +92,54 @@ func WithConcurrentWorkers(prefetchers int) ethstate.PrefetcherOption {
 }
 
 // Retrieve the balance from the given address or 0 if object not found
-func (s *StateDB) GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int {
+func GetBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common.Hash) *big.Int {
 	NormalizeCoinID(&coinID)
-	return s.StateDB.GetState(addr, coinID).Big()
-}
-
-// GetState retrieves a value from the given account's storage trie.
-func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	NormalizeStateKey(&hash)
-	return s.StateDB.GetState(addr, hash)
+	return s.GetState(addr, coinID, stateconf.SkipStateKeyTransformation()).Big()
 }
 
 // AddBalance adds amount to the account associated with addr.
-func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+func AddBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common.Hash, amount *big.Int) {
 	if amount.Sign() == 0 {
 		s.AddBalance(addr, new(uint256.Int)) // used to cause touch
 		return
 	}
-	if !ethstate.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+
+	if !ethstate.GetExtra(s, customtypes.IsMultiCoinPayloads, addr) {
+		ethstate.SetExtra(s, customtypes.IsMultiCoinPayloads, addr, true)
 	}
-	newAmount := new(big.Int).Add(s.GetBalanceMultiCoin(addr, coinID), amount)
+
+	newAmount := new(big.Int).Add(GetBalanceMultiCoin(s, addr, coinID), amount)
 	NormalizeCoinID(&coinID)
-	s.StateDB.SetState(addr, coinID, common.BigToHash(newAmount))
+	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+func SubBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common.Hash, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
 	// Note: It's not needed to set the IsMultiCoin (extras) flag here, as this
 	// call would always be preceded by a call to AddBalanceMultiCoin, which would
 	// set the extra flag. Seems we should remove the redundant code.
-	if !ethstate.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	if !ethstate.GetExtra(s, customtypes.IsMultiCoinPayloads, addr) {
+		ethstate.SetExtra(s, customtypes.IsMultiCoinPayloads, addr, true)
 	}
-	newAmount := new(big.Int).Sub(s.GetBalanceMultiCoin(addr, coinID), amount)
+	newAmount := new(big.Int).Sub(GetBalanceMultiCoin(s, addr, coinID), amount)
 	NormalizeCoinID(&coinID)
-	s.StateDB.SetState(addr, coinID, common.BigToHash(newAmount))
-}
-
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	NormalizeStateKey(&key)
-	s.StateDB.SetState(addr, key, value)
+	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
 }
 
 // SetTxContext sets the current transaction hash and index which are
 // used when the EVM emits new state logs. It should be invoked before
 // transaction execution.
 func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
-	s.thash = thash
-	s.txIndex = ti
+	s.txHash = thash
 	s.StateDB.SetTxContext(thash, ti)
 }
 
 // GetTxHash returns the current tx hash on the StateDB set by SetTxContext.
 func (s *StateDB) GetTxHash() common.Hash {
-	return s.thash
+	return s.txHash
 }
 
 func (s *StateDB) Copy() *StateDB {
@@ -157,8 +147,7 @@ func (s *StateDB) Copy() *StateDB {
 		StateDB: s.StateDB.Copy(),
 		db:      s.db,
 		snaps:   s.snaps,
-		thash:   s.thash,
-		txIndex: s.txIndex,
+		txHash:  s.txHash,
 	}
 }
 
