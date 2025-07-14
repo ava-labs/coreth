@@ -101,7 +101,7 @@ func createBlockChain(
 }
 
 func TestArchiveBlockChain(t *testing.T) {
-	createArchiveBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	createArchiveBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		return createBlockChain(db, archiveConfig, gspec, lastAcceptedHash)
 	}
 	for _, tt := range tests {
@@ -112,7 +112,7 @@ func TestArchiveBlockChain(t *testing.T) {
 }
 
 func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		return createBlockChain(
 			db,
 			&CacheConfig{
@@ -136,7 +136,7 @@ func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
 }
 
 func TestPruningBlockChain(t *testing.T) {
-	createPruningBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	createPruningBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		return createBlockChain(db, pruningConfig, gspec, lastAcceptedHash)
 	}
 	for _, tt := range tests {
@@ -155,7 +155,7 @@ func TestPruningBlockChainSnapsDisabled(t *testing.T) {
 }
 
 func testPruningBlockChainSnapsDisabled(t *testing.T, scheme string) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error) {
 		return createBlockChain(
 			db,
 			&CacheConfig{
@@ -169,11 +169,69 @@ func testPruningBlockChainSnapsDisabled(t *testing.T, scheme string) {
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
 				StateScheme:               scheme,
-				ChainDataDir:              params.GetExtra(gspec.Config).SnowCtx.ChainDataDir,
+				ChainDataDir:              dataPath,
 			},
 			gspec,
 			lastAcceptedHash,
 		)
+	}
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, create)
+		})
+	}
+}
+
+// Runs the same tests but ensures that the blockchain can handle eth blocks
+// that are empty, without atomic txs. This can happen during bootstrapping.
+func TestPruningEmptyCallbacks(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testPruningEmptyCallbacks(t, scheme)
+		})
+	}
+}
+
+func testPruningEmptyCallbacks(t *testing.T, scheme string) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error) {
+		cacheConfig := &CacheConfig{
+			TrieCleanLimit:            256,
+			TrieDirtyLimit:            256,
+			TrieDirtyCommitTarget:     20,
+			TriePrefetcherParallelism: 4,
+			Pruning:                   true,
+			CommitInterval:            4096,
+			SnapshotLimit:             0, // Disable snapshots
+			AcceptorQueueLimit:        64,
+			StateScheme:               scheme,
+			StateHistory:              32,
+			ChainDataDir:              dataPath,
+		}
+		blockchain, err := NewBlockChain(
+			db,
+			cacheConfig,
+			gspec,
+			dummy.NewFakerWithCallbacks(TestEmptyCallbacks),
+			vm.Config{},
+			lastAcceptedHash,
+			false,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return blockchain, nil
+	}
+
+	// Only need to test the ones with empty blocks.
+	tests := []ChainTest{
+		{
+			"EmptyBlocks",
+			EmptyBlocksTest,
+		},
+		{
+			"EmptyAndNonEmptyBlocks",
+			EmptyAndNonEmptyBlocksTest,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -189,7 +247,7 @@ type wrappedStateManager struct {
 func (w *wrappedStateManager) Shutdown() error { return nil }
 
 func TestPruningBlockChainUngracefulShutdown(t *testing.T) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		blockchain, err := createBlockChain(db, pruningConfig, gspec, lastAcceptedHash)
 		if err != nil {
 			return nil, err
@@ -216,7 +274,7 @@ func TestPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T) {
 }
 
 func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme string) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error) {
 		// If no database path has been persisted, set the path to a temporary test directory.
 		// Otherwise, make sure not to overwrite so that it re-uses any existing database.
 		blockchain, err := createBlockChain(
@@ -232,7 +290,7 @@ func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme s
 				SnapshotLimit:             0, // Disable snapshots
 				AcceptorQueueLimit:        64,
 				StateScheme:               scheme,
-				ChainDataDir:              params.GetExtra(gspec.Config).SnowCtx.ChainDataDir,
+				ChainDataDir:              dataPath,
 			},
 			gspec,
 			lastAcceptedHash,
@@ -256,7 +314,7 @@ func testPruningBlockChainUngracefulShutdownSnapsDisabled(t *testing.T, scheme s
 func TestEnableSnapshots(t *testing.T) {
 	// Set snapshots to be disabled the first time, and then enable them on the restart
 	snapLimit := 0
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		// Import the chain. This runs all block validation rules.
 		blockchain, err := createBlockChain(
 			db,
@@ -270,7 +328,6 @@ func TestEnableSnapshots(t *testing.T) {
 				StateHistory:              32,
 				SnapshotLimit:             snapLimit,
 				AcceptorQueueLimit:        64,
-				ChainDataDir:              params.GetExtra(gspec.Config).SnowCtx.ChainDataDir,
 			},
 			gspec,
 			lastAcceptedHash,
@@ -290,7 +347,7 @@ func TestEnableSnapshots(t *testing.T) {
 }
 
 func TestCorruptSnapshots(t *testing.T) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		// Delete the snapshot block hash and state root to ensure that if we die in between writing a snapshot
 		// diff layer to disk at any point, we can still recover on restart.
 		customrawdb.DeleteSnapshotBlockHash(db)
@@ -306,7 +363,7 @@ func TestCorruptSnapshots(t *testing.T) {
 }
 
 func TestBlockChainOfflinePruningUngracefulShutdown(t *testing.T) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		// Import the chain. This runs all block validation rules.
 		blockchain, err := createBlockChain(db, pruningConfig, gspec, lastAcceptedHash)
 		if err != nil {
@@ -483,8 +540,8 @@ func TestUngracefulAsyncShutdownSnapsDisabled(t *testing.T) {
 
 func testUngracefulAsyncShutdown(t *testing.T, scheme string, cacheConfig *CacheConfig) {
 	var (
-		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
-			cacheConfig.ChainDataDir = params.GetExtra(gspec.Config).SnowCtx.ChainDataDir
+		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error) {
+			cacheConfig.ChainDataDir = dataPath
 			blockchain, err := createBlockChain(db, cacheConfig, gspec, lastAcceptedHash)
 			if err != nil {
 				return nil, err
@@ -501,14 +558,12 @@ func testUngracefulAsyncShutdown(t *testing.T, scheme string, cacheConfig *Cache
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,120 +670,6 @@ func testUngracefulAsyncShutdown(t *testing.T, scheme string, cacheConfig *Cache
 			}
 		}
 	}
-}
-
-// TestCompletelyEmptyBlocks tests that the blockchain correctly handles successive
-// duplicate state roots with no txs.
-// The other `TestEmptyBlocks` test ensures that the blockchain can handle eth blocks
-// that are empty, but they still contain atomic txs.
-func TestCompletelyEmptyBlocks(t *testing.T) {
-	for _, scheme := range schemes {
-		t.Run(scheme, func(t *testing.T) {
-			testCompletelyEmptyBlocks(t, scheme)
-		})
-	}
-}
-
-func testCompletelyEmptyBlocks(t *testing.T, scheme string) {
-	var (
-		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
-			cacheConfig := &CacheConfig{
-				TrieCleanLimit:            256,
-				TrieDirtyLimit:            256,
-				TrieDirtyCommitTarget:     20,
-				TriePrefetcherParallelism: 4,
-				Pruning:                   true,
-				CommitInterval:            4096,
-				SnapshotLimit:             0, // Disable snapshots
-				AcceptorQueueLimit:        64,
-				StateScheme:               scheme,
-				StateHistory:              32,
-				ChainDataDir:              params.GetExtra(gspec.Config).SnowCtx.ChainDataDir,
-			}
-			blockchain, err := NewBlockChain(
-				db,
-				cacheConfig,
-				gspec,
-				dummy.NewFakerWithCallbacks(TestEmptyCallbacks),
-				vm.Config{},
-				lastAcceptedHash,
-				false,
-			)
-			if err != nil {
-				return nil, err
-			}
-			return blockchain, nil
-		}
-
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		chainDB = rawdb.NewMemoryDatabase()
-	)
-
-	// Ensure that key1 has some funds in the genesis block.
-	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
-	gspec := &Genesis{
-		Config: config,
-		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
-	}
-
-	blockchain, err := create(chainDB, gspec, common.Hash{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer blockchain.Stop()
-
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 5, 10, func(i int, gen *BlockGen) {
-		if i == 3 {
-			// Generate a transaction to create a unique block
-			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, key1)
-			gen.AddTx(tx)
-		}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Insert three blocks into the chain and accept only the first block.
-	if _, err := blockchain.InsertChain(chain); err != nil {
-		t.Fatal(err)
-	}
-	for _, block := range chain {
-		if err := blockchain.Accept(block); err != nil {
-			t.Fatal(err)
-		}
-	}
-	blockchain.DrainAcceptorQueue()
-
-	// We expect results from block 3
-	checkState := func(sdb *state.StateDB) error {
-		nonce1 := sdb.GetNonce(addr1)
-		if nonce1 != 1 {
-			return fmt.Errorf("expected addr1 nonce: 3, found nonce: %d", nonce1)
-		}
-		balance1 := sdb.GetBalance(addr1)
-		transferredFunds := uint256.NewInt(10000)
-		genesisBalance := uint256.MustFromBig(genesisBalance)
-		expectedBalance := new(uint256.Int).Sub(genesisBalance, transferredFunds)
-		if balance1.Cmp(expectedBalance) != 0 {
-			return fmt.Errorf("expected balance1: %d, found balance: %d", expectedBalance, balance1)
-		}
-		nonce2 := sdb.GetNonce(addr2)
-		if nonce2 != 0 {
-			return fmt.Errorf("expected addr2 nonce: 0, found nonce %d", nonce2)
-		}
-		balance2 := sdb.GetBalance(addr2)
-		if balance2.Cmp(transferredFunds) != 0 {
-			return fmt.Errorf("expected balance2: %d, found %d", transferredFunds, balance2)
-		}
-		return nil
-	}
-
-	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
@@ -867,7 +808,7 @@ func TestTxLookupBlockChain(t *testing.T) {
 		AcceptorQueueLimit:        64,   // ensure channel doesn't block
 		TransactionHistory:        5,
 	}
-	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		return createBlockChain(db, cacheConf, gspec, lastAcceptedHash)
 	}
 	for _, tt := range tests {
@@ -892,7 +833,7 @@ func TestTxLookupSkipIndexingBlockChain(t *testing.T) {
 		TransactionHistory:        5,
 		SkipTxIndexing:            true,
 	}
-	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error) {
+	createTxLookupBlockChain := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
 		return createBlockChain(db, cacheConf, gspec, lastAcceptedHash)
 	}
 	for _, tt := range tests {

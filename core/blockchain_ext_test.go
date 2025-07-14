@@ -8,11 +8,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -54,19 +52,11 @@ var (
 	}
 )
 
-func addDir(cfg *params.ChainConfig, dir string) {
-	params.GetExtra(cfg).AvalancheContext = extras.AvalancheContext{
-		SnowCtx: &snow.Context{
-			ChainDataDir: dir,
-		},
-	}
-}
-
 type ChainTest struct {
 	Name     string
 	testFunc func(
 		t *testing.T,
-		create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error),
+		create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error),
 	)
 }
 
@@ -94,6 +84,10 @@ var tests = []ChainTest{
 	{
 		"EmptyBlocks",
 		EmptyBlocksTest,
+	},
+	{
+		"EmptyAndNonEmptyBlocks",
+		EmptyAndNonEmptyBlocksTest,
 	},
 	{
 		"ReorgReInsert",
@@ -144,7 +138,7 @@ func checkBlockChainState(
 	bc *BlockChain,
 	gspec *Genesis,
 	originalDB ethdb.Database,
-	create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error),
+	create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error),
 	checkState func(sdb *state.StateDB) error,
 ) (*BlockChain, *BlockChain, *BlockChain) {
 	var (
@@ -160,12 +154,8 @@ func checkBlockChainState(
 		t.Fatalf("Check state failed for original blockchain due to: %s", err)
 	}
 
-	// Firewood needs a new directory to force the creation of a new database.
-	extraCfg := params.GetExtra(gspec.Config)
-	oldPath := extraCfg.SnowCtx.ChainDataDir
-	newPath := t.TempDir()
-	extraCfg.SnowCtx.ChainDataDir = newPath
-	newBlockChain, err := create(newDB, gspec, common.Hash{})
+	oldChainDataDir := bc.CacheConfig().ChainDataDir // cacheConfig uses same reference in most tests
+	newBlockChain, err := create(newDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to create new blockchain instance: %s", err)
 	}
@@ -201,11 +191,10 @@ func checkBlockChainState(
 
 	// Copy the database over to prevent any issues when re-using [originalDB] after this call.
 	originalDB, err = copyMemDB(originalDB)
-	extraCfg.SnowCtx.ChainDataDir = oldPath // replace the path
 	if err != nil {
 		t.Fatal(err)
 	}
-	restartedChain, err := create(originalDB, gspec, lastAcceptedBlock.Hash())
+	restartedChain, err := create(originalDB, gspec, lastAcceptedBlock.Hash(), oldChainDataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +218,7 @@ func checkBlockChainState(
 	return bc, newBlockChain, restartedChain
 }
 
-func InsertChainAcceptSingleBlockTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func InsertChainAcceptSingleBlockTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -240,13 +229,11 @@ func InsertChainAcceptSingleBlockTest(t *testing.T, create func(db ethdb.Databas
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +288,7 @@ func InsertChainAcceptSingleBlockTest(t *testing.T, create func(db ethdb.Databas
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func InsertLongForkedChainTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func InsertLongForkedChainTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -312,14 +299,12 @@ func InsertLongForkedChainTest(t *testing.T, create func(db ethdb.Database, gspe
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +452,7 @@ func InsertLongForkedChainTest(t *testing.T, create func(db ethdb.Database, gspe
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func AcceptNonCanonicalBlockTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func AcceptNonCanonicalBlockTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -480,14 +465,12 @@ func AcceptNonCanonicalBlockTest(t *testing.T, create func(db ethdb.Database, gs
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -580,7 +563,7 @@ func AcceptNonCanonicalBlockTest(t *testing.T, create func(db ethdb.Database, gs
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func SetPreferenceRewindTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func SetPreferenceRewindTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -591,14 +574,12 @@ func SetPreferenceRewindTest(t *testing.T, create func(db ethdb.Database, gspec 
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,7 +695,7 @@ func SetPreferenceRewindTest(t *testing.T, create func(db ethdb.Database, gspec 
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkUpdatedState)
 }
 
-func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -727,17 +708,15 @@ func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc: types.GenesisAlloc{
 			addr1: {Balance: genesisBalance},
 			addr3: {Balance: genesisBalance},
 		},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -883,18 +862,16 @@ func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	chainDB := rawdb.NewMemoryDatabase()
 
 	// Ensure that key1 has some funds in the genesis block.
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -924,7 +901,7 @@ func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func ReorgReInsertTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func EmptyAndNonEmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -935,14 +912,82 @@ func ReorgReInsertTest(t *testing.T, create func(db ethdb.Database, gspec *Genes
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 5, 10, func(i int, gen *BlockGen) {
+		if i == 3 {
+			// Generate a transaction to create a unique block
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, key1)
+			gen.AddTx(tx)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blockchain.DrainAcceptorQueue()
+
+	// We expect results from block 3
+	checkState := func(sdb *state.StateDB) error {
+		nonce1 := sdb.GetNonce(addr1)
+		if nonce1 != 1 {
+			return fmt.Errorf("expected addr1 nonce: 3, found nonce: %d", nonce1)
+		}
+		balance1 := sdb.GetBalance(addr1)
+		transferredFunds := uint256.NewInt(10000)
+		genesisBalance := uint256.MustFromBig(genesisBalance)
+		expectedBalance := new(uint256.Int).Sub(genesisBalance, transferredFunds)
+		if balance1.Cmp(expectedBalance) != 0 {
+			return fmt.Errorf("expected balance1: %d, found balance: %d", expectedBalance, balance1)
+		}
+		nonce2 := sdb.GetNonce(addr2)
+		if nonce2 != 0 {
+			return fmt.Errorf("expected addr2 nonce: 0, found nonce %d", nonce2)
+		}
+		balance2 := sdb.GetBalance(addr2)
+		if balance2.Cmp(transferredFunds) != 0 {
+			return fmt.Errorf("expected balance2: %d, found %d", transferredFunds, balance2)
+		}
+		return nil
+	}
+
+	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
+}
+
+func ReorgReInsertTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		chainDB = rawdb.NewMemoryDatabase()
+	)
+
+	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000000)
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+	}
+
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1032,7 +1077,7 @@ func ReorgReInsertTest(t *testing.T, create func(db ethdb.Database, gspec *Genes
 //	A3
 //
 //nolint:goimports
-func AcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func AcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1043,14 +1088,12 @@ func AcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Databa
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1178,7 +1221,7 @@ func AcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Databa
 //	A3
 //
 //nolint:goimports
-func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1189,14 +1232,12 @@ func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db eth
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := big.NewInt(1000000000)
-	config := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	addDir(config, t.TempDir())
 	gspec := &Genesis{
-		Config: config,
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1253,8 +1294,7 @@ func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db eth
 
 	// Restart the chain with a new database.
 	chainDB = rawdb.NewMemoryDatabase()
-	addDir(gspec.Config, t.TempDir())
-	blockchain, err = create(chainDB, gspec, common.Hash{})
+	blockchain, err = create(chainDB, gspec, common.Hash{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1336,7 +1376,7 @@ func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db eth
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func GenerateChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func GenerateChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		require = require.New(t)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1348,22 +1388,20 @@ func GenerateChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Databas
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
-	config := params.Copy(params.TestChainConfig)
-	addDir(&config, t.TempDir())
 	gspec := &Genesis{
-		Config: &config,
+		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	require.NoError(err)
 	t.Cleanup(blockchain.Stop)
 
 	// This call generates a chain of 3 blocks.
-	signer := types.LatestSigner(&config)
+	signer := types.LatestSigner(params.TestChainConfig)
 	_, _, _, err = GenerateChainWithGenesis(gspec, blockchain.engine, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   config.ChainID,
+			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
 			To:        &addr2,
 			Gas:       params.TxGas,
@@ -1379,7 +1417,7 @@ func GenerateChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Databas
 	require.ErrorIs(err, dummy.ErrInsufficientBlockGas)
 }
 
-func InsertChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func InsertChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		require = require.New(t)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1391,23 +1429,21 @@ func InsertChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database,
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
-	config := params.Copy(params.TestChainConfig)
-	addDir(&config, t.TempDir())
 	gspec := &Genesis{
-		Config: &config,
+		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	require.NoError(err)
 	t.Cleanup(blockchain.Stop)
 
 	// This call generates a chain of 3 blocks.
-	signer := types.LatestSigner(&config)
+	signer := types.LatestSigner(params.TestChainConfig)
 	eng := dummy.NewFakerWithMode(TestCallbacks, dummy.Mode{ModeSkipBlockFee: true, ModeSkipCoinbase: true})
 	_, chain, _, err := GenerateChainWithGenesis(gspec, eng, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
 		tx := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   config.ChainID,
+			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
 			To:        &addr2,
 			Gas:       params.TxGas,
@@ -1425,7 +1461,7 @@ func InsertChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database,
 	require.ErrorIs(err, dummy.ErrInsufficientBlockGas)
 }
 
-func InsertChainValidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash) (*BlockChain, error)) {
+func InsertChainValidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
 	var (
 		require = require.New(t)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1439,25 +1475,23 @@ func InsertChainValidBlockFeeTest(t *testing.T, create func(db ethdb.Database, g
 
 	// Ensure that key1 has some funds in the genesis block.
 	genesisBalance := new(big.Int).Mul(big.NewInt(1000000), big.NewInt(params.Ether))
-	config := params.Copy(params.TestChainConfig)
-	addDir(&config, t.TempDir())
 	gspec := &Genesis{
-		Config: &config,
+		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
 	}
 
-	blockchain, err := create(chainDB, gspec, common.Hash{})
+	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	require.NoError(err)
 	t.Cleanup(blockchain.Stop)
 
 	// This call generates a chain of 3 blocks.
-	signer := types.LatestSigner(&config)
+	signer := types.LatestSigner(params.TestChainConfig)
 	tip := big.NewInt(50000 * params.GWei)
 	transfer := big.NewInt(10000)
 	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 3, ap4.TargetBlockRate-1, func(i int, gen *BlockGen) {
 		feeCap := new(big.Int).Add(gen.BaseFee(), tip)
 		tx := types.NewTx(&types.DynamicFeeTx{
-			ChainID:   config.ChainID,
+			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
 			To:        &addr2,
 			Gas:       params.TxGas,

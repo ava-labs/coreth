@@ -104,7 +104,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "genesis without ChainConfig",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(t, db, scheme)), new(Genesis), common.Hash{})
+				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(t, scheme)), new(Genesis), common.Hash{})
 			},
 			wantErr:    errGenesisNoConfig,
 			wantConfig: nil,
@@ -112,7 +112,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "no block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(t, db, scheme)), nil, common.Hash{})
+				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(t, scheme)), nil, common.Hash{})
 			},
 			wantErr:    ErrNoGenesis,
 			wantConfig: nil,
@@ -120,7 +120,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(t, db, scheme))
+				tdb := triedb.NewDatabase(db, newDbConfig(t, scheme))
 				customg.Commit(db, tdb)
 				return setupGenesisBlock(db, tdb, nil, common.Hash{})
 			},
@@ -130,7 +130,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(t, db, scheme))
+				tdb := triedb.NewDatabase(db, newDbConfig(t, scheme))
 				oldcustomg.Commit(db, tdb)
 				return setupGenesisBlock(db, tdb, &customg, customghash)
 			},
@@ -142,7 +142,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with ApricotPhase1 transition at 90.
 				// Advance to block #4, past the ApricotPhase1 transition block of customg.
-				tdb := triedb.NewDatabase(db, newDbConfig(t, db, rawdb.HashScheme))
+				tdb := triedb.NewDatabase(db, newDbConfig(t, rawdb.HashScheme))
 				genesis, err := oldcustomg.Commit(db, tdb)
 				if err != nil {
 					t.Fatal(err)
@@ -298,7 +298,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 	require.NoError(err)
 }
 
-func newDbConfig(t *testing.T, db ethdb.Database, scheme string) *triedb.Config {
+func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 	switch scheme {
 	case rawdb.HashScheme:
 		return triedb.HashDefaults
