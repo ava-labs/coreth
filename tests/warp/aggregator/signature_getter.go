@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/avalanchego/buf/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"google.golang.org/protobuf/proto"

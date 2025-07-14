@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/buf/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/cache"
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
-	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
