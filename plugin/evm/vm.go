@@ -430,6 +430,10 @@ func (vm *VM) Initialize(
 			return errors.New("State sync is not yet supported for Firewood")
 		}
 	}
+	if vm.ethConfig.StateScheme == rawdb.PathScheme {
+		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
+		return errors.New("Path state scheme is not supported")
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
