@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
@@ -106,13 +107,14 @@ func newTestBackendFakerEngine(t *testing.T, config *params.ChainConfig, numBloc
 	engine := dummy.NewETHFaker()
 
 	// Generate testing blocks
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, ap4.TargetBlockRate-1, genBlocks)
+	_, _, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, ap4.TargetBlockRate-1, genBlocks)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
-	chain, err := core.NewBlockChain(diskdb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
+	blockDb := ethblockdb.NewMock(diskdb)
+	chain, err := core.NewBlockChain(diskdb, blockDb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
@@ -140,12 +142,14 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 	})
 
 	// Generate testing blocks
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, ap4.TargetBlockRate-1, genBlocks)
+	_, _, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, ap4.TargetBlockRate-1, genBlocks)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Construct testing chain
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
+	db := rawdb.NewMemoryDatabase()
+	blockDb := ethblockdb.NewMock(db)
+	chain, err := core.NewBlockChain(db, blockDb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}

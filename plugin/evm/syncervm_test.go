@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	syncervm "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -355,7 +356,7 @@ func createSyncServerAndClientVMs(t *testing.T, test syncTest, numBlocks int) *s
 	// and update the vm's state so the trie with accounts will
 	// be returned by StateSyncGetLastSummary
 	lastAccepted := server.vm.blockChain.LastAcceptedBlock()
-	patchedBlock := patchBlock(lastAccepted, root, server.vm.chaindb)
+	patchedBlock := patchBlock(lastAccepted, root, server.vm.chaindb, server.vm.blockdb)
 	blockBytes, err := rlp.EncodeToBytes(patchedBlock)
 	require.NoError(err)
 	internalBlock, err := server.vm.parseBlock(context.Background(), blockBytes)
@@ -507,7 +508,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 
 	lastNumber := syncerVM.blockChain.LastAcceptedBlock().NumberU64()
 	// check the last block is indexed
-	lastSyncedBlock := rawdb.ReadBlock(syncerVM.chaindb, rawdb.ReadCanonicalHash(syncerVM.chaindb, lastNumber), lastNumber)
+	lastSyncedBlock := syncerVM.blockdb.ReadBlock(lastNumber)
 	for _, tx := range lastSyncedBlock.Transactions() {
 		index := rawdb.ReadTxLookupEntry(syncerVM.chaindb, tx.Hash())
 		require.NotNilf(index, "Miss transaction indices, number %d hash %s", lastNumber, tx.Hash().Hex())
@@ -517,7 +518,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 	if syncerVM.ethConfig.TransactionHistory != 0 {
 		tail := lastSyncedBlock.NumberU64()
 
-		coretest.CheckTxIndices(t, &tail, tail, tail, tail, syncerVM.chaindb, true)
+		coretest.CheckTxIndices(t, &tail, tail, tail, tail, syncerVM.chaindb, syncerVM.blockdb, true)
 	}
 
 	blocksToBuild := 10
@@ -548,7 +549,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 				if tail < lastSyncedBlock.NumberU64() {
 					tail = lastSyncedBlock.NumberU64()
 				}
-				coretest.CheckTxIndices(t, &tail, tail, block.NumberU64(), block.NumberU64(), syncerVM.chaindb, true)
+				coretest.CheckTxIndices(t, &tail, tail, block.NumberU64(), block.NumberU64(), syncerVM.chaindb, syncerVM.blockdb, true)
 			}
 		},
 	)
@@ -592,7 +593,7 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 				if tail < lastSyncedBlock.NumberU64() {
 					tail = lastSyncedBlock.NumberU64()
 				}
-				coretest.CheckTxIndices(t, &tail, tail, block.NumberU64(), block.NumberU64(), syncerVM.chaindb, true)
+				coretest.CheckTxIndices(t, &tail, tail, block.NumberU64(), block.NumberU64(), syncerVM.chaindb, syncerVM.blockdb, true)
 			}
 		},
 	)
@@ -603,14 +604,14 @@ func testSyncerVM(t *testing.T, vmSetup *syncVMSetup, test syncTest) {
 // This breaks the digestibility of the chain since after this call
 // [blk] does not necessarily define a state transition from its parent
 // state to the new state root.
-func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Block {
+func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database, blkDb ethblockdb.Database) *types.Block {
 	header := blk.Header()
 	header.Root = root
 	receipts := rawdb.ReadRawReceipts(db, blk.Hash(), blk.NumberU64())
 	newBlk := customtypes.NewBlockWithExtData(
 		header, blk.Transactions(), blk.Uncles(), receipts, trie.NewStackTrie(nil), customtypes.BlockExtData(blk), true,
 	)
-	rawdb.WriteBlock(db, newBlk)
+	blkDb.WriteBlock(newBlk)
 	rawdb.WriteCanonicalHash(db, newBlk.Hash(), newBlk.NumberU64())
 	return newBlk
 }

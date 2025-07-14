@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
@@ -116,8 +117,9 @@ func TestStateProcessorErrors(t *testing.T) {
 
 	{ // Tests against a 'recent' chain definition
 		var (
-			db    = rawdb.NewMemoryDatabase()
-			gspec = &Genesis{
+			db      = rawdb.NewMemoryDatabase()
+			blockDb = ethblockdb.NewMock(db)
+			gspec   = &Genesis{
 				Config:    config,
 				Timestamp: uint64(upgrade.InitiallyActiveTime.Unix()),
 				Alloc: types.GenesisAlloc{
@@ -129,7 +131,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				GasLimit: cortina.GasLimit,
 			}
 			// FullFaker used to skip header verification that enforces no blobs.
-			blockchain, _  = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, false)
+			blockchain, _  = NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, false)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 		)
 
@@ -265,8 +267,9 @@ func TestStateProcessorErrors(t *testing.T) {
 	// ErrTxTypeNotSupported, For this, we need an older chain
 	{
 		var (
-			db    = rawdb.NewMemoryDatabase()
-			gspec = &Genesis{
+			db      = rawdb.NewMemoryDatabase()
+			blockDb = ethblockdb.NewMock(db)
+			gspec   = &Genesis{
 				Config: params.WithExtra(
 					&params.ChainConfig{
 						ChainID:             big.NewInt(1),
@@ -295,7 +298,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				GasLimit: ap1.GasLimit,
 			}
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
+			blockchain, _ = NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -323,8 +326,9 @@ func TestStateProcessorErrors(t *testing.T) {
 	// ErrSenderNoEOA, for this we need the sender to have contract code
 	{
 		var (
-			db    = rawdb.NewMemoryDatabase()
-			gspec = &Genesis{
+			db      = rawdb.NewMemoryDatabase()
+			blockDb = ethblockdb.NewMock(db)
+			gspec   = &Genesis{
 				Config: config,
 				Alloc: types.GenesisAlloc{
 					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
@@ -335,7 +339,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				GasLimit: cortina.GasLimit,
 			}
-			blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
+			blockchain, _ = NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {

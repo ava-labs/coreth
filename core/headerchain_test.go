@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -75,14 +76,15 @@ func testInsert(t *testing.T, bc *BlockChain, chain []*types.Block, wantErr erro
 // This test checks status reporting of InsertHeaderChain.
 func TestHeaderInsertion(t *testing.T) {
 	var (
-		db    = rawdb.NewMemoryDatabase()
-		gspec = &Genesis{
+		db      = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
+		gspec   = &Genesis{
 			BaseFee: big.NewInt(ap3.InitialBaseFee),
 			Config:  params.TestChainConfig,
 		}
 	)
 	genesis := gspec.ToBlock()
-	chain, err := NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
+	chain, err := NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

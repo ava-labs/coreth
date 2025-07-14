@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/bloombits"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/bitutil"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -186,7 +187,8 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	clearBloomBits(db)
 
-	_, sys := newTestFilterSystem(b, db, Config{})
+	blockDb := ethblockdb.NewMock(db)
+	_, sys := newTestFilterSystem(b, db, blockDb, Config{})
 
 	b.Log("Running filter benchmarks...")
 	start := time.Now()

@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
@@ -115,7 +116,7 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 
 	if head-indexer.limit+1 >= tailValue {
 		// Unindex a part of stale indices and forward index tail to HEAD-limit
-		rawdb.UnindexTransactions(indexer.db, tailValue, head-indexer.limit+1, stop, false)
+		ethblockdb.UnindexTransactions(indexer.db, indexer.chain.blockDb, tailValue, head-indexer.limit+1, stop, nil, false)
 	}
 }
 

@@ -32,8 +32,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -160,9 +162,11 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
 	var db ethdb.Database
+	var blockDb ethblockdb.Database
 	var err error
 	if !disk {
 		db = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
 	} else {
 		dir := b.TempDir()
 		db, err = rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
@@ -170,6 +174,11 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}
 		defer db.Close()
+		store, err := blockdb.New(blockdb.DefaultConfig().WithDir(dir), nil)
+		if err != nil {
+			b.Fatalf("cannot create temporary block database: %v", err)
+		}
+		blockDb = ethblockdb.New(store, db)
 	}
 
 	// Generate a chain of b.N blocks using the supplied block
@@ -178,11 +187,11 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
 	}
-	_, chain, _, _ := GenerateChainWithGenesis(gspec, dummy.NewCoinbaseFaker(), b.N, 10, gen)
+	_, _, chain, _, _ := GenerateChainWithGenesis(gspec, dummy.NewCoinbaseFaker(), b.N, 10, gen)
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
+	chainman, _ := NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, common.Hash{}, false)
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -283,6 +292,11 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", dir, err)
 	}
+	store, err := blockdb.New(blockdb.DefaultConfig().WithDir(dir), nil)
+	if err != nil {
+		b.Fatalf("cannot create temporary block database: %v", err)
+	}
+	blockDb := ethblockdb.New(store, db)
 	genesis := &Genesis{Config: params.TestChainConfig}
 	makeChainForBench(db, genesis, full, count)
 	db.Close()
@@ -295,7 +309,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
-		chain, err := NewBlockChain(db, DefaultCacheConfig, genesis, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
+		chain, err := NewBlockChain(db, blockDb, DefaultCacheConfig, genesis, dummy.NewFaker(), vm.Config{}, common.Hash{}, false)
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

@@ -87,11 +87,22 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	if number == nil {
 		return nil
 	}
-	body := rawdb.ReadBody(bc.db, hash, *number)
+
+	isCanonical := *number <= bc.lastAccepted.NumberU64()
+	var body *types.Body
+	if isCanonical {
+		body = bc.blockDb.ReadBody(*number)
+	} else {
+		block := bc.blockDb.ReadBlock(*number)
+		if block != nil && block.Hash() != hash {
+			body = rawdb.ReadBody(bc.db, hash, *number)
+		}
+	}
+
 	if body == nil {
 		return nil
 	}
-	// Cache the found body for next time and return
+
 	bc.bodyCache.Add(hash, body)
 	return body
 }
@@ -101,10 +112,17 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
-	if !bc.HasHeader(hash, number) {
-		return false
+	isCanonical := number <= bc.lastAccepted.NumberU64()
+	if isCanonical {
+		return bc.blockDb.HasBlock(number)
 	}
-	return rawdb.HasBody(bc.db, hash, number)
+
+	header := bc.blockDb.ReadHeader(number)
+	if header != nil && header.Hash() != hash {
+		return rawdb.HasHeader(bc.db, hash, number) && rawdb.HasBody(bc.db, hash, number)
+	}
+
+	return header != nil
 }
 
 // HasFastBlock checks if a fast block is fully present in the database or not.
@@ -125,10 +143,22 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block
 	}
-	block := rawdb.ReadBlock(bc.db, hash, number)
+
+	block := bc.blockDb.ReadBlock(number)
+
+	// the block could be in chainDb if its not canonical not found in blockdb
+	if block != nil && block.Hash() != hash {
+		if bc.lastAccepted != nil && number > bc.lastAccepted.NumberU64() {
+			block = rawdb.ReadBlock(bc.db, hash, number)
+		} else {
+			block = nil
+		}
+	}
+
 	if block == nil {
 		return nil
 	}
+
 	// Cache the found block for next time and return
 	bc.blockCache.Add(block.Hash(), block)
 	return block
@@ -185,7 +215,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if header == nil {
 		return nil
 	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, *number, header.Time, bc.chainConfig)
+	receipts := bc.blockDb.ReadReceipts(hash, *number, header.Time, bc.chainConfig)
 	if receipts == nil {
 		return nil
 	}
@@ -213,7 +243,7 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 	if item, exist := bc.txLookupCache.Get(hash); exist {
 		return item.lookup, item.transaction, nil
 	}
-	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
+	tx, blockHash, blockNumber, txIndex := bc.blockDb.ReadTransaction(hash)
 	if tx == nil {
 		// The transaction is already indexed, the transaction is either
 		// not existent or not in the range of index, returning null.

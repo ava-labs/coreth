@@ -4,15 +4,23 @@
 package evm
 
 import (
+	"path/filepath"
+	"strconv"
 	"time"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/plugin/evm/database"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/log"
+)
+
+const (
+	blockDbFolder = "blockdb"
 )
 
 // initializeDBs initializes the databases used by the VM.
@@ -29,6 +37,17 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
 	vm.warpDB = prefixdb.New(warpPrefix, db)
+
+	// Initialize block database
+	versionPath := strconv.FormatUint(uint64(blockdb.IndexFileVersion), 10)
+	blockDBPath := filepath.Join(vm.ctx.ChainDataDir, blockDbFolder, versionPath)
+	config := blockdb.DefaultConfig().WithDir(blockDBPath).WithSyncToDisk(false)
+	blockDatabase, err := blockdb.New(config, vm.ctx.Log)
+	if err != nil {
+		return err
+	}
+	vm.blockdb = ethblockdb.New(blockDatabase, vm.chaindb)
+
 	return nil
 }
 

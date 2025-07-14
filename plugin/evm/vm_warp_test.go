@@ -45,7 +45,6 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
@@ -121,7 +120,7 @@ func TestSendWarpMessage(t *testing.T) {
 	// Verify that the constructed block contains the expected log with an unsigned warp message in the log data
 	ethBlock1 := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	require.Len(ethBlock1.Transactions(), 1)
-	receipts := rawdb.ReadReceipts(tvm.vm.chaindb, ethBlock1.Hash(), ethBlock1.NumberU64(), ethBlock1.Time(), tvm.vm.chainConfig)
+	receipts := tvm.vm.blockdb.ReadReceipts(ethBlock1.Hash(), ethBlock1.NumberU64(), ethBlock1.Time(), tvm.vm.chainConfig)
 	require.Len(receipts, 1)
 
 	require.Len(receipts[0].Logs, 1)
@@ -856,6 +855,7 @@ func TestSignatureRequestsToVM(t *testing.T) {
 func TestClearWarpDB(t *testing.T) {
 	ctx, db, genesisBytes, _ := setupGenesis(t, upgradetest.Latest)
 	innerVM := &VM{}
+	chainDataDir := ctx.ChainDataDir
 	vm := atomicvm.WrapVM(innerVM)
 	require.NoError(t, vm.Initialize(
 		context.Background(),
@@ -889,6 +889,7 @@ func TestClearWarpDB(t *testing.T) {
 	vm = atomicvm.WrapVM(innerVM)
 	// we need new context since the previous one has registered metrics.
 	ctx, _, _, _ = setupGenesis(t, upgradetest.Latest)
+	ctx.ChainDataDir = chainDataDir
 	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,
@@ -913,6 +914,7 @@ func TestClearWarpDB(t *testing.T) {
 	vm = atomicvm.WrapVM(innerVM)
 	config := `{"prune-warp-db-enabled": true}`
 	ctx, _, _, _ = setupGenesis(t, upgradetest.Latest)
+	ctx.ChainDataDir = chainDataDir
 	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,

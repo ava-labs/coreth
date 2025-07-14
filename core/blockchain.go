@@ -49,6 +49,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customlogs"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -67,6 +68,7 @@ import (
 
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
+	_ "github.com/ava-labs/libevm/trie"
 )
 
 // ====== If resolving merge conflicts ======
@@ -269,11 +271,12 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db           ethdb.Database   // Low level persistent database to store final content in
-	snaps        *snapshot.Tree   // Snapshot tree for fast trie leaf access
-	triedb       *triedb.Database // The database handler for maintaining trie nodes.
-	stateCache   state.Database   // State database to reuse between imports (contains state cache)
-	txIndexer    *txIndexer       // Transaction indexer, might be nil if not enabled
+	db           ethdb.Database      // Low level persistent database to store final content in
+	blockDb      ethblockdb.Database // Block database for canonical blocks
+	snaps        *snapshot.Tree      // Snapshot tree for fast trie leaf access
+	triedb       *triedb.Database    // The database handler for maintaining trie nodes.
+	stateCache   state.Database      // State database to reuse between imports (contains state cache)
+	txIndexer    *txIndexer          // Transaction indexer, might be nil if not enabled
 	stateManager TrieWriter
 
 	hc                *HeaderChain
@@ -360,7 +363,7 @@ type BlockChain struct {
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
 func NewBlockChain(
-	db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, engine consensus.Engine,
+	db ethdb.Database, blockDb ethblockdb.Database, cacheConfig *CacheConfig, genesis *Genesis, engine consensus.Engine,
 	vmConfig vm.Config, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
 ) (*BlockChain, error) {
 	if cacheConfig == nil {
@@ -375,7 +378,7 @@ func NewBlockChain(
 	// Note: In go-ethereum, the code rewinds the chain on an incompatible config upgrade.
 	// We don't do this and expect the node operator to always update their node's configuration
 	// before network upgrades take effect.
-	chainConfig, _, err := SetupGenesisBlock(db, triedb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
+	chainConfig, _, err := SetupGenesisBlock(db, triedb, blockDb, genesis, lastAcceptedHash, skipChainConfigCheckCompatible)
 	if err != nil {
 		return nil, err
 	}
@@ -391,6 +394,7 @@ func NewBlockChain(
 		chainConfig:       chainConfig,
 		cacheConfig:       cacheConfig,
 		db:                db,
+		blockDb:           blockDb,
 		triedb:            triedb,
 		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
 		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
@@ -408,7 +412,7 @@ func NewBlockChain(
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
-	bc.hc, err = NewHeaderChain(db, chainConfig, cacheConfig, engine)
+	bc.hc, err = NewHeaderChain(db, blockDb, chainConfig, cacheConfig, engine)
 	if err != nil {
 		return nil, err
 	}
@@ -738,11 +742,8 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 
 func (bc *BlockChain) loadGenesisState() error {
 	// Prepare the genesis block and reinitialise the chain
-	batch := bc.db.NewBatch()
-	rawdb.WriteBlock(batch, bc.genesisBlock)
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to write genesis block", "err", err)
-	}
+	bc.blockDb.WriteBlock(bc.genesisBlock)
+	rawdb.WriteHeaderNumber(bc.db, bc.genesisBlock.Hash(), bc.genesisBlock.NumberU64())
 	bc.writeHeadBlock(bc.genesisBlock)
 
 	// Last update all in-memory chain markers
@@ -1082,6 +1083,24 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		}
 	}
 
+	// Since we optimistically store the first block at a height as the canonical block,
+	// we need to rewrite the canonical block in the blockdb if another block at the same height
+	// was accepted.
+	savedBlock := bc.blockDb.ReadBlock(block.NumberU64())
+	if savedBlock == nil || savedBlock.Hash() != block.Hash() {
+		bc.blockDb.WriteBlock(block)
+
+		// delete the block data from the chaindb since we are now storing it in the blockdb
+		batch := bc.db.NewBatch()
+		rawdb.DeleteHeader(batch, block.Hash(), block.NumberU64())
+		rawdb.DeleteBody(batch, block.Hash(), block.NumberU64())
+		// add back the hash->number mapping since DeleteHeader will have removed it
+		rawdb.WriteHeaderNumber(batch, block.Hash(), block.NumberU64())
+		if err := batch.Write(); err != nil {
+			return fmt.Errorf("failed to write delete block batch: %w", err)
+		}
+	}
+
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
 	bc.addAcceptorQueue(block)
@@ -1103,6 +1122,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		latestGasCapacityGauge.Update(int64(s.Gas.Capacity))
 		latestGasTargetGauge.Update(int64(s.Target()))
 	}
+
 	return nil
 }
 
@@ -1188,16 +1208,24 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, parentRoot common
 // writeBlockWithState writes the block and all associated state to the database,
 // but it expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, state *state.StateDB) error {
-	// Irrelevant of the canonical status, write the block itself to the database.
+	// Irrelevant of the canonical status, write the block to blockdb and related
+	// data to the chaindb.
 	//
-	// Note all the components of block(hash->number map, header, body, receipts)
+	// Note the block data is written first, then all other components of block(hash->number map, receipts, preimages)
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
-	rawdb.WriteBlock(blockBatch, block)
+	blockNumber := block.NumberU64()
+	if !bc.blockDb.HasBlock(blockNumber) {
+		bc.blockDb.WriteBlock(block)
+		rawdb.WriteHeaderNumber(blockBatch, block.Hash(), blockNumber)
+	} else {
+		// write block to the chaindb if we already stored a block at the same height
+		rawdb.WriteBlock(bc.db, block)
+	}
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
-		log.Crit("Failed to write block into disk", "err", err)
+		log.Crit("Failed to write block receipts and preimages into disk", "err", err)
 	}
 
 	// Commit all cached state changes into underlying memory database.
@@ -1538,11 +1566,14 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// stale lookups are still cached.
 	bc.txLookupCache.Purge()
 
-	// Insert the new chain(except the head block(reverse order)),
-	// taking care of the proper incremental order.
+	// Remove non-canonical blocks from the chain db and ensure the canonical
+	// block are stored in the blockdb
+	blocksBatch := bc.db.NewBatch()
 	for i := len(newChain) - 1; i >= 1; i-- {
-		// Insert the block in the canonical way, re-writing history
 		bc.writeHeadBlock(newChain[i])
+	}
+	if err := blocksBatch.Write(); err != nil {
+		log.Crit("Failed to write block data during reorg", "err", err)
 	}
 
 	// Delete any canonical number assignments above the new head

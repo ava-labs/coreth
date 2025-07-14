@@ -193,6 +193,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 		fork = *config.fork
 	}
 	ctx.NetworkUpgrades = upgradetest.GetConfig(fork)
+	ctx.ChainDataDir = t.TempDir()
 
 	if len(config.genesisJSON) == 0 {
 		config.genesisJSON = genesisJSON(forkToChainConfig[fork])
@@ -270,6 +271,7 @@ func setupGenesis(
 ) {
 	ctx := snowtest.Context(t, snowtest.CChainID)
 	ctx.NetworkUpgrades = upgradetest.GetConfig(fork)
+	ctx.ChainDataDir = t.TempDir()
 
 	baseDB := memdb.New()
 
@@ -719,6 +721,7 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 	restartedVM := atomicvm.WrapVM(&VM{})
 	newCTX := snowtest.Context(t, snowtest.CChainID)
+	newCTX.ChainDataDir = tvm.vm.ctx.ChainDataDir
 	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
 	if err := restartedVM.Initialize(
 		context.Background(),
@@ -1692,7 +1695,7 @@ func TestReorgProtection(t *testing.T) {
 	}
 
 	if err := vm1BlkC.Accept(context.Background()); !strings.Contains(err.Error(), "expected accepted block to have parent") {
-		t.Fatalf("Unexpected error when setting block at finalized height: %s", err)
+		t.Fatalf("Unexpected error when setting block at finalized height: %d", err)
 	}
 }
 
@@ -2461,7 +2464,6 @@ func TestAcceptReorg(t *testing.T) {
 	if err := vm1BlkA.Verify(context.Background()); err != nil {
 		t.Fatalf("Block failed verification on VM1: %s", err)
 	}
-
 	if err := tvm1.vm.SetPreference(context.Background(), vm1BlkA.ID()); err != nil {
 		t.Fatal(err)
 	}
@@ -2546,7 +2548,6 @@ func TestAcceptReorg(t *testing.T) {
 	if err := vm2BlkC.Verify(context.Background()); err != nil {
 		t.Fatalf("BlkC failed verification on VM2: %s", err)
 	}
-
 	if err := tvm2.vm.SetPreference(context.Background(), vm2BlkC.ID()); err != nil {
 		t.Fatal(err)
 	}
@@ -3701,6 +3702,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
 	newCTX := snowtest.Context(t, tvm.vm.ctx.ChainID)
+	newCTX.ChainDataDir = tvm.vm.ctx.ChainDataDir
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
@@ -3871,7 +3873,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 		b.AddTx(tx)
 	}
 	// FullFaker used to skip header verification so we can generate a block with blobs
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, dummy.NewFullFaker(), 1, 10, blockGen)
+	_, _, blocks, _, err := core.GenerateChainWithGenesis(gspec, dummy.NewFullFaker(), 1, 10, blockGen)
 	require.NoError(err)
 
 	// Create a VM with the genesis (will use header verification)

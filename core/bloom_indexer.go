@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/bloombits"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/bitutil"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -57,14 +58,14 @@ type BloomIndexer struct {
 
 // NewBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for fast logs filtering.
-func NewBloomIndexer(db ethdb.Database, size, confirms uint64) *ChainIndexer {
+func NewBloomIndexer(db ethdb.Database, blockDb ethblockdb.Database, size, confirms uint64) *ChainIndexer {
 	backend := &BloomIndexer{
 		db:   db,
 		size: size,
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
 
-	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "bloombits")
+	return NewChainIndexer(db, table, blockDb, backend, size, confirms, bloomThrottling, "bloombits")
 }
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index

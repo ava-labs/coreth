@@ -36,6 +36,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -66,6 +67,7 @@ type HeaderChain struct {
 	config *params.ChainConfig
 
 	chainDb       ethdb.Database
+	blockDb       ethblockdb.Database
 	genesisHeader *types.Header
 
 	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
@@ -81,7 +83,7 @@ type HeaderChain struct {
 
 // NewHeaderChain creates a new HeaderChain structure. ProcInterrupt points
 // to the parent's interrupt semaphore.
-func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, cacheConfig *CacheConfig, engine consensus.Engine) (*HeaderChain, error) {
+func NewHeaderChain(chainDb ethdb.Database, blockDb ethblockdb.Database, config *params.ChainConfig, cacheConfig *CacheConfig, engine consensus.Engine) (*HeaderChain, error) {
 	acceptedNumberCache := NewFIFOCache[uint64, *types.Header](cacheConfig.AcceptedCacheSize)
 
 	// Seed a fast but crypto originating random generator
@@ -93,6 +95,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, cacheCon
 	hc := &HeaderChain{
 		config:              config,
 		chainDb:             chainDb,
+		blockDb:             blockDb,
 		headerCache:         lru.NewCache[common.Hash, *types.Header](headerCacheLimit),
 		numberCache:         lru.NewCache[common.Hash, uint64](numberCacheLimit),
 		acceptedNumberCache: acceptedNumberCache,
@@ -136,10 +139,16 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header
 	}
-	header := rawdb.ReadHeader(hc.chainDb, hash, number)
+	header := hc.blockDb.ReadHeader(number)
+
+	if header != nil && header.Hash() != hash {
+		header = rawdb.ReadHeader(hc.chainDb, hash, number)
+	}
+
 	if header == nil {
 		return nil
 	}
+
 	// Cache the found header for next time and return
 	hc.headerCache.Add(hash, header)
 	return header
@@ -162,7 +171,15 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
 		return true
 	}
-	return rawdb.HasHeader(hc.chainDb, hash, number)
+
+	header := hc.blockDb.ReadHeader(number)
+	if header != nil && header.Hash() != hash {
+		return rawdb.HasHeader(hc.chainDb, hash, number)
+	}
+	if header == nil {
+		return false
+	}
+	return true
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,

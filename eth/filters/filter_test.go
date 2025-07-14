@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -62,7 +63,8 @@ func makeReceipt(addr common.Address) *types.Receipt {
 func BenchmarkFilters(b *testing.B) {
 	var (
 		db, _   = rawdb.NewLevelDBDatabase(b.TempDir(), 0, 0, "", false)
-		_, sys  = newTestFilterSystem(b, db, Config{})
+		blockDb = ethblockdb.NewMock(db)
+		_, sys  = newTestFilterSystem(b, db, blockDb, Config{})
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = common.BytesToAddress([]byte("jeff"))
@@ -76,7 +78,7 @@ func BenchmarkFilters(b *testing.B) {
 		}
 	)
 	defer db.Close()
-	_, chain, receipts, err := core.GenerateChainWithGenesis(gspec, dummy.NewFaker(), 100010, 10, func(i int, gen *core.BlockGen) {
+	_, _, chain, receipts, err := core.GenerateChainWithGenesis(gspec, dummy.NewFaker(), 100010, 10, func(i int, gen *core.BlockGen) {
 		switch i {
 		case 2403:
 			receipt := makeReceipt(addr1)
@@ -100,7 +102,7 @@ func BenchmarkFilters(b *testing.B) {
 	// The test txs are not properly signed, can't simply create a chain
 	// and then import blocks. TODO(rjl493456442) try to get rid of the
 	// manual database writes.
-	gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	gspec.MustCommit(db, blockDb, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
@@ -123,8 +125,9 @@ func BenchmarkFilters(b *testing.B) {
 
 func TestFilters(t *testing.T) {
 	var (
-		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		db      = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
+		_, sys  = newTestFilterSystem(t, db, blockDb, Config{})
 		// Sender account
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
@@ -194,7 +197,7 @@ func TestFilters(t *testing.T) {
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err = gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err = gspec.Commit(db, blockDb, triedb.NewDatabase(db, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +267,7 @@ func TestFilters(t *testing.T) {
 		}
 	})
 	require.NoError(t, err)
-	bc, err := core.NewBlockChain(db, core.DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, gspec.ToBlock().Hash(), false)
+	bc, err := core.NewBlockChain(db, blockDb, core.DefaultCacheConfig, gspec, dummy.NewCoinbaseFaker(), vm.Config{}, gspec.ToBlock().Hash(), false)
 	if err != nil {
 		t.Fatal(err)
 	}

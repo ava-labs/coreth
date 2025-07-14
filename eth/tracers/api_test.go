@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
@@ -66,6 +67,7 @@ type testBackend struct {
 	engine      consensus.Engine
 	chaindb     ethdb.Database
 	chain       *core.BlockChain
+	blockDb     ethblockdb.Database
 
 	refHook func() // Hook is invoked when the requested state is referenced
 	relHook func() // Hook is invoked when the requested state is released
@@ -74,13 +76,15 @@ type testBackend struct {
 // testBackend creates a new test backend. OBS: After test is done, teardown must be
 // invoked in order to release associated resources.
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
+	db := rawdb.NewMemoryDatabase()
 	backend := &testBackend{
 		chainConfig: gspec.Config,
 		engine:      dummy.NewETHFaker(),
-		chaindb:     rawdb.NewMemoryDatabase(),
+		chaindb:     db,
+		blockDb:     ethblockdb.NewMock(db),
 	}
 	// Generate blocks for testing
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, backend.engine, n, 10, generator)
+	_, _, blocks, _, err := core.GenerateChainWithGenesis(gspec, backend.engine, n, 10, generator)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +97,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:             128,
 		Pruning:                   false, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, backend.engine, vm.Config{}, common.Hash{}, false)
+	chain, err := core.NewBlockChain(backend.chaindb, backend.blockDb, cacheConfig, gspec, backend.engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -135,7 +139,7 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 func (b *testBackend) BadBlocks() ([]*types.Block, []*core.BadBlockReason) { return nil, nil }
 
 func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
-	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
+	tx, hash, blockNumber, index := b.blockDb.ReadTransaction(txHash)
 	return tx != nil, tx, hash, blockNumber, index, nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/core/txpool/legacypool"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -94,12 +95,13 @@ func TestGossipSubscribe(t *testing.T) {
 func setupPoolWithConfig(t *testing.T, config *params.ChainConfig, fundedAddress common.Address) *txpool.TxPool {
 	diskdb := rawdb.NewMemoryDatabase()
 	engine := dummy.NewETHFaker()
+	blockDb := ethblockdb.NewMock(diskdb)
 
 	gspec := &core.Genesis{
 		Config: config,
 		Alloc:  types.GenesisAlloc{fundedAddress: {Balance: big.NewInt(1000000000000000000)}},
 	}
-	chain, err := core.NewBlockChain(diskdb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
+	chain, err := core.NewBlockChain(diskdb, blockDb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	require.NoError(t, err)
 	testTxPoolConfig := legacypool.DefaultConfig
 	legacyPool := legacypool.New(testTxPoolConfig, chain)

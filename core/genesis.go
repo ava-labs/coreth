@@ -36,6 +36,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -125,7 +126,7 @@ func (e *GenesisMismatchError) Error() string {
 // specify a fork block below the local head block). In case of a conflict, the
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 func SetupGenesisBlock(
-	db ethdb.Database, triedb *triedb.Database, genesis *Genesis, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
+	db ethdb.Database, triedb *triedb.Database, blockDb ethblockdb.Database, genesis *Genesis, lastAcceptedHash common.Hash, skipChainConfigCheckCompatible bool,
 ) (*params.ChainConfig, common.Hash, error) {
 	if genesis == nil {
 		return nil, common.Hash{}, ErrNoGenesis
@@ -137,7 +138,7 @@ func SetupGenesisBlock(
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		log.Info("Writing genesis to database")
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, blockDb, triedb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
@@ -147,14 +148,14 @@ func SetupGenesisBlock(
 	// state database is not initialized yet. It can happen that the node
 	// is initialized with an external ancient store. Commit genesis state
 	// in this case.
-	header := rawdb.ReadHeader(db, stored, 0)
+	header := blockDb.ReadHeader(0)
 	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock().Hash()
 		if hash != stored {
 			return genesis.Config, common.Hash{}, &GenesisMismatchError{stored, hash}
 		}
-		_, err := genesis.Commit(db, triedb)
+		_, err := genesis.Commit(db, blockDb, triedb)
 		return genesis.Config, common.Hash{}, err
 	}
 	// Check whether the genesis block is already written.
@@ -182,7 +183,7 @@ func SetupGenesisBlock(
 	// we use last accepted block for cfg compatibility check. Note this allows
 	// the node to continue if it previously halted due to attempting to process blocks with
 	// an incorrect chain config.
-	lastBlock := ReadBlockByHash(db, lastAcceptedHash)
+	lastBlock := ReadBlockByHash(db, blockDb, lastAcceptedHash)
 	// this should never happen, but we check anyway
 	// when we start syncing from scratch, the last accepted block
 	// will be genesis block
@@ -313,7 +314,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, blockDb ethblockdb.Database, triedb *triedb.Database) (*types.Block, error) {
 	block := g.toBlock(db, triedb)
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
@@ -325,7 +326,9 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	rawdb.WriteBlock(db, block)
+	log.Info("Writing genesis block with hash", "hash", block.Hash())
+	blockDb.WriteBlock(block)
+	rawdb.WriteHeaderNumber(db, block.Hash(), block.Header().Number.Uint64())
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())
@@ -336,8 +339,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	block, err := g.Commit(db, triedb)
+func (g *Genesis) MustCommit(db ethdb.Database, blockDb ethblockdb.Database, triedb *triedb.Database) *types.Block {
+	block, err := g.Commit(db, blockDb, triedb)
 	if err != nil {
 		panic(err)
 	}
@@ -351,14 +354,14 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 		Alloc:   types.GenesisAlloc{addr: {Balance: balance}},
 		BaseFee: big.NewInt(ap3.InitialBaseFee),
 	}
-	return g.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	return g.MustCommit(db, ethblockdb.NewMock(db), triedb.NewDatabase(db, triedb.HashDefaults))
 }
 
 // ReadBlockByHash reads the block with the given hash from the database.
-func ReadBlockByHash(db ethdb.Reader, hash common.Hash) *types.Block {
+func ReadBlockByHash(db ethdb.Reader, blockDb ethblockdb.Database, hash common.Hash) *types.Block {
 	blockNumber := rawdb.ReadHeaderNumber(db, hash)
 	if blockNumber == nil {
 		return nil
 	}
-	return rawdb.ReadBlock(db, hash, *blockNumber)
+	return blockDb.ReadBlock(*blockNumber)
 }

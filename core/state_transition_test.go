@@ -36,6 +36,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/libevm/common"
@@ -98,8 +99,9 @@ func executeStateTransitionTest(t *testing.T, st stateTransitionTest) {
 	require.Equal(len(st.txs), len(st.gasUsed), "length of gas used must match length of txs")
 
 	var (
-		db    = rawdb.NewMemoryDatabase()
-		gspec = &Genesis{
+		db      = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
+		gspec   = &Genesis{
 			Config: st.config,
 			Alloc: types.GenesisAlloc{
 				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
@@ -111,7 +113,7 @@ func executeStateTransitionTest(t *testing.T, st stateTransitionTest) {
 		}
 		genesis       = gspec.ToBlock()
 		engine        = dummy.NewFaker()
-		blockchain, _ = NewBlockChain(db, DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
+		blockchain, _ = NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	)
 	defer blockchain.Stop()
 

@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/coretest"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -60,7 +61,7 @@ func TestTransactionIndices(t *testing.T) {
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	genDb, blocks, _, err := GenerateChainWithGenesis(gspec, dummy.NewFakerWithCallbacks(TestCallbacks), 128, 10, func(i int, block *BlockGen) {
+	genDb, _, blocks, _, err := GenerateChainWithGenesis(gspec, dummy.NewFakerWithCallbacks(TestCallbacks), 128, 10, func(i int, block *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		require.NoError(err)
 		block.AddTx(tx)
@@ -89,7 +90,8 @@ func TestTransactionIndices(t *testing.T) {
 
 	// Init block chain and check all needed indices has been indexed.
 	chainDB := rawdb.NewMemoryDatabase()
-	chain, err := createBlockChain(chainDB, conf, gspec, common.Hash{})
+	blockDb := ethblockdb.NewMock(chainDB)
+	chain, err := createBlockChain(chainDB, blockDb, conf, gspec, common.Hash{})
 	require.NoError(err)
 
 	_, err = chain.InsertChain(blocks)
@@ -104,7 +106,7 @@ func TestTransactionIndices(t *testing.T) {
 	lastAcceptedBlock := blocks[len(blocks)-1]
 	require.Equal(lastAcceptedBlock.Hash(), chain.CurrentHeader().Hash())
 
-	coretest.CheckTxIndices(t, nil, 0, lastAcceptedBlock.NumberU64(), lastAcceptedBlock.NumberU64(), chain.db, false) // check all indices has been indexed
+	coretest.CheckTxIndices(t, nil, 0, lastAcceptedBlock.NumberU64(), lastAcceptedBlock.NumberU64(), chain.db, blockDb, false) // check all indices has been indexed
 	chain.Stop()
 
 	// Reconstruct a block chain which only reserves limited tx indices
@@ -120,7 +122,7 @@ func TestTransactionIndices(t *testing.T) {
 		t.Run(fmt.Sprintf("test-%d, limit: %d", i+1, l), func(t *testing.T) {
 			conf.TransactionHistory = l
 
-			chain, err := createBlockChain(chainDB, conf, gspec, lastAcceptedBlock.Hash())
+			chain, err := createBlockChain(chainDB, blockDb, conf, gspec, lastAcceptedBlock.Hash())
 			require.NoError(err)
 
 			tail := getTail(l, lastAcceptedBlock.NumberU64())
@@ -129,7 +131,7 @@ func TestTransactionIndices(t *testing.T) {
 				indexedFrom = *tail
 			}
 			// check if startup indices are correct
-			coretest.CheckTxIndices(t, tail, indexedFrom, lastAcceptedBlock.NumberU64(), lastAcceptedBlock.NumberU64(), chain.db, false)
+			coretest.CheckTxIndices(t, tail, indexedFrom, lastAcceptedBlock.NumberU64(), lastAcceptedBlock.NumberU64(), chain.db, blockDb, false)
 
 			newBlks := blocks2[i : i+1]
 			_, err = chain.InsertChain(newBlks) // Feed chain a higher block to trigger indices updater.
@@ -146,7 +148,7 @@ func TestTransactionIndices(t *testing.T) {
 				indexedFrom = *tail
 			}
 			// check if indices are updated correctly
-			coretest.CheckTxIndices(t, tail, indexedFrom, lastAcceptedBlock.NumberU64(), lastAcceptedBlock.NumberU64(), chain.db, false)
+			coretest.CheckTxIndices(t, tail, indexedFrom, lastAcceptedBlock.NumberU64(), lastAcceptedBlock.NumberU64(), chain.db, blockDb, false)
 			chain.Stop()
 		})
 	}
@@ -180,7 +182,7 @@ func TestTransactionSkipIndexing(t *testing.T) {
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	genDb, blocks, _, err := GenerateChainWithGenesis(gspec, dummy.NewFakerWithCallbacks(TestCallbacks), 5, 10, func(i int, block *BlockGen) {
+	genDb, _, blocks, _, err := GenerateChainWithGenesis(gspec, dummy.NewFakerWithCallbacks(TestCallbacks), 5, 10, func(i int, block *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
 		require.NoError(err)
 		block.AddTx(tx)
@@ -210,10 +212,11 @@ func TestTransactionSkipIndexing(t *testing.T) {
 
 	// test1: Init block chain and check all indices has been skipped.
 	chainDB := rawdb.NewMemoryDatabase()
-	chain, err := createAndInsertChain(chainDB, conf, gspec, blocks, common.Hash{},
+	blockDb := ethblockdb.NewMock(chainDB)
+	chain, err := createAndInsertChain(chainDB, blockDb, conf, gspec, blocks, common.Hash{},
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
-			coretest.CheckTxIndices(t, nil, bNumber+1, bNumber+1, bNumber, chainDB, false) // check all indices has been skipped
+			coretest.CheckTxIndices(t, nil, bNumber+1, bNumber+1, bNumber, chainDB, blockDb, false) // check all indices has been skipped
 		})
 	require.NoError(err)
 	chain.Stop()
@@ -221,11 +224,12 @@ func TestTransactionSkipIndexing(t *testing.T) {
 	// test2: specify lookuplimit with tx index skipping enabled. Blocks should not be indexed but tail should be updated.
 	conf.TransactionHistory = 2
 	chainDB = rawdb.NewMemoryDatabase()
-	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks, common.Hash{},
+	blockDb = ethblockdb.NewMock(chainDB)
+	chain, err = createAndInsertChain(chainDB, blockDb, conf, gspec, blocks, common.Hash{},
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
 			tail := bNumber - conf.TransactionHistory + 1
-			coretest.CheckTxIndices(t, &tail, bNumber+1, bNumber+1, bNumber, chainDB, false) // check all indices has been skipped
+			coretest.CheckTxIndices(t, &tail, bNumber+1, bNumber+1, bNumber, chainDB, blockDb, false) // check all indices has been skipped
 		})
 	require.NoError(err)
 	chain.Stop()
@@ -234,10 +238,11 @@ func TestTransactionSkipIndexing(t *testing.T) {
 	conf.TransactionHistory = 0
 	conf.SkipTxIndexing = false
 	chainDB = rawdb.NewMemoryDatabase()
-	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks, common.Hash{},
+	blockDb = ethblockdb.NewMock(chainDB)
+	chain, err = createAndInsertChain(chainDB, blockDb, conf, gspec, blocks, common.Hash{},
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
-			coretest.CheckTxIndices(t, nil, 0, bNumber, bNumber, chainDB, false) // check all indices has been indexed
+			coretest.CheckTxIndices(t, nil, 0, bNumber, bNumber, chainDB, blockDb, false) // check all indices has been indexed
 		})
 	require.NoError(err)
 	chain.Stop()
@@ -246,18 +251,20 @@ func TestTransactionSkipIndexing(t *testing.T) {
 	// and old indices are removed up to the tail, but [tail, current) indices are still there.
 	conf.TransactionHistory = 2
 	conf.SkipTxIndexing = true
-	chain, err = createAndInsertChain(chainDB, conf, gspec, blocks2[0:1], chain.CurrentHeader().Hash(),
+	chainDB = rawdb.NewMemoryDatabase()
+	blockDb = ethblockdb.NewMock(chainDB)
+	chain, err = createAndInsertChain(chainDB, blockDb, conf, gspec, blocks2[0:1], chain.CurrentHeader().Hash(),
 		func(b *types.Block) {
 			bNumber := b.NumberU64()
 			tail := bNumber - conf.TransactionHistory + 1
-			coretest.CheckTxIndices(t, &tail, tail, bNumber-1, bNumber, chainDB, false)
+			coretest.CheckTxIndices(t, &tail, tail, bNumber-1, bNumber, chainDB, blockDb, false)
 		})
 	require.NoError(err)
 	chain.Stop()
 }
 
-func createAndInsertChain(db ethdb.Database, cacheConfig *CacheConfig, gspec *Genesis, blocks types.Blocks, lastAcceptedHash common.Hash, accepted func(*types.Block)) (*BlockChain, error) {
-	chain, err := createBlockChain(db, cacheConfig, gspec, lastAcceptedHash)
+func createAndInsertChain(db ethdb.Database, blockDb ethblockdb.Database, cacheConfig *CacheConfig, gspec *Genesis, blocks types.Blocks, lastAcceptedHash common.Hash, accepted func(*types.Block)) (*BlockChain, error) {
+	chain, err := createBlockChain(db, blockDb, cacheConfig, gspec, lastAcceptedHash)
 	if err != nil {
 		return nil, err
 	}

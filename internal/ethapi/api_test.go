@@ -49,6 +49,7 @@ import (
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/internal/blocktest"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
@@ -56,7 +57,6 @@ import (
 	"github.com/ava-labs/libevm/accounts/keystore"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -437,10 +437,11 @@ func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
 }
 
 type testBackend struct {
-	db     ethdb.Database
-	chain  *core.BlockChain
-	accman *accounts.Manager
-	acc    accounts.Account
+	db      ethdb.Database
+	blockDb ethblockdb.Database
+	chain   *core.BlockChain
+	accman  *accounts.Manager
+	acc     accounts.Account
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -455,8 +456,8 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 	accman, acc := newTestAccountManager(t)
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
-	db, blocks, _, _ := core.GenerateChainWithGenesis(gspec, engine, n, 10, generator)
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, engine, vm.Config{}, gspec.ToBlock().Hash(), false)
+	db, blockDb, blocks, _, _ := core.GenerateChainWithGenesis(gspec, engine, n, 10, generator)
+	chain, err := core.NewBlockChain(db, blockDb, cacheConfig, gspec, engine, vm.Config{}, gspec.ToBlock().Hash(), false)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -470,7 +471,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 	}
 	chain.DrainAcceptorQueue()
 
-	backend := &testBackend{db: db, chain: chain, accman: accman, acc: acc}
+	backend := &testBackend{db: db, blockDb: blockDb, chain: chain, accman: accman, acc: acc}
 	return backend
 }
 
@@ -557,7 +558,7 @@ func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	if header == nil || err != nil {
 		return nil, err
 	}
-	receipts := rawdb.ReadReceipts(b.db, hash, header.Number.Uint64(), header.Time, b.chain.Config())
+	receipts := b.blockDb.ReadReceipts(hash, header.Number.Uint64(), header.Time, b.chain.Config())
 	return receipts, nil
 }
 func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
@@ -584,7 +585,7 @@ func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) er
 	panic("implement me")
 }
 func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
-	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
+	tx, blockHash, blockNumber, index := b.blockDb.ReadTransaction(txHash)
 	return true, tx, blockHash, blockNumber, index, nil
 }
 func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }

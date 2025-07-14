@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/coreth/network"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
@@ -207,6 +208,9 @@ type VM struct {
 
 	// [db] is the VM's current database
 	db database.Database
+
+	// [blockdb] is the VM's current block database
+	blockdb ethblockdb.Database
 
 	// metadataDB is used to store one off keys.
 	metadataDB database.Database
@@ -536,6 +540,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		&vm.ethConfig,
 		&EthPushGossiper{vm: vm},
 		vm.chaindb,
+		vm.blockdb,
 		eth.Settings{MaxBlocksPerRequest: vm.config.MaxBlocksPerRequest},
 		lastAcceptedHash,
 		dummy.NewDummyEngine(
@@ -646,6 +651,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		RequestSize:        vm.config.StateSyncRequestSize,
 		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
 		ChaindDB:           vm.chaindb,
+		BlockDb:            vm.blockdb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
 		Acceptor:           vm,
@@ -712,6 +718,7 @@ func (vm *VM) SetState(_ context.Context, state snow.State) error {
 // onBootstrapStarted marks this VM as bootstrapping
 func (vm *VM) onBootstrapStarted() error {
 	vm.bootstrapped.Set(false)
+	log.Info("onBootstrapStarted", "time", time.Now().UTC())
 	if err := vm.Client.Error(); err != nil {
 		return err
 	}
@@ -731,6 +738,8 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return nil
 	}
 	vm.bootstrapped.Set(true)
+	log.Info("onNormalOperationsStarted", "time", time.Now().UTC())
+
 	// Initialize goroutines related to block building
 	// once we enter normal operation as there is no need to handle mempool gossip before this point.
 	return vm.initBlockBuilding()
@@ -1212,4 +1221,8 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 
 func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
 	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
+}
+
+func (vm *VM) CreateHTTP2Handler(ctx context.Context) (http.Handler, error) {
+	return nil, nil
 }

@@ -34,6 +34,7 @@ import (
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -73,9 +74,10 @@ func TestGenesisEthUpgrades(t *testing.T) {
 	)
 
 	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+	blockDb := ethblockdb.NewMock(db)
 	config := *preEthUpgrades
 	// Set this up once, just to get the genesis hash
-	_, genHash, err := SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, common.Hash{}, false)
+	_, genHash, err := SetupGenesisBlock(db, tdb, blockDb, &Genesis{Config: &config}, common.Hash{}, false)
 	require.NoError(t, err)
 
 	// Write the configuration back to the db as it would be in prior versions
@@ -96,6 +98,6 @@ func TestGenesisEthUpgrades(t *testing.T) {
 	// We should still be able to re-initialize
 	config = *preEthUpgrades
 	require.NoError(t, params.SetEthUpgrades(&config)) // New versions will set additional fields eg, LondonBlock
-	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
+	_, _, err = SetupGenesisBlock(db, tdb, blockDb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
 }

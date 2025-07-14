@@ -37,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -53,8 +54,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, lastAcceptedHash common.Hash) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlock(db, triedb, genesis, lastAcceptedHash, false)
+func setupGenesisBlock(db ethdb.Database, triedb *triedb.Database, blockDb ethblockdb.Database, genesis *Genesis, lastAcceptedHash common.Hash) (*params.ChainConfig, common.Hash, error) {
+	return SetupGenesisBlock(db, triedb, blockDb, genesis, lastAcceptedHash, false)
 }
 
 func TestGenesisBlockForTesting(t *testing.T) {
@@ -89,62 +90,62 @@ func testSetupGenesis(t *testing.T, scheme string) {
 	oldcustomg.Config = &rollbackApricotPhase1Config
 	tests := []struct {
 		name       string
-		fn         func(ethdb.Database) (*params.ChainConfig, common.Hash, error)
+		fn         func(ethdb.Database, ethblockdb.Database) (*params.ChainConfig, common.Hash, error)
 		wantConfig *params.ChainConfig
 		wantHash   common.Hash
 		wantErr    error
 	}{
 		{
 			name: "genesis without ChainConfig",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), new(Genesis), common.Hash{})
+			fn: func(db ethdb.Database, blockDb ethblockdb.Database) (*params.ChainConfig, common.Hash, error) {
+				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), blockDb, new(Genesis), common.Hash{})
 			},
 			wantErr:    errGenesisNoConfig,
 			wantConfig: nil,
 		},
 		{
 			name: "no block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
-				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), nil, common.Hash{})
+			fn: func(db ethdb.Database, blockDb ethblockdb.Database) (*params.ChainConfig, common.Hash, error) {
+				return setupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), blockDb, nil, common.Hash{})
 			},
 			wantErr:    ErrNoGenesis,
 			wantConfig: nil,
 		},
 		{
 			name: "custom block in DB, genesis == nil",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+			fn: func(db ethdb.Database, blockDb ethblockdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
-				return setupGenesisBlock(db, tdb, nil, common.Hash{})
+				customg.Commit(db, blockDb, tdb)
+				return setupGenesisBlock(db, tdb, blockDb, nil, common.Hash{})
 			},
 			wantErr:    ErrNoGenesis,
 			wantConfig: nil,
 		},
 		{
 			name: "compatible config in DB",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+			fn: func(db ethdb.Database, blockDb ethblockdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb)
-				return setupGenesisBlock(db, tdb, &customg, customghash)
+				oldcustomg.Commit(db, blockDb, tdb)
+				return setupGenesisBlock(db, tdb, blockDb, &customg, customghash)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
 		},
 		{
 			name: "incompatible config for avalanche fork in DB",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+			fn: func(db ethdb.Database, blockDb ethblockdb.Database) (*params.ChainConfig, common.Hash, error) {
 				// Commit the 'old' genesis block with ApricotPhase1 transition at 90.
 				// Advance to block #4, past the ApricotPhase1 transition block of customg.
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				genesis, err := oldcustomg.Commit(db, tdb)
+				genesis, err := oldcustomg.Commit(db, blockDb, tdb)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, dummy.NewFullFaker(), vm.Config{}, genesis.Hash(), false)
+				bc, _ := NewBlockChain(db, blockDb, DefaultCacheConfigWithScheme(scheme), &oldcustomg, dummy.NewFullFaker(), vm.Config{}, genesis.Hash(), false)
 				defer bc.Stop()
 
-				_, blocks, _, err := GenerateChainWithGenesis(&oldcustomg, dummy.NewFullFaker(), 4, 25, nil)
+				_, _, blocks, _, err := GenerateChainWithGenesis(&oldcustomg, dummy.NewFullFaker(), 4, 25, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -157,7 +158,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				}
 
 				// This should return a compatibility error.
-				return setupGenesisBlock(db, tdb, &customg, bc.lastAccepted.Hash())
+				return setupGenesisBlock(db, tdb, blockDb, &customg, bc.lastAccepted.Hash())
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -173,7 +174,8 @@ func testSetupGenesis(t *testing.T, scheme string) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			db := rawdb.NewMemoryDatabase()
-			config, hash, err := test.fn(db)
+			blockDb := ethblockdb.NewMock(db)
+			config, hash, err := test.fn(db, blockDb)
 			// Check the return values.
 			if !reflect.DeepEqual(err, test.wantErr) {
 				spew := spew.ConfigState{DisablePointerAddresses: true, DisableCapacities: true}
@@ -204,11 +206,12 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 		},
 	}
-	bc, _ := NewBlockChain(db, DefaultCacheConfig, &customg, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, false)
+	blockDb := ethblockdb.NewMock(db)
+	bc, _ := NewBlockChain(db, blockDb, DefaultCacheConfig, &customg, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, false)
 	defer bc.Stop()
 
 	// Advance header to block #4, past the ApricotPhase2 timestamp.
-	_, blocks, _, _ := GenerateChainWithGenesis(&customg, dummy.NewFullFaker(), 4, 25, nil)
+	_, _, blocks, _, _ := GenerateChainWithGenesis(&customg, dummy.NewFullFaker(), 4, 25, nil)
 
 	require := require.New(t)
 	_, err := bc.InsertChain(blocks)
@@ -237,7 +240,7 @@ func TestNetworkUpgradeBetweenHeadAndAcceptedBlock(t *testing.T) {
 	require.Less(bc.lastAccepted.Time(), *apricotPhase2Timestamp)
 
 	// This should not return any error since the last accepted block is before the activation block.
-	config, _, err := setupGenesisBlock(db, triedb.NewDatabase(db, nil), &activatedGenesis, bc.lastAccepted.Hash())
+	config, _, err := setupGenesisBlock(db, triedb.NewDatabase(db, nil), blockDb, &activatedGenesis, bc.lastAccepted.Hash())
 	require.NoError(err)
 	if !reflect.DeepEqual(config, activatedGenesis.Config) {
 		t.Errorf("returned %v\nwant     %v", config, activatedGenesis.Config)
@@ -256,9 +259,10 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 
 	db := rawdb.NewMemoryDatabase()
 	trieDB := triedb.NewDatabase(db, triedb.HashDefaults)
-	genesisBlock := genesis.MustCommit(db, trieDB)
+	blockDb := ethblockdb.NewMock(db)
+	genesisBlock := genesis.MustCommit(db, blockDb, trieDB)
 
-	_, _, err := SetupGenesisBlock(db, trieDB, genesis, genesisBlock.Hash(), false)
+	_, _, err := SetupGenesisBlock(db, trieDB, blockDb, genesis, genesisBlock.Hash(), false)
 	require.NoError(err)
 
 	params.GetExtra(genesis.Config).UpgradeConfig.PrecompileUpgrades = []extras.PrecompileUpgrade{
@@ -266,7 +270,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 			Config: warp.NewConfig(utils.NewUint64(51), 0, false),
 		},
 	}
-	_, _, err = SetupGenesisBlock(db, trieDB, genesis, genesisBlock.Hash(), false)
+	_, _, err = SetupGenesisBlock(db, trieDB, blockDb, genesis, genesisBlock.Hash(), false)
 	require.NoError(err)
 
 	timestamp := uint64(100)
@@ -281,7 +285,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 
 	// Attempt restart after the chain has advanced past the activation of the precompile upgrade.
 	// This tests a regression where the UpgradeConfig would not be written to disk correctly.
-	_, _, err = SetupGenesisBlock(db, trieDB, genesis, lastAcceptedBlock.Hash(), false)
+	_, _, err = SetupGenesisBlock(db, trieDB, blockDb, genesis, lastAcceptedBlock.Hash(), false)
 	require.NoError(err)
 }
 
@@ -329,8 +333,9 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
+	blockDb := ethblockdb.NewMock(db)
 	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, DBOverride: pathdb.Defaults.BackendConstructor})
-	block := genesis.MustCommit(db, triedb)
+	block := genesis.MustCommit(db, blockDb, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
 	}

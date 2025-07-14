@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
@@ -69,6 +70,7 @@ type ClientConfig struct {
 	Chain      *eth.Ethereum
 	State      *chain.State
 	ChaindDB   ethdb.Database
+	BlockDb    ethblockdb.Database
 	Acceptor   BlockAcceptor
 	VerDB      *versiondb.Database
 	MetadataDB database.Database
@@ -262,7 +264,11 @@ func (client *client) syncBlocks(ctx context.Context, fromHash common.Hash, from
 	// first, check for blocks already available on disk so we don't
 	// request them from peers.
 	for parentsToGet >= 0 {
-		blk := rawdb.ReadBlock(client.ChaindDB, nextHash, nextHeight)
+		blk := client.BlockDb.ReadBlock(nextHeight)
+		if blk != nil && blk.Hash() != nextHash {
+			log.Error("sync blocks: block hash mismatch", "expected", nextHash, "got", blk.Hash())
+			blk = nil
+		}
 		if blk != nil {
 			// block exists
 			nextHash = blk.ParentHash()
@@ -288,7 +294,8 @@ func (client *client) syncBlocks(ctx context.Context, fromHash common.Hash, from
 			return err
 		}
 		for _, block := range blocks {
-			rawdb.WriteBlock(batch, block)
+			client.BlockDb.WriteBlock(block)
+			rawdb.WriteHeaderNumber(batch, block.Hash(), block.NumberU64())
 			rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
 
 			i--

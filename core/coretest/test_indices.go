@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/stretchr/testify/assert"
@@ -18,7 +19,7 @@ import (
 // [indexedFrom] is the block number from which the transactions should be indexed.
 // [indexedTo] is the block number to which the transactions should be indexed.
 // [head] is the block number of the head block.
-func CheckTxIndices(t *testing.T, expectedTail *uint64, indexedFrom uint64, indexedTo uint64, head uint64, db ethdb.Database, allowNilBlocks bool) {
+func CheckTxIndices(t *testing.T, expectedTail *uint64, indexedFrom uint64, indexedTo uint64, head uint64, db ethdb.Database, blkDb ethblockdb.Database, allowNilBlocks bool) {
 	if expectedTail == nil {
 		require.Nil(t, rawdb.ReadTxIndexTail(db))
 	} else {
@@ -34,7 +35,7 @@ func CheckTxIndices(t *testing.T, expectedTail *uint64, indexedFrom uint64, inde
 	}
 
 	for i := uint64(0); i <= head; i++ {
-		block := rawdb.ReadBlock(db, rawdb.ReadCanonicalHash(db, i), i)
+		block := blkDb.ReadBlock(i)
 		if block == nil && allowNilBlocks {
 			continue
 		}

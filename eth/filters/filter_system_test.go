@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
@@ -56,6 +57,7 @@ import (
 
 type testBackend struct {
 	db                ethdb.Database
+	blockDb           ethblockdb.Database
 	sections          uint64
 	txFeed            event.Feed
 	acceptedTxFeed    event.Feed
@@ -88,7 +90,12 @@ func (b *testBackend) GetMaxBlocksPerRequest() int64 {
 }
 
 func (b *testBackend) LastAcceptedBlock() *types.Block {
-	return rawdb.ReadHeadBlock(b.db)
+	hash := rawdb.ReadHeadBlockHash(b.db)
+	number := rawdb.ReadHeaderNumber(b.db, hash)
+	if number == nil {
+		return nil
+	}
+	return b.blockDb.ReadBlock(*number)
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
@@ -121,7 +128,7 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
-	return rawdb.ReadHeader(b.db, hash, num), nil
+	return b.blockDb.ReadHeader(num), nil
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
@@ -129,20 +136,17 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 	if number == nil {
 		return nil, nil
 	}
-	return rawdb.ReadHeader(b.db, hash, *number), nil
+	return b.blockDb.ReadHeader(*number), nil
 }
 
 func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
-	if body := rawdb.ReadBody(b.db, hash, uint64(number)); body != nil {
-		return body, nil
-	}
-	return nil, errors.New("block body not found")
+	return b.blockDb.ReadBody(uint64(number)), nil
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
-		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
-			return rawdb.ReadReceipts(b.db, hash, *number, header.Time, params.TestChainConfig), nil
+		if header := b.blockDb.ReadHeader(*number); header != nil {
+			return b.blockDb.ReadReceipts(hash, *number, header.Time, params.TestChainConfig), nil
 		}
 	}
 	return nil, nil
@@ -216,8 +220,8 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 	}()
 }
 
-func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
-	backend := &testBackend{db: db}
+func newTestFilterSystem(t testing.TB, db ethdb.Database, blockDb ethblockdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+	backend := &testBackend{db: db, blockDb: blockDb}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
 }
@@ -233,14 +237,15 @@ func TestBlockSubscription(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		blockDb      = ethblockdb.NewMock(db)
+		backend, sys = newTestFilterSystem(t, db, blockDb, Config{})
 		api          = NewFilterAPI(sys)
 		genesis      = &core.Genesis{
 			Config:  params.TestChainConfig,
 			BaseFee: big.NewInt(1),
 		}
-		_, chain, _, _ = core.GenerateChainWithGenesis(genesis, dummy.NewFaker(), 10, 10, func(i int, b *core.BlockGen) {})
-		chainEvents    = []core.ChainEvent{}
+		_, _, chain, _, _ = core.GenerateChainWithGenesis(genesis, dummy.NewFaker(), 10, 10, func(i int, b *core.BlockGen) {})
+		chainEvents       = []core.ChainEvent{}
 	)
 
 	for _, blk := range chain {
@@ -288,7 +293,8 @@ func TestPendingTxFilter(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		blockDb      = ethblockdb.NewMock(db)
+		backend, sys = newTestFilterSystem(t, db, blockDb, Config{})
 		api          = NewFilterAPI(sys)
 
 		transactions = []*types.Transaction{
@@ -344,7 +350,8 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		blockDb      = ethblockdb.NewMock(db)
+		backend, sys = newTestFilterSystem(t, db, blockDb, Config{})
 		api          = NewFilterAPI(sys)
 
 		transactions = []*types.Transaction{
@@ -399,9 +406,10 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 // If not it must return an error.
 func TestLogFilterCreation(t *testing.T) {
 	var (
-		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys)
+		db      = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
+		_, sys  = newTestFilterSystem(t, db, blockDb, Config{})
+		api     = NewFilterAPI(sys)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -448,9 +456,10 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys)
+		db      = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
+		_, sys  = newTestFilterSystem(t, db, blockDb, Config{})
+		api     = NewFilterAPI(sys)
 	)
 
 	// different situations where log filter creation should fail.
@@ -476,7 +485,8 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 
 	var (
 		db        = rawdb.NewMemoryDatabase()
-		_, sys    = newTestFilterSystem(t, db, Config{})
+		blockDb   = ethblockdb.NewMock(db)
+		_, sys    = newTestFilterSystem(t, db, blockDb, Config{})
 		api       = NewFilterAPI(sys)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
@@ -502,9 +512,10 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 	t.Parallel()
 
 	var (
-		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
-		api    = NewFilterAPI(sys)
+		db      = rawdb.NewMemoryDatabase()
+		blockDb = ethblockdb.NewMock(db)
+		_, sys  = newTestFilterSystem(t, db, blockDb, Config{})
+		api     = NewFilterAPI(sys)
 	)
 
 	if _, err := api.GetLogs(context.Background(), FilterCriteria{FromBlock: big.NewInt(2), ToBlock: big.NewInt(1)}); err != errInvalidBlockRange {
@@ -518,7 +529,8 @@ func TestLogFilter(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		blockDb      = ethblockdb.NewMock(db)
+		backend, sys = newTestFilterSystem(t, db, blockDb, Config{})
 		api          = NewFilterAPI(sys)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -632,7 +644,8 @@ func TestPendingLogsSubscription(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		blockDb      = ethblockdb.NewMock(db)
+		backend, sys = newTestFilterSystem(t, db, blockDb, Config{})
 		api          = NewFilterAPI(sys)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -816,7 +829,8 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{Timeout: timeout})
+		blockDb      = ethblockdb.NewMock(db)
+		backend, sys = newTestFilterSystem(t, db, blockDb, Config{Timeout: timeout})
 		api          = NewFilterAPI(sys)
 		done         = make(chan struct{})
 	)
@@ -886,7 +900,7 @@ func TestGetLogsRegression(t *testing.T) {
 		genesis = &core.Genesis{
 			Config: params.TestChainConfig,
 		}
-		_, _, _, _ = core.GenerateChainWithGenesis(genesis, dummy.NewFaker(), 10, 10, func(i int, gen *core.BlockGen) {})
+		_, _, _, _, _ = core.GenerateChainWithGenesis(genesis, dummy.NewFaker(), 10, 10, func(i int, gen *core.BlockGen) {})
 	)
 
 	test := FilterCriteria{BlockHash: &common.Hash{}, FromBlock: big.NewInt(rpc.LatestBlockNumber.Int64())}

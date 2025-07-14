@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/sync/handlers/stats/statstest"
@@ -108,7 +109,8 @@ func TestBlockRequestHandler(t *testing.T) {
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	blockDb := ethblockdb.NewMock(memdb)
+	genesis := gspec.MustCommit(memdb, blockDb, tdb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {
@@ -166,7 +168,8 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 	)
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	blockDb := ethblockdb.NewMock(memdb)
+	genesis := gspec.MustCommit(memdb, blockDb, tdb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(gspec.Config, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {
 		var data []byte
@@ -220,7 +223,8 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
-	genesis := gspec.MustCommit(memdb, tdb)
+	blockDb := ethblockdb.NewMock(memdb)
+	genesis := gspec.MustCommit(memdb, blockDb, tdb)
 	engine := dummy.NewETHFaker()
 	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
 	if err != nil {

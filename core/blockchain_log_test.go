@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -56,7 +57,7 @@ func TestAcceptedLogsSubscription(t *testing.T) {
 	packedFunction, err := parsed.Pack("Call")
 	require.NoError(err)
 
-	_, blocks, _, err := GenerateChainWithGenesis(gspec, engine, 2, 10, func(i int, b *BlockGen) {
+	_, _, blocks, _, err := GenerateChainWithGenesis(gspec, engine, 2, 10, func(i int, b *BlockGen) {
 		switch i {
 		case 0:
 			// First, we deploy the contract
@@ -74,7 +75,9 @@ func TestAcceptedLogsSubscription(t *testing.T) {
 	})
 	require.NoError(err)
 
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
+	db := rawdb.NewMemoryDatabase()
+	blockDb := ethblockdb.NewMock(db)
+	chain, err := NewBlockChain(db, blockDb, DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	require.NoError(err)
 	defer chain.Stop()
 
