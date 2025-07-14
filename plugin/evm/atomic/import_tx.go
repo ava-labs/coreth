@@ -81,7 +81,7 @@ func (utx *UnsignedImportTx) Verify(
 	case utx.NetworkID != ctx.NetworkID:
 		return ErrWrongNetworkID
 	case ctx.ChainID != utx.BlockchainID:
-		return ErrWrongChainID
+		return fmt.Errorf("%w: tx chain ID: %s, want %s", ErrWrongChainID, ctx.ChainID, utx.BlockchainID)
 	case rules.IsApricotPhase3 && len(utx.Outs) == 0:
 		return ErrNoEVMOutputs
 	}
@@ -91,11 +91,11 @@ func (utx *UnsignedImportTx) Verify(
 		// Note that SameSubnet verifies that [tx.SourceChain] isn't this
 		// chain's ID
 		if err := verify.SameSubnet(context.TODO(), ctx, utx.SourceChain); err != nil {
-			return ErrWrongChainID
+			return fmt.Errorf("post ApricotPhase5 failed to verify same subnet: %w", err)
 		}
 	} else {
 		if utx.SourceChain != ctx.XChainID {
-			return ErrWrongChainID
+			return fmt.Errorf("%w: tx source chain ID is not X-ChainID pre-ApricotPhase5: %s, want %s", ErrWrongChainID, utx.SourceChain, ctx.XChainID)
 		}
 	}
 
