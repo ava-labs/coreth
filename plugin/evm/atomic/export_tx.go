@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -219,7 +221,7 @@ func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 func NewExportTx(
 	ctx *snow.Context,
 	rules extras.Rules,
-	state StateDB,
+	stateDB *state.StateDB,
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export
 	chainID ids.ID, // Chain to send the UTXOs to
@@ -248,7 +250,7 @@ func NewExportTx(
 
 	// consume non-AVAX
 	if assetID != ctx.AVAXAssetID {
-		ins, signers, err = getSpendableFunds(ctx, state, keys, assetID, amount)
+		ins, signers, err = getSpendableFunds(ctx, stateDB, keys, assetID, amount)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
 		}
@@ -276,14 +278,14 @@ func NewExportTx(
 			return nil, err
 		}
 
-		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
+		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, stateDB, keys, avaxNeeded, cost, baseFee)
 	default:
 		var newAvaxNeeded uint64
 		newAvaxNeeded, err = math.Add64(avaxNeeded, ap0.AtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}
-		avaxIns, avaxSigners, err = getSpendableFunds(ctx, state, keys, ctx.AVAXAssetID, newAvaxNeeded)
+		avaxIns, avaxSigners, err = getSpendableFunds(ctx, stateDB, keys, ctx.AVAXAssetID, newAvaxNeeded)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
@@ -310,7 +312,8 @@ func NewExportTx(
 }
 
 // EVMStateTransfer executes the state update from the atomic export transaction
-func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
+func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.StateDB) error {
+	ws := extstate.New(stateDB)
 	addrs := map[[20]byte]uint64{}
 	for _, from := range utx.Ins {
 		if from.AssetID == ctx.AVAXAssetID {
@@ -321,25 +324,25 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) 
 				uint256.NewInt(from.Amount),
 				uint256.NewInt(X2CRate.Uint64()),
 			)
-			if state.GetBalance(from.Address).Cmp(amount) < 0 {
+			if ws.GetBalance(from.Address).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			state.SubBalance(from.Address, amount)
+			ws.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("export_tx", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
-			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
+			if ws.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
+			ws.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
-		if state.GetNonce(from.Address) != from.Nonce {
+		if ws.GetNonce(from.Address) != from.Nonce {
 			return errInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
 	}
 	for addr, nonce := range addrs {
-		state.SetNonce(addr, nonce+1)
+		ws.SetNonce(addr, nonce+1)
 	}
 	return nil
 }
@@ -351,11 +354,12 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) 
 // [tx.Sign] which supports multiple keys on a single input.
 func getSpendableFunds(
 	ctx *snow.Context,
-	state StateDB,
+	stateDB *state.StateDB,
 	keys []*secp256k1.PrivateKey,
 	assetID ids.ID,
 	amount uint64,
 ) ([]EVMInput, [][]*secp256k1.PrivateKey, error) {
+	ws := extstate.New(stateDB)
 	inputs := []EVMInput{}
 	signers := [][]*secp256k1.PrivateKey{}
 	// Note: we assume that each key in [keys] is unique, so that iterating over
@@ -369,9 +373,9 @@ func getSpendableFunds(
 		if assetID == ctx.AVAXAssetID {
 			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
 			// denomination of AVAX that can be exported.
-			balance = new(uint256.Int).Div(state.GetBalance(addr), X2CRate).Uint64()
+			balance = new(uint256.Int).Div(ws.GetBalance(addr), X2CRate).Uint64()
 		} else {
-			balance = state.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
+			balance = ws.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
 		}
 		if balance == 0 {
 			continue
@@ -379,7 +383,7 @@ func getSpendableFunds(
 		if amount < balance {
 			balance = amount
 		}
-		nonce := state.GetNonce(addr)
+		nonce := ws.GetNonce(addr)
 
 		inputs = append(inputs, EVMInput{
 			Address: addr,
@@ -408,7 +412,7 @@ func getSpendableFunds(
 // [tx.Sign] which supports multiple keys on a single input.
 func getSpendableAVAXWithFee(
 	ctx *snow.Context,
-	state StateDB,
+	stateDB *state.StateDB,
 	keys []*secp256k1.PrivateKey,
 	amount uint64,
 	cost uint64,
@@ -450,7 +454,7 @@ func getSpendableAVAXWithFee(
 		addr := key.EthAddress()
 		// Since the asset is AVAX, we divide by the x2cRate to convert back to
 		// the correct denomination of AVAX that can be exported.
-		balance := new(uint256.Int).Div(state.GetBalance(addr), X2CRate).Uint64()
+		balance := new(uint256.Int).Div(stateDB.GetBalance(addr), X2CRate).Uint64()
 		// If the balance for [addr] is insufficient to cover the additional cost
 		// of adding an input to the transaction, skip adding the input altogether
 		if balance <= additionalFee {
@@ -473,7 +477,7 @@ func getSpendableAVAXWithFee(
 		if amount < balance {
 			inputAmount = amount
 		}
-		nonce := state.GetNonce(addr)
+		nonce := stateDB.GetNonce(addr)
 
 		inputs = append(inputs, EVMInput{
 			Address: addr,

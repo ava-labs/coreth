@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -332,18 +334,19 @@ func NewImportTx(
 
 // EVMStateTransfer performs the state transfer to increase the balances of
 // accounts accordingly with the imported EVMOutputs
-func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
+func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.StateDB) error {
+	ws := extstate.New(stateDB)
 	for _, to := range utx.Outs {
 		if to.AssetID == ctx.AVAXAssetID {
 			log.Debug("import_tx", "src", utx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", "AVAX")
 			// If the asset is AVAX, convert the input amount in nAVAX to gWei by
 			// multiplying by the x2c rate.
 			amount := new(uint256.Int).Mul(uint256.NewInt(to.Amount), X2CRate)
-			state.AddBalance(to.Address, amount)
+			ws.AddBalance(to.Address, amount)
 		} else {
 			log.Debug("import_tx", "src", utx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", to.AssetID)
 			amount := new(big.Int).SetUint64(to.Amount)
-			state.AddBalanceMultiCoin(to.Address, common.Hash(to.AssetID), amount)
+			ws.AddBalanceMultiCoin(to.Address, common.Hash(to.AssetID), amount)
 		}
 	}
 	return nil

@@ -29,19 +29,27 @@
 package state
 
 import (
-	"math/big"
-
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
-	ethstate "github.com/ava-labs/libevm/core/state"
-	"github.com/ava-labs/libevm/libevm/stateconf"
-	"github.com/holiman/uint256"
+	"github.com/ava-labs/libevm/core/state"
 )
 
-type StateDB = ethstate.StateDB
+func init() {
+	state.RegisterExtras(normalizeStateKeys{})
+}
 
-var New = ethstate.New
+type normalizeStateKeys struct{}
+
+// TransformStateKey sets the 0th bit of the first byte in `key` to 0.
+// This partitions normal state storage from multicoin storage.
+func (normalizeStateKeys) TransformStateKey(_ common.Address, key common.Hash) common.Hash {
+	key[0] &= 0xfe
+	return key
+}
+
+type StateDB = state.StateDB
+
+var New = state.New
 
 type workerPool struct {
 	*utils.BoundedWorkers
@@ -53,63 +61,9 @@ func (wp *workerPool) Done() {
 	wp.BoundedWorkers.Wait()
 }
 
-func WithConcurrentWorkers(prefetchers int) ethstate.PrefetcherOption {
+func WithConcurrentWorkers(prefetchers int) state.PrefetcherOption {
 	pool := &workerPool{
 		BoundedWorkers: utils.NewBoundedWorkers(prefetchers),
 	}
-	return ethstate.WithWorkerPools(func() ethstate.WorkerPool { return pool })
-}
-
-// Retrieve the balance from the given address or 0 if object not found
-func GetBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common.Hash) *big.Int {
-	NormalizeCoinID(&coinID)
-	return s.GetState(addr, coinID, stateconf.SkipStateKeyTransformation()).Big()
-}
-
-// AddBalance adds amount to the account associated with addr.
-func AddBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common.Hash, amount *big.Int) {
-	if amount.Sign() == 0 {
-		s.AddBalance(addr, new(uint256.Int)) // used to cause touch
-		return
-	}
-
-	if !ethstate.GetExtra(s, customtypes.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s, customtypes.IsMultiCoinPayloads, addr, true)
-	}
-
-	newAmount := new(big.Int).Add(GetBalanceMultiCoin(s, addr, coinID), amount)
-	NormalizeCoinID(&coinID)
-	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
-}
-
-// SubBalance subtracts amount from the account associated with addr.
-func SubBalanceMultiCoin(s *ethstate.StateDB, addr common.Address, coinID common.Hash, amount *big.Int) {
-	if amount.Sign() == 0 {
-		return
-	}
-	// Note: It's not needed to set the IsMultiCoin (extras) flag here, as this
-	// call would always be preceded by a call to AddBalanceMultiCoin, which would
-	// set the extra flag. Seems we should remove the redundant code.
-	if !ethstate.GetExtra(s, customtypes.IsMultiCoinPayloads, addr) {
-		ethstate.SetExtra(s, customtypes.IsMultiCoinPayloads, addr, true)
-	}
-	newAmount := new(big.Int).Sub(GetBalanceMultiCoin(s, addr, coinID), amount)
-	NormalizeCoinID(&coinID)
-	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
-}
-
-// NormalizeCoinID ORs the 0th bit of the first byte in
-// `coinID`, which ensures this bit will be 1 and all other
-// bits are left the same.
-// This partitions multicoin storage from normal state storage.
-func NormalizeCoinID(coinID *common.Hash) {
-	coinID[0] |= 0x01
-}
-
-// NormalizeStateKey ANDs the 0th bit of the first byte in
-// `key`, which ensures this bit will be 0 and all other bits
-// are left the same.
-// This partitions normal state storage from multicoin storage.
-func NormalizeStateKey(key *common.Hash) {
-	key[0] &= 0xfe
+	return state.WithWorkerPools(func() state.WorkerPool { return pool })
 }

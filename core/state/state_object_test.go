@@ -31,26 +31,25 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/libevm/common"
 )
 
+var NormalizeStateKey = normalizeStateKeys{}
+
 func TestStateObjectPartition(t *testing.T) {
 	h1 := common.Hash{}
-	NormalizeCoinID(&h1)
+	extstate.NormalizeCoinID(&h1)
 
-	h2 := common.Hash{}
-	NormalizeStateKey(&h2)
-
+	h2 := NormalizeStateKey.TransformStateKey(common.Address{}, common.Hash{})
 	if bytes.Equal(h1.Bytes(), h2.Bytes()) {
 		t.Fatalf("Expected normalized hashes to be unique")
 	}
 
 	h3 := common.Hash([32]byte{0xff})
-	NormalizeCoinID(&h3)
+	extstate.NormalizeCoinID(&h3)
 
-	h4 := common.Hash([32]byte{0xff})
-	NormalizeStateKey(&h4)
-
+	h4 := NormalizeStateKey.TransformStateKey(common.Address{}, common.Hash{0xff})
 	if bytes.Equal(h3.Bytes(), h4.Bytes()) {
 		t.Fatal("Expected normalized hashes to be unqiue")
 	}
