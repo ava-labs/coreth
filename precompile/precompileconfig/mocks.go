@@ -201,20 +201,6 @@ func (mr *MockChainConfigMockRecorder) IsDurango(time any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDurango", reflect.TypeOf((*MockChainConfig)(nil).IsDurango), time)
 }
 
-// IsGranite mocks base method.
-func (m *MockChainConfig) IsGranite(time uint64) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsGranite", time)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsGranite indicates an expected call of IsGranite.
-func (mr *MockChainConfigMockRecorder) IsGranite(time any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsGranite", reflect.TypeOf((*MockChainConfig)(nil).IsGranite), time)
-}
-
 // MockAccepter is a mock of Accepter interface.
 type MockAccepter struct {
 	ctrl     *gomock.Controller
