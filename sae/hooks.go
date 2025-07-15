@@ -73,7 +73,10 @@ func (h *hooks) ConstructBlock(
 }
 
 func (h *hooks) BlockExecuted(ctx context.Context, block *types.Block, receipts types.Receipts) error {
-	return nil // TODO: Implement me
+	// TODO: Write warp information
+	// TODO: Apply atomic txs to shared memory
+	// TODO: Update last executed height to support restarts
+	return nil
 }
 
 func (h *hooks) ConstructBlockFromBlock(ctx context.Context, b *types.Block) (hook.ConstructBlock, error) {
@@ -262,6 +265,12 @@ func packAtomicTxs(
 			continue
 		}
 
+		// TODO: The transaction signatures must be verified and the import
+		// UTXOs must be read from shared memory here.
+
+		// The atomicTxOp will verify that export txs have sufficient funds and
+		// utilize proper nonces. It additionally enforces that sufficient fees
+		// are paid by the transactions.
 		op, err := atomicTxOp(tx, avaxAssetID, baseFee)
 		if err != nil {
 			txs.DiscardCurrentTx(tx.ID())
