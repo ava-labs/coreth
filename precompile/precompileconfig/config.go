@@ -76,6 +76,4 @@ type Accepter interface {
 type ChainConfig interface {
 	// IsDurango returns true if the time is after Durango.
 	IsDurango(time uint64) bool
-	// IsGranite returns true if the time is after Granite.
-	IsGranite(time uint64) bool
 }
