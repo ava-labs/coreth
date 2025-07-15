@@ -17,19 +17,14 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
-	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/predicate"
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/strevm/hook"
 	"github.com/ava-labs/strevm/worstcase"
-	"github.com/holiman/uint256"
 	"go.uber.org/zap"
 
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
@@ -224,48 +219,6 @@ func (h *hooks) ExtraBlockOperations(ctx context.Context, block *types.Block) ([
 	return ops, nil
 }
 
-func inputUTXOs(blocks iter.Seq[*types.Block]) (set.Set[ids.ID], error) {
-	var inputUTXOs set.Set[ids.ID]
-	for block := range blocks {
-		// Extract atomic transactions from the block
-		txs, err := atomic.ExtractAtomicTxs(
-			customtypes.BlockExtData(block),
-			true,
-			atomic.Codec,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, tx := range txs {
-			inputUTXOs.Union(tx.InputUTXOs())
-		}
-	}
-	return inputUTXOs, nil
-}
-
-type txs interface {
-	NextTx() (*atomic.Tx, bool)
-	CancelCurrentTx(txID ids.ID)
-	DiscardCurrentTx(txID ids.ID)
-	DiscardCurrentTxs()
-}
-
-type txSlice []*atomic.Tx
-
-func (t *txSlice) NextTx() (*atomic.Tx, bool) {
-	if len(*t) == 0 {
-		return nil, false
-	}
-	tx := (*t)[0]
-	*t = (*t)[1:]
-	return tx, true
-}
-
-func (*txSlice) CancelCurrentTx(ids.ID)  {}
-func (*txSlice) DiscardCurrentTx(ids.ID) {}
-func (*txSlice) DiscardCurrentTxs()      {}
-
 func packAtomicTxs(
 	ctx context.Context,
 	log logging.Logger,
@@ -337,96 +290,4 @@ func packAtomicTxs(
 		cumulativeSize += txSize
 	}
 	return atomicTxs, nil
-}
-
-func atomicTxOp(
-	tx *atomic.Tx,
-	avaxAssetID ids.ID,
-	baseFee *big.Int,
-) (hook.Op, error) {
-	// Note: we do not need to check if we are in at least ApricotPhase4 here
-	// because we assume that this function will only be called when the block
-	// is in at least ApricotPhase5.
-	gasUsed, err := tx.GasUsed(true)
-	if err != nil {
-		return hook.Op{}, err
-	}
-	burned, err := tx.Burned(avaxAssetID)
-	if err != nil {
-		return hook.Op{}, err
-	}
-
-	var bigGasUsed uint256.Int
-	bigGasUsed.SetUint64(gasUsed)
-
-	var gasPrice uint256.Int // gasPrice = burned * x2cRate / gasUsed
-	gasPrice.SetUint64(burned)
-	gasPrice.Mul(&gasPrice, atomic.X2CRate)
-	gasPrice.Div(&gasPrice, &bigGasUsed)
-
-	op := hook.Op{
-		Gas:      gas.Gas(gasUsed),
-		GasPrice: gasPrice,
-	}
-	switch tx := tx.UnsignedAtomicTx.(type) {
-	case *atomic.UnsignedImportTx:
-		op.To = make(map[common.Address]uint256.Int)
-		for _, output := range tx.Outs {
-			if output.AssetID != avaxAssetID {
-				continue
-			}
-			var amount uint256.Int
-			amount.SetUint64(output.Amount)
-			amount.Mul(&amount, atomic.X2CRate)
-			op.To[output.Address] = amount
-		}
-	case *atomic.UnsignedExportTx:
-		op.From = make(map[common.Address]hook.Account)
-		for _, input := range tx.Ins {
-			if input.AssetID != avaxAssetID {
-				continue
-			}
-			var amount uint256.Int
-			amount.SetUint64(input.Amount)
-			amount.Mul(&amount, atomic.X2CRate)
-			op.From[input.Address] = hook.Account{
-				Nonce:  input.Nonce,
-				Amount: amount,
-			}
-		}
-	default:
-		return hook.Op{}, fmt.Errorf("unexpected atomic tx type: %T", tx)
-	}
-	return op, nil
-}
-
-func marshalAtomicTxs(txs []*atomic.Tx) ([]byte, error) {
-	if len(txs) == 0 {
-		return nil, nil
-	}
-	return atomic.Codec.Marshal(atomic.CodecVersion, txs)
-}
-
-func calculatePredicateResults(
-	ctx context.Context,
-	snowContext *snow.Context,
-	rules params.Rules,
-	blockContext *block.Context,
-	txs []*types.Transaction,
-) (*predicate.Results, error) {
-	predicateContext := precompileconfig.PredicateContext{
-		SnowCtx:            snowContext,
-		ProposerVMBlockCtx: blockContext,
-	}
-	predicateResults := predicate.NewResults()
-	// TODO: Each transaction's predicates should be able to be calculated
-	// concurrently.
-	for _, tx := range txs {
-		results, err := core.CheckPredicates(rules, &predicateContext, tx)
-		if err != nil {
-			return nil, err
-		}
-		predicateResults.SetTxResults(tx.Hash(), results)
-	}
-	return predicateResults, nil
 }
