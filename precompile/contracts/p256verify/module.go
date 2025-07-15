@@ -7,13 +7,10 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 
 	"github.com/ava-labs/libevm/common"
 )
-
-var _ contract.Configurator = (*configurator)(nil)
 
 // ConfigKey is the key used in json config files to specify this precompile config.
 // must be unique across all precompiles.
@@ -22,23 +19,11 @@ const ConfigKey = "p256verifyConfig"
 // ContractAddress is the address of the p256verify precompile contract
 var ContractAddress = common.HexToAddress("0x0000000000000000000000000000000000000100")
 
-// Module is the precompile module. It is used to register the precompile contract.
-var Module = modules.Module{
-	ConfigKey:    ConfigKey,
-	Address:      ContractAddress,
-	Contract:     &P256VerifyPrecompile{},
-	Configurator: &configurator{},
-}
+// Note: p256verify is now implemented as a stateless precompile and is handled
+// directly in the PrecompileOverride method in params/hooks_libevm.go.
+// This module is kept for configuration purposes only.
 
 type configurator struct{}
-
-func init() {
-	// Register the precompile module.
-	// Each precompile contract registers itself through [RegisterModule] function.
-	if err := modules.RegisterModule(Module); err != nil {
-		panic(err)
-	}
-}
 
 // MakeConfig returns a new precompile config instance.
 // This is required to Marshal/Unmarshal the precompile config.
