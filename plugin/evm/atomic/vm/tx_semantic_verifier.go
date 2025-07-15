@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
-	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -42,7 +41,7 @@ type BlockFetcher interface {
 
 type VerifierBackend struct {
 	Ctx          *snow.Context
-	Fx           fx.Fx
+	Fx           *secp256k1fx.Fx
 	Rules        extras.Rules
 	Bootstrapped bool
 	BlockFetcher BlockFetcher
@@ -158,7 +157,7 @@ func (s *semanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
 func VerifyTx(
 	ctx *snow.Context,
 	rules extras.Rules,
-	fx fx.Fx,
+	fx *secp256k1fx.Fx,
 	cache *secp256k1.RecoverCache,
 	bootstrapped bool,
 	tx *atomic.Tx,
@@ -246,7 +245,7 @@ func verifyFlowCheck(
 
 func verifyCredentials(
 	sharedMemory avagoatomic.SharedMemory,
-	fx fx.Fx,
+	fx *secp256k1fx.Fx,
 	cache *secp256k1.RecoverCache,
 	tx *atomic.Tx,
 ) error {
@@ -262,7 +261,7 @@ func verifyCredentials(
 
 func verifyCredentialsImportTx(
 	sharedMemory avagoatomic.SharedMemory,
-	fx fx.Fx,
+	fx *secp256k1fx.Fx,
 	utx *atomic.UnsignedImportTx,
 	creds []verify.Verifiable,
 ) error {
