@@ -99,6 +99,8 @@ func atomicTxOp(
 			if output.AssetID != avaxAssetID {
 				continue
 			}
+
+			// TODO: This implementation assumes that the addresses are unique.
 			var amount uint256.Int
 			amount.SetUint64(output.Amount)
 			amount.Mul(&amount, atomic.X2CRate)
@@ -110,6 +112,8 @@ func atomicTxOp(
 			if input.AssetID != avaxAssetID {
 				continue
 			}
+
+			// TODO: This implementation assumes that the addresses are unique.
 			var amount uint256.Int
 			amount.SetUint64(input.Amount)
 			amount.Mul(&amount, atomic.X2CRate)

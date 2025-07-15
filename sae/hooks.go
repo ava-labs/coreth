@@ -13,11 +13,13 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
@@ -28,6 +30,7 @@ import (
 	"go.uber.org/zap"
 
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 )
 
 const targetAtomicTxsSize = 40 * units.KiB
@@ -42,6 +45,14 @@ type hooks struct {
 	ctx         *snow.Context
 	chainConfig *params.ChainConfig
 	mempool     *atomictxpool.Txs
+
+	// TODO: Handle this correctly
+	bootstrapped bool
+
+	// TODO: Make this a global and initialize it
+	fx secp256k1fx.Fx
+	// TODO: Make this a global and initialize it
+	cache *secp256k1.RecoverCache
 }
 
 func (h *hooks) GasTarget(parent *types.Block) gas.Gas {
@@ -130,11 +141,16 @@ func (h *hooks) constructBlock(
 		return nil, err
 	}
 
+	rules := h.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
+	rulesExtra := params.GetRulesExtra(rules)
 	atomicTxs, err := packAtomicTxs(
 		ctx,
-		h.ctx.Log,
+		h.ctx,
+		&h.fx,
+		h.cache,
+		rulesExtra,
+		h.bootstrapped,
 		state,
-		h.ctx.AVAXAssetID,
 		header.BaseFee,
 		ancestorInputUTXOs,
 		potentialAtomicTxs,
@@ -171,7 +187,6 @@ func (h *hooks) constructBlock(
 	// 	return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	// }
 
-	rules := h.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
 	predicateResults, err := calculatePredicateResults(
 		ctx,
 		h.ctx,
@@ -224,9 +239,12 @@ func (h *hooks) ExtraBlockOperations(ctx context.Context, block *types.Block) ([
 
 func packAtomicTxs(
 	ctx context.Context,
-	log logging.Logger,
+	snowContext *snow.Context,
+	fx *secp256k1fx.Fx,
+	cache *secp256k1.RecoverCache,
+	rules *extras.Rules,
+	bootstrapped bool,
 	state hook.State,
-	avaxAssetID ids.ID,
 	baseFee *big.Int,
 	ancestorInputUTXOs set.Set[ids.ID],
 	txs txs,
@@ -249,29 +267,46 @@ func packAtomicTxs(
 			break
 		}
 
+		// VerifyTx ensures:
+		// 1. Transactions are syntactically valid.
+		// 2. Transactions do not produces more assets than they consume,
+		//    including the fees.
+		// 3. Inputs all have corresponding credentials with valid signatures.
+		// 4. ImportTxs are consuming UTXOs that are currently in shared memory.
+		err := atomicvm.VerifyTx(
+			snowContext,
+			*rules,
+			fx,
+			cache,
+			bootstrapped,
+			tx,
+			baseFee,
+		)
+		if err != nil {
+			txID := tx.ID()
+			snowContext.Log.Debug("discarding tx due to failed verification",
+				zap.Stringer("txID", txID),
+				zap.Error(err),
+			)
+			txs.DiscardCurrentTx(txID)
+			continue
+		}
+
+		// Verify that any ImportTxs do not conflict with prior ImportTxs,
+		// either in the same block or in an ancestor.
 		inputUTXOs := tx.InputUTXOs()
 		if ancestorInputUTXOs.Overlaps(inputUTXOs) {
-			// Discard the transaction from the mempool since it will fail
-			// verification after this block has been accepted.
-			//
-			// Note: if the proposed block is not accepted, the transaction may
-			// still be valid, but we discard it early here based on the
-			// assumption that the proposed block will most likely be accepted.
 			txID := tx.ID()
-			log.Debug("discarding tx due to overlapping input utxos",
+			snowContext.Log.Debug("discarding tx due to overlapping input utxos",
 				zap.Stringer("txID", txID),
 			)
 			txs.DiscardCurrentTx(txID)
 			continue
 		}
 
-		// TODO: The transaction signatures must be verified and the import
-		// UTXOs must be read from shared memory here.
-
-		// The atomicTxOp will verify that export txs have sufficient funds and
-		// utilize proper nonces. It additionally enforces that sufficient fees
-		// are paid by the transactions.
-		op, err := atomicTxOp(tx, avaxAssetID, baseFee)
+		// The atomicTxOp will verify that ExportTxs have sufficient funds and
+		// utilize proper nonces.
+		op, err := atomicTxOp(tx, snowContext.AVAXAssetID, baseFee)
 		if err != nil {
 			txs.DiscardCurrentTx(tx.ID())
 			continue
@@ -285,7 +320,7 @@ func packAtomicTxs(
 		}
 		if err != nil {
 			txID := tx.ID()
-			log.Debug("discarding tx from mempool due to failed verification",
+			snowContext.Log.Debug("discarding tx from mempool due to failed verification",
 				zap.Stringer("txID", txID),
 				zap.Error(err),
 			)
