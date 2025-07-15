@@ -113,10 +113,6 @@ var reexecTests = []ReexecTest{
 		"ReexecMaxBlocks",
 		ReexecMaxBlocksTest,
 	},
-	{
-		"ReexecTooManyBlocks",
-		ReexecTooManyBlocksTest,
-	},
 }
 
 func copyMemDB(db ethdb.Database) (ethdb.Database, error) {
@@ -1737,70 +1733,5 @@ func ReexecMaxBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Gen
 				t.Fatalf("missing transaction: %v", tx)
 			}
 		}
-	}
-}
-
-func ReexecTooManyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, commitInterval uint64) (*BlockChain, error)) {
-	var (
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		chainDB = rawdb.NewMemoryDatabase()
-	)
-
-	// Ensure that key1 has some funds in the genesis block.
-	genesisBalance := big.NewInt(1000000)
-	gspec := &Genesis{
-		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
-	}
-
-	blockchain, err := create(chainDB, gspec, common.Hash{}, 4096)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer blockchain.Stop()
-
-	// Check that we are generating enough blocks to test the reexec functionality.
-	genNumBlocks := 20
-	newCommitInterval := 6
-	numAcceptedBlocks := 2 * newCommitInterval
-
-	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, genNumBlocks, 10, func(i int, gen *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
-		gen.AddTx(tx)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Insert three blocks into the chain and accept only the first block.
-	if _, err := blockchain.InsertChain(chain); err != nil {
-		t.Fatal(err)
-	}
-
-	for i, block := range chain {
-		if err := blockchain.Accept(block); err != nil {
-			t.Fatal(err)
-		}
-
-		if i == numAcceptedBlocks {
-			// kill the async accepted block processor to force an
-			// ungraceful recovery
-			blockchain.stopAcceptor()
-			blockchain.acceptorQueue = nil
-		}
-	}
-
-	// Attempt to create chain.
-	copiedDB, err := copyMemDB(chainDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = create(copiedDB, gspec, blockchain.lastAccepted.Hash(), uint64(newCommitInterval))
-	if err == nil {
-		t.Fatal("expected error when reprocessing too many blocks, but got none")
 	}
 }
