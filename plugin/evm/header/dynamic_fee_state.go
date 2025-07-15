@@ -14,6 +14,8 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 )
 
+var InitialTargetExcess gas.Gas
+
 // feeStateBeforeBlock takes the previous header and the timestamp of its child
 // block and calculates the fee state before the child block is executed.
 func feeStateBeforeBlock(
@@ -29,7 +31,7 @@ func feeStateBeforeBlock(
 		)
 	}
 
-	var state acp176.State
+	var state acp176.State = acp176.State{TargetExcess: InitialTargetExcess}
 	if config.IsFortuna(parent.Time) && parent.Number.Cmp(common.Big0) != 0 {
 		// If the parent block was running with ACP-176, we start with the
 		// resulting fee state from the parent block. It is assumed that the

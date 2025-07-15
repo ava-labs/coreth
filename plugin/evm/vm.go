@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/coreth/network"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -529,6 +530,10 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if vm.config.GasTarget != nil {
 		desiredTargetExcess = new(gas.Gas)
 		*desiredTargetExcess = acp176.DesiredTargetExcess(*vm.config.GasTarget)
+	}
+
+	if vm.config.InitialTargetExcess != nil {
+		header.InitialTargetExcess = *vm.config.InitialTargetExcess
 	}
 
 	vm.eth, err = eth.New(
