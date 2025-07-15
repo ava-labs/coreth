@@ -64,6 +64,69 @@ func (h *hooks) ConstructBlock(
 	txs []*types.Transaction,
 	receipts []*types.Receipt,
 ) (*types.Block, error) {
+	return h.constructBlock(
+		ctx,
+		blockContext,
+		header,
+		parent,
+		ancestors,
+		state,
+		txs,
+		receipts,
+		h.mempool,
+	)
+}
+
+func (h *hooks) BlockExecuted(ctx context.Context, block *types.Block, receipts types.Receipts) error {
+	return nil // TODO: Implement me
+}
+
+func (h *hooks) ConstructBlockFromBlock(ctx context.Context, b *types.Block) (hook.ConstructBlock, error) {
+	atomicTxs, err := atomic.ExtractAtomicTxs(
+		customtypes.BlockExtData(b),
+		true,
+		atomic.Codec,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	atomicTxSlice := txSlice(atomicTxs)
+	return func(
+		ctx context.Context,
+		blockContext *block.Context,
+		header *types.Header,
+		parent *types.Header,
+		ancestors iter.Seq[*types.Block],
+		state hook.State,
+		txs []*types.Transaction,
+		receipts []*types.Receipt,
+	) (*types.Block, error) {
+		return h.constructBlock(
+			ctx,
+			blockContext,
+			header,
+			parent,
+			ancestors,
+			state,
+			txs,
+			receipts,
+			&atomicTxSlice,
+		)
+	}, nil
+}
+
+func (h *hooks) constructBlock(
+	ctx context.Context,
+	blockContext *block.Context,
+	header *types.Header,
+	parent *types.Header,
+	ancestors iter.Seq[*types.Block],
+	state hook.State,
+	txs []*types.Transaction,
+	receipts []*types.Receipt,
+	potentialAtomicTxs txs,
+) (*types.Block, error) {
 	ancestorInputUTXOs, err := inputUTXOs(ancestors)
 	if err != nil {
 		return nil, err
@@ -76,7 +139,7 @@ func (h *hooks) ConstructBlock(
 		h.ctx.AVAXAssetID,
 		header.BaseFee,
 		ancestorInputUTXOs,
-		h.mempool,
+		potentialAtomicTxs,
 	)
 	if err != nil {
 		return nil, err
@@ -98,7 +161,7 @@ func (h *hooks) ConstructBlock(
 		h.ctx.Log.Debug("discarding txs due to error marshaling atomic transactions",
 			zap.Error(err),
 		)
-		h.mempool.DiscardCurrentTxs()
+		potentialAtomicTxs.DiscardCurrentTxs()
 		return nil, fmt.Errorf("failed to marshal batch of atomic transactions due to %w", err)
 	}
 
@@ -137,17 +200,6 @@ func (h *hooks) ConstructBlock(
 		atomicTxBytes,
 		true,
 	), nil
-}
-
-func (h *hooks) BlockExecuted(ctx context.Context, block *types.Block, receipts types.Receipts) error {
-	return nil // TODO: Implement me
-}
-
-func (h *hooks) ConstructBlockFromBlock(ctx context.Context, b *types.Block) (hook.ConstructBlock, error) {
-	return func(context.Context, *block.Context, *types.Header, *types.Header, iter.Seq[*types.Block], hook.State, []*types.Transaction, []*types.Receipt) (*types.Block, error) {
-		// TODO: Implement me
-		return b, nil
-	}, nil
 }
 
 func (h *hooks) ExtraBlockOperations(ctx context.Context, block *types.Block) ([]hook.Op, error) {
@@ -192,6 +244,28 @@ func inputUTXOs(blocks iter.Seq[*types.Block]) (set.Set[ids.ID], error) {
 	return inputUTXOs, nil
 }
 
+type txs interface {
+	NextTx() (*atomic.Tx, bool)
+	CancelCurrentTx(txID ids.ID)
+	DiscardCurrentTx(txID ids.ID)
+	DiscardCurrentTxs()
+}
+
+type txSlice []*atomic.Tx
+
+func (t *txSlice) NextTx() (*atomic.Tx, bool) {
+	if len(*t) == 0 {
+		return nil, false
+	}
+	tx := (*t)[0]
+	*t = (*t)[1:]
+	return tx, true
+}
+
+func (*txSlice) CancelCurrentTx(ids.ID)  {}
+func (*txSlice) DiscardCurrentTx(ids.ID) {}
+func (*txSlice) DiscardCurrentTxs()      {}
+
 func packAtomicTxs(
 	ctx context.Context,
 	log logging.Logger,
@@ -199,14 +273,14 @@ func packAtomicTxs(
 	avaxAssetID ids.ID,
 	baseFee *big.Int,
 	ancestorInputUTXOs set.Set[ids.ID],
-	mempool *atomictxpool.Txs,
+	txs txs,
 ) ([]*atomic.Tx, error) {
 	var (
 		cumulativeSize int
 		atomicTxs      []*atomic.Tx
 	)
 	for {
-		tx, exists := mempool.NextTx()
+		tx, exists := txs.NextTx()
 		if !exists {
 			break
 		}
@@ -215,7 +289,7 @@ func packAtomicTxs(
 		// soft limit.
 		txSize := len(tx.SignedBytes())
 		if cumulativeSize+txSize > targetAtomicTxsSize {
-			mempool.CancelCurrentTx(tx.ID())
+			txs.CancelCurrentTx(tx.ID())
 			break
 		}
 
@@ -231,20 +305,20 @@ func packAtomicTxs(
 			log.Debug("discarding tx due to overlapping input utxos",
 				zap.Stringer("txID", txID),
 			)
-			mempool.DiscardCurrentTx(txID)
+			txs.DiscardCurrentTx(txID)
 			continue
 		}
 
 		op, err := atomicTxOp(tx, avaxAssetID, baseFee)
 		if err != nil {
-			mempool.DiscardCurrentTx(tx.ID())
+			txs.DiscardCurrentTx(tx.ID())
 			continue
 		}
 
 		err = state.Apply(op)
 		if errors.Is(err, worstcase.ErrBlockTooFull) || errors.Is(err, worstcase.ErrQueueTooFull) {
 			// Send [tx] back to the mempool's tx heap.
-			mempool.CancelCurrentTx(tx.ID())
+			txs.CancelCurrentTx(tx.ID())
 			break
 		}
 		if err != nil {
@@ -253,7 +327,7 @@ func packAtomicTxs(
 				zap.Stringer("txID", txID),
 				zap.Error(err),
 			)
-			mempool.DiscardCurrentTx(txID)
+			txs.DiscardCurrentTx(txID)
 			continue
 		}
 
@@ -345,6 +419,8 @@ func calculatePredicateResults(
 		ProposerVMBlockCtx: blockContext,
 	}
 	predicateResults := predicate.NewResults()
+	// TODO: Each transaction's predicates should be able to be calculated
+	// concurrently.
 	for _, tx := range txs {
 		results, err := core.CheckPredicates(rules, &predicateContext, tx)
 		if err != nil {
