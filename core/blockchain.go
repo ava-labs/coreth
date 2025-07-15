@@ -51,6 +51,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -64,7 +65,6 @@ import (
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
-	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
 
 	// Force libevm metrics of the same name to be registered first.
@@ -1920,6 +1920,8 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			return err
 		}
 
+		roots = append(roots, root)
+
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
@@ -1927,7 +1929,6 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root
-			roots = append(roots, root)
 			return nil
 		}, current.Hash()); err != nil {
 			return err
@@ -1947,9 +1948,14 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	// Firewood requires processing each root individually.
 	if _, ok := bc.triedb.Backend().(*firewood.Database); ok {
 		for _, root := range roots {
-			return triedb.Commit(root, true)
+			if err := triedb.Commit(root, true); err != nil {
+				return err
+			}
 		}
-	} else if previousRoot != (common.Hash{}) {
+		return nil
+	}
+
+	if previousRoot != (common.Hash{}) {
 		return triedb.Commit(previousRoot, true)
 	}
 	return nil
