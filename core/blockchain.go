@@ -1806,8 +1806,14 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
-	for i := 0; i < int(reexec); i++ {
+	for i := 0; i <= int(reexec); i++ {
 		// TODO: handle canceled context
+
+		// Once we have a state, we can reprocess from there.
+		_, err = bc.stateCache.OpenTrie(current.Root())
+		if err == nil {
+			break
+		}
 
 		if current.NumberU64() == 0 {
 			return errors.New("genesis state is missing")
@@ -1817,10 +1823,6 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
 		}
 		current = parent
-		_, err = bc.stateCache.OpenTrie(current.Root())
-		if err == nil {
-			break
-		}
 	}
 	if err != nil {
 		switch err.(type) {
