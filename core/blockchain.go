@@ -175,8 +175,7 @@ const (
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "hashdb/memcache/clean/fastcache"
 
-	// firewoodPath fixes the name of the firewood database file.
-	firewoodPath = "firewood_state"
+	firewoodFileName = "firewood_state"
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -230,7 +229,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			log.Crit("Chain data directory must be specified for Firewood")
 		}
 		config.DBOverride = firewood.Config{
-			FilePath:             filepath.Join(c.ChainDataDir, firewoodPath),
+			FilePath:             filepath.Join(c.ChainDataDir, firewoodFileName),
 			CleanCacheSize:       c.TrieCleanLimit * 1024 * 1024,
 			FreeListCacheEntries: firewood.Defaults.FreeListCacheEntries,
 			Revisions:            uint(c.StateHistory), // must be at least 2
@@ -1772,7 +1771,7 @@ func (bc *BlockChain) commitWithSnap(
 
 	// Because Firewood relies on tracking block hashes in a tree, we need to notify the
 	// database that this block is empty.
-	if _, ok := bc.triedb.Backend().(*firewood.Database); ok && root == parentRoot {
+	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme && root == parentRoot {
 		if err := bc.triedb.Update(root, parentRoot, current.NumberU64(), nil, nil, triedbOpt); err != nil {
 			return common.Hash{}, fmt.Errorf("failed to update trie for block %s: %w", current.Hash(), err)
 		}
@@ -1939,7 +1938,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 
 	// Firewood requires processing each root individually.
-	if _, ok := bc.triedb.Backend().(*firewood.Database); ok {
+	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
 		for _, root := range roots {
 			if err := triedb.Commit(root, true); err != nil {
 				return err

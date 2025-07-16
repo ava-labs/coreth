@@ -52,11 +52,12 @@ var (
 	}
 )
 
+type createFunc func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)
 type ChainTest struct {
 	Name     string
 	testFunc func(
 		t *testing.T,
-		create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error),
+		create createFunc,
 	)
 }
 
@@ -115,11 +116,13 @@ var tests = []ChainTest{
 	},
 }
 
+type ReexecTestFunc func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string, commitInterval uint64) (*BlockChain, error)
+
 type ReexecTest struct {
 	Name     string
 	testFunc func(
 		t *testing.T,
-		create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string, commitInterval uint64) (*BlockChain, error),
+		create ReexecTestFunc,
 	)
 }
 
@@ -157,7 +160,7 @@ func checkBlockChainState(
 	bc *BlockChain,
 	gspec *Genesis,
 	originalDB ethdb.Database,
-	create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error),
+	create createFunc,
 	checkState func(sdb *state.StateDB) error,
 ) (*BlockChain, *BlockChain, *BlockChain) {
 	var (
@@ -237,7 +240,7 @@ func checkBlockChainState(
 	return bc, newBlockChain, restartedChain
 }
 
-func InsertChainAcceptSingleBlockTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func InsertChainAcceptSingleBlockTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -307,7 +310,7 @@ func InsertChainAcceptSingleBlockTest(t *testing.T, create func(db ethdb.Databas
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func InsertLongForkedChainTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func InsertLongForkedChainTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -471,7 +474,7 @@ func InsertLongForkedChainTest(t *testing.T, create func(db ethdb.Database, gspe
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func AcceptNonCanonicalBlockTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func AcceptNonCanonicalBlockTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -582,7 +585,7 @@ func AcceptNonCanonicalBlockTest(t *testing.T, create func(db ethdb.Database, gs
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func SetPreferenceRewindTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func SetPreferenceRewindTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -714,7 +717,7 @@ func SetPreferenceRewindTest(t *testing.T, create func(db ethdb.Database, gspec 
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkUpdatedState)
 }
 
-func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func BuildOnVariousStagesTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -881,7 +884,7 @@ func BuildOnVariousStagesTest(t *testing.T, create func(db ethdb.Database, gspec
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func EmptyBlocksTest(t *testing.T, create createFunc) {
 	chainDB := rawdb.NewMemoryDatabase()
 
 	// Ensure that key1 has some funds in the genesis block.
@@ -920,7 +923,7 @@ func EmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func EmptyAndNonEmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func EmptyAndNonEmptyBlocksTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -990,7 +993,7 @@ func EmptyAndNonEmptyBlocksTest(t *testing.T, create func(db ethdb.Database, gsp
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func ReorgReInsertTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func ReorgReInsertTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1096,7 +1099,7 @@ func ReorgReInsertTest(t *testing.T, create func(db ethdb.Database, gspec *Genes
 //	A3
 //
 //nolint:goimports
-func AcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func AcceptBlockIdenticalStateRootTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1240,7 +1243,7 @@ func AcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Databa
 //	A3
 //
 //nolint:goimports
-func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create createFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1395,7 +1398,7 @@ func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db eth
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func GenerateChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func GenerateChainInvalidBlockFeeTest(t *testing.T, create createFunc) {
 	var (
 		require = require.New(t)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1436,7 +1439,7 @@ func GenerateChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Databas
 	require.ErrorIs(err, dummy.ErrInsufficientBlockGas)
 }
 
-func InsertChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func InsertChainInvalidBlockFeeTest(t *testing.T, create createFunc) {
 	var (
 		require = require.New(t)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1480,7 +1483,7 @@ func InsertChainInvalidBlockFeeTest(t *testing.T, create func(db ethdb.Database,
 	require.ErrorIs(err, dummy.ErrInsufficientBlockGas)
 }
 
-func InsertChainValidBlockFeeTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error)) {
+func InsertChainValidBlockFeeTest(t *testing.T, create createFunc) {
 	var (
 		require = require.New(t)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1565,7 +1568,7 @@ func InsertChainValidBlockFeeTest(t *testing.T, create func(db ethdb.Database, g
 	checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
 }
 
-func ReexecBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string, commitInterval uint64) (*BlockChain, error)) {
+func ReexecBlocksTest(t *testing.T, create ReexecTestFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1695,7 +1698,7 @@ func ReexecBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesi
 	}
 }
 
-func ReexecMaxBlocksTest(t *testing.T, create func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string, commitInterval uint64) (*BlockChain, error)) {
+func ReexecMaxBlocksTest(t *testing.T, create ReexecTestFunc) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
