@@ -1807,7 +1807,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 	// Find a historic available state root
 	var hasState bool
-	for range reexec {
+	for i := 0; i <= int(reexec); i++ {
 		// TODO: handle canceled context
 
 		if bc.HasState(current.Root()) {
