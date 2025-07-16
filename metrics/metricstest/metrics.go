@@ -6,6 +6,8 @@ package metricstest
 import (
 	"testing"
 
+	avalanchemetrics "github.com/ava-labs/avalanchego/api/metrics"
+	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/libevm/metrics"
 )
 
@@ -20,4 +22,10 @@ func WithMetrics(t *testing.T) {
 	t.Cleanup(func() {
 		metrics.Enabled = false
 	})
+}
+
+// ResetMetrics resets the vm avalanchego metrics, and allows
+// for the VM to be re-initialized in tests.
+func ResetMetrics(snowCtx *snow.Context) {
+	snowCtx.Metrics = avalanchemetrics.NewPrefixGatherer()
 }

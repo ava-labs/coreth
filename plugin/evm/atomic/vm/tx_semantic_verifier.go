@@ -25,14 +25,14 @@ import (
 var _ atomic.Visitor = (*semanticVerifier)(nil)
 
 var (
-	ErrAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
-	ErrConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
+	errAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
+	errConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
 	errRejectedParent             = errors.New("rejected parent")
 	errPublicKeySignatureMismatch = errors.New("signature doesn't match public key")
 )
 
 type BlockFetcher interface {
-	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
+	// GetExtendedBlock returns the ExtendedBlock for the given ID or an error if the block is not found
 	GetExtendedBlock(context.Context, ids.ID) (extension.ExtendedBlock, error)
 	// LastAcceptedExtendedBlock returns the last accepted VM block
 	LastAcceptedExtendedBlock() extension.ExtendedBlock
@@ -47,14 +47,14 @@ type VerifierBackend struct {
 	SecpCache    *secp256k1.RecoverCache
 }
 
-func NewVerifierBackend(vm *VM, rules extras.Rules) *VerifierBackend {
+func newVerifierBackend(vm *VM, rules extras.Rules) *VerifierBackend {
 	return &VerifierBackend{
-		Ctx:          vm.Ctx,
-		Fx:           &vm.Fx,
+		Ctx:          vm.ctx,
+		Fx:           &vm.fx,
 		Rules:        rules,
 		Bootstrapped: vm.bootstrapped.Get(),
 		BlockFetcher: vm,
-		SecpCache:    vm.SecpCache,
+		SecpCache:    vm.secpCache,
 	}
 }
 
@@ -149,7 +149,7 @@ func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 		utxoAssetID := utxo.AssetID()
 		inAssetID := in.AssetID()
 		if utxoAssetID != inAssetID {
-			return ErrAssetIDMismatch
+			return errAssetIDMismatch
 		}
 
 		if err := backend.Fx.VerifyTransfer(utx, in.In, cred, utxo.Out); err != nil {
@@ -178,7 +178,7 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extens
 		// return an error.
 		for _, atomicTx := range ancestorExt.AtomicTxs() {
 			if inputs.Overlaps(atomicTx.InputUTXOs()) {
-				return ErrConflictingAtomicInputs
+				return errConflictingAtomicInputs
 			}
 		}
 
