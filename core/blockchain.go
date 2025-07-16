@@ -1913,6 +1913,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		if err != nil {
 			return err
 		}
+		roots = append(roots, root)
 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
@@ -1921,7 +1922,6 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 				triedb.Dereference(previousRoot)
 			}
 			previousRoot = root
-			roots = append(roots, root)
 			return nil
 		}, current.Hash()); err != nil {
 			return err
@@ -1941,9 +1941,14 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	// Firewood requires processing each root individually.
 	if _, ok := bc.triedb.Backend().(*firewood.Database); ok {
 		for _, root := range roots {
-			return triedb.Commit(root, true)
+			if err := triedb.Commit(root, true); err != nil {
+				return err
+			}
 		}
-	} else if previousRoot != (common.Hash{}) {
+		return nil
+	}
+
+	if previousRoot != (common.Hash{}) {
 		return triedb.Commit(previousRoot, true)
 	}
 	return nil
