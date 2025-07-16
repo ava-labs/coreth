@@ -35,7 +35,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/pruner"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
@@ -47,7 +46,6 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -506,169 +504,51 @@ func TestRepopulateMissingTries(t *testing.T) {
 }
 
 func TestUngracefulAsyncShutdown(t *testing.T) {
-	testUngracefulAsyncShutdown(t, rawdb.HashScheme, &CacheConfig{
-		TrieCleanLimit:            256,
-		TrieDirtyLimit:            256,
-		TrieDirtyCommitTarget:     20,
-		TriePrefetcherParallelism: 4,
-		Pruning:                   true,
-		CommitInterval:            4096,
-		SnapshotLimit:             256,
-		SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
-		AcceptorQueueLimit:        1000, // ensure channel doesn't block
-		StateHistory:              32,
-	})
+	testUngracefulAsyncShutdown(t, rawdb.HashScheme, true)
 }
 
-func TestUngracefulAsyncShutdownSnapsDisabled(t *testing.T) {
+// HashDB passes these tests because:
+// lastAcceptedHeight <= lastCommittedHeight + 2 * commitInterval
+// where lastCommittedHeight is the last multiple of commitInterval (so 0)
+// Firewood passes these tests because lastCommittedHeight always equals acceptorTip.
+// This means it will work as long as lastAcceptedHeight <= acceptorTip + 2 * commitInterval
+func TestUngracefulAsyncShutdownNoSnapshots(t *testing.T) {
 	for _, scheme := range schemes {
 		t.Run(scheme, func(t *testing.T) {
-			testUngracefulAsyncShutdown(t, scheme, &CacheConfig{
-				TrieCleanLimit:        256,
-				TrieDirtyLimit:        256,
-				TrieDirtyCommitTarget: 20,
-				Pruning:               true,
-				CommitInterval:        4096,
-				SnapshotLimit:         0,
-				AcceptorQueueLimit:    1000, // ensure channel doesn't block
-				StateScheme:           scheme,
-				StateHistory:          32,
-			})
+			testUngracefulAsyncShutdown(t, scheme, false)
 		})
 	}
 }
 
-func testUngracefulAsyncShutdown(t *testing.T, scheme string, cacheConfig *CacheConfig) {
-	var (
-		create = func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error) {
-			cacheConfig.ChainDataDir = dataPath
-			blockchain, err := createBlockChain(db, cacheConfig, gspec, lastAcceptedHash)
-			if err != nil {
-				return nil, err
-			}
-			return blockchain, nil
-		}
-
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		chainDB = rawdb.NewMemoryDatabase()
-	)
-
-	// Ensure that key1 has some funds in the genesis block.
-	genesisBalance := big.NewInt(1000000)
-	gspec := &Genesis{
-		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+func testUngracefulAsyncShutdown(t *testing.T, scheme string, snapshotEnabled bool) {
+	snapshotLimit := 0
+	if snapshotEnabled {
+		snapshotLimit = 256
 	}
-
-	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string, commitInterval uint64) (*BlockChain, error) {
+		blockchain, err := createBlockChain(db, &CacheConfig{
+			TrieCleanLimit:            256,
+			TrieDirtyLimit:            256,
+			TrieDirtyCommitTarget:     20,
+			TriePrefetcherParallelism: 4,
+			Pruning:                   true,
+			CommitInterval:            commitInterval,
+			StateScheme:               scheme,
+			ChainDataDir:              dataPath,
+			StateHistory:              32,
+			SnapshotLimit:             snapshotLimit,
+			SnapshotNoBuild:           snapshotEnabled, // If true, ensure that the test errors if snapshot initialization fails
+			AcceptorQueueLimit:        1000,            // ensure channel doesn't block
+		}, gspec, lastAcceptedHash)
+		if err != nil {
+			return nil, err
+		}
+		return blockchain, nil
 	}
-	defer blockchain.Stop()
-
-	// This call generates a chain of 10 blocks.
-	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
-		gen.AddTx(tx)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Insert three blocks into the chain and accept only the first block.
-	if _, err := blockchain.InsertChain(chain); err != nil {
-		t.Fatal(err)
-	}
-
-	foundTxs := []common.Hash{}
-	missingTxs := []common.Hash{}
-	for i, block := range chain {
-		if err := blockchain.Accept(block); err != nil {
-			t.Fatal(err)
-		}
-
-		if i == 3 {
-			// At height 3, kill the async accepted block processor to force an
-			// ungraceful recovery
-			blockchain.stopAcceptor()
-			blockchain.acceptorQueue = nil
-		}
-
-		if i <= 3 {
-			// If <= height 3, all txs should be accessible on lookup
-			for _, tx := range block.Transactions() {
-				foundTxs = append(foundTxs, tx.Hash())
-			}
-		} else {
-			// If > 3, all txs should be accessible on lookup
-			for _, tx := range block.Transactions() {
-				missingTxs = append(missingTxs, tx.Hash())
-			}
-		}
-	}
-
-	// After inserting all blocks, we should confirm that txs added after the
-	// async worker shutdown cannot be found.
-	for _, tx := range foundTxs {
-		txLookup, _, _ := blockchain.GetTransactionLookup(tx)
-		if txLookup == nil {
-			t.Fatalf("missing transaction: %v", tx)
-		}
-	}
-	for _, tx := range missingTxs {
-		txLookup, _, _ := blockchain.GetTransactionLookup(tx)
-		if txLookup != nil {
-			t.Fatalf("transaction should be missing: %v", tx)
-		}
-	}
-
-	// check the state of the last accepted block
-	checkState := func(sdb *state.StateDB) error {
-		nonce := sdb.GetNonce(addr1)
-		if nonce != 10 {
-			return fmt.Errorf("expected nonce addr1: 10, found nonce: %d", nonce)
-		}
-		transferredFunds := uint256.MustFromBig(big.NewInt(100000))
-		balance1 := sdb.GetBalance(addr1)
-		genesisBalance := uint256.MustFromBig(genesisBalance)
-		expectedBalance1 := new(uint256.Int).Sub(genesisBalance, transferredFunds)
-		if balance1.Cmp(expectedBalance1) != 0 {
-			return fmt.Errorf("expected addr1 balance: %d, found balance: %d", expectedBalance1, balance1)
-		}
-
-		balance2 := sdb.GetBalance(addr2)
-		expectedBalance2 := transferredFunds
-		if balance2.Cmp(expectedBalance2) != 0 {
-			return fmt.Errorf("expected addr2 balance: %d, found balance: %d", expectedBalance2, balance2)
-		}
-
-		nonce = sdb.GetNonce(addr2)
-		if nonce != 0 {
-			return fmt.Errorf("expected addr2 nonce: 0, found nonce: %d", nonce)
-		}
-		return nil
-	}
-
-	_, newChain, restartedChain := checkBlockChainState(t, blockchain, gspec, chainDB, create, checkState)
-
-	allTxs := append(foundTxs, missingTxs...)
-	for _, bc := range []*BlockChain{newChain, restartedChain} {
-		// We should confirm that snapshots were properly initialized
-		if bc.snaps == nil && bc.cacheConfig.SnapshotLimit > 0 {
-			t.Fatal("snapshot initialization failed")
-		}
-
-		// We should confirm all transactions can now be queried
-		for _, tx := range allTxs {
-			txLookup, _, _ := bc.GetTransactionLookup(tx)
-			if txLookup == nil {
-				t.Fatalf("missing transaction: %v", tx)
-			}
-		}
+	for _, tt := range reexecTests {
+		t.Run(tt.Name, func(t *testing.T) {
+			tt.testFunc(t, create)
+		})
 	}
 }
 
