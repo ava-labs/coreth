@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
+	"github.com/ava-labs/libevm/libevm/precompiles/p256verify"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -82,6 +83,12 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 
 	var addresses []common.Address
 	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
+
+	// Add p256verify address if Granite is enabled
+	if r.AvalancheRules.IsGranite {
+		addresses = append(addresses, common.HexToAddress("0x0000000000000000000000000000000000000100"))
+	}
+
 	addresses = append(addresses, existing...)
 	return addresses
 }
@@ -141,6 +148,16 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 	if p, ok := r.precompileOverrideBuiltin(addr); ok {
 		return p, true
 	}
+
+	// Handle p256verify as a stateless precompile
+	if addr == common.HexToAddress("0x0000000000000000000000000000000000000100") {
+		// Check if p256verify is enabled at the current timestamp
+		if r.AvalancheRules.IsGranite {
+			return &p256verify.Precompile{}, true
+		}
+		return nil, false
+	}
+
 	if _, ok := r.Precompiles[addr]; !ok {
 		return nil, false
 	}
