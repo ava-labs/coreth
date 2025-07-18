@@ -18,6 +18,7 @@ import (
 	common "github.com/ava-labs/libevm/common"
 	types "github.com/ava-labs/libevm/core/types"
 	vm "github.com/ava-labs/libevm/core/vm"
+	stateconf "github.com/ava-labs/libevm/libevm/stateconf"
 	uint256 "github.com/holiman/uint256"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -166,17 +167,22 @@ func (mr *MockStateDBMockRecorder) GetPredicateStorageSlots(address, index any) 
 }
 
 // GetState mocks base method.
-func (m *MockStateDB) GetState(arg0 common.Address, arg1 common.Hash) common.Hash {
+func (m *MockStateDB) GetState(arg0 common.Address, arg1 common.Hash, arg2 ...stateconf.StateDBStateOption) common.Hash {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetState", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetState", varargs...)
 	ret0, _ := ret[0].(common.Hash)
 	return ret0
 }
 
 // GetState indicates an expected call of GetState.
-func (mr *MockStateDBMockRecorder) GetState(arg0, arg1 any) *gomock.Call {
+func (mr *MockStateDBMockRecorder) GetState(arg0, arg1 any, arg2 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockStateDB)(nil).GetState), arg0, arg1)
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockStateDB)(nil).GetState), varargs...)
 }
 
 // GetTxHash mocks base method.
@@ -232,15 +238,20 @@ func (mr *MockStateDBMockRecorder) SetNonce(arg0, arg1 any) *gomock.Call {
 }
 
 // SetState mocks base method.
-func (m *MockStateDB) SetState(arg0 common.Address, arg1, arg2 common.Hash) {
+func (m *MockStateDB) SetState(arg0 common.Address, arg1, arg2 common.Hash, arg3 ...stateconf.StateDBStateOption) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetState", arg0, arg1, arg2)
+	varargs := []any{arg0, arg1, arg2}
+	for _, a := range arg3 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetState", varargs...)
 }
 
 // SetState indicates an expected call of SetState.
-func (mr *MockStateDBMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockStateDBMockRecorder) SetState(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockStateDB)(nil).SetState), arg0, arg1, arg2)
+	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockStateDB)(nil).SetState), varargs...)
 }
 
 // Snapshot mocks base method.

@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
@@ -420,7 +421,8 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err := verifierBackend.SemanticVerify(tx, parent, baseFee); err != nil {
 		return err
 	}
-	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, state)
+	extState := extstate.New(state)
+	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, extState)
 }
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
@@ -686,8 +688,9 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		return nil, nil, nil
 	}
 
+	extState := extstate.New(state)
 	for _, tx := range txs {
-		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, state); err != nil {
+		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, extState); err != nil {
 			return nil, nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
@@ -810,11 +813,13 @@ func (vm *VM) NewExportTx(
 		return nil, err
 	}
 
+	extState := extstate.New(state)
+
 	// Create the transaction
 	tx, err := atomic.NewExportTx(
 		vm.Ctx,            // Context
 		vm.CurrentRules(), // VM rules
-		state,
+		extState,
 		assetID, // AssetID
 		amount,  // Amount
 		chainID, // ID of the chain to send the funds to
