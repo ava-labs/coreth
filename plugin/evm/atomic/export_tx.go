@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -221,7 +219,7 @@ func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 func NewExportTx(
 	ctx *snow.Context,
 	rules extras.Rules,
-	state *state.StateDB,
+	state StateDB,
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export
 	chainID ids.ID, // Chain to send the UTXOs to
@@ -312,8 +310,7 @@ func NewExportTx(
 }
 
 // EVMStateTransfer executes the state update from the atomic export transaction
-func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.StateDB) error {
-	state := extstate.New(stateDB)
+func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
 	addrs := map[[20]byte]uint64{}
 	for _, from := range utx.Ins {
 		if from.AssetID == ctx.AVAXAssetID {
@@ -354,12 +351,11 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.
 // [tx.Sign] which supports multiple keys on a single input.
 func getSpendableFunds(
 	ctx *snow.Context,
-	stateDB *state.StateDB,
+	state StateDB,
 	keys []*secp256k1.PrivateKey,
 	assetID ids.ID,
 	amount uint64,
 ) ([]EVMInput, [][]*secp256k1.PrivateKey, error) {
-	state := extstate.New(stateDB)
 	inputs := []EVMInput{}
 	signers := [][]*secp256k1.PrivateKey{}
 	// Note: we assume that each key in [keys] is unique, so that iterating over
@@ -412,7 +408,7 @@ func getSpendableFunds(
 // [tx.Sign] which supports multiple keys on a single input.
 func getSpendableAVAXWithFee(
 	ctx *snow.Context,
-	state *state.StateDB,
+	state StateDB,
 	keys []*secp256k1.PrivateKey,
 	amount uint64,
 	cost uint64,
