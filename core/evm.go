@@ -41,6 +41,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
 )
 
@@ -77,19 +78,19 @@ func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm
 }
 
 func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
+	stateDB := extstate.New(db.(*state.StateDB))
 	if params.GetRulesExtra(rules).IsApricotPhase1 {
-		db = &StateDbAP1{db.(extstate.VmStateDB)}
+		return stateDB
 	}
-	return extstate.New(db.(extstate.VmStateDB))
+	return &StateDBAP0{stateDB}
 }
 
-type StateDbAP1 struct {
-	extstate.VmStateDB
+type StateDBAP0 struct {
+	*extstate.StateDB
 }
 
-func (s *StateDbAP1) GetCommittedState(addr common.Address, key common.Hash) common.Hash {
-	state.NormalizeStateKey(&key)
-	return s.VmStateDB.GetCommittedState(addr, key)
+func (s *StateDBAP0) GetCommittedState(addr common.Address, key common.Hash, _ ...stateconf.StateDBStateOption) common.Hash {
+	return s.StateDB.GetCommittedState(addr, key, stateconf.SkipStateKeyTransformation())
 }
 
 // ChainContext supports retrieving headers and consensus parameters from the

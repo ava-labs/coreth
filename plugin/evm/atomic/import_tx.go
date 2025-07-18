@@ -10,6 +10,8 @@ import (
 	"math/big"
 	"slices"
 
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -332,7 +334,8 @@ func NewImportTx(
 
 // EVMStateTransfer performs the state transfer to increase the balances of
 // accounts accordingly with the imported EVMOutputs
-func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
+func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.StateDB) error {
+	state := extstate.New(stateDB)
 	for _, to := range utx.Outs {
 		if to.AssetID == ctx.AVAXAssetID {
 			log.Debug("import_tx", "src", utx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", "AVAX")
