@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
 )
 
@@ -23,17 +24,18 @@ type StatefulPrecompiledContract interface {
 
 // StateDB is the interface for accessing EVM state
 type StateDB interface {
-	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
+	GetState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
+	SetState(common.Address, common.Hash, common.Hash, ...stateconf.StateDBStateOption)
 
 	SetNonce(common.Address, uint64)
 	GetNonce(common.Address) uint64
 
 	GetBalance(common.Address) *uint256.Int
 	AddBalance(common.Address, *uint256.Int)
-	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
-	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
-	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+
+	GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int
+	AddBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int)
+	SubBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int)
 
 	CreateAccount(common.Address)
 	Exist(common.Address) bool
