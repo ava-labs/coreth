@@ -22,10 +22,9 @@ import (
 	"github.com/ava-labs/libevm/trie"
 )
 
-// TrieNode represents a leaf node that belongs to the atomic trie.
-const TrieNode message.NodeType = 2
-
 const (
+	// TrieNode represents a leaf node that belongs to the atomic trie.
+	TrieNode message.NodeType = 2
 	// MinNumWorkers is the minimum number of worker goroutines to use for atomic trie syncing.
 	MinNumWorkers = 1
 )
@@ -134,7 +133,7 @@ func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie
 	tasks := make(chan syncclient.LeafSyncTask, numWorkers)
 
 	// For atomic trie syncing, we typically want a single task since the trie is sequential.
-	// But we can create multiple tasks if needed for parallel processing of different ranges
+	// But we can create multiple tasks if needed for parallel processing of different ranges.
 	tasks <- &syncerLeafTask{syncer: syncer}
 	close(tasks)
 
@@ -144,8 +143,6 @@ func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie
 
 // Start begins syncing the target atomic root with the specified number of worker goroutines.
 // If numWorkers is not provided, it defaults to DefaultNumWorkers().
-// Note: numWorkers refers to worker goroutines, not OS threads. The Go runtime
-// scheduler will efficiently distribute these goroutines across available OS threads.
 func (s *syncer) Start(ctx context.Context, numWorkers ...int) error {
 	workers := DefaultNumWorkers()
 	if len(numWorkers) > 0 {

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
@@ -121,10 +122,10 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 
 	// check all commit heights are created correctly
 	hasher := trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	serverTrie, err := trie.New(trie.TrieID(targetRoot), serverTrieDB)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	addAllKeysWithPrefix := func(prefix []byte) error {
 		nodeIt, err := serverTrie.NodeIterator(prefix)
 		if err != nil {
@@ -136,19 +137,19 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 				return it.Err
 			}
 			err := hasher.Update(it.Key, it.Value)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return it.Err
 	}
 
 	for height := uint64(0); height <= targetHeight; height++ {
 		err := addAllKeysWithPrefix(database.PackUInt64(height))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		if height%commitInterval == 0 {
 			expected := hasher.Hash()
 			root, err := atomicTrie.Root(height)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, expected, root)
 		}
 	}
@@ -217,18 +218,18 @@ func TestSyncerWaitWithoutStart(t *testing.T) {
 	clientDB := versiondb.New(memdb.New())
 
 	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
-	assert.NoError(t, err, "could not create syncer")
+	require.NoError(t, err, "could not create syncer")
 
-	// Create a context that will be cancelled
+	// Create a context that will be cancelled.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Cancel the context immediately
+	// Cancel the context immediately.
 	cancel()
 
-	// Wait should return context error even without Start() being called
+	// Wait should return context error even without Start() being called.
 	err = syncer.Wait(ctx)
-	assert.Error(t, err, "should return context error")
+	require.Error(t, err, "should return context error")
 	assert.Equal(t, context.Canceled, err, "should return context.Canceled")
 }
 
@@ -238,20 +239,20 @@ func TestSyncerStartValidation(t *testing.T) {
 	clientDB := versiondb.New(memdb.New())
 
 	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
-	assert.NoError(t, err, "could not create syncer")
+	require.NoError(t, err, "could not create syncer")
 
-	// Test with valid worker count
+	// Test with a valid worker count.
 	err = syncer.Start(ctx, 4)
-	assert.NoError(t, err, "should accept valid worker count")
+	require.NoError(t, err, "should accept valid worker count")
 
-	// Test with too few workers
+	// Test with too few workers.
 	err = syncer.Start(ctx, 0)
-	assert.Error(t, err, "should reject worker count below minimum")
+	require.Error(t, err, "should reject worker count below minimum")
 	assert.Contains(t, err.Error(), "must be at least")
 
-	// Test with too many workers
+	// Test with too many workers.
 	err = syncer.Start(ctx, MaxNumWorkers()+1)
-	assert.Error(t, err, "should reject worker count above maximum")
+	require.Error(t, err, "should reject worker count above maximum")
 	assert.Contains(t, err.Error(), "must be at most")
 }
 
@@ -330,10 +331,10 @@ func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Contex
 
 	clientDB := versiondb.New(memdb.New())
 	repo, err := state.NewAtomicTxRepository(clientDB, message.Codec, 0)
-	assert.NoError(t, err, "could not initialize atomic tx repository")
+	require.NoError(t, err, "could not initialize atomic tx repository")
 
 	atomicBackend, err := state.NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, 0, common.Hash{}, commitInterval)
-	assert.NoError(t, err, "could not initialize atomic backend")
+	require.NoError(t, err, "could not initialize atomic backend")
 
 	return ctx, mockClient, atomicBackend, root
 }
@@ -349,26 +350,26 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 
 	if useDefaultWorkers {
 		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
-		assert.NoError(t, err, "could not create syncer")
+		require.NoError(t, err, "could not create syncer")
 
 		err = syncer.Start(ctx)
-		assert.NoError(t, err, "could not start syncer with default workers")
+		require.NoError(t, err, "could not start syncer with default workers")
 	} else {
 		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, numWorkers)
-		assert.NoError(t, err, "could not create syncer")
+		require.NoError(t, err, "could not create syncer")
 
 		err = syncer.Start(ctx, numWorkers)
-		assert.NoError(t, err, "could not start syncer with workers")
+		require.NoError(t, err, "could not start syncer with workers")
 	}
 
 	// Wait for completion.
 	err = syncer.Wait(ctx)
-	assert.NoError(t, err, "syncer should complete successfully")
+	require.NoError(t, err, "syncer should complete successfully")
 
 	// Verify that the syncer completed successfully.
 	select {
 	case err := <-syncer.Done():
-		assert.NoError(t, err, "no error should be returned from Done()")
+		require.NoError(t, err, "no error should be returned from Done()")
 	default:
 		// No error, which is expected
 	}
