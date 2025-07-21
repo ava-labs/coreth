@@ -9,9 +9,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
-	engCommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
@@ -30,11 +32,11 @@ import (
 
 // createExportTxOptions adds funds to shared memory, imports them, and returns a list of export transactions
 // that attempt to send the funds to each of the test keys (list of length 3).
-func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
+func createExportTxOptions(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
 	// Add a UTXO to shared memory
 	utxo := &avax.UTXO{
 		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
-		Asset:  avax.Asset{ID: vm.ctx.AVAXAssetID},
+		Asset:  avax.Asset{ID: vm.Ctx.AVAXAssetID},
 		Out: &secp256k1fx.TransferOutput{
 			Amt: uint64(50000000),
 			OutputOwners: secp256k1fx.OutputOwners{
@@ -48,9 +50,9 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 		t.Fatal(err)
 	}
 
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.ctx.XChainID)
+	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.Ctx.XChainID)
 	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
+	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
@@ -61,16 +63,18 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 	}
 
 	// Import the funds
-	importTx, err := vm.newImportTx(vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+	importTx, err := vm.NewImportTx(vm.Ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := vm.atomicVM.AtomicMempool.AddLocalTx(importTx); err != nil {
+	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
 		t.Fatal(err)
 	}
 
-	<-issuer
+	msg, err := vm.WaitForEvent(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, commonEng.PendingTxs, msg)
 
 	blk, err := vm.BuildBlock(context.Background())
 	if err != nil {
@@ -91,12 +95,12 @@ func createExportTxOptions(t *testing.T, vm *VM, issuer chan engCommon.Message, 
 
 	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
 	exportTxs := make([]*atomic.Tx, 0, 3)
-	state, err := vm.blockChain.State()
+	state, err := vm.Blockchain().State()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, addr := range testShortIDAddrs {
-		exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+		exportTx, err := atomic.NewExportTx(vm.Ctx, vm.CurrentRules(), state, vm.Ctx.AVAXAssetID, uint64(5000000), vm.Ctx.XChainID, addr, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -380,16 +384,16 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			tx, err := tvm.atomicVM.NewImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
+			if err := tvm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -449,9 +453,10 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 
 func TestExportTxSemanticVerify(t *testing.T) {
 	fork := upgradetest.NoUpgrades
-	vm := newVM(t, testVMConfig{
+	tvm := newVM(t, testVMConfig{
 		fork: &fork,
-	}).vm
+	})
+	vm := tvm.atomicVM
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -473,14 +478,14 @@ func TestExportTxSemanticVerify(t *testing.T) {
 	)
 
 	validExportTx := &atomic.UnsignedExportTx{
-		NetworkID:        vm.ctx.NetworkID,
-		BlockchainID:     vm.ctx.ChainID,
-		DestinationChain: vm.ctx.XChainID,
+		NetworkID:        vm.Ctx.NetworkID,
+		BlockchainID:     vm.Ctx.ChainID,
+		DestinationChain: vm.Ctx.XChainID,
 		Ins: []atomic.EVMInput{
 			{
 				Address: ethAddr,
 				Amount:  avaxBalance,
-				AssetID: vm.ctx.AVAXAssetID,
+				AssetID: vm.Ctx.AVAXAssetID,
 				Nonce:   0,
 			},
 			{
@@ -512,20 +517,20 @@ func TestExportTxSemanticVerify(t *testing.T) {
 	avalancheutils.Sort(validExportTx.Ins)
 
 	validAVAXExportTx := &atomic.UnsignedExportTx{
-		NetworkID:        vm.ctx.NetworkID,
-		BlockchainID:     vm.ctx.ChainID,
-		DestinationChain: vm.ctx.XChainID,
+		NetworkID:        vm.Ctx.NetworkID,
+		BlockchainID:     vm.Ctx.ChainID,
+		DestinationChain: vm.Ctx.XChainID,
 		Ins: []atomic.EVMInput{
 			{
 				Address: ethAddr,
 				Amount:  avaxBalance,
-				AssetID: vm.ctx.AVAXAssetID,
+				AssetID: vm.Ctx.AVAXAssetID,
 				Nonce:   0,
 			},
 		},
 		ExportedOutputs: []*avax.TransferableOutput{
 			{
-				Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
+				Asset: avax.Asset{ID: vm.Ctx.AVAXAssetID},
 				Out: &secp256k1fx.TransferOutput{
 					Amt: avaxBalance / 2,
 					OutputOwners: secp256k1fx.OutputOwners{
@@ -828,7 +833,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 				validExportTx := *validExportTx
 				validExportTx.ExportedOutputs = []*avax.TransferableOutput{
 					{
-						Asset: avax.Asset{ID: vm.ctx.AVAXAssetID},
+						Asset: avax.Asset{ID: vm.Ctx.AVAXAssetID},
 						Out: &secp256k1fx.TransferOutput{
 							Amt: avaxBalance, // after fees this should be too much
 							OutputOwners: secp256k1fx.OutputOwners{
@@ -923,25 +928,12 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		backend := &atomicvm.VerifierBackend{
-			Ctx:          vm.ctx,
-			Fx:           &vm.atomicVM.Fx,
-			Rules:        test.rules,
-			Bootstrapped: vm.bootstrapped.Get(),
-			BlockFetcher: vm,
-			SecpCache:    vm.atomicVM.SecpCache,
-		}
+		backend := atomicvm.NewVerifierBackend(vm, test.rules)
 
 		t.Run(test.name, func(t *testing.T) {
 			tx := test.tx
-			exportTx := tx.UnsignedAtomicTx
 
-			err := exportTx.Visit(&atomicvm.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: test.baseFee,
-			})
+			err := backend.SemanticVerify(tx, parent, test.baseFee)
 			if test.shouldErr && err == nil {
 				t.Fatalf("should have errored but returned valid")
 			}
@@ -1741,16 +1733,16 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			tx, err := tvm.atomicVM.NewImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if err := tvm.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
+			if err := tvm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1784,21 +1776,9 @@ func TestNewExportTx(t *testing.T) {
 
 			exportTx := tx.UnsignedAtomicTx
 
-			backend := &atomicvm.VerifierBackend{
-				Ctx:          tvm.vm.ctx,
-				Fx:           &tvm.vm.atomicVM.Fx,
-				Rules:        tvm.vm.currentRules(),
-				Bootstrapped: tvm.vm.bootstrapped.Get(),
-				BlockFetcher: tvm.vm,
-				SecpCache:    tvm.vm.atomicVM.SecpCache,
-			}
+			backend := atomicvm.NewVerifierBackend(tvm.atomicVM, tvm.vm.currentRules())
 
-			if err := exportTx.Visit(&atomicvm.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: parent.GetEthBlock().BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.GetEthBlock().BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 
@@ -1940,16 +1920,16 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tx, err := tvm.vm.newImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			tx, err := tvm.atomicVM.NewImportTx(tvm.vm.ctx.XChainID, testEthAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if err := tvm.vm.atomicVM.AtomicMempool.AddRemoteTx(tx); err != nil {
+			if err := tvm.atomicVM.AtomicMempool.AddRemoteTx(tx); err != nil {
 				t.Fatal(err)
 			}
 
-			<-tvm.toEngine
+			require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 			blk, err := tvm.vm.BuildBlock(context.Background())
 			if err != nil {
@@ -1988,21 +1968,9 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			}
 
 			exportTx := tx.UnsignedAtomicTx
-			backend := &atomicvm.VerifierBackend{
-				Ctx:          tvm.vm.ctx,
-				Fx:           &tvm.vm.atomicVM.Fx,
-				Rules:        tvm.vm.currentRules(),
-				Bootstrapped: tvm.vm.bootstrapped.Get(),
-				BlockFetcher: tvm.vm,
-				SecpCache:    tvm.vm.atomicVM.SecpCache,
-			}
+			backend := atomicvm.NewVerifierBackend(tvm.atomicVM, tvm.vm.currentRules())
 
-			if err := exportTx.Visit(&atomicvm.SemanticVerifier{
-				Backend: backend,
-				Tx:      tx,
-				Parent:  parent,
-				BaseFee: parent.GetEthBlock().BaseFee(),
-			}); err != nil {
+			if err := backend.SemanticVerify(tx, parent, parent.GetEthBlock().BaseFee()); err != nil {
 				t.Fatal("newExportTx created an invalid transaction", err)
 			}
 

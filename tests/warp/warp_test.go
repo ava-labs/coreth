@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +17,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/warp/aggregator"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
 
@@ -34,6 +31,7 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 
+	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/cmd/simulator/key"
 	"github.com/ava-labs/coreth/cmd/simulator/load"
 	"github.com/ava-labs/coreth/cmd/simulator/metrics"
@@ -42,25 +40,17 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/predicate"
-	"github.com/ava-labs/coreth/tests"
 	"github.com/ava-labs/coreth/tests/utils"
+	"github.com/ava-labs/coreth/tests/warp/aggregator"
 	warpBackend "github.com/ava-labs/coreth/warp"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/core/types"
 )
 
-const (
-	subnetAName = "warp-subnet-a"
-)
-
 var (
 	flagVars *e2e.FlagVars
 
-	repoRootPath = tests.GetRepoRootPath("tests/warp")
-
-	genesisPath = filepath.Join(repoRootPath, "tests/precompile/genesis/warp.json")
-
-	subnetA, cChainSubnetDetails *Subnet
+	cChainSubnetDetails *Subnet
 
 	testPayload = []byte{1, 2, 3}
 )
@@ -99,7 +89,6 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 			"coreth-warp-e2e",
 			nodes,
 			tmpnet.FlagsMap{},
-			utils.NewTmpnetSubnet(subnetAName, genesisPath, utils.DefaultChainConfig, nodes...),
 		),
 	)
 
@@ -121,15 +110,6 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	validatorURIs := make([]string, len(network.Nodes))
 	for i, node := range network.Nodes {
 		validatorURIs[i] = node.URI
-	}
-
-	tmpnetSubnetA := network.GetSubnet(subnetAName)
-	require.NotNil(tmpnetSubnetA)
-	subnetA = &Subnet{
-		SubnetID:      tmpnetSubnetA.SubnetID,
-		BlockchainID:  tmpnetSubnetA.Chains[0].ChainID,
-		PreFundedKey:  tmpnetSubnetA.Chains[0].PreFundedKey.ToECDSA(),
-		ValidatorURIs: validatorURIs,
 	}
 
 	infoClient := info.NewClient(network.Nodes[0].URI)
@@ -167,8 +147,12 @@ var _ = ginkgo.Describe("[Warp]", func() {
 		ginkgo.GinkgoLogr.Info("Executing warp load test")
 		w.warpLoad()
 	}
-	ginkgo.It("SubnetA -> C-Chain", func() { testFunc(subnetA, cChainSubnetDetails) })
-	ginkgo.It("C-Chain -> SubnetA", func() { testFunc(cChainSubnetDetails, subnetA) })
+	// TODO: Uncomment these tests when we have a way to run them in CI, currently we should not depend on Subnet-EVM
+	// as Coreth and Subnet-EVM have different release cycles. The problem is that once we update AvalancheGo (protocol version),
+	// we need to update Subnet-EVM to the same protocol version. Until then all Subnet-EVM tests are broken, so it's blocking Coreth development.
+	// It's best to not run these tests until we have a way to run them in CI.
+	// ginkgo.It("SubnetA -> C-Chain", func() { testFunc(subnetA, cChainSubnetDetails) })
+	// ginkgo.It("C-Chain -> SubnetA", func() { testFunc(cChainSubnetDetails, subnetA) })
 	ginkgo.It("C-Chain -> C-Chain", func() { testFunc(cChainSubnetDetails, cChainSubnetDetails) })
 })
 
@@ -386,7 +370,7 @@ func (w *warpTest) aggregateSignaturesViaAPI() {
 	}
 
 	ginkgo.GinkgoLogr.Info("Aggregating signatures from validator set", "numValidators", len(warpValidators), "totalWeight", totalWeight)
-	apiSignatureGetter := warpBackend.NewAPIFetcher(warpAPIs)
+	apiSignatureGetter := NewAPIFetcher(warpAPIs)
 	signatureResult, err := aggregator.New(apiSignatureGetter, warpValidators, totalWeight).AggregateSignatures(ctx, w.addressedCallUnsignedMessage, 100)
 	require.NoError(err)
 	require.Equal(signatureResult.SignatureWeight, signatureResult.TotalWeight)

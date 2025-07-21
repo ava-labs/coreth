@@ -1,13 +1,11 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-
-package evm
+package vm
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"net/http"
 
 	"github.com/ava-labs/avalanchego/api"
@@ -15,56 +13,24 @@ import (
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
-	"github.com/ava-labs/libevm/common"
+
 	"github.com/ava-labs/libevm/log"
 )
 
-// test constants
 const (
-	GenesisTestAddr = "0x751a0b96e1042bee789452ecb20253fba40dbe85"
-	GenesisTestKey  = "0xabd71b35d559563fea757f0f5edbde286fb8c043105b15abb7cd57189306d7d1"
-
 	// Max number of addresses that can be passed in as argument to GetUTXOs
 	maxGetUTXOsAddrs = 1024
+	maxUTXOsToFetch  = 1024
 )
 
 var (
 	errNoAddresses   = errors.New("no addresses provided")
 	errNoSourceChain = errors.New("no source chain provided")
 	errNilTxID       = errors.New("nil transaction ID")
-
-	initialBaseFee = big.NewInt(ap3.InitialBaseFee)
 )
-
-// SnowmanAPI introduces snowman specific functionality to the evm
-type SnowmanAPI struct{ vm *VM }
-
-// GetAcceptedFrontReply defines the reply that will be sent from the
-// GetAcceptedFront API call
-type GetAcceptedFrontReply struct {
-	Hash   common.Hash `json:"hash"`
-	Number *big.Int    `json:"number"`
-}
-
-// GetAcceptedFront returns the last accepted block's hash and height
-func (api *SnowmanAPI) GetAcceptedFront(ctx context.Context) (*GetAcceptedFrontReply, error) {
-	blk := api.vm.blockChain.LastConsensusAcceptedBlock()
-	return &GetAcceptedFrontReply{
-		Hash:   blk.Hash(),
-		Number: blk.Number(),
-	}, nil
-}
-
-// IssueBlock to the chain
-func (api *SnowmanAPI) IssueBlock(ctx context.Context) error {
-	log.Info("Issuing a new block")
-
-	api.vm.builder.signalTxsReady()
-	return nil
-}
 
 // AvaxAPI offers Avalanche network related API methods
 type AvaxAPI struct{ vm *VM }
@@ -75,7 +41,11 @@ type VersionReply struct {
 
 // ClientVersion returns the version of the VM running
 func (service *AvaxAPI) Version(r *http.Request, _ *struct{}, reply *VersionReply) error {
-	reply.Version = Version
+	version, err := service.vm.InnerVM.Version(context.Background())
+	if err != nil {
+		return err
+	}
+	reply.Version = version
 	return nil
 }
 
@@ -94,15 +64,14 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 		return errNoSourceChain
 	}
 
-	chainID, err := service.vm.ctx.BCLookup.Lookup(args.SourceChain)
+	sourceChainID, err := service.vm.Ctx.BCLookup.Lookup(args.SourceChain)
 	if err != nil {
 		return fmt.Errorf("problem parsing source chainID %q: %w", args.SourceChain, err)
 	}
-	sourceChain := chainID
 
 	addrSet := set.Set[ids.ShortID]{}
 	for _, addrStr := range args.Addresses {
-		addr, err := service.vm.ParseServiceAddress(addrStr)
+		addr, err := ParseServiceAddress(service.vm.Ctx, addrStr)
 		if err != nil {
 			return fmt.Errorf("couldn't parse address %q: %w", addrStr, err)
 		}
@@ -112,7 +81,7 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 	startAddr := ids.ShortEmpty
 	startUTXO := ids.Empty
 	if args.StartIndex.Address != "" || args.StartIndex.UTXO != "" {
-		startAddr, err = service.vm.ParseServiceAddress(args.StartIndex.Address)
+		startAddr, err = ParseServiceAddress(service.vm.Ctx, args.StartIndex.Address)
 		if err != nil {
 			return fmt.Errorf("couldn't parse start index address %q: %w", args.StartIndex.Address, err)
 		}
@@ -122,15 +91,23 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 		}
 	}
 
-	service.vm.ctx.Lock.Lock()
-	defer service.vm.ctx.Lock.Unlock()
+	service.vm.Ctx.Lock.Lock()
+	defer service.vm.Ctx.Lock.Unlock()
 
-	utxos, endAddr, endUTXOID, err := service.vm.GetAtomicUTXOs(
-		sourceChain,
+	limit := int(args.Limit)
+
+	if limit <= 0 || limit > maxUTXOsToFetch {
+		limit = maxUTXOsToFetch
+	}
+
+	utxos, endAddr, endUTXOID, err := avax.GetAtomicUTXOs(
+		service.vm.Ctx.SharedMemory,
+		atomic.Codec,
+		sourceChainID,
 		addrSet,
 		startAddr,
 		startUTXO,
-		int(args.Limit),
+		limit,
 	)
 	if err != nil {
 		return fmt.Errorf("problem retrieving UTXOs: %w", err)
@@ -149,7 +126,7 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 		reply.UTXOs[i] = str
 	}
 
-	endAddress, err := service.vm.FormatLocalAddress(endAddr)
+	endAddress, err := FormatLocalAddress(service.vm.Ctx, endAddr)
 	if err != nil {
 		return fmt.Errorf("problem formatting address: %w", err)
 	}
@@ -179,13 +156,13 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 
 	response.TxID = tx.ID()
 
-	service.vm.ctx.Lock.Lock()
-	defer service.vm.ctx.Lock.Unlock()
+	service.vm.Ctx.Lock.Lock()
+	defer service.vm.Ctx.Lock.Unlock()
 
-	if err := service.vm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
+	if err := service.vm.AtomicMempool.AddLocalTx(tx); err != nil {
 		return err
 	}
-	service.vm.atomicVM.AtomicTxPushGossiper.Add(tx)
+	service.vm.AtomicTxPushGossiper.Add(tx)
 	return nil
 }
 
@@ -197,17 +174,17 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 		return errNilTxID
 	}
 
-	service.vm.ctx.Lock.Lock()
-	defer service.vm.ctx.Lock.Unlock()
+	service.vm.Ctx.Lock.Lock()
+	defer service.vm.Ctx.Lock.Unlock()
 
-	_, status, height, _ := service.vm.getAtomicTx(args.TxID)
+	_, status, height, _ := service.vm.GetAtomicTx(args.TxID)
 
 	reply.Status = status
 	if status == atomic.Accepted {
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.blockChain.LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			reply.Status = atomic.Processing
 			return nil
@@ -232,10 +209,10 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 		return errNilTxID
 	}
 
-	service.vm.ctx.Lock.Lock()
-	defer service.vm.ctx.Lock.Unlock()
+	service.vm.Ctx.Lock.Lock()
+	defer service.vm.Ctx.Lock.Unlock()
 
-	tx, status, height, err := service.vm.getAtomicTx(args.TxID)
+	tx, status, height, err := service.vm.GetAtomicTx(args.TxID)
 	if err != nil {
 		return err
 	}
@@ -254,7 +231,7 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.blockChain.LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			return nil
 		}
