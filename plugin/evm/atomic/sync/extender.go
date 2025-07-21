@@ -42,14 +42,16 @@ func (a *Extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 
 	// Use default number of workers for atomic syncing.
 	// This can be made configurable in the future.
-	syncer, err := newSyncer(
-		client,
-		verDB,
-		a.trie,
-		atomicSummary.AtomicRoot,
-		atomicSummary.BlockNumber,
-		a.requestSize, DefaultNumWorkers(),
-	)
+	config := Config{
+		Client:       client,
+		Database:     verDB,
+		AtomicTrie:   a.trie,
+		TargetRoot:   atomicSummary.AtomicRoot,
+		TargetHeight: atomicSummary.BlockNumber,
+		RequestSize:  a.requestSize,
+		NumWorkers:   DefaultNumWorkers(),
+	}
+	syncer, err := newSyncer(config)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic syncer: %w", err)
 	}

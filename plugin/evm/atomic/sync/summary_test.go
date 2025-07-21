@@ -17,7 +17,9 @@ import (
 
 func TestMarshalSummary(t *testing.T) {
 	atomicSummary, err := NewSummary(common.Hash{1}, 2, common.Hash{3}, common.Hash{4})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to create summary: %v", err)
+	}
 
 	require.Equal(t, common.Hash{1}, atomicSummary.GetBlockHash())
 	require.Equal(t, uint64(2), atomicSummary.Height())
@@ -35,7 +37,9 @@ func TestMarshalSummary(t *testing.T) {
 		return block.StateSyncSkipped, nil
 	}
 	s, err := parser.Parse(atomicSummary.Bytes(), acceptImplTest)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to parse summary: %v", err)
+	}
 	require.Equal(t, atomicSummary.GetBlockHash(), s.GetBlockHash())
 	require.Equal(t, atomicSummary.Height(), s.Height())
 	require.Equal(t, atomicSummary.GetBlockRoot(), s.GetBlockRoot())
@@ -43,7 +47,9 @@ func TestMarshalSummary(t *testing.T) {
 	require.Equal(t, atomicSummary.Bytes(), s.Bytes())
 
 	mode, err := s.Accept(context.TODO())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to accept summary: %v", err)
+	}
 	require.Equal(t, block.StateSyncSkipped, mode)
 	require.True(t, called)
 }

@@ -7,9 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"runtime"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -26,64 +24,14 @@ import (
 const (
 	// TrieNode represents a leaf node that belongs to the atomic trie.
 	TrieNode message.NodeType = 2
-	// MinNumWorkers is the minimum number of worker goroutines to use for atomic trie syncing.
-	MinNumWorkers = 1
 )
-
-// Sentinel errors for atomic syncer operations
-var (
-	// ErrWaitBeforeStart is returned when Wait() is called before Start().
-	ErrWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
-
-	// ErrTooFewWorkers is returned when numWorkers is below the minimum.
-	ErrTooFewWorkers = errors.New("numWorkers below minimum")
-
-	// ErrTooManyWorkers is returned when numWorkers exceeds the maximum.
-	ErrTooManyWorkers = errors.New("numWorkers above maximum")
-)
-
-// MaxNumWorkers returns the maximum number of worker goroutines to use for atomic trie syncing.
-// For I/O bound work like network syncing, we can be more aggressive than CPU-bound work.
-// This allows up to 2x CPU cores for I/O bound work, but caps at 64 for very large systems.
-// Rationale:
-// - I/O bound work benefits from more goroutines than CPU cores.
-// - 2x CPU cores provides good parallelism without overwhelming the system.
-// - Cap of 64 prevents excessive resource usage on very large systems.
-func MaxNumWorkers() int {
-	cpus := runtime.NumCPU()
-
-	return min(cpus*2, 64)
-}
-
-// DefaultNumWorkers returns the optimal number of worker goroutines for atomic trie syncing
-// based on available CPU cores, with sensible bounds.
-// Note: These are goroutines, not OS threads. The Go runtime scheduler will distribute
-// them efficiently across the available OS threads (GOMAXPROCS).
-// Rationale:
-// - 75% of CPU cores provides good parallelism while leaving headroom for other operations.
-// - This balances performance with system resource usage.
-// - Bounded by MinNumWorkers and MaxNumWorkers for safety.
-func DefaultNumWorkers() int {
-	cpus := runtime.NumCPU()
-
-	// Use 75% of available CPUs to leave some headroom for other operations.
-	optimal := (cpus * 3) / 4
-
-	// Apply bounds.
-	if optimal < MinNumWorkers {
-		return MinNumWorkers
-	}
-
-	if optimal > MaxNumWorkers() {
-		return MaxNumWorkers()
-	}
-
-	return optimal
-}
 
 var (
 	_ Syncer                  = (*syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
+
+	// Pre-allocate zero bytes to avoid repeated allocations.
+	zeroBytes = bytes.Repeat([]byte{0x00}, common.HashLength)
 )
 
 // Syncer represents a step in state sync,
@@ -124,33 +72,35 @@ type syncer struct {
 func addZeroes(height uint64) []byte {
 	packer := wrappers.Packer{Bytes: make([]byte, atomicstate.TrieKeyLength)}
 	packer.PackLong(height)
-	packer.PackFixedBytes(bytes.Repeat([]byte{0x00}, common.HashLength))
+	packer.PackFixedBytes(zeroBytes)
 	return packer.Bytes
 }
 
 // newSyncer returns a new syncer instance that will sync the atomic trie from the network.
-func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie *atomicstate.AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16, numWorkers int) (*syncer, error) {
-	// Validate worker count.
-	if numWorkers < MinNumWorkers {
-		return nil, fmt.Errorf("%w: %d (minimum: %d)", ErrTooFewWorkers, numWorkers, MinNumWorkers)
+func newSyncer(config Config) (*syncer, error) {
+	// Validate the configuration
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
 
-	if numWorkers > MaxNumWorkers() {
-		return nil, fmt.Errorf("%w: %d (maximum: %d)", ErrTooManyWorkers, numWorkers, MaxNumWorkers())
+	// Use default workers if not specified
+	numWorkers := config.NumWorkers
+	if numWorkers == 0 {
+		numWorkers = defaultWorkers
 	}
 
-	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
-	trie, err := atomicTrie.OpenTrie(lastCommittedRoot)
+	lastCommittedRoot, lastCommit := config.AtomicTrie.LastCommitted()
+	trie, err := config.AtomicTrie.OpenTrie(lastCommittedRoot)
 	if err != nil {
 		return nil, err
 	}
 
 	syncer := &syncer{
-		db:           vdb,
-		atomicTrie:   atomicTrie,
+		db:           config.Database,
+		atomicTrie:   config.AtomicTrie,
 		trie:         trie,
-		targetRoot:   targetRoot,
-		targetHeight: targetHeight,
+		targetRoot:   config.TargetRoot,
+		targetHeight: config.TargetHeight,
 		lastHeight:   lastCommit,
 		numWorkers:   numWorkers,
 	}
@@ -163,7 +113,7 @@ func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie
 	tasks <- &syncerLeafTask{syncer: syncer}
 	close(tasks)
 
-	syncer.syncer = syncclient.NewCallbackLeafSyncer(client, tasks, requestSize)
+	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, config.RequestSize)
 	return syncer, nil
 }
 

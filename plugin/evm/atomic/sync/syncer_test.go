@@ -65,7 +65,16 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	// next trie.
 	for i, checkpoint := range checkpoints {
 		// Create syncer targeting the current [syncTrie].
-		syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize, 1)
+		syncerConfig := Config{
+			Client:       mockClient,
+			Database:     clientDB,
+			AtomicTrie:   atomicBackend.AtomicTrie(),
+			TargetRoot:   targetRoot,
+			TargetHeight: targetHeight,
+			RequestSize:  config.DefaultStateSyncRequestSize,
+			NumWorkers:   1,
+		}
+		syncer, err := newSyncer(syncerConfig)
 		require.NoError(t, err, "could not create syncer")
 		mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
@@ -89,7 +98,16 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	}
 
 	// Create syncer targeting the current [targetRoot].
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize, 1)
+	syncerConfig := Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   targetRoot,
+		TargetHeight: targetHeight,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   1,
+	}
+	syncer, err := newSyncer(syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 	mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 		// Increment the number of leaves and return the original response
@@ -111,10 +129,11 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 
 	// check all commit heights are created correctly
 	hasher := trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil))
-	require.NoError(t, err)
 
 	serverTrie, err := trie.New(trie.TrieID(targetRoot), serverTrieDB)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("failed to create server trie: %v", err)
+	}
 	addAllKeysWithPrefix := func(prefix []byte) error {
 		nodeIt, err := serverTrie.NodeIterator(prefix)
 		if err != nil {
@@ -125,20 +144,24 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			if !bytes.HasPrefix(it.Key, prefix) {
 				return it.Err
 			}
-			err := hasher.Update(it.Key, it.Value)
-			require.NoError(t, err)
+			if err := hasher.Update(it.Key, it.Value); err != nil {
+				return err
+			}
 		}
 		return it.Err
 	}
 
 	for height := uint64(0); height <= targetHeight; height++ {
-		err := addAllKeysWithPrefix(database.PackUInt64(height))
-		require.NoError(t, err)
+		if err := addAllKeysWithPrefix(database.PackUInt64(height)); err != nil {
+			t.Fatalf("failed to add keys for height %d: %v", height, err)
+		}
 
 		if height%commitInterval == 0 {
 			expected := hasher.Hash()
 			root, err := atomicTrie.Root(height)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("failed to get root for height %d: %v", height, err)
+			}
 			require.Equal(t, expected, root)
 		}
 	}
@@ -206,7 +229,16 @@ func TestSyncerWaitWithoutStart(t *testing.T) {
 	_, mockClient, atomicBackend, root := setupParallelizationTest(t, 100)
 	clientDB := versiondb.New(memdb.New())
 
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
+	syncerConfig := Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   0,
+	}
+	syncer, err := newSyncer(syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 
 	ctx := context.Background()
@@ -221,14 +253,23 @@ func TestSyncerWaitAfterStart(t *testing.T) {
 	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, 100)
 	clientDB := versiondb.New(memdb.New())
 
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
+	syncerConfig := Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   0,
+	}
+	syncer, err := newSyncer(syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 
-	// Start the syncer
+	// Start the syncer.
 	err = syncer.Start(ctx)
 	require.NoError(t, err, "could not start syncer")
 
-	// Wait should work correctly after Start()
+	// Wait should work correctly after Start().
 	err = syncer.Wait(ctx)
 	require.NoError(t, err, "Wait() should work after Start()")
 }
@@ -239,15 +280,42 @@ func TestSyncerConstructorValidation(t *testing.T) {
 	clientDB := versiondb.New(memdb.New())
 
 	// Test with a valid worker count.
-	_, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, 4)
+	syncerConfig := Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   4,
+	}
+	_, err := newSyncer(syncerConfig)
 	require.NoError(t, err, "should accept valid worker count")
 
 	// Test with too few workers.
-	_, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, 0)
+	syncerConfig = Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   -1, // Use negative value to trigger validation error.
+	}
+	_, err = newSyncer(syncerConfig)
 	require.ErrorIs(t, err, ErrTooFewWorkers, "should return ErrTooFewWorkers")
 
 	// Test with too many workers.
-	_, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, MaxNumWorkers()+1)
+	syncerConfig = Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   MaxNumWorkers() + 1,
+	}
+	_, err = newSyncer(syncerConfig)
 	require.ErrorIs(t, err, ErrTooManyWorkers, "should return ErrTooManyWorkers")
 }
 
@@ -257,11 +325,30 @@ func TestSyncerErrorDetails(t *testing.T) {
 	clientDB := versiondb.New(memdb.New())
 
 	// Test that error details are preserved while sentinel errors are identifiable
-	_, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, 0)
-	require.ErrorIs(t, err, ErrTooFewWorkers, "should be identifiable as ErrTooFewWorkers")
-	require.Contains(t, err.Error(), "0 (minimum: 1)", "should contain detailed information")
+	syncerConfig := Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   -1, // Use negative value to trigger validation error
+	}
 
-	_, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, MaxNumWorkers()+1)
+	_, err := newSyncer(syncerConfig)
+	require.ErrorIs(t, err, ErrTooFewWorkers, "should be identifiable as ErrTooFewWorkers")
+	require.Contains(t, err.Error(), "-1 (minimum: 1)", "should contain detailed information")
+
+	syncerConfig = Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: 100,
+		RequestSize:  config.DefaultStateSyncRequestSize,
+		NumWorkers:   MaxNumWorkers() + 1,
+	}
+	_, err = newSyncer(syncerConfig)
 	require.ErrorIs(t, err, ErrTooManyWorkers, "should be identifiable as ErrTooManyWorkers")
 	require.Contains(t, err.Error(), fmt.Sprintf("%d (maximum: %d)", MaxNumWorkers()+1, MaxNumWorkers()), "should contain detailed information")
 }
@@ -353,24 +440,32 @@ func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Contex
 func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int, useDefaultWorkers bool) {
 	clientDB := versiondb.New(memdb.New())
 
-	var (
-		syncer *syncer
-		err    error
-	)
-
-	if useDefaultWorkers {
-		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
-		require.NoError(t, err, "could not create syncer")
-
-		err = syncer.Start(ctx)
-		require.NoError(t, err, "could not start syncer with default workers")
-	} else {
-		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, numWorkers)
-		require.NoError(t, err, "could not create syncer")
-
-		err = syncer.Start(ctx)
-		require.NoError(t, err, "could not start syncer with workers")
+	syncerConfig := Config{
+		Client:       mockClient,
+		Database:     clientDB,
+		AtomicTrie:   atomicBackend.AtomicTrie(),
+		TargetRoot:   root,
+		TargetHeight: targetHeight,
+		RequestSize:  config.DefaultStateSyncRequestSize,
 	}
+
+	// Set worker count based on test type
+	if useDefaultWorkers {
+		syncerConfig.NumWorkers = DefaultNumWorkers()
+	} else {
+		syncerConfig.NumWorkers = numWorkers
+	}
+
+	syncer, err := newSyncer(syncerConfig)
+	require.NoError(t, err, "could not create syncer")
+
+	workerType := "default workers"
+	if !useDefaultWorkers {
+		workerType = fmt.Sprintf("%d workers", numWorkers)
+	}
+
+	err = syncer.Start(ctx)
+	require.NoError(t, err, "could not start syncer with %s", workerType)
 
 	// Wait for completion.
 	err = syncer.Wait(ctx)
