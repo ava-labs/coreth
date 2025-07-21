@@ -40,10 +40,14 @@ func (a *Extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 	}
 	log.Info("atomic sync starting", "summary", atomicSummary)
 
-	// Use default number of threads for atomic syncing.
+	// Use default number of workers for atomic syncing.
 	// This can be made configurable in the future.
 	syncer, err := newSyncer(
-		client, verDB, a.trie, atomicSummary.AtomicRoot, atomicSummary.BlockNumber,
+		client,
+		verDB,
+		a.trie,
+		atomicSummary.AtomicRoot,
+		atomicSummary.BlockNumber,
 		a.requestSize, DefaultNumWorkers(),
 	)
 	if err != nil {

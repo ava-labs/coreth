@@ -233,25 +233,22 @@ func TestSyncerWaitWithoutStart(t *testing.T) {
 	assert.Equal(t, context.Canceled, err, "should return context.Canceled")
 }
 
-// TestSyncerStartValidation verifies that the Start method properly validates numWorkers.
-func TestSyncerStartValidation(t *testing.T) {
-	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, 100)
+// TestSyncerConstructorValidation verifies that the newSyncer function properly validates numWorkers.
+func TestSyncerConstructorValidation(t *testing.T) {
+	_, mockClient, atomicBackend, root := setupParallelizationTest(t, 100)
 	clientDB := versiondb.New(memdb.New())
 
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
-	require.NoError(t, err, "could not create syncer")
-
 	// Test with a valid worker count.
-	err = syncer.Start(ctx, 4)
+	_, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, 4)
 	require.NoError(t, err, "should accept valid worker count")
 
 	// Test with too few workers.
-	err = syncer.Start(ctx, 0)
+	_, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, 0)
 	require.Error(t, err, "should reject worker count below minimum")
 	assert.Contains(t, err.Error(), "must be at least")
 
 	// Test with too many workers.
-	err = syncer.Start(ctx, MaxNumWorkers()+1)
+	_, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, MaxNumWorkers()+1)
 	require.Error(t, err, "should reject worker count above maximum")
 	assert.Contains(t, err.Error(), "must be at most")
 }
@@ -358,7 +355,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, numWorkers)
 		require.NoError(t, err, "could not create syncer")
 
-		err = syncer.Start(ctx, numWorkers)
+		err = syncer.Start(ctx)
 		require.NoError(t, err, "could not start syncer with workers")
 	}
 

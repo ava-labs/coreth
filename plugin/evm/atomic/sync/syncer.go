@@ -78,7 +78,7 @@ var (
 // and monitor progress.
 // Error returns an error if any was encountered.
 type Syncer interface {
-	Start(ctx context.Context, numWorkers ...int) error
+	Start(ctx context.Context) error
 	Done() <-chan error
 	Wait(ctx context.Context) error
 }
@@ -100,6 +100,9 @@ type syncer struct {
 	// were last inserted into the [atomicTrie]
 	lastHeight uint64
 
+	// numWorkers is the number of worker goroutines to use for syncing
+	numWorkers int
+
 	// cancel is used to cancel the sync operation
 	cancel context.CancelFunc
 }
@@ -114,6 +117,15 @@ func addZeroes(height uint64) []byte {
 
 // newSyncer returns a new syncer instance that will sync the atomic trie from the network.
 func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie *atomicstate.AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16, numWorkers int) (*syncer, error) {
+	// Validate worker count.
+	if numWorkers < MinNumWorkers {
+		return nil, fmt.Errorf("numWorkers (%d) must be at least %d", numWorkers, MinNumWorkers)
+	}
+
+	if numWorkers > MaxNumWorkers() {
+		return nil, fmt.Errorf("numWorkers (%d) must be at most %d", numWorkers, MaxNumWorkers())
+	}
+
 	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
 	trie, err := atomicTrie.OpenTrie(lastCommittedRoot)
 	if err != nil {
@@ -127,6 +139,7 @@ func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie
 		targetRoot:   targetRoot,
 		targetHeight: targetHeight,
 		lastHeight:   lastCommit,
+		numWorkers:   numWorkers,
 	}
 
 	// Create tasks channel with capacity for the number of workers.
@@ -141,25 +154,10 @@ func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie
 	return syncer, nil
 }
 
-// Start begins syncing the target atomic root with the specified number of worker goroutines.
-// If numWorkers is not provided, it defaults to DefaultNumWorkers().
-func (s *syncer) Start(ctx context.Context, numWorkers ...int) error {
-	workers := DefaultNumWorkers()
-	if len(numWorkers) > 0 {
-		workers = numWorkers[0]
-
-		// Validate worker count.
-		if workers < MinNumWorkers {
-			return fmt.Errorf("numWorkers (%d) must be at least %d", workers, MinNumWorkers)
-		}
-
-		if workers > MaxNumWorkers() {
-			return fmt.Errorf("numWorkers (%d) must be at most %d", workers, MaxNumWorkers())
-		}
-	}
-
+// Start begins syncing the target atomic root with the configured number of worker goroutines.
+func (s *syncer) Start(ctx context.Context) error {
 	ctx, s.cancel = context.WithCancel(ctx)
-	s.syncer.Start(ctx, workers, s.onSyncFailure)
+	s.syncer.Start(ctx, s.numWorkers, s.onSyncFailure)
 
 	return nil
 }
