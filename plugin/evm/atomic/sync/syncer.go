@@ -77,7 +77,7 @@ func addZeroes(height uint64) []byte {
 }
 
 // newSyncer returns a new syncer instance that will sync the atomic trie from the network.
-func newSyncer(config Config) (*syncer, error) {
+func newSyncer(config *Config) (*syncer, error) {
 	// Validate the configuration
 	if err := config.Validate(); err != nil {
 		return nil, err

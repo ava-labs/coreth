@@ -74,7 +74,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			RequestSize:  config.DefaultStateSyncRequestSize,
 			NumWorkers:   1,
 		}
-		syncer, err := newSyncer(syncerConfig)
+		syncer, err := newSyncer(&syncerConfig)
 		require.NoError(t, err, "could not create syncer")
 		mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
@@ -107,7 +107,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   1,
 	}
-	syncer, err := newSyncer(syncerConfig)
+	syncer, err := newSyncer(&syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 	mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 		// Increment the number of leaves and return the original response
@@ -238,7 +238,7 @@ func TestSyncerWaitWithoutStart(t *testing.T) {
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   0,
 	}
-	syncer, err := newSyncer(syncerConfig)
+	syncer, err := newSyncer(&syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 
 	ctx := context.Background()
@@ -262,7 +262,7 @@ func TestSyncerWaitAfterStart(t *testing.T) {
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   0,
 	}
-	syncer, err := newSyncer(syncerConfig)
+	syncer, err := newSyncer(&syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 
 	// Start the syncer.
@@ -289,7 +289,7 @@ func TestSyncerConstructorValidation(t *testing.T) {
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   4,
 	}
-	_, err := newSyncer(syncerConfig)
+	_, err := newSyncer(&syncerConfig)
 	require.NoError(t, err, "should accept valid worker count")
 
 	// Test with too few workers.
@@ -302,7 +302,7 @@ func TestSyncerConstructorValidation(t *testing.T) {
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   -1, // Use negative value to trigger validation error.
 	}
-	_, err = newSyncer(syncerConfig)
+	_, err = newSyncer(&syncerConfig)
 	require.ErrorIs(t, err, ErrTooFewWorkers, "should return ErrTooFewWorkers")
 
 	// Test with too many workers.
@@ -315,7 +315,7 @@ func TestSyncerConstructorValidation(t *testing.T) {
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   MaxNumWorkers() + 1,
 	}
-	_, err = newSyncer(syncerConfig)
+	_, err = newSyncer(&syncerConfig)
 	require.ErrorIs(t, err, ErrTooManyWorkers, "should return ErrTooManyWorkers")
 }
 
@@ -335,7 +335,7 @@ func TestSyncerErrorDetails(t *testing.T) {
 		NumWorkers:   -1, // Use negative value to trigger validation error
 	}
 
-	_, err := newSyncer(syncerConfig)
+	_, err := newSyncer(&syncerConfig)
 	require.ErrorIs(t, err, ErrTooFewWorkers, "should be identifiable as ErrTooFewWorkers")
 	require.Contains(t, err.Error(), "-1 (minimum: 1)", "should contain detailed information")
 
@@ -348,7 +348,7 @@ func TestSyncerErrorDetails(t *testing.T) {
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   MaxNumWorkers() + 1,
 	}
-	_, err = newSyncer(syncerConfig)
+	_, err = newSyncer(&syncerConfig)
 	require.ErrorIs(t, err, ErrTooManyWorkers, "should be identifiable as ErrTooManyWorkers")
 	require.Contains(t, err.Error(), fmt.Sprintf("%d (maximum: %d)", MaxNumWorkers()+1, MaxNumWorkers()), "should contain detailed information")
 }
@@ -456,7 +456,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 		syncerConfig.NumWorkers = numWorkers
 	}
 
-	syncer, err := newSyncer(syncerConfig)
+	syncer, err := newSyncer(&syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 
 	workerType := "default workers"

@@ -51,7 +51,7 @@ func (a *Extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 		RequestSize:  a.requestSize,
 		NumWorkers:   DefaultNumWorkers(),
 	}
-	syncer, err := newSyncer(config)
+	syncer, err := newSyncer(&config)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic syncer: %w", err)
 	}
