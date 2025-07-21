@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -27,6 +28,18 @@ const (
 	TrieNode message.NodeType = 2
 	// MinNumWorkers is the minimum number of worker goroutines to use for atomic trie syncing.
 	MinNumWorkers = 1
+)
+
+// Sentinel errors for atomic syncer operations
+var (
+	// ErrWaitBeforeStart is returned when Wait() is called before Start().
+	ErrWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
+
+	// ErrTooFewWorkers is returned when numWorkers is below the minimum.
+	ErrTooFewWorkers = errors.New("numWorkers below minimum")
+
+	// ErrTooManyWorkers is returned when numWorkers exceeds the maximum.
+	ErrTooManyWorkers = errors.New("numWorkers above maximum")
 )
 
 // MaxNumWorkers returns the maximum number of worker goroutines to use for atomic trie syncing.
@@ -119,11 +132,11 @@ func addZeroes(height uint64) []byte {
 func newSyncer(client syncclient.LeafClient, vdb *versiondb.Database, atomicTrie *atomicstate.AtomicTrie, targetRoot common.Hash, targetHeight uint64, requestSize uint16, numWorkers int) (*syncer, error) {
 	// Validate worker count.
 	if numWorkers < MinNumWorkers {
-		return nil, fmt.Errorf("numWorkers (%d) must be at least %d", numWorkers, MinNumWorkers)
+		return nil, fmt.Errorf("%w: %d (minimum: %d)", ErrTooFewWorkers, numWorkers, MinNumWorkers)
 	}
 
 	if numWorkers > MaxNumWorkers() {
-		return nil, fmt.Errorf("numWorkers (%d) must be at most %d", numWorkers, MaxNumWorkers())
+		return nil, fmt.Errorf("%w: %d (maximum: %d)", ErrTooManyWorkers, numWorkers, MaxNumWorkers())
 	}
 
 	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
@@ -246,16 +259,17 @@ func (s *syncer) Done() <-chan error { return s.syncer.Done() }
 
 // Wait blocks until the sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
-// Note: This method should only be called after Start() has been called.
+// This method must be called after Start() has been called.
 func (s *syncer) Wait(ctx context.Context) error {
+	if s.cancel == nil {
+		return ErrWaitBeforeStart
+	}
+
 	select {
 	case err := <-s.syncer.Done():
 		return err
 	case <-ctx.Done():
-		// Only cancel if we have a cancel function (i.e., Start() was called).
-		if s.cancel != nil {
-			s.cancel()
-		}
+		s.cancel()
 		return ctx.Err()
 	}
 }
