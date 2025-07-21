@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,7 +69,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	// next trie.
 	for i, checkpoint := range checkpoints {
 		// Create syncer targeting the current [syncTrie].
-		syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize)
+		syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize, 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +85,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		}
 
 		syncer.Start(ctx)
-		if err := <-syncer.Done(); err == nil {
+		if err := syncer.Wait(ctx); err == nil {
 			t.Fatalf("Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 		}
 
@@ -95,12 +96,10 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	}
 
 	// Create syncer targeting the current [targetRoot].
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize)
+	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, targetHeight, config.DefaultStateSyncRequestSize, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Update intercept to only count the leaves
 	mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 		// Increment the number of leaves and return the original response
 		numLeaves += len(leafsResponse.Keys)
@@ -108,7 +107,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	}
 
 	syncer.Start(ctx)
-	if err := <-syncer.Done(); err != nil {
+	if err := syncer.Wait(ctx); err != nil {
 		t.Fatalf("Expected syncer to finish successfully but failed due to %s", err)
 	}
 
@@ -202,4 +201,175 @@ func TestSyncerResumeNewRootCheckpoint(t *testing.T) {
 			expectedNumLeavesSynced: commitInterval * 4,
 		},
 	}, int64(targetHeight2)+commitInterval-1) // we will resync the last commitInterval - 1 leafs
+}
+
+// TestSyncerParallelization verifies that the syncer works correctly with multiple worker goroutines.
+func TestSyncerParallelization(t *testing.T) {
+	const targetHeight = 2 * uint64(commitInterval) // 2,048 leaves for meaningful parallelization.
+	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, targetHeight)
+
+	runParallelizationTest(t, ctx, mockClient, atomicBackend, root, targetHeight, 4, false)
+}
+
+// TestSyncerWaitWithoutStart verifies that Wait() handles the case where Start() was never called.
+func TestSyncerWaitWithoutStart(t *testing.T) {
+	_, mockClient, atomicBackend, root := setupParallelizationTest(t, 100)
+	clientDB := versiondb.New(memdb.New())
+
+	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
+	assert.NoError(t, err, "could not create syncer")
+
+	// Create a context that will be cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Cancel the context immediately
+	cancel()
+
+	// Wait should return context error even without Start() being called
+	err = syncer.Wait(ctx)
+	assert.Error(t, err, "should return context error")
+	assert.Equal(t, context.Canceled, err, "should return context.Canceled")
+}
+
+// TestSyncerStartValidation verifies that the Start method properly validates numWorkers.
+func TestSyncerStartValidation(t *testing.T) {
+	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, 100)
+	clientDB := versiondb.New(memdb.New())
+
+	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, 100, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
+	assert.NoError(t, err, "could not create syncer")
+
+	// Test with valid worker count
+	err = syncer.Start(ctx, 4)
+	assert.NoError(t, err, "should accept valid worker count")
+
+	// Test with too few workers
+	err = syncer.Start(ctx, 0)
+	assert.Error(t, err, "should reject worker count below minimum")
+	assert.Contains(t, err.Error(), "must be at least")
+
+	// Test with too many workers
+	err = syncer.Start(ctx, MaxNumWorkers()+1)
+	assert.Error(t, err, "should reject worker count above maximum")
+	assert.Contains(t, err.Error(), "must be at most")
+}
+
+// TestSyncerDefaultParallelization verifies that the syncer defaults to parallelization.
+func TestSyncerDefaultParallelization(t *testing.T) {
+	const targetHeight = uint64(commitInterval) // 1,024 leaves to test commit boundary.
+	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, targetHeight)
+
+	runParallelizationTest(t, ctx, mockClient, atomicBackend, root, targetHeight, 0, true)
+}
+
+// TestDefaultNumWorkers verifies that the DefaultNumWorkers function returns reasonable values.
+func TestDefaultNumWorkers(t *testing.T) {
+	workers := DefaultNumWorkers()
+
+	// Should be within bounds
+	assert.GreaterOrEqual(t, workers, MinNumWorkers, "workers should be greater than or equal to MinNumWorkers")
+	assert.LessOrEqual(t, workers, MaxNumWorkers(), "workers should be less than or equal to MaxNumWorkers")
+
+	// Should be reasonable relative to CPU count
+	cpus := runtime.NumCPU()
+	expectedMin := (cpus * 3) / 4 // 75% of CPUs
+	if expectedMin > MaxNumWorkers() {
+		expectedMin = MaxNumWorkers()
+	}
+	if expectedMin < MinNumWorkers {
+		expectedMin = MinNumWorkers
+	}
+
+	// Allow some flexibility due to rounding
+	assert.GreaterOrEqual(t, workers, expectedMin-1, "workers should be close to 75% of CPU count")
+	assert.LessOrEqual(t, workers, expectedMin+1, "workers should be close to 75% of CPU count")
+
+	t.Logf("CPU count: %d, Default worker goroutines: %d", cpus, workers)
+}
+
+// TestMaxNumWorkers verifies that the MaxNumWorkers function returns reasonable values.
+func TestMaxNumWorkers(t *testing.T) {
+	maxWorkers := MaxNumWorkers()
+	cpus := runtime.NumCPU()
+
+	// Should be at least 2x CPU cores (for I/O bound work).
+	expectedMin := cpus * 2
+	if expectedMin > 64 {
+		expectedMin = 64 // Capped at 64
+	}
+
+	assert.Equal(t, expectedMin, maxWorkers, "MaxNumWorkers should be 2x CPU cores, capped at 64")
+
+	// Should be reasonable for different CPU counts.
+	if cpus <= 32 {
+		assert.Equal(t, cpus*2, maxWorkers, "For %d CPUs, should allow %d workers", cpus, cpus*2)
+	} else {
+		assert.Equal(t, 64, maxWorkers, "For %d CPUs, should be capped at 64", cpus)
+	}
+
+	t.Logf("CPU count: %d, Max worker goroutines: %d", cpus, maxWorkers)
+}
+
+// setupParallelizationTest creates the common test infrastructure for parallelization tests.
+// It returns the context, mock client, atomic backend, and root hash for testing.
+func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Context, *syncclient.TestClient, *state.AtomicBackend, common.Hash) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// Create a simple test trie with some data using the existing pattern.
+	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+	root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicstate.TrieKeyLength)
+
+	mockClient := syncclient.NewTestClient(
+		message.Codec,
+		handlers.NewLeafsRequestHandler(serverTrieDB, state.TrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
+		nil,
+		nil,
+	)
+
+	clientDB := versiondb.New(memdb.New())
+	repo, err := state.NewAtomicTxRepository(clientDB, message.Codec, 0)
+	assert.NoError(t, err, "could not initialize atomic tx repository")
+
+	atomicBackend, err := state.NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, 0, common.Hash{}, commitInterval)
+	assert.NoError(t, err, "could not initialize atomic backend")
+
+	return ctx, mockClient, atomicBackend, root
+}
+
+// runParallelizationTest executes a parallelization test with the given parameters.
+func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int, useDefaultWorkers bool) {
+	clientDB := versiondb.New(memdb.New())
+
+	var (
+		syncer *syncer
+		err    error
+	)
+
+	if useDefaultWorkers {
+		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, DefaultNumWorkers())
+		assert.NoError(t, err, "could not create syncer")
+
+		err = syncer.Start(ctx)
+		assert.NoError(t, err, "could not start syncer with default workers")
+	} else {
+		syncer, err = newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, config.DefaultStateSyncRequestSize, numWorkers)
+		assert.NoError(t, err, "could not create syncer")
+
+		err = syncer.Start(ctx, numWorkers)
+		assert.NoError(t, err, "could not start syncer with workers")
+	}
+
+	// Wait for completion.
+	err = syncer.Wait(ctx)
+	assert.NoError(t, err, "syncer should complete successfully")
+
+	// Verify that the syncer completed successfully.
+	select {
+	case err := <-syncer.Done():
+		assert.NoError(t, err, "no error should be returned from Done()")
+	default:
+		// No error, which is expected
+	}
 }

@@ -39,13 +39,12 @@ func (a *Extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 		return fmt.Errorf("expected *Summary, got %T", summary)
 	}
 	log.Info("atomic sync starting", "summary", atomicSummary)
+
+	// Use default number of threads for atomic syncing.
+	// This can be made configurable in the future.
 	syncer, err := newSyncer(
-		client,
-		verDB,
-		a.trie,
-		atomicSummary.AtomicRoot,
-		atomicSummary.BlockNumber,
-		a.requestSize,
+		client, verDB, a.trie, atomicSummary.AtomicRoot, atomicSummary.BlockNumber,
+		a.requestSize, DefaultNumWorkers(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create atomic syncer: %w", err)
@@ -53,8 +52,10 @@ func (a *Extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 	if err := syncer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start atomic syncer: %w", err)
 	}
-	err = <-syncer.Done()
+
+	err = syncer.Wait(ctx)
 	log.Info("atomic sync finished", "summary", atomicSummary, "err", err)
+
 	return err
 }
 
