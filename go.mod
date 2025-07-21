@@ -15,7 +15,7 @@ require (
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/go-bexpr v0.1.10
-	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
+	github.com/hashicorp/golang-lru v1.0.2
 	github.com/holiman/billy v0.0.0-20240216141850-2abb0c79d3c4
 	github.com/holiman/bloomfilter/v2 v2.0.3
 	github.com/holiman/uint256 v1.2.4
