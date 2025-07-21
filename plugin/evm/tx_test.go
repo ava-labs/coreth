@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -9,17 +9,21 @@ import (
 	"strings"
 	"testing"
 
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
@@ -80,34 +84,30 @@ func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 
 type atomicTxTest struct {
 	// setup returns the atomic transaction for the test
-	setup func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
+	setup func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
 	// define a string that should be contained in the error message if the tx fails verification
 	// at some point. If the strings are empty, then the tx should pass verification at the
 	// respective step.
 	semanticVerifyErr, evmStateTransferErr, acceptErr string
 	// checkState is called iff building and verifying a block containing the transaction is successful. Verifies
 	// the state of the VM following the block's acceptance.
-	checkState func(t *testing.T, vm *VM)
+	checkState func(t *testing.T, vm *atomicvm.VM)
 
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool
-	// genesisJSON to use for the VM genesis (also defines the rule set that will be used in verification)
-	// If this is left empty, [genesisJSONApricotPhase0], will be used
-	genesisJSON string
-
-	// passed directly into GenesisVM
-	configJSON, upgradeJSON string
+	// fork to use for the VM rules and genesis
+	// If this is left empty, [upgradetest.NoUpgrades], will be used
+	fork upgradetest.Fork
 }
 
 func executeTxTest(t *testing.T, test atomicTxTest) {
-	genesisJSON := test.genesisJSON
-	if len(genesisJSON) == 0 {
-		genesisJSON = genesisJSONApricotPhase0
-	}
-	issuer, vm, _, sharedMemory, _ := GenesisVM(t, !test.bootstrapping, genesisJSON, test.configJSON, test.upgradeJSON)
-	rules := vm.currentRules()
+	tvm := newVM(t, testVMConfig{
+		isSyncing: test.bootstrapping,
+		fork:      &test.fork,
+	})
+	rules := tvm.vm.currentRules()
 
-	tx := test.setup(t, vm, sharedMemory)
+	tx := test.setup(t, tvm.atomicVM, tvm.atomicMemory)
 
 	var baseFee *big.Int
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
@@ -116,16 +116,9 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		baseFee = initialBaseFee
 	}
 
-	lastAcceptedBlock := vm.LastAcceptedBlockInternal().(*Block)
-	backend := &atomic.Backend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.fx,
-		Rules:        rules,
-		Bootstrapped: vm.bootstrapped.Get(),
-		BlockFetcher: vm,
-		SecpCache:    &vm.secpCache,
-	}
-	if err := tx.UnsignedAtomicTx.SemanticVerify(backend, tx, lastAcceptedBlock, baseFee); len(test.semanticVerifyErr) == 0 && err != nil {
+	lastAcceptedBlock := tvm.vm.LastAcceptedExtendedBlock()
+	backend := atomicvm.NewVerifierBackend(tvm.atomicVM, rules)
+	if err := backend.SemanticVerify(tx, lastAcceptedBlock, baseFee); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
 	} else if len(test.semanticVerifyErr) != 0 {
 		if err == nil {
@@ -139,11 +132,11 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
+	if err := tx.UnsignedAtomicTx.EVMStateTransfer(tvm.vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
 		t.Fatalf("EVMStateTransfer failed unexpectedly due to: %s", err)
 	} else if len(test.evmStateTransferErr) != 0 {
 		if err == nil {
@@ -160,18 +153,19 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		// If this test simulates processing txs during bootstrapping (where some verification is skipped),
 		// initialize the block building goroutines normally initialized in SetState(snow.NormalOps).
 		// This ensures that the VM can build a block correctly during the test.
-		if err := vm.initBlockBuilding(); err != nil {
+		if err := tvm.vm.initBlockBuilding(); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := vm.mempool.AddLocalTx(tx); err != nil {
+	if err := tvm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
-	<-issuer
+
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
-	blk, err := vm.BuildBlock(context.Background())
+	blk, err := tvm.vm.BuildBlock(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +188,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	if test.checkState != nil {
-		test.checkState(t, vm)
+		test.checkState(t, tvm.atomicVM)
 	}
 }
 

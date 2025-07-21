@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package stats
@@ -166,7 +166,10 @@ func (h *handlerStats) IncSnapshotReadSuccess()    { h.snapshotReadSuccess.Inc(1
 func (h *handlerStats) IncSnapshotSegmentValid()   { h.snapshotSegmentValid.Inc(1) }
 func (h *handlerStats) IncSnapshotSegmentInvalid() { h.snapshotSegmentInvalid.Inc(1) }
 
-func NewHandlerStats(enabled bool) HandlerStats {
+// GetOrRegisterHandlerStats returns a [HandlerStats] to track state sync handler metrics.
+// If `enabled` is false, a no-op implementation is returned.
+// if `enabled` is true, calling this multiple times will return the same registered metrics.
+func GetOrRegisterHandlerStats(enabled bool) HandlerStats {
 	if !enabled {
 		return NewNoopHandlerStats()
 	}
