@@ -85,7 +85,7 @@ func newSyncer(config *Config) (*syncer, error) {
 	// Use default workers if not specified.
 	numWorkers := config.NumWorkers
 	if numWorkers == 0 {
-		numWorkers = defaultWorkers
+		numWorkers = DefaultNumWorkers
 	}
 
 	lastCommittedRoot, lastCommit := config.AtomicTrie.LastCommitted()

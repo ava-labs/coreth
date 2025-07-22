@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -313,7 +312,7 @@ func TestSyncerConstructorValidation(t *testing.T) {
 		TargetRoot:   root,
 		TargetHeight: 100,
 		RequestSize:  config.DefaultStateSyncRequestSize,
-		NumWorkers:   MaxNumWorkers() + 1,
+		NumWorkers:   MaxNumWorkers + 1,
 	}
 	_, err = newSyncer(&syncerConfig)
 	require.ErrorIs(t, err, ErrTooManyWorkers, "should return ErrTooManyWorkers")
@@ -346,11 +345,11 @@ func TestSyncerErrorDetails(t *testing.T) {
 		TargetRoot:   root,
 		TargetHeight: 100,
 		RequestSize:  config.DefaultStateSyncRequestSize,
-		NumWorkers:   MaxNumWorkers() + 1,
+		NumWorkers:   MaxNumWorkers + 1,
 	}
 	_, err = newSyncer(&syncerConfig)
 	require.ErrorIs(t, err, ErrTooManyWorkers, "should be identifiable as ErrTooManyWorkers")
-	require.Contains(t, err.Error(), fmt.Sprintf("%d (maximum: %d)", MaxNumWorkers()+1, MaxNumWorkers()), "should contain detailed information")
+	require.Contains(t, err.Error(), fmt.Sprintf("%d (maximum: %d)", MaxNumWorkers+1, MaxNumWorkers), "should contain detailed information")
 }
 
 // TestSyncerDefaultParallelization verifies that the syncer defaults to parallelization.
@@ -361,53 +360,6 @@ func TestSyncerDefaultParallelization(t *testing.T) {
 	runParallelizationTest(t, ctx, mockClient, atomicBackend, root, targetHeight, 0, true)
 }
 
-// TestDefaultNumWorkers verifies that the DefaultNumWorkers function returns reasonable values.
-func TestDefaultNumWorkers(t *testing.T) {
-	workers := DefaultNumWorkers()
-
-	// Should be within bounds
-	require.GreaterOrEqual(t, workers, MinNumWorkers, "workers should be greater than or equal to MinNumWorkers")
-	require.LessOrEqual(t, workers, MaxNumWorkers(), "workers should be less than or equal to MaxNumWorkers")
-
-	// Should be reasonable relative to CPU count
-	cpus := runtime.NumCPU()
-	expectedMin := (cpus * 3) / 4 // 75% of CPUs
-	if expectedMin > MaxNumWorkers() {
-		expectedMin = MaxNumWorkers()
-	}
-	if expectedMin < MinNumWorkers {
-		expectedMin = MinNumWorkers
-	}
-
-	// Allow some flexibility due to rounding
-	require.GreaterOrEqual(t, workers, expectedMin-1, "workers should be close to 75% of CPU count")
-	require.LessOrEqual(t, workers, expectedMin+1, "workers should be close to 75% of CPU count")
-
-	t.Logf("CPU count: %d, Default worker goroutines: %d", cpus, workers)
-}
-
-// TestMaxNumWorkers verifies that the MaxNumWorkers function returns reasonable values.
-func TestMaxNumWorkers(t *testing.T) {
-	maxWorkers := MaxNumWorkers()
-	cpus := runtime.NumCPU()
-
-	// Should be at least 2x CPU cores (for I/O bound work).
-	expectedMin := cpus * 2
-	if expectedMin > 64 {
-		expectedMin = 64 // Capped at 64
-	}
-
-	require.Equal(t, expectedMin, maxWorkers, "MaxNumWorkers should be 2x CPU cores, capped at 64")
-
-	// Should be reasonable for different CPU counts.
-	if cpus <= 32 {
-		require.Equal(t, cpus*2, maxWorkers, "For %d CPUs, should allow %d workers", cpus, cpus*2)
-	} else {
-		require.Equal(t, 64, maxWorkers, "For %d CPUs, should be capped at 64", cpus)
-	}
-
-	t.Logf("CPU count: %d, Max worker goroutines: %d", cpus, maxWorkers)
-}
 
 // setupParallelizationTest creates the common test infrastructure for parallelization tests.
 // It returns the context, mock client, atomic backend, and root hash for testing.
@@ -451,7 +403,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 
 	// Set worker count based on test type
 	if useDefaultWorkers {
-		syncerConfig.NumWorkers = DefaultNumWorkers()
+		syncerConfig.NumWorkers = DefaultNumWorkers
 	} else {
 		syncerConfig.NumWorkers = numWorkers
 	}
