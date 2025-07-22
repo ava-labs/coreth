@@ -535,7 +535,7 @@ func (vm *VM) initializeMetrics() error {
 		return err
 	}
 
-	if vm.config.MetricsExpensiveEnabled && vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == customrawdb.FirewoodScheme {
 		if err := ffi.StartMetrics(); err != nil {
 			return fmt.Errorf("failed to start firewood metrics collection: %w", err)
 		}
