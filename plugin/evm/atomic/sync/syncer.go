@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -22,17 +23,74 @@ import (
 )
 
 const (
+	MinNumWorkers     = 1
+	MaxNumWorkers     = 64
+	DefaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
+
 	// TrieNode represents a leaf node that belongs to the atomic trie.
 	TrieNode message.NodeType = 2
 )
 
 var (
+	// ErrWaitBeforeStart is returned when Wait() is called before Start().
+	ErrWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
+
+	// ErrTooFewWorkers is returned when numWorkers is below the minimum.
+	ErrTooFewWorkers = errors.New("numWorkers below minimum")
+
+	// ErrTooManyWorkers is returned when numWorkers exceeds the maximum.
+	ErrTooManyWorkers = errors.New("numWorkers above maximum")
+
 	_ Syncer                  = (*syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 
 	// Pre-allocate zero bytes to avoid repeated allocations.
 	zeroBytes = bytes.Repeat([]byte{0x00}, common.HashLength)
 )
+
+// Config holds the configuration for creating a new atomic syncer.
+type Config struct {
+	// Client is the leaf client used to fetch data from the network.
+	Client syncclient.LeafClient
+
+	// Database is the version database for storing synced data.
+	Database *versiondb.Database
+
+	// AtomicTrie is the atomic trie to sync into.
+	AtomicTrie *atomicstate.AtomicTrie
+
+	// TargetRoot is the root hash of the trie to sync to.
+	TargetRoot common.Hash
+
+	// TargetHeight is the target block height to sync to.
+	TargetHeight uint64
+
+	// RequestSize is the maximum number of leaves to request in a single network call.
+	RequestSize uint16
+
+	// NumWorkers is the number of worker goroutines to use for syncing.
+	// If not set, [DefaultNumWorkers] will be used.
+	NumWorkers int
+}
+
+// Validate checks if the configuration is valid and returns an error if not.
+func (c *Config) Validate() error {
+	// Use default workers if not specified
+	numWorkers := c.NumWorkers
+	if numWorkers == 0 {
+		numWorkers = DefaultNumWorkers
+	}
+
+	if numWorkers < MinNumWorkers {
+		return fmt.Errorf("%w: %d (minimum: %d)", ErrTooFewWorkers, numWorkers, MinNumWorkers)
+	}
+
+	if numWorkers > MaxNumWorkers {
+		return fmt.Errorf("%w: %d (maximum: %d)", ErrTooManyWorkers, numWorkers, MaxNumWorkers)
+	}
+
+	return nil
+}
 
 // Syncer represents a step in state sync,
 // along with Start/Wait methods to control

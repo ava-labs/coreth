@@ -360,7 +360,6 @@ func TestSyncerDefaultParallelization(t *testing.T) {
 	runParallelizationTest(t, ctx, mockClient, atomicBackend, root, targetHeight, 0, true)
 }
 
-
 // setupParallelizationTest creates the common test infrastructure for parallelization tests.
 // It returns the context, mock client, atomic backend, and root hash for testing.
 func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Context, *syncclient.TestClient, *state.AtomicBackend, common.Hash) {
