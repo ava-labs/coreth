@@ -470,12 +470,4 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 	// Wait for completion.
 	err = syncer.Wait(ctx)
 	require.NoError(t, err, "syncer should complete successfully")
-
-	// Verify that the syncer completed successfully.
-	select {
-	case err := <-syncer.Done():
-		require.NoError(t, err, "no error should be returned from Done()")
-	default:
-		// No error, which is expected
-	}
 }

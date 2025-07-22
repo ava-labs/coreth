@@ -35,12 +35,11 @@ var (
 )
 
 // Syncer represents a step in state sync,
-// along with Start/Done methods to control
+// along with Start/Wait methods to control
 // and monitor progress.
 // Error returns an error if any was encountered.
 type Syncer interface {
 	Start(ctx context.Context) error
-	Done() <-chan error
 	Wait(ctx context.Context) error
 }
 
@@ -83,7 +82,7 @@ func newSyncer(config *Config) (*syncer, error) {
 		return nil, err
 	}
 
-	// Use default workers if not specified
+	// Use default workers if not specified.
 	numWorkers := config.NumWorkers
 	if numWorkers == 0 {
 		numWorkers = defaultWorkers
@@ -203,9 +202,6 @@ func (s *syncer) onFinish() error {
 func (s *syncer) onSyncFailure(error) error {
 	return nil
 }
-
-// Done returns a channel which produces any error that occurred during syncing or nil on success.
-func (s *syncer) Done() <-chan error { return s.syncer.Done() }
 
 // Wait blocks until the sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.

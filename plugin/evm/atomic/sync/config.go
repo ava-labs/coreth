@@ -15,10 +15,8 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
-const (
-	// MinNumWorkers is the minimum number of worker goroutines to use for atomic trie syncing.
-	MinNumWorkers = 1
-)
+// MinNumWorkers is the minimum number of worker goroutines to use for atomic trie syncing.
+const MinNumWorkers = 1
 
 var (
 	// ErrWaitBeforeStart is returned when Wait() is called before Start().
