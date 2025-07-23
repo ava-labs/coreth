@@ -59,7 +59,7 @@ func TestConfigValidation(t *testing.T) {
 		TargetRoot:   root,
 		TargetHeight: 100,
 		RequestSize:  config.DefaultStateSyncRequestSize,
-		NumWorkers:   DefaultNumWorkers,
+		NumWorkers:   defaultNumWorkers,
 	}
 
 	tests := []struct {
@@ -78,31 +78,31 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name:             "nil client",
 			configModifyFunc: func(c *Config) { c.Client = nil },
-			expectedErr:      ErrNilClient,
+			expectedErr:      errNilClient,
 			description:      "should reject nil client",
 		},
 		{
 			name:             "nil database",
 			configModifyFunc: func(c *Config) { c.Database = nil },
-			expectedErr:      ErrNilDatabase,
+			expectedErr:      errNilDatabase,
 			description:      "should reject nil database",
 		},
 		{
 			name:             "nil atomic trie",
 			configModifyFunc: func(c *Config) { c.AtomicTrie = nil },
-			expectedErr:      ErrNilAtomicTrie,
+			expectedErr:      errNilAtomicTrie,
 			description:      "should reject nil atomic trie",
 		},
 		{
 			name:             "empty target root",
 			configModifyFunc: func(c *Config) { c.TargetRoot = common.Hash{} },
-			expectedErr:      ErrEmptyTargetRoot,
+			expectedErr:      errEmptyTargetRoot,
 			description:      "should reject empty target root",
 		},
 		{
 			name:             "zero target height",
 			configModifyFunc: func(c *Config) { c.TargetHeight = 0 },
-			expectedErr:      ErrInvalidTargetHeight,
+			expectedErr:      errInvalidTargetHeight,
 			description:      "should reject zero target height",
 		},
 		{
@@ -113,8 +113,8 @@ func TestConfigValidation(t *testing.T) {
 		},
 		{
 			name:             "request size too large",
-			configModifyFunc: func(c *Config) { c.RequestSize = MaxRequestSize + 1 },
-			expectedErr:      ErrInvalidRequestSize,
+			configModifyFunc: func(c *Config) { c.RequestSize = maxRequestSize + 1 },
+			expectedErr:      errInvalidRequestSize,
 			description:      "should reject request size above maximum",
 		},
 		{
@@ -131,8 +131,8 @@ func TestConfigValidation(t *testing.T) {
 		},
 		{
 			name:             "num workers too many",
-			configModifyFunc: func(c *Config) { c.NumWorkers = MaxNumWorkers + 1 },
-			expectedErr:      ErrTooManyWorkers,
+			configModifyFunc: func(c *Config) { c.NumWorkers = maxNumWorkers + 1 },
+			expectedErr:      errTooManyWorkers,
 			description:      "should reject num workers above maximum",
 		},
 		{
@@ -144,25 +144,25 @@ func TestConfigValidation(t *testing.T) {
 		// Boundary tests
 		{
 			name:             "minimum valid request size",
-			configModifyFunc: func(c *Config) { c.RequestSize = MinRequestSize },
+			configModifyFunc: func(c *Config) { c.RequestSize = minRequestSize },
 			expectedErr:      nil,
 			description:      "should accept minimum valid request size",
 		},
 		{
 			name:             "maximum valid request size",
-			configModifyFunc: func(c *Config) { c.RequestSize = MaxRequestSize },
+			configModifyFunc: func(c *Config) { c.RequestSize = maxRequestSize },
 			expectedErr:      nil,
 			description:      "should accept maximum valid request size",
 		},
 		{
 			name:             "minimum valid num workers",
-			configModifyFunc: func(c *Config) { c.NumWorkers = MinNumWorkers },
+			configModifyFunc: func(c *Config) { c.NumWorkers = minNumWorkers },
 			expectedErr:      nil,
 			description:      "should accept minimum valid num workers",
 		},
 		{
 			name:             "maximum valid num workers",
-			configModifyFunc: func(c *Config) { c.NumWorkers = MaxNumWorkers },
+			configModifyFunc: func(c *Config) { c.NumWorkers = maxNumWorkers },
 			expectedErr:      nil,
 			description:      "should accept maximum valid num workers",
 		},
@@ -181,26 +181,26 @@ func TestConfigValidation(t *testing.T) {
 		},
 		{
 			name:             "request size exactly at bounds",
-			configModifyFunc: func(c *Config) { c.RequestSize = MinRequestSize },
+			configModifyFunc: func(c *Config) { c.RequestSize = minRequestSize },
 			expectedErr:      nil,
 			description:      "should accept request size at minimum bound",
 		},
 		{
 			name:             "num workers exactly at bounds",
-			configModifyFunc: func(c *Config) { c.NumWorkers = MinNumWorkers },
+			configModifyFunc: func(c *Config) { c.NumWorkers = minNumWorkers },
 			expectedErr:      nil,
 			description:      "should accept num workers at minimum bound",
 		},
 		{
 			name:             "negative num workers",
 			configModifyFunc: func(c *Config) { c.NumWorkers = -1 },
-			expectedErr:      ErrTooFewWorkers,
+			expectedErr:      errTooFewWorkers,
 			description:      "should reject negative num workers",
 		},
 		{
 			name:             "request size overflow",
 			configModifyFunc: func(c *Config) { c.RequestSize = math.MaxUint16 },
-			expectedErr:      ErrInvalidRequestSize,
+			expectedErr:      errInvalidRequestSize,
 			description:      "should reject request size that exceeds max allowed",
 		},
 	}
@@ -318,7 +318,7 @@ func TestSyncerWaitScenarios(t *testing.T) {
 		{
 			name:        "wait without start",
 			startSyncer: false,
-			expectedErr: ErrWaitBeforeStart,
+			expectedErr: errWaitBeforeStart,
 			description: "should return ErrWaitBeforeStart when called before Start()",
 		},
 		{
@@ -388,7 +388,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 
 	// Set worker count based on test type
 	if useDefaultWorkers {
-		config.NumWorkers = DefaultNumWorkers
+		config.NumWorkers = defaultNumWorkers
 	} else {
 		config.NumWorkers = numWorkers
 	}

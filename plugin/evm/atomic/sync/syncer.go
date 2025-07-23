@@ -24,39 +24,39 @@ import (
 )
 
 const (
-	MinNumWorkers     = 1
-	MaxNumWorkers     = 64
-	DefaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
+	minNumWorkers     = 1
+	maxNumWorkers     = 64
+	defaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
 
-	MinRequestSize = 1
-	MaxRequestSize = 1024 // Matches [maxLeavesLimit] in sync/handlers/leafs_request.go
+	minRequestSize = 1
+	maxRequestSize = 1024 // Matches [maxLeavesLimit] in sync/handlers/leafs_request.go
 
 	// TrieNode represents a leaf node that belongs to the atomic trie.
 	TrieNode message.NodeType = 2
 )
 
 var (
-	// ErrWaitBeforeStart is returned when Wait() is called before Start().
-	ErrWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
+	// errWaitBeforeStart is returned when Wait() is called before Start().
+	errWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
 
-	// ErrTooFewWorkers is returned when numWorkers is below the minimum.
-	ErrTooFewWorkers = errors.New("numWorkers below minimum")
+	// errTooFewWorkers is returned when numWorkers is below the minimum.
+	errTooFewWorkers = errors.New("numWorkers below minimum")
 
-	// ErrTooManyWorkers is returned when numWorkers exceeds the maximum.
-	ErrTooManyWorkers = errors.New("numWorkers above maximum")
+	// errTooManyWorkers is returned when numWorkers exceeds the maximum.
+	errTooManyWorkers = errors.New("numWorkers above maximum")
 
-	ErrNilClient           = errors.New("Client cannot be nil")
-	ErrNilDatabase         = errors.New("Database cannot be nil")
-	ErrNilAtomicTrie       = errors.New("AtomicTrie cannot be nil")
-	ErrEmptyTargetRoot     = errors.New("TargetRoot cannot be empty")
-	ErrInvalidTargetHeight = errors.New("TargetHeight must be greater than 0")
-	ErrInvalidRequestSize  = errors.New("RequestSize must be between 1 and 1024")
-
-	_ Syncer                  = (*syncer)(nil)
-	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
+	errNilClient           = errors.New("Client cannot be nil")
+	errNilDatabase         = errors.New("Database cannot be nil")
+	errNilAtomicTrie       = errors.New("AtomicTrie cannot be nil")
+	errEmptyTargetRoot     = errors.New("TargetRoot cannot be empty")
+	errInvalidTargetHeight = errors.New("TargetHeight must be greater than 0")
+	errInvalidRequestSize  = errors.New("RequestSize must be between 1 and 1024")
 
 	// Pre-allocate zero bytes to avoid repeated allocations.
 	zeroBytes = bytes.Repeat([]byte{0x00}, common.HashLength)
+
+	_ Syncer                  = (*syncer)(nil)
+	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 )
 
 // Config holds the configuration for creating a new atomic syncer.
@@ -87,39 +87,39 @@ type Config struct {
 // Validate checks if the configuration is valid and returns an error if not.
 func (c *Config) Validate() error {
 	if c.Client == nil {
-		return ErrNilClient
+		return errNilClient
 	}
 	if c.Database == nil {
-		return ErrNilDatabase
+		return errNilDatabase
 	}
 	if c.AtomicTrie == nil {
-		return ErrNilAtomicTrie
+		return errNilAtomicTrie
 	}
 	if c.TargetRoot == (common.Hash{}) {
-		return ErrEmptyTargetRoot
+		return errEmptyTargetRoot
 	}
 	if c.TargetHeight == 0 {
-		return ErrInvalidTargetHeight
+		return errInvalidTargetHeight
 	}
 
 	// Set default RequestSize if not specified.
 	if c.RequestSize == 0 {
 		c.RequestSize = config.DefaultStateSyncRequestSize
 	}
-	if c.RequestSize < MinRequestSize || c.RequestSize > MaxRequestSize {
-		return fmt.Errorf("%w: %d (must be between %d and %d)", ErrInvalidRequestSize, c.RequestSize, MinRequestSize, MaxRequestSize)
+	if c.RequestSize < minRequestSize || c.RequestSize > maxRequestSize {
+		return fmt.Errorf("%w: %d (must be between %d and %d)", errInvalidRequestSize, c.RequestSize, minRequestSize, maxRequestSize)
 	}
 
 	// Validate NumWorkers.
 	numWorkers := c.NumWorkers
 	if numWorkers == 0 {
-		numWorkers = DefaultNumWorkers
+		numWorkers = defaultNumWorkers
 	}
-	if numWorkers < MinNumWorkers {
-		return fmt.Errorf("%w: %d (minimum: %d)", ErrTooFewWorkers, numWorkers, MinNumWorkers)
+	if numWorkers < minNumWorkers {
+		return fmt.Errorf("%w: %d (minimum: %d)", errTooFewWorkers, numWorkers, minNumWorkers)
 	}
-	if numWorkers > MaxNumWorkers {
-		return fmt.Errorf("%w: %d (maximum: %d)", ErrTooManyWorkers, numWorkers, MaxNumWorkers)
+	if numWorkers > maxNumWorkers {
+		return fmt.Errorf("%w: %d (maximum: %d)", errTooManyWorkers, numWorkers, maxNumWorkers)
 	}
 
 	return nil
@@ -176,7 +176,7 @@ func newSyncer(config *Config) (*syncer, error) {
 	// Use default workers if not specified.
 	numWorkers := config.NumWorkers
 	if numWorkers == 0 {
-		numWorkers = DefaultNumWorkers
+		numWorkers = defaultNumWorkers
 	}
 
 	lastCommittedRoot, lastCommit := config.AtomicTrie.LastCommitted()
@@ -299,7 +299,7 @@ func (s *syncer) onSyncFailure(error) error {
 // This method must be called after Start() has been called.
 func (s *syncer) Wait(ctx context.Context) error {
 	if s.cancel == nil {
-		return ErrWaitBeforeStart
+		return errWaitBeforeStart
 	}
 
 	select {

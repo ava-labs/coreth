@@ -49,7 +49,7 @@ func (a *Extender) Sync(ctx context.Context, client syncclient.LeafClient, verDB
 		TargetRoot:   atomicSummary.AtomicRoot,
 		TargetHeight: atomicSummary.BlockNumber,
 		RequestSize:  a.requestSize,
-		NumWorkers:   DefaultNumWorkers,
+		NumWorkers:   defaultNumWorkers,
 	}
 	syncer, err := newSyncer(&config)
 	if err != nil {
