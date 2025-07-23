@@ -33,10 +33,8 @@ import (
 	"github.com/ava-labs/libevm/core/state"
 )
 
-// TODO: Remove this alias
 type StateDB = state.StateDB
 
-// TODO: Remove this alias
 var New = state.New
 
 type workerPool struct {
