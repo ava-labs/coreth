@@ -80,18 +80,28 @@ do
         exit 1
     fi
 
-    # If only known flakes failed and no tests were missing, we can be more efficient
+    # Determine which tests to retry based on what happened
+    TESTS_TO_RETRY=""
+    
     if [[ -z "$MISSING_TESTS" ]]; then
-        echo "Only known flakes failed and all tests ran. Retrying only failed tests..."
-        # Run only the failed tests for efficiency
-        for test in $FAILED_TESTS; do
+        # All tests ran, only retry the failed ones
+        echo "All tests ran successfully. Retrying only failed tests..."
+        TESTS_TO_RETRY="$FAILED_TESTS"
+    else
+        # Some tests didn't run due to panics, retry missing + failed tests
+        echo "Some tests did not run due to panics. Retrying missing and failed tests..."
+        TESTS_TO_RETRY=$(echo -e "$MISSING_TESTS\n$FAILED_TESTS" | sort -u)
+    fi
+    
+    # Retry the specific tests that need it
+    if [[ -n "$TESTS_TO_RETRY" ]]; then
+        echo "Retrying tests: $TESTS_TO_RETRY"
+        for test in $TESTS_TO_RETRY; do
             package=$(echo "$test" | cut -d'/' -f1)
             test_name=$(echo "$test" | cut -d'/' -f2)
             echo "Retrying $test_name in $package"
             go test -run "^${test_name}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" $package
         done
-    else
-        echo "Some tests did not run, retrying entire suite..."
     fi
     
     echo "Test run $i failed with known flakes, retrying..."
