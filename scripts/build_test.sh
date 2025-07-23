@@ -28,7 +28,16 @@ MAX_RUNS=4
 # Function to get all test names from packages
 get_all_tests() {
     local packages="$1"
-    go test -list=".*" ${race:-} "$@" $packages 2>/dev/null | grep "^Test" | sort
+    # Process packages individually since go test -list only works with single packages, not ./... patterns
+    local all_tests=""
+    while IFS= read -r package; do
+        [[ -z "$package" ]] && continue
+        package_tests=$(go test -list=".*" ${race:-} "$@" "$package" 2>/dev/null | grep "^Test" || true)
+        if [[ -n "$package_tests" ]]; then
+            all_tests="${all_tests}${all_tests:+$'\n'}${package_tests}"
+        fi
+    done <<< "$(echo "$packages" | tr ' ' '\n')"
+    echo "$all_tests" | sort -u
 }
 
 # Get all packages to test
