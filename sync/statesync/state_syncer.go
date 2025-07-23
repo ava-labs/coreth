@@ -5,6 +5,7 @@ package statesync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -22,6 +23,8 @@ const (
 	numMainTrieSegments    = 8
 	defaultNumWorkers      = 8
 )
+
+var errWaitBeforeStart = errors.New("cannot call Wait before Start")
 
 type StateSyncerConfig struct {
 	Root                     common.Hash
@@ -60,6 +63,9 @@ type stateSync struct {
 	triesInProgressSem chan struct{}
 	done               chan error
 	stats              *trieSyncStats
+
+	// context cancellation management
+	cancelFunc context.CancelFunc
 }
 
 func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
@@ -218,8 +224,12 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Start(ctx context.Context) error {
+	// Create a cancellable context for the sync operations
+	syncCtx, cancel := context.WithCancel(ctx)
+	t.cancelFunc = cancel
+
 	// Start the code syncer and leaf syncer.
-	eg, egCtx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(syncCtx)
 	t.codeSyncer.start(egCtx) // start the code syncer first since the leaf syncer may add code tasks
 	t.syncer.Start(egCtx, defaultNumWorkers, t.onSyncFailure)
 	eg.Go(func() error {
@@ -244,7 +254,39 @@ func (t *stateSync) Start(ctx context.Context) error {
 	return nil
 }
 
-func (t *stateSync) Done() <-chan error { return t.done }
+func (t *stateSync) Wait(ctx context.Context) error {
+	// This should only be called after Start, so we can assume cancelFunc is set.
+	if t.cancelFunc == nil {
+		return errWaitBeforeStart
+	}
+
+	// Monitor the Wait context in a separate goroutine
+	// If it gets cancelled, cancel the sync operations
+	waitCancelled := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			// Wait context was cancelled, cancel the sync operations
+			t.cancelFunc()
+			close(waitCancelled)
+		case <-t.done:
+			// Sync completed before Wait context was cancelled
+			close(waitCancelled)
+		}
+	}()
+
+	select {
+	case err := <-t.done:
+		return err
+	case <-waitCancelled:
+		// Wait context was cancelled
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// If we reach here, sync completed normally
+		return <-t.done
+	}
+}
 
 // addTrieInProgress tracks the root as being currently synced.
 func (t *stateSync) addTrieInProgress(root common.Hash, trie *trieToSync) {
