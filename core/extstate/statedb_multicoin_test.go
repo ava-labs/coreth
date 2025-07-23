@@ -54,14 +54,14 @@ func TestMultiCoinSnapshot(t *testing.T) {
 	addr := common.Address{1}
 	assetID1 := common.Hash{1}
 	assetID2 := common.Hash{2}
-	assertBalances := func(t *testing.T, sdb *StateDB, regular, multicoin1, multicoin2 int64) {
+	assertBalances := func(t *testing.T, wrappedStateDB *StateDB, regular, multicoin1, multicoin2 int64) {
 		t.Helper()
 
-		balance := sdb.GetBalance(addr)
+		balance := wrappedStateDB.GetBalance(addr)
 		require.Equal(t, uint256.NewInt(uint64(regular)), balance, "incorrect non-multicoin balance")
-		balanceBig := sdb.GetBalanceMultiCoin(addr, assetID1)
+		balanceBig := wrappedStateDB.GetBalanceMultiCoin(addr, assetID1)
 		require.Equal(t, big.NewInt(multicoin1).String(), balanceBig.String(), "incorrect multicoin1 balance")
-		balanceBig = sdb.GetBalanceMultiCoin(addr, assetID2)
+		balanceBig = wrappedStateDB.GetBalanceMultiCoin(addr, assetID2)
 		require.Equal(t, big.NewInt(multicoin2).String(), balanceBig.String(), "incorrect multicoin2 balance")
 	}
 
