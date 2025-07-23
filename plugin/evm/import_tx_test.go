@@ -1272,12 +1272,12 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 			checkState: func(t *testing.T, vm *atomicvm.VM) {
 				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
-				stateDB, err := vm.Blockchain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
+				statedb, err := vm.Blockchain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				wrappedStateDB := extstate.New(stateDB)
+				wrappedStateDB := extstate.New(statedb)
 				assetBalance := wrappedStateDB.GetBalanceMultiCoin(testEthAddrs[0], common.Hash(assetID))
 				if assetBalance.Cmp(common.Big1) != 0 {
 					t.Fatalf("Expected asset balance to be %d, found balance: %d", common.Big1, assetBalance)

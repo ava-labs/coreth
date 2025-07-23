@@ -94,14 +94,14 @@ func createExportTxOptions(t *testing.T, vm *atomicvm.VM, sharedMemory *avalanch
 		t.Fatal(err)
 	}
 
-	stateDB, err := vm.Blockchain().State()
+	statedb, err := vm.Blockchain().State()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
 	exportTxs := make([]*atomic.Tx, 0, 3)
-	wrappedStateDB := extstate.New(stateDB)
+	wrappedStateDB := extstate.New(statedb)
 	for _, addr := range testShortIDAddrs {
 		exportTx, err := atomic.NewExportTx(vm.Ctx, vm.CurrentRules(), wrappedStateDB, vm.Ctx.AVAXAssetID, uint64(5000000), vm.Ctx.XChainID, addr, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 		if err != nil {
@@ -419,12 +419,12 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				Ins: test.tx,
 			}
 
-			stateDB, err := tvm.vm.blockChain.State()
+			statedb, err := tvm.vm.blockChain.State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			wrappedStateDB := extstate.New(stateDB)
+			wrappedStateDB := extstate.New(statedb)
 			err = newTx.EVMStateTransfer(tvm.vm.ctx, wrappedStateDB)
 			if test.shouldErr {
 				if err == nil {
@@ -1768,12 +1768,12 @@ func TestNewExportTx(t *testing.T) {
 			parent = tvm.vm.LastAcceptedExtendedBlock()
 			exportAmount := uint64(5000000)
 
-			stateDB, err := tvm.vm.blockChain.State()
+			statedb, err := tvm.vm.blockChain.State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			wrappedStateDB := extstate.New(stateDB)
+			wrappedStateDB := extstate.New(statedb)
 			tx, err = atomic.NewExportTx(tvm.vm.ctx, tvm.vm.currentRules(), wrappedStateDB, tvm.vm.ctx.AVAXAssetID, exportAmount, tvm.vm.ctx.XChainID, testShortIDAddrs[0], initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
@@ -1808,11 +1808,11 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			stateDB, err = tvm.vm.blockChain.State()
+			statedb, err = tvm.vm.blockChain.State()
 			if err != nil {
 				t.Fatal(err)
 			}
-			wrappedStateDB = extstate.New(stateDB)
+			wrappedStateDB = extstate.New(statedb)
 			err = exportTx.EVMStateTransfer(tvm.vm.ctx, wrappedStateDB)
 			if err != nil {
 				t.Fatal(err)
@@ -1963,12 +1963,12 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			stateDB, err := tvm.vm.blockChain.State()
+			statedb, err := tvm.vm.blockChain.State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			wrappedStateDB := extstate.New(stateDB)
+			wrappedStateDB := extstate.New(statedb)
 			tx, err = atomic.NewExportTx(tvm.vm.ctx, tvm.vm.currentRules(), wrappedStateDB, tid, exportAmount, tvm.vm.ctx.XChainID, exportId, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
@@ -1994,11 +1994,11 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			stateDB, err = tvm.vm.blockChain.State()
+			statedb, err = tvm.vm.blockChain.State()
 			if err != nil {
 				t.Fatal(err)
 			}
-			wrappedStateDB = extstate.New(stateDB)
+			wrappedStateDB = extstate.New(statedb)
 			err = exportTx.EVMStateTransfer(tvm.vm.ctx, wrappedStateDB)
 			if err != nil {
 				t.Fatal(err)

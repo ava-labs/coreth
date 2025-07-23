@@ -133,11 +133,11 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	stateDB, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
+	statedb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrappedStateDB := extstate.New(stateDB)
+	wrappedStateDB := extstate.New(statedb)
 	if err := tx.UnsignedAtomicTx.EVMStateTransfer(tvm.vm.ctx, wrappedStateDB); len(test.evmStateTransferErr) == 0 && err != nil {
 		t.Fatalf("EVMStateTransfer failed unexpectedly due to: %s", err)
 	} else if len(test.evmStateTransferErr) != 0 {

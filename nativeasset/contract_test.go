@@ -116,20 +116,20 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
 				// Create account
-				stateDB.CreateAccount(userAddr1)
+				statedb.CreateAccount(userAddr1)
 				// Set balance to pay for gas fee
-				stateDB.SetBalance(userAddr1, u256Hundred)
+				statedb.SetBalance(userAddr1, u256Hundred)
 				// Initialize multicoin balance and set it back to 0
-				wrappedStateDB := extstate.New(stateDB)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.SubBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetBalanceAddr,
@@ -143,19 +143,19 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
 				// Create account
-				stateDB.CreateAccount(userAddr1)
+				statedb.CreateAccount(userAddr1)
 				// Set balance to pay for gas fee
-				stateDB.SetBalance(userAddr1, u256Hundred)
+				statedb.SetBalance(userAddr1, u256Hundred)
 				// Initialize multicoin balance to 100
-				wrappedStateDB := extstate.New(stateDB)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetBalanceAddr,
@@ -223,15 +223,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -242,10 +242,10 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          nil,
 			expectedResult:       nil,
 			name:                 "native asset call: multicoin transfer",
-			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
-				user1Balance := stateDB.GetBalance(userAddr1)
-				user2Balance := stateDB.GetBalance(userAddr2)
-				wrappedStateDB := extstate.New(stateDB)
+			stateDBCheck: func(t *testing.T, statedb *state.StateDB) {
+				user1Balance := statedb.GetBalance(userAddr1)
+				user2Balance := statedb.GetBalance(userAddr2)
+				wrappedStateDB := extstate.New(statedb)
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
@@ -258,15 +258,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -277,11 +277,11 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          nil,
 			expectedResult:       nil,
 			name:                 "native asset call: multicoin transfer with non-zero value",
-			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
-				user1Balance := stateDB.GetBalance(userAddr1)
-				user2Balance := stateDB.GetBalance(userAddr2)
-				nativeAssetCallAddrBalance := stateDB.GetBalance(NativeAssetCallAddr)
-				wrappedStateDB := extstate.New(stateDB)
+			stateDBCheck: func(t *testing.T, statedb *state.StateDB) {
+				user1Balance := statedb.GetBalance(userAddr1)
+				user2Balance := statedb.GetBalance(userAddr2)
+				nativeAssetCallAddrBalance := statedb.GetBalance(NativeAssetCallAddr)
+				wrappedStateDB := extstate.New(statedb)
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 				expectedBalance := big.NewInt(50)
@@ -295,15 +295,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, big.NewInt(50))
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -314,10 +314,10 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          vm.ErrInsufficientBalance,
 			expectedResult:       nil,
 			name:                 "native asset call: insufficient multicoin funds",
-			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
-				user1Balance := stateDB.GetBalance(userAddr1)
-				user2Balance := stateDB.GetBalance(userAddr2)
-				wrappedStateDB := extstate.New(stateDB)
+			stateDBCheck: func(t *testing.T, statedb *state.StateDB) {
+				user1Balance := statedb.GetBalance(userAddr1)
+				user2Balance := statedb.GetBalance(userAddr2)
+				wrappedStateDB := extstate.New(statedb)
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
@@ -329,15 +329,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, uint256.NewInt(50))
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, uint256.NewInt(50))
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, big.NewInt(50))
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -348,10 +348,10 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          vm.ErrInsufficientBalance,
 			expectedResult:       nil,
 			name:                 "native asset call: insufficient funds",
-			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
-				user1Balance := stateDB.GetBalance(userAddr1)
-				user2Balance := stateDB.GetBalance(userAddr2)
-				wrappedStateDB := extstate.New(stateDB)
+			stateDBCheck: func(t *testing.T, statedb *state.StateDB) {
+				user1Balance := statedb.GetBalance(userAddr1)
+				user2Balance := statedb.GetBalance(userAddr2)
+				wrappedStateDB := extstate.New(statedb)
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
@@ -363,15 +363,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -385,15 +385,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -404,10 +404,10 @@ func TestStatefulPrecompile(t *testing.T) {
 			expectedErr:          vm.ErrOutOfGas,
 			expectedResult:       nil,
 			name:                 "native asset call: insufficient gas to create new account",
-			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
-				user1Balance := stateDB.GetBalance(userAddr1)
-				user2Balance := stateDB.GetBalance(userAddr2)
-				wrappedStateDB := extstate.New(stateDB)
+			stateDBCheck: func(t *testing.T, statedb *state.StateDB) {
+				user1Balance := statedb.GetBalance(userAddr1)
+				user2Balance := statedb.GetBalance(userAddr2)
+				wrappedStateDB := extstate.New(statedb)
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
@@ -419,15 +419,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       NativeAssetCallAddr,
@@ -441,15 +441,15 @@ func TestStatefulPrecompile(t *testing.T) {
 		},
 		{
 			setupStateDB: func() *state.StateDB {
-				stateDB, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+				statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
-				stateDB.SetBalance(userAddr1, u256Hundred)
-				wrappedStateDB := extstate.New(stateDB)
+				statedb.SetBalance(userAddr1, u256Hundred)
+				wrappedStateDB := extstate.New(statedb)
 				wrappedStateDB.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
 				wrappedStateDB.Finalise(true)
-				return stateDB
+				return statedb
 			},
 			from:                 userAddr1,
 			precompileAddr:       GenesisContractAddr,
