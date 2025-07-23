@@ -333,7 +333,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, uint256.NewInt(50))
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, big.NewInt(50))
