@@ -412,7 +412,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
 // TODO: unexport this function
-func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
+func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, stateDB *state.StateDB, rules extras.Rules) error {
 	parent, err := vm.InnerVM.GetExtendedBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -421,8 +421,8 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err := verifierBackend.SemanticVerify(tx, parent, baseFee); err != nil {
 		return err
 	}
-	extState := extstate.New(state)
-	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, extState)
+	wrappedStateDB := extstate.New(stateDB)
+	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, wrappedStateDB)
 }
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
@@ -647,7 +647,7 @@ func (vm *VM) onFinalizeAndAssemble(
 	return vm.postBatchOnFinalizeAndAssemble(header, parent, state, txs)
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, stateDB *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
@@ -688,9 +688,9 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		return nil, nil, nil
 	}
 
-	extState := extstate.New(state)
+	wrappedStateDB := extstate.New(stateDB)
 	for _, tx := range txs {
-		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, extState); err != nil {
+		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, wrappedStateDB); err != nil {
 			return nil, nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution

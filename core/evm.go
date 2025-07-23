@@ -77,12 +77,12 @@ func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm
 	return args
 }
 
-func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
-	stateDB := extstate.New(db.(*state.StateDB))
+func wrapStateDB(rules params.Rules, stateDB vm.StateDB) vm.StateDB {
+	wrappedStateDB := extstate.New(stateDB.(*state.StateDB))
 	if params.GetRulesExtra(rules).IsApricotPhase1 {
-		return stateDB
+		return wrappedStateDB
 	}
-	return &StateDBAP0{stateDB}
+	return &StateDBAP0{wrappedStateDB}
 }
 
 // StateDBAP0 implements the GetCommittedState behavior that existed prior to

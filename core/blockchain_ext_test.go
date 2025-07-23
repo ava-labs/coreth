@@ -25,8 +25,8 @@ import (
 var (
 	TestCallbacks = dummy.ConsensusCallbacks{
 		OnExtraStateChange: func(block *types.Block, _ *types.Header, stateDB *state.StateDB) (*big.Int, *big.Int, error) {
-			state := extstate.New(stateDB)
-			state.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
+			wrappedStateDB := extstate.New(stateDB)
+			wrappedStateDB.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(block.Number().Int64()))
 			return nil, nil, nil
 		},
 		OnFinalizeAndAssemble: func(
@@ -35,8 +35,8 @@ var (
 			stateDB *state.StateDB,
 			_ []*types.Transaction,
 		) ([]byte, *big.Int, *big.Int, error) {
-			state := extstate.New(stateDB)
-			state.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
+			wrappedStateDB := extstate.New(stateDB)
+			wrappedStateDB.AddBalanceMultiCoin(common.HexToAddress("0xdeadbeef"), common.HexToHash("0xdeadbeef"), big.NewInt(header.Number.Int64()))
 			return nil, nil, nil, nil
 		},
 	}
