@@ -41,9 +41,22 @@ do
     # Extract test results for analysis
     echo "$test_output" > test.json
     
+    # Debug: Check if JSON output is valid
+    echo "Debug: JSON output size: $(echo "$test_output" | wc -l) lines"
+    echo "Debug: First few JSON lines:"
+    echo "$test_output" | head -5
+    
     # Get tests that actually ran and failed
     RAN_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "pass" or .Action == "fail") | .Test' 2>/dev/null | sort || echo "")
     FAILED_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "fail") | .Test' 2>/dev/null | sort || echo "")
+    
+    # Debug: Show what we found
+    echo "Debug: Found $(echo "$RAN_TESTS" | wc -l | tr -d ' ') tests that ran"
+    echo "Debug: Found $(echo "$FAILED_TESTS" | wc -l | tr -d ' ') tests that failed"
+    if [[ -n "$RAN_TESTS" ]]; then
+        echo "Debug: First few ran tests:"
+        echo "$RAN_TESTS" | head -3
+    fi
     
     # Detect missing tests by analyzing package-level results
     # Check for both complete package failures and partial test failures
@@ -65,8 +78,8 @@ do
             missing_package_tests=$(comm -23 <(echo "$expected_package_tests") <(echo "$ran_package_tests") 2>/dev/null || echo "")
             
             if [[ -n "$missing_package_tests" ]]; then
-                missing_count=$(echo "$missing_package_tests" | wc -l)
-                ran_count=$(echo "$ran_package_tests" | wc -l)
+                missing_count=$(echo "$missing_package_tests" | wc -l | tr -d ' ')
+                ran_count=$(echo "$ran_package_tests" | wc -l | tr -d ' ')
                 echo "WARNING: Package $package has $package_has_tests tests, $ran_count ran, $missing_count missing - likely due to panic"
                 MISSING_TESTS="${MISSING_TESTS}${MISSING_TESTS:+$'\n'}${missing_package_tests}"
             fi

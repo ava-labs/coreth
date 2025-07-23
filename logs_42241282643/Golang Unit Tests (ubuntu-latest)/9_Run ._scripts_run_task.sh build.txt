@@ -1,7 +1,0 @@
-﻿2025-07-23T19:29:29.7295401Z ##[group]Run ./scripts/run_task.sh build
-2025-07-23T19:29:29.7295747Z [36;1m./scripts/run_task.sh build[0m
-2025-07-23T19:29:29.7324573Z shell: /usr/bin/bash -e {0}
-2025-07-23T19:29:29.7324809Z ##[endgroup]
-2025-07-23T19:29:30.1577556Z task: [build] ./scripts/build.sh
-2025-07-23T19:29:30.1786073Z Using branch: d85ec03
-2025-07-23T19:29:30.1802849Z Building Coreth @ GitCommit: d85ec0364204a0b3e07e9cdc140a65c53b4d6ce4 at /home/runner/.avalanchego/plugins/srEXiWaHuhNyGwPUi444Tu47ZEDwxTWrbQiuD7FmgSAQ6X7Dy
