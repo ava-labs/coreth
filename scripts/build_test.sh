@@ -25,25 +25,23 @@ fi
 # This is useful for flaky tests
 MAX_RUNS=4
 
-# Function to get all test names from packages
 get_all_tests() {
     local packages="$1"
-
-    # Compute directories for each package under current build tags/platform
+    # Map import paths → directories matching your build tags/platform
     local dirs
     dirs=$(printf '%s\n' "$packages" | xargs go list -f '{{.Dir}}')
-
-    # Grep top-level Test functions in *_test.go and emit unique sorted names
+    # Grep for top-level Test functions in *_test.go
     grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+(Test[[:alnum:]_]+)\(' \
          $dirs |
     sed -E 's/^.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' |
     sort -u
 }
 
-# Get all packages to test (excluding the pure tests directory)
+# Get all packages to test
 PACKAGES=$(go list ./... | grep -v github.com/ava-labs/coreth/tests)
 
-for ((i = 1; i <= MAX_RUNS; i++)); do
+for ((i = 1; i <= MAX_RUNS; i++));
+do
     echo "Test run $i of $MAX_RUNS"
     
     # Get expected tests (for comparison) on first run
@@ -55,14 +53,17 @@ for ((i = 1; i <= MAX_RUNS; i++)); do
     
     # Run tests with JSON output for better tracking
     echo "Running tests..."
-    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" \
-                   -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
+    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
     
     # Extract test results for analysis
     echo "$test_output" > test.json
     
     # Get tests that actually ran and failed
-    RAN_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "pass" or .Action == "fail") | .Test' 2>/dev/null | sort || echo "")
+    RAN_TESTS=$(echo "$test_output" \
+        | jq -r 'select(.Action == "pass" or .Action == "fail" or .Action == "skip") | .Test' 2>/dev/null \
+        | sort || echo "")
+ 
+    # Get tests that failed
     FAILED_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "fail") | .Test' 2>/dev/null | sort || echo "")
     
     # Check if all expected tests ran
@@ -106,10 +107,9 @@ for ((i = 1; i <= MAX_RUNS; i++)); do
     if [[ -n "$TESTS_TO_RETRY" ]]; then
         echo "Retrying tests: $TESTS_TO_RETRY"
         for test in $TESTS_TO_RETRY; do
-            package=$(echo "$test" | cut -d'/' -f1)
-            test_name=$(echo "$test" | cut -d'/' -f2)
-            echo "Retrying $test_name in $package"
-            go test -run "^${test_name}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" "$package"
+            echo "Retrying $test"
+            # run the single test pattern across all packages
+            go test -run "^${test}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" $PACKAGES
         done
     fi
     
