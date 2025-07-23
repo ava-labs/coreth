@@ -180,7 +180,6 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 		return StorageRangeResult{}, errFirewoodNotSupported
 	}
 
-	var block *types.Block
 	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return StorageRangeResult{}, err
