@@ -246,9 +246,9 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				sdb := extstate.New(stateDB)
-				user1AssetBalance := sdb.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := sdb.GetBalanceMultiCoin(userAddr2, assetID)
+				state := extstate.New(stateDB)
+				user1AssetBalance := state.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := state.GetBalanceMultiCoin(userAddr2, assetID)
 
 				expectedBalance := big.NewInt(50)
 				assert.Equal(t, u256Hundred, user1Balance, "user 1 balance")
@@ -320,9 +320,9 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				sdb := extstate.New(stateDB)
-				user1AssetBalance := sdb.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := sdb.GetBalanceMultiCoin(userAddr2, assetID)
+				state := extstate.New(stateDB)
+				user1AssetBalance := state.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := state.GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -355,9 +355,9 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				sdb := extstate.New(stateDB)
-				user1AssetBalance := sdb.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := sdb.GetBalanceMultiCoin(userAddr2, assetID)
+				state := extstate.New(stateDB)
+				user1AssetBalance := state.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := state.GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, big.NewInt(50), user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
@@ -413,9 +413,9 @@ func TestStatefulPrecompile(t *testing.T) {
 			stateDBCheck: func(t *testing.T, stateDB *state.StateDB) {
 				user1Balance := stateDB.GetBalance(userAddr1)
 				user2Balance := stateDB.GetBalance(userAddr2)
-				sdb := extstate.New(stateDB)
-				user1AssetBalance := sdb.GetBalanceMultiCoin(userAddr1, assetID)
-				user2AssetBalance := sdb.GetBalanceMultiCoin(userAddr2, assetID)
+				state := extstate.New(stateDB)
+				user1AssetBalance := state.GetBalanceMultiCoin(userAddr1, assetID)
+				user2AssetBalance := state.GetBalanceMultiCoin(userAddr2, assetID)
 
 				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
 				assert.Equal(t, big0, user2Balance, "user 2 balance")
