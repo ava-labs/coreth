@@ -32,7 +32,7 @@ get_all_tests() {
     dirs=$(printf '%s\n' "$packages" | xargs go list -f '{{.Dir}}')
     # Grep for top-level Test functions in *_test.go
     grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+(Test[[:alnum:]_]+)\(' \
-         $dirs |
+         "$dirs" |
     sed -E 's/^.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' |
     sort -u
 }
@@ -58,9 +58,17 @@ do
     # Extract test results for analysis
     echo "$test_output" > test.json
     
-    # Get tests that actually ran and failed
+    # Get tests that actually ran (including panics) and skipped
     RAN_TESTS=$(echo "$test_output" \
-        | jq -r 'select(.Action == "pass" or .Action == "fail" or .Action == "skip") | .Test' 2>/dev/null \
+        | jq -r '
+            select(
+              .Action == "run"
+              or .Action == "pass"
+              or .Action == "fail"
+              or .Action == "skip"
+            )
+            | .Test
+          ' 2>/dev/null \
         | sort || echo "")
  
     # Get tests that failed
@@ -108,8 +116,16 @@ do
         echo "Retrying tests: $TESTS_TO_RETRY"
         for test in $TESTS_TO_RETRY; do
             echo "Retrying $test"
-            # run the single test pattern across all packages
-            go test -run "^${test}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" $PACKAGES
+            # find the package directory containing that test
+            pkg_dir=$(grep -R --include='*_test.go' -l "func[[:space:]]\+${test}\(" "$CORETH_PATH" | head -n1)
+            if [[ -n "$pkg_dir" ]]; then
+              pkg=$(dirname "$pkg_dir" | xargs go list -f '{{.ImportPath}}' 2>/dev/null)
+            else
+              pkg="$PACKAGES"
+            fi
+            echo " → in package $pkg"
+            # run only that test in its package
+            go test -run "^${test}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" "$pkg"
         done
     fi
     
