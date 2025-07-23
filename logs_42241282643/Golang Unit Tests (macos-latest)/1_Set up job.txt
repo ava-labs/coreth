@@ -1,0 +1,47 @@
+﻿2025-07-23T19:28:55.6469440Z Current runner version: '2.326.0'
+2025-07-23T19:28:55.6485610Z ##[group]Operating System
+2025-07-23T19:28:55.6486070Z macOS
+2025-07-23T19:28:55.6486460Z 14.7.6
+2025-07-23T19:28:55.6486750Z 23H626
+2025-07-23T19:28:55.6487130Z ##[endgroup]
+2025-07-23T19:28:55.6487440Z ##[group]Runner Image
+2025-07-23T19:28:55.6487770Z Image: macos-14-arm64
+2025-07-23T19:28:55.6488090Z Version: 20250715.1663
+2025-07-23T19:28:55.6488820Z Included Software: https://github.com/actions/runner-images/blob/macos-14-arm64/20250715.1663/images/macos/macos-14-arm64-Readme.md
+2025-07-23T19:28:55.6489720Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-14-arm64%2F20250715.1663
+2025-07-23T19:28:55.6490280Z ##[endgroup]
+2025-07-23T19:28:55.6490600Z ##[group]Runner Image Provisioner
+2025-07-23T19:28:55.6490980Z 2.0.449.1+6d46f4794670abc677653e70ad733fc4b7478209
+2025-07-23T19:28:55.6491360Z ##[endgroup]
+2025-07-23T19:28:55.6492780Z ##[group]GITHUB_TOKEN Permissions
+2025-07-23T19:28:55.6493700Z Actions: write
+2025-07-23T19:28:55.6494080Z Attestations: write
+2025-07-23T19:28:55.6494420Z Checks: write
+2025-07-23T19:28:55.6494710Z Contents: write
+2025-07-23T19:28:55.6494990Z Deployments: write
+2025-07-23T19:28:55.6495400Z Discussions: write
+2025-07-23T19:28:55.6495700Z Issues: write
+2025-07-23T19:28:55.6495980Z Metadata: read
+2025-07-23T19:28:55.6496270Z Models: read
+2025-07-23T19:28:55.6496550Z Packages: write
+2025-07-23T19:28:55.6496860Z Pages: write
+2025-07-23T19:28:55.6497140Z PullRequests: write
+2025-07-23T19:28:55.6497450Z RepositoryProjects: write
+2025-07-23T19:28:55.6497770Z SecurityEvents: write
+2025-07-23T19:28:55.6498070Z Statuses: write
+2025-07-23T19:28:55.6498370Z ##[endgroup]
+2025-07-23T19:28:55.6499510Z Secret source: Actions
+2025-07-23T19:28:55.6499910Z Prepare workflow directory
+2025-07-23T19:28:55.6698640Z Prepare all required actions
+2025-07-23T19:28:55.6723790Z Getting action download info
+2025-07-23T19:28:55.9826770Z ##[group]Download immutable action package 'actions/checkout@v4'
+2025-07-23T19:28:55.9827440Z Version: 4.2.2
+2025-07-23T19:28:55.9828010Z Digest: sha256:ccb2698953eaebd21c7bf6268a94f9c26518a7e38e27e0b83c1fe1ad049819b1
+2025-07-23T19:28:55.9828760Z Source commit SHA: 11bd71901bbe5b1630ceea73d27597364c9af683
+2025-07-23T19:28:55.9829220Z ##[endgroup]
+2025-07-23T19:28:56.3134370Z ##[group]Download immutable action package 'actions/setup-go@v5'
+2025-07-23T19:28:56.3135560Z Version: 5.5.0
+2025-07-23T19:28:56.3136060Z Digest: sha256:f5eeb2233d0c6714b5236de9b44ad0b935014e15eeab3c28d73dc44c1c641ebb
+2025-07-23T19:28:56.3136680Z Source commit SHA: d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+2025-07-23T19:28:56.3137140Z ##[endgroup]
+2025-07-23T19:28:57.0637990Z Complete job name: Golang Unit Tests (macos-latest)

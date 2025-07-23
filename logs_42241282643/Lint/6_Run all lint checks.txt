@@ -1,0 +1,51 @@
+﻿2025-07-23T19:29:14.6408264Z ##[group]Run ./scripts/run_task.sh lint-all-ci
+2025-07-23T19:29:14.6408675Z [36;1m./scripts/run_task.sh lint-all-ci[0m
+2025-07-23T19:29:14.6442885Z shell: /usr/bin/bash -e {0}
+2025-07-23T19:29:14.6443211Z ##[endgroup]
+2025-07-23T19:29:15.4094647Z task: [lint] ./scripts/lint.sh
+2025-07-23T19:29:15.4166893Z Running 'golangci_lint license_header require_error_is_no_funcs_as_params single_import interface_compliance_nil require_no_error_inline_func import_testing_only_in_tests' at: Wed Jul 23 19:29:15 UTC 2025
+2025-07-23T19:29:15.4192512Z find: warning: -path ./ will not match anything because it ends with /.
+2025-07-23T19:29:15.4494196Z START: 'golangci_lint' at Wed Jul 23 19:29:15 UTC 2025
+2025-07-23T19:30:03.0594111Z SUCCESS: 'golangci_lint' completed at Wed Jul 23 19:30:03 UTC 2025
+2025-07-23T19:30:03.0614513Z START: 'license_header' at Wed Jul 23 19:30:03 UTC 2025
+2025-07-23T19:30:03.0618951Z Running license tool on upstream files with header for upstream...
+2025-07-23T19:30:03.6289756Z 1 file does not have the correct license header:
+2025-07-23T19:30:03.6290273Z 	./core/state/database_test.go
+2025-07-23T19:30:03.6294300Z exit status 1
+2025-07-23T19:30:03.6316094Z Running license tool on remaining files with default header...
+2025-07-23T19:30:04.0109864Z SUCCESS: 'license_header' completed at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0131126Z START: 'require_error_is_no_funcs_as_params' at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0237529Z SUCCESS: 'require_error_is_no_funcs_as_params' completed at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0259074Z START: 'single_import' at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0358249Z SUCCESS: 'single_import' completed at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0378159Z START: 'interface_compliance_nil' at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0514146Z SUCCESS: 'interface_compliance_nil' completed at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0533738Z START: 'require_no_error_inline_func' at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0651810Z SUCCESS: 'require_no_error_inline_func' completed at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.0671742Z START: 'import_testing_only_in_tests' at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.1045679Z SUCCESS: 'import_testing_only_in_tests' completed at Wed Jul 23 19:30:04 UTC 2025
+2025-07-23T19:30:04.1046562Z ALL SUCCESS!
+2025-07-23T19:30:04.1091049Z task: [actionlint] ./scripts/actionlint.sh
+2025-07-23T19:30:07.1235336Z Checking use of scripts/* in GitHub Actions workflows...
+2025-07-23T19:30:07.1334227Z task: [shellcheck] ./scripts/shellcheck.sh
+2025-07-23T19:30:07.4978675Z 
+2025-07-23T19:30:07.4979258Z In /home/runner/work/coreth/coreth/scripts/build_test.sh line 59:
+2025-07-23T19:30:07.4980332Z     test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" $PACKAGES 2>&1) || command_status=$?
+2025-07-23T19:30:07.4985705Z                                                                                                                                     ^-------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+2025-07-23T19:30:07.4986094Z 
+2025-07-23T19:30:07.4986191Z Did you mean: 
+2025-07-23T19:30:07.4987315Z     test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
+2025-07-23T19:30:07.4987916Z 
+2025-07-23T19:30:07.4987921Z 
+2025-07-23T19:30:07.4988135Z In /home/runner/work/coreth/coreth/scripts/build_test.sh line 112:
+2025-07-23T19:30:07.4988885Z             go test -run "^${test_name}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" $package
+2025-07-23T19:30:07.4991775Z                                                                                      ^------^ SC2086 (info): Double quote to prevent globbing and word splitting.
+2025-07-23T19:30:07.4992092Z 
+2025-07-23T19:30:07.4992188Z Did you mean: 
+2025-07-23T19:30:07.4992770Z             go test -run "^${test_name}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" "$package"
+2025-07-23T19:30:07.4993448Z 
+2025-07-23T19:30:07.4993545Z For more information:
+2025-07-23T19:30:07.4993974Z   https://www.shellcheck.net/wiki/SC2086 -- Double quote to prevent globbing ...
+2025-07-23T19:30:07.5008101Z task: Failed to run task "lint-all-ci": exit status 123
+2025-07-23T19:30:07.5017709Z exit status 201
+2025-07-23T19:30:07.5072538Z ##[error]Process completed with exit code 1.

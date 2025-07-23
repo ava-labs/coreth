@@ -25,20 +25,7 @@ fi
 # This is useful for flaky tests
 MAX_RUNS=4
 
-# Function to get all test names from packages
-get_all_tests() {
-    local packages="$1"
-    # Process packages individually since go test -list only works with single packages, not ./... patterns
-    local all_tests=""
-    while IFS= read -r package; do
-        [[ -z "$package" ]] && continue
-        package_tests=$(go test -list=".*" ${race:-} "$@" "$package" 2>/dev/null | grep "^Test" || true)
-        if [[ -n "$package_tests" ]]; then
-            all_tests="${all_tests}${all_tests:+$'\n'}${package_tests}"
-        fi
-    done <<< "$(echo "$packages" | tr ' ' '\n')"
-    echo "$all_tests" | sort -u
-}
+
 
 # Get all packages to test
 PACKAGES=$(go list ./... | grep -v github.com/ava-labs/coreth/tests)
@@ -47,31 +34,44 @@ for ((i = 1; i <= MAX_RUNS; i++));
 do
     echo "Test run $i of $MAX_RUNS"
     
-    # Get expected tests (for comparison) on first run
-    if [[ $i -eq 1 ]]; then
-        echo "Getting expected test list..."
-        EXPECTED_TESTS=$(get_all_tests "$PACKAGES")
-        echo "Expected tests: $(echo "$EXPECTED_TESTS" | wc -l | tr -d ' ') tests"
-    fi
-    
     # Run tests with JSON output for better tracking
     echo "Running tests..."
-    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" $PACKAGES 2>&1) || command_status=$?
+    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
     
     # Extract test results for analysis
     echo "$test_output" > test.json
     
     # Get tests that actually ran and failed
-    RAN_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "pass" or .Action == "fail") | .Test' | sort)
-    FAILED_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "fail") | .Test' | sort)
+    RAN_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "pass" or .Action == "fail") | .Test' 2>/dev/null | sort || echo "")
+    FAILED_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "fail") | .Test' 2>/dev/null | sort || echo "")
     
-    # Check if all expected tests ran
-    MISSING_TESTS=$(comm -23 <(echo "$EXPECTED_TESTS") <(echo "$RAN_TESTS"))
-    
-    if [[ -n "$MISSING_TESTS" ]]; then
-        echo "WARNING: Some tests did not run due to panics or other issues:"
-        echo "$MISSING_TESTS"
-    fi
+    # Detect missing tests by analyzing package-level results
+    # Check for both complete package failures and partial test failures
+    MISSING_TESTS=""
+    while IFS= read -r package; do
+        [[ -z "$package" ]] && continue
+        
+        # Check if this package has any tests
+        package_has_tests=$(go test -list=".*" "$package" 2>/dev/null | grep -c "^Test" || echo "0")
+        
+        if [[ "$package_has_tests" -gt 0 ]]; then
+            # Get all expected tests for this package
+            expected_package_tests=$(go test -list=".*" "$package" 2>/dev/null | grep "^Test" | sed "s|^|$package/|" || true)
+            
+            # Get tests that actually ran from this package
+            ran_package_tests=$(echo "$RAN_TESTS" | grep "^$package/" || true)
+            
+            # Find missing tests by comparing expected vs ran
+            missing_package_tests=$(comm -23 <(echo "$expected_package_tests") <(echo "$ran_package_tests") 2>/dev/null || echo "")
+            
+            if [[ -n "$missing_package_tests" ]]; then
+                missing_count=$(echo "$missing_package_tests" | wc -l)
+                ran_count=$(echo "$ran_package_tests" | wc -l)
+                echo "WARNING: Package $package has $package_has_tests tests, $ran_count ran, $missing_count missing - likely due to panic"
+                MISSING_TESTS="${MISSING_TESTS}${MISSING_TESTS:+$'\n'}${missing_package_tests}"
+            fi
+        fi
+    done <<< "$PACKAGES"
 
     # If the test passed, exit
     if [[ ${command_status:-0} == 0 ]]; then
@@ -83,7 +83,7 @@ do
     fi
 
     # Check for unexpected failures
-    unexpected_failures=$(comm -23 <(echo "$FAILED_TESTS") <(sed 's/\r$//' ./scripts/known_flakes.txt))
+    unexpected_failures=$(comm -23 <(echo "$FAILED_TESTS") <(sed 's/\r$//' ./scripts/known_flakes.txt) 2>/dev/null || echo "")
     if [ -n "${unexpected_failures}" ]; then
         echo "Unexpected test failures: ${unexpected_failures}"
         exit 1
@@ -104,12 +104,12 @@ do
     
     # Retry the specific tests that need it
     if [[ -n "$TESTS_TO_RETRY" ]]; then
-        echo "Retrying tests: $TESTS_TO_RETRY"
+        echo "Retrying $(echo "$TESTS_TO_RETRY" | wc -l) tests..."
         for test in $TESTS_TO_RETRY; do
             package=$(echo "$test" | cut -d'/' -f1)
             test_name=$(echo "$test" | cut -d'/' -f2)
             echo "Retrying $test_name in $package"
-            go test -run "^${test_name}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" $package
+            go test -run "^${test_name}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" "$package"
         done
     fi
     

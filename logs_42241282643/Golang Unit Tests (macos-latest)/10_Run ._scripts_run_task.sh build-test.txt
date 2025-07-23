@@ -1,0 +1,16 @@
+﻿2025-07-23T19:29:51.2280730Z ##[group]Run ./scripts/run_task.sh build-test
+2025-07-23T19:29:51.2281080Z [36;1m./scripts/run_task.sh build-test[0m
+2025-07-23T19:29:51.2415470Z shell: /bin/bash -e {0}
+2025-07-23T19:29:51.2415660Z env:
+2025-07-23T19:29:51.2415810Z   TIMEOUT: 
+2025-07-23T19:29:51.2415930Z ##[endgroup]
+2025-07-23T19:29:51.8737350Z task: [build-test] ./scripts/build_test.sh
+2025-07-23T19:29:51.9016910Z Using branch: d85ec03
+2025-07-23T19:29:52.2501390Z Test run 1 of 4
+2025-07-23T19:29:52.2501750Z Getting expected test list...
+2025-07-23T19:29:58.6019610Z Expected tests: 1 tests
+2025-07-23T19:29:58.6019970Z Running tests...
+2025-07-23T19:35:29.6858340Z jq: parse error: Invalid numeric literal at line 1, column 2
+2025-07-23T19:35:29.6980780Z task: Failed to run task "build-test": exit status 5
+2025-07-23T19:35:29.7011040Z exit status 201
+2025-07-23T19:35:29.7081660Z ##[error]Process completed with exit code 1.

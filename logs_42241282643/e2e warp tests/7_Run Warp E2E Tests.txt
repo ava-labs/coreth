@@ -1,0 +1,826 @@
+﻿2025-07-23T19:30:52.5253270Z ##[group]Run ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@66ce7a7701db0c4b370f97b339478d5b5ebe919a
+2025-07-23T19:30:52.5253805Z with:
+2025-07-23T19:30:52.5254192Z   run: ./scripts/run_task.sh test-e2e-warp-ci
+2025-07-23T19:30:52.5254542Z   run_env: AVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego/build
+2025-07-23T19:30:52.5254854Z   artifact_prefix: warp
+2025-07-23T19:30:52.5255056Z   runtime: process
+2025-07-23T19:30:52.5255249Z   repository_owner: ava-labs
+2025-07-23T19:30:52.5255459Z   repository_name: coreth
+2025-07-23T19:30:52.5255656Z   workflow: CI
+2025-07-23T19:30:52.5255831Z   run_id: 16480013789
+2025-07-23T19:30:52.5256005Z   run_number: 5026
+2025-07-23T19:30:52.5256180Z   run_attempt: 1
+2025-07-23T19:30:52.5256349Z   job: e2e_warp
+2025-07-23T19:30:52.5256535Z ##[endgroup]
+2025-07-23T19:30:52.5351273Z ##[group]Run cachix/install-nix-action@02a151ada4993995686f9ed4f1be7cfbb229e56f
+2025-07-23T19:30:52.5351649Z with:
+2025-07-23T19:30:52.5351817Z   enable_kvm: true
+2025-07-23T19:30:52.5352026Z ##[endgroup]
+2025-07-23T19:30:52.5367468Z ##[group]Run ${GITHUB_ACTION_PATH}/install-nix.sh
+2025-07-23T19:30:52.5367826Z [36;1m${GITHUB_ACTION_PATH}/install-nix.sh[0m
+2025-07-23T19:30:52.5396773Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-07-23T19:30:52.5397086Z env:
+2025-07-23T19:30:52.5397258Z   INPUT_EXTRA_NIX_CONFIG: 
+2025-07-23T19:30:52.5397477Z   INPUT_GITHUB_ACCESS_TOKEN: 
+2025-07-23T19:30:52.5397692Z   INPUT_INSTALL_OPTIONS: 
+2025-07-23T19:30:52.5397886Z   INPUT_INSTALL_URL: 
+2025-07-23T19:30:52.5398068Z   INPUT_NIX_PATH: 
+2025-07-23T19:30:52.5398254Z   INPUT_ENABLE_KVM: true
+2025-07-23T19:30:52.5398662Z   GITHUB_TOKEN: ***
+2025-07-23T19:30:52.5398844Z ##[endgroup]
+2025-07-23T19:30:52.5472677Z ##[group]Enabling KVM support
+2025-07-23T19:30:52.5539648Z KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"
+2025-07-23T19:30:52.5842674Z Enabled KVM
+2025-07-23T19:30:52.5843321Z ##[endgroup]
+2025-07-23T19:30:52.5844261Z ##[group]Installing Nix
+2025-07-23T19:30:52.6129670Z installer options: --no-channel-add --darwin-use-unencrypted-nix-store-volume --nix-extra-conf-file /tmp/tmp.W0ihg3Z3cO/nix.conf --daemon --daemon-user-count 8
+2025-07-23T19:30:52.9227119Z * Host releases.nixos.org:443 was resolved.
+2025-07-23T19:30:52.9227698Z * IPv6: 2a04:4e42:77::729
+2025-07-23T19:30:52.9228048Z * IPv4: 146.75.30.217
+2025-07-23T19:30:52.9228378Z *   Trying 146.75.30.217:443...
+2025-07-23T19:30:52.9278018Z * Connected to releases.nixos.org (146.75.30.217) port 443
+2025-07-23T19:30:52.9292363Z * ALPN: curl offers h2,http/1.1
+2025-07-23T19:30:52.9294133Z } [5 bytes data]
+2025-07-23T19:30:52.9294896Z * TLSv1.3 (OUT), TLS handshake, Client hello (1):
+2025-07-23T19:30:52.9296388Z } [512 bytes data]
+2025-07-23T19:30:52.9506175Z *  CAfile: /etc/ssl/certs/ca-certificates.crt
+2025-07-23T19:30:52.9506721Z *  CApath: /etc/ssl/certs
+2025-07-23T19:30:52.9510336Z { [5 bytes data]
+2025-07-23T19:30:52.9511135Z * TLSv1.3 (IN), TLS handshake, Server hello (2):
+2025-07-23T19:30:52.9511623Z { [104 bytes data]
+2025-07-23T19:30:52.9512020Z * TLSv1.2 (IN), TLS handshake, Certificate (11):
+2025-07-23T19:30:52.9512472Z { [2827 bytes data]
+2025-07-23T19:30:52.9513034Z * TLSv1.2 (IN), TLS handshake, Server key exchange (12):
+2025-07-23T19:30:52.9513511Z { [300 bytes data]
+2025-07-23T19:30:52.9514275Z * TLSv1.2 (IN), TLS handshake, Server finished (14):
+2025-07-23T19:30:52.9514739Z { [4 bytes data]
+2025-07-23T19:30:52.9516391Z * TLSv1.2 (OUT), TLS handshake, Client key exchange (16):
+2025-07-23T19:30:52.9516897Z } [37 bytes data]
+2025-07-23T19:30:52.9517330Z * TLSv1.2 (OUT), TLS change cipher, Change cipher spec (1):
+2025-07-23T19:30:52.9517835Z } [1 bytes data]
+2025-07-23T19:30:52.9518140Z * TLSv1.2 (OUT), TLS handshake, Finished (20):
+2025-07-23T19:30:52.9518406Z } [16 bytes data]
+2025-07-23T19:30:52.9570150Z * TLSv1.2 (IN), TLS handshake, Finished (20):
+2025-07-23T19:30:52.9570628Z { [16 bytes data]
+2025-07-23T19:30:52.9571224Z * SSL connection using TLSv1.2 / ECDHE-RSA-CHACHA20-POLY1305 / X25519 / RSASSA-PSS
+2025-07-23T19:30:52.9572183Z * ALPN: server accepted h2
+2025-07-23T19:30:52.9572410Z * Server certificate:
+2025-07-23T19:30:52.9572629Z *  subject: CN=releases.nixos.org
+2025-07-23T19:30:52.9572876Z *  start date: Oct 11 20:56:16 2024 GMT
+2025-07-23T19:30:52.9573126Z *  expire date: Nov 12 20:56:15 2025 GMT
+2025-07-23T19:30:52.9573501Z *  subjectAltName: host "releases.nixos.org" matched cert's "releases.nixos.org"
+2025-07-23T19:30:52.9574214Z *  issuer: C=BE; O=GlobalSign nv-sa; CN=GlobalSign Atlas R3 DV TLS CA 2024 Q4
+2025-07-23T19:30:52.9574579Z *  SSL certificate verify ok.
+2025-07-23T19:30:52.9575006Z *   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+2025-07-23T19:30:52.9575621Z *   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+2025-07-23T19:30:52.9576265Z *   Certificate level 2: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+2025-07-23T19:30:52.9576696Z } [5 bytes data]
+2025-07-23T19:30:52.9576885Z * using HTTP/2
+2025-07-23T19:30:52.9577216Z * [HTTP/2] [1] OPENED stream for https://releases.nixos.org/nix/nix-2.26.3/install
+2025-07-23T19:30:52.9577574Z * [HTTP/2] [1] [:method: GET]
+2025-07-23T19:30:52.9577795Z * [HTTP/2] [1] [:scheme: https]
+2025-07-23T19:30:52.9578053Z * [HTTP/2] [1] [:authority: releases.nixos.org]
+2025-07-23T19:30:52.9578343Z * [HTTP/2] [1] [:path: /nix/nix-2.26.3/install]
+2025-07-23T19:30:52.9578602Z * [HTTP/2] [1] [user-agent: curl/8.5.0]
+2025-07-23T19:30:52.9578844Z * [HTTP/2] [1] [accept: */*]
+2025-07-23T19:30:52.9579064Z } [5 bytes data]
+2025-07-23T19:30:52.9579261Z > GET /nix/nix-2.26.3/install HTTP/2
+2025-07-23T19:30:52.9579502Z > Host: releases.nixos.org
+2025-07-23T19:30:52.9579747Z > User-Agent: curl/8.5.0
+2025-07-23T19:30:52.9580128Z > Accept: */*
+2025-07-23T19:30:52.9580289Z > 
+2025-07-23T19:30:52.9621308Z { [5 bytes data]
+2025-07-23T19:30:52.9642724Z < HTTP/2 200 
+2025-07-23T19:30:52.9643374Z < last-modified: Wed, 05 Mar 2025 18:21:15 GMT
+2025-07-23T19:30:52.9644579Z < etag: "c6753896884bce9b95ec3ca7be157ef6"
+2025-07-23T19:30:52.9645197Z < x-amz-server-side-encryption: AES256
+2025-07-23T19:30:52.9645739Z < content-type: text/plain
+2025-07-23T19:30:52.9646190Z < server: AmazonS3
+2025-07-23T19:30:52.9646576Z < via: 1.1 varnish, 1.1 varnish
+2025-07-23T19:30:52.9647054Z < access-control-allow-origin: *
+2025-07-23T19:30:52.9647527Z < accept-ranges: bytes
+2025-07-23T19:30:52.9647941Z < date: Wed, 23 Jul 2025 19:30:52 GMT
+2025-07-23T19:30:52.9648401Z < age: 9629
+2025-07-23T19:30:52.9648903Z < x-served-by: cache-dub4357-DUB, cache-iad-kiad7000142-IAD
+2025-07-23T19:30:52.9649472Z < x-cache: HIT, HIT
+2025-07-23T19:30:52.9649773Z < x-cache-hits: 3, 1
+2025-07-23T19:30:52.9650093Z < content-length: 4267
+2025-07-23T19:30:52.9650397Z < 
+2025-07-23T19:30:52.9650652Z { [4267 bytes data]
+2025-07-23T19:30:52.9651048Z * Connection #0 to host releases.nixos.org left intact
+2025-07-23T19:30:52.9721178Z downloading Nix 2.26.3 binary tarball for x86_64-linux from 'https://releases.nixos.org/nix/nix-2.26.3/nix-2.26.3-x86_64-linux.tar.xz' to '/tmp/nix-binary-tarball-unpack.BFXbScEBNw'...
+2025-07-23T19:30:52.9789513Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2025-07-23T19:30:52.9791319Z                                  Dload  Upload   Total   Spent    Left  Speed
+2025-07-23T19:30:52.9792603Z 
+2025-07-23T19:30:53.0430705Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2025-07-23T19:30:53.1646723Z   0 22.6M    0  143k    0     0  2232k      0  0:00:10 --:--:--  0:00:10 2207k
+2025-07-23T19:30:53.1647259Z 100 22.6M  100 22.6M    0     0   121M      0 --:--:-- --:--:-- --:--:--  121M
+2025-07-23T19:30:54.7498707Z Note: a multi-user installation is possible. See https://nixos.org/manual/nix/stable/installation/installing-binary.html#multi-user-installation
+2025-07-23T19:30:54.7508664Z Warning: the flag --darwin-use-unencrypted-nix-store-volume
+2025-07-23T19:30:54.7509517Z          is no longer needed and will be removed in the future.
+2025-07-23T19:30:54.7510212Z 
+2025-07-23T19:30:54.7520151Z [1;31mSwitching to the Multi-user Installer[0m
+2025-07-23T19:30:54.7620316Z [32mWelcome to the Multi-User Nix Installation
+2025-07-23T19:30:54.7629721Z [0m
+2025-07-23T19:30:54.7630244Z This installation tool will set up your computer with the Nix package
+2025-07-23T19:30:54.7630861Z manager. This will happen in a few stages:
+2025-07-23T19:30:54.7631054Z 
+2025-07-23T19:30:54.7631243Z 1. Make sure your computer doesn't already have Nix. If it does, I
+2025-07-23T19:30:54.7631733Z    will show you instructions on how to clean up your old install.
+2025-07-23T19:30:54.7632096Z 
+2025-07-23T19:30:54.7632378Z 2. Show you what I am going to install and where. Then I will ask
+2025-07-23T19:30:54.7632972Z    if you are ready to continue.
+2025-07-23T19:30:54.7633207Z 
+2025-07-23T19:30:54.7633515Z 3. Create the system users [34m(uids [30001..30008])[0m and groups [34m(gid 30000)[0m
+2025-07-23T19:30:54.7634279Z    that the Nix daemon uses to run builds. To create system users
+2025-07-23T19:30:54.7634705Z    in a different range, exit and run this tool again with
+2025-07-23T19:30:54.7635021Z    NIX_FIRST_BUILD_UID set.
+2025-07-23T19:30:54.7635181Z 
+2025-07-23T19:30:54.7635331Z 4. Perform the basic installation of the Nix files daemon.
+2025-07-23T19:30:54.7635544Z 
+2025-07-23T19:30:54.7635725Z 5. Configure your shell to import special Nix Profile files, so you
+2025-07-23T19:30:54.7636045Z    can use Nix.
+2025-07-23T19:30:54.7636156Z 
+2025-07-23T19:30:54.7636238Z 6. Start the Nix daemon.
+2025-07-23T19:30:54.7636366Z 
+2025-07-23T19:30:54.7636626Z [32m[4;32mWould you like to see a more detailed list of what I will do?
+2025-07-23T19:30:54.7637019Z [0mNo TTY, assuming you would say yes :)
+2025-07-23T19:30:54.7642145Z 
+2025-07-23T19:30:54.7642434Z I will:
+2025-07-23T19:30:54.7642566Z 
+2025-07-23T19:30:54.7642741Z  - make sure your computer doesn't already have Nix files
+2025-07-23T19:30:54.7643157Z    (if it does, I will tell you how to clean them up.)
+2025-07-23T19:30:54.7643840Z  - create local users (see the list above for the users I'll make)
+2025-07-23T19:30:54.7644690Z  - create a local group (nixbld)
+2025-07-23T19:30:54.7645006Z  - install Nix in /nix
+2025-07-23T19:30:54.7645245Z  - create a configuration file in /etc/nix
+2025-07-23T19:30:54.7645605Z  - set up the "default profile" by creating some Nix-related files in
+2025-07-23T19:30:54.7645937Z    /root
+2025-07-23T19:30:54.7657327Z  - back up /etc/bash.bashrc to /etc/bash.bashrc.backup-before-nix
+2025-07-23T19:30:54.7657797Z  - update /etc/bash.bashrc to include some Nix configuration
+2025-07-23T19:30:54.7668871Z  - load and start a service (at /etc/systemd/system/nix-daemon.service
+2025-07-23T19:30:54.7669363Z    and /etc/systemd/system/nix-daemon.socket) for nix-daemon
+2025-07-23T19:30:54.7669621Z 
+2025-07-23T19:30:54.7671449Z [32m[4;32mReady to continue?
+2025-07-23T19:30:54.7671987Z [0mNo TTY, assuming you would say yes :)
+2025-07-23T19:30:54.7692828Z 
+2025-07-23T19:30:54.7693410Z [34m---- let's talk about sudo -----------------------------------------------------
+2025-07-23T19:30:54.7704564Z [0mThis script is going to call sudo a lot. Normally, it would show you
+2025-07-23T19:30:54.7705345Z exactly what commands it is running and why. However, the script is
+2025-07-23T19:30:54.7705710Z run in a headless fashion, like this:
+2025-07-23T19:30:54.7705879Z 
+2025-07-23T19:30:54.7706041Z   $ curl -L https://nixos.org/nix/install | sh
+2025-07-23T19:30:54.7706353Z 
+2025-07-23T19:30:54.7706629Z or maybe in a CI pipeline. Because of that, I'm going to skip the
+2025-07-23T19:30:54.7707111Z verbose output in the interest of brevity.
+2025-07-23T19:30:54.7707294Z 
+2025-07-23T19:30:54.7707375Z If you would like to
+2025-07-23T19:30:54.7707609Z see the output, try like this:
+2025-07-23T19:30:54.7707756Z 
+2025-07-23T19:30:54.7707934Z   $ curl -L -o install-nix https://nixos.org/nix/install
+2025-07-23T19:30:54.7708231Z   $ sh ./install-nix
+2025-07-23T19:30:54.7708347Z 
+2025-07-23T19:30:54.7708564Z 
+2025-07-23T19:30:54.7708769Z [32m~~> Checking for artifacts of previous installs
+2025-07-23T19:30:54.7716877Z [0mBefore I try to install, I'll check for signs Nix already is or has
+2025-07-23T19:30:54.7717479Z been installed on this system.
+2025-07-23T19:30:54.7750345Z 
+2025-07-23T19:30:54.7751044Z [34m---- Nix config report ---------------------------------------------------------
+2025-07-23T19:30:54.7751808Z [0m[1m        Temp Dir[0m:	/tmp/tmp.eIS0LfBP7g
+2025-07-23T19:30:54.7752355Z [1m        Nix Root[0m:	/nix
+2025-07-23T19:30:54.7752728Z [1m     Build Users[0m:	8
+2025-07-23T19:30:54.7752995Z [1m  Build Group ID[0m:	30000
+2025-07-23T19:30:54.7753257Z [1mBuild Group Name[0m:	nixbld
+2025-07-23T19:30:54.7753406Z 
+2025-07-23T19:30:54.7753516Z [4;34mbuild users:
+2025-07-23T19:30:54.7753741Z [0m[1m    Username[0m:	UID
+2025-07-23T19:30:54.7780622Z [1m     nixbld1[0m:	30001
+2025-07-23T19:30:54.7790747Z [1m     nixbld2[0m:	30002
+2025-07-23T19:30:54.7800674Z [1m     nixbld3[0m:	30003
+2025-07-23T19:30:54.7810874Z [1m     nixbld4[0m:	30004
+2025-07-23T19:30:54.7820854Z [1m     nixbld5[0m:	30005
+2025-07-23T19:30:54.7830777Z [1m     nixbld6[0m:	30006
+2025-07-23T19:30:54.7840529Z [1m     nixbld7[0m:	30007
+2025-07-23T19:30:54.7850712Z [1m     nixbld8[0m:	30008
+2025-07-23T19:30:54.7850995Z 
+2025-07-23T19:30:54.7851233Z [32m[4;32mReady to continue?
+2025-07-23T19:30:54.7851827Z [0mNo TTY, assuming you would say yes :)
+2025-07-23T19:30:54.7852308Z 
+2025-07-23T19:30:54.7852613Z [32m~~> Setting up the build group nixbld
+2025-07-23T19:30:54.8255172Z [0m[1m            Created[0m:	Yes
+2025-07-23T19:30:54.8277990Z 
+2025-07-23T19:30:54.8278405Z [32m~~> Setting up the build user nixbld1
+2025-07-23T19:30:54.8428488Z useradd warning: nixbld1's uid 30001 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:54.8513656Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:54.8519207Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:54.8537204Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:54.8557215Z [1m              Note[0m:	Nix build user 1
+2025-07-23T19:30:54.8574914Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:54.8597494Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:54.8615458Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:54.8626211Z 
+2025-07-23T19:30:54.8626542Z [32m~~> Setting up the build user nixbld2
+2025-07-23T19:30:54.8754868Z useradd warning: nixbld2's uid 30002 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:54.8834230Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:54.8839512Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:54.8857379Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:54.8877598Z [1m              Note[0m:	Nix build user 2
+2025-07-23T19:30:54.8895448Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:54.8913569Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:54.8931720Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:54.8942401Z 
+2025-07-23T19:30:54.8942711Z [32m~~> Setting up the build user nixbld3
+2025-07-23T19:30:54.9073029Z useradd warning: nixbld3's uid 30003 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:54.9156799Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:54.9162019Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:54.9180465Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:54.9200289Z [1m              Note[0m:	Nix build user 3
+2025-07-23T19:30:54.9217816Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:54.9236131Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:54.9259374Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:54.9271356Z 
+2025-07-23T19:30:54.9272804Z [32m~~> Setting up the build user nixbld4
+2025-07-23T19:30:54.9401877Z useradd warning: nixbld4's uid 30004 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:54.9483579Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:54.9489187Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:54.9507712Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:54.9527561Z [1m              Note[0m:	Nix build user 4
+2025-07-23T19:30:54.9545436Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:54.9563805Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:54.9582130Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:54.9592895Z 
+2025-07-23T19:30:54.9593502Z [32m~~> Setting up the build user nixbld5
+2025-07-23T19:30:54.9740599Z useradd warning: nixbld5's uid 30005 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:54.9826935Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:54.9832246Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:54.9850505Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:54.9870493Z [1m              Note[0m:	Nix build user 5
+2025-07-23T19:30:54.9888218Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:54.9906368Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:54.9924854Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:54.9935212Z 
+2025-07-23T19:30:54.9935591Z [32m~~> Setting up the build user nixbld6
+2025-07-23T19:30:55.0064873Z useradd warning: nixbld6's uid 30006 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:55.0148582Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:55.0153995Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:55.0171940Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:55.0192119Z [1m              Note[0m:	Nix build user 6
+2025-07-23T19:30:55.0210166Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:55.0229029Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:55.0246943Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:55.0257882Z 
+2025-07-23T19:30:55.0258304Z [32m~~> Setting up the build user nixbld7
+2025-07-23T19:30:55.0386690Z useradd warning: nixbld7's uid 30007 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:55.0482587Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:55.0488048Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:55.0507672Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:55.0528260Z [1m              Note[0m:	Nix build user 7
+2025-07-23T19:30:55.0546374Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:55.0565137Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:55.0582804Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:55.0593468Z 
+2025-07-23T19:30:55.0594077Z [32m~~> Setting up the build user nixbld8
+2025-07-23T19:30:55.0727619Z useradd warning: nixbld8's uid 30008 is greater than SYS_UID_MAX 999
+2025-07-23T19:30:55.0813597Z [0m[1m           Created[0m:	Yes
+2025-07-23T19:30:55.0819175Z [1m            Hidden[0m:	Yes
+2025-07-23T19:30:55.0838051Z [1m    Home Directory[0m:	/var/empty
+2025-07-23T19:30:55.0858038Z [1m              Note[0m:	Nix build user 8
+2025-07-23T19:30:55.0876432Z [1m   Logins Disabled[0m:	Yes
+2025-07-23T19:30:55.0895155Z [1m  Member of nixbld[0m:	Yes
+2025-07-23T19:30:55.0913171Z [1m    PrimaryGroupID[0m:	30000
+2025-07-23T19:30:55.0913507Z 
+2025-07-23T19:30:55.0914060Z [32m~~> Setting up the basic directory structure
+2025-07-23T19:30:55.1046982Z [0minstall: creating directory '/nix'
+2025-07-23T19:30:55.1047535Z install: creating directory '/nix/var'
+2025-07-23T19:30:55.1047996Z install: creating directory '/nix/var/log'
+2025-07-23T19:30:55.1048336Z install: creating directory '/nix/var/log/nix'
+2025-07-23T19:30:55.1048642Z install: creating directory '/nix/var/log/nix/drvs'
+2025-07-23T19:30:55.1048941Z install: creating directory '/nix/var/nix'
+2025-07-23T19:30:55.1049253Z install: creating directory '/nix/var/nix/db'
+2025-07-23T19:30:55.1049782Z install: creating directory '/nix/var/nix/gcroots'
+2025-07-23T19:30:55.1050139Z install: creating directory '/nix/var/nix/profiles'
+2025-07-23T19:30:55.1050474Z install: creating directory '/nix/var/nix/temproots'
+2025-07-23T19:30:55.1050816Z install: creating directory '/nix/var/nix/userpool'
+2025-07-23T19:30:55.1051154Z install: creating directory '/nix/var/nix/daemon-socket'
+2025-07-23T19:30:55.1051523Z install: creating directory '/nix/var/nix/gcroots/per-user'
+2025-07-23T19:30:55.1051914Z install: creating directory '/nix/var/nix/profiles/per-user'
+2025-07-23T19:30:55.1129229Z install: creating directory '/nix/store'
+2025-07-23T19:30:55.1213749Z install: creating directory '/etc/nix'
+2025-07-23T19:30:55.1224142Z 
+2025-07-23T19:30:55.1224682Z [32m~~> Installing Nix
+2025-07-23T19:30:55.3190219Z [0m      Alright! We have our first nix at /nix/store/x3235311q3n51rppm2y2ycwd7nb3mgpn-nix-2.26.3
+2025-07-23T19:30:55.3906022Z       Just finished getting the nix database ready.
+2025-07-23T19:30:55.3908871Z 
+2025-07-23T19:30:55.3910092Z [32m~~> Setting up shell profiles: /etc/bashrc /etc/profile.d/nix.sh /etc/zshrc /etc/bash.bashrc /etc/zsh/zshrc
+2025-07-23T19:30:55.4075762Z [0m
+2025-07-23T19:30:55.4076049Z # Nix
+2025-07-23T19:30:55.4076482Z if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+2025-07-23T19:30:55.4077359Z   . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+2025-07-23T19:30:55.4077945Z fi
+2025-07-23T19:30:55.4078226Z # End Nix
+2025-07-23T19:30:55.4078391Z 
+2025-07-23T19:30:55.4246690Z 
+2025-07-23T19:30:55.4246861Z # Nix
+2025-07-23T19:30:55.4247314Z if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+2025-07-23T19:30:55.4247941Z   . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+2025-07-23T19:30:55.4248486Z fi
+2025-07-23T19:30:55.4248766Z # End Nix
+2025-07-23T19:30:55.4248940Z 
+2025-07-23T19:30:55.4418548Z 
+2025-07-23T19:30:55.4418936Z # Nix
+2025-07-23T19:30:55.4419634Z if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+2025-07-23T19:30:55.4420521Z   . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+2025-07-23T19:30:55.4421078Z fi
+2025-07-23T19:30:55.4421356Z # End Nix
+2025-07-23T19:30:55.4421514Z 
+2025-07-23T19:30:55.4591652Z 
+2025-07-23T19:30:55.4592074Z # Nix
+2025-07-23T19:30:55.4592630Z if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+2025-07-23T19:30:55.4593534Z   . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+2025-07-23T19:30:55.4594753Z fi
+2025-07-23T19:30:55.4595037Z # End Nix
+2025-07-23T19:30:55.4595205Z 
+2025-07-23T19:30:55.4617675Z 
+2025-07-23T19:30:55.4618771Z [32m~~> Setting up shell profiles for Fish with conf.d/nix.fish inside /etc/fish /usr/local/etc/fish /opt/homebrew/etc/fish /opt/local/etc/fish
+2025-07-23T19:30:55.4679374Z [0m
+2025-07-23T19:30:55.4679808Z [32m~~> Setting up the default profile
+2025-07-23T19:30:55.4970734Z installing 'nix-2.26.3'
+2025-07-23T19:30:55.5101105Z building '/nix/store/5afca9ydks0pp5szkwwhi7a6m2zmgk9g-user-environment.drv'...
+2025-07-23T19:30:55.5496231Z installing 'nss-cacert-3.107'
+2025-07-23T19:30:55.5622625Z building '/nix/store/ilxzpc39hcw5jr229rmajjkyz1a0fym1-user-environment.drv'...
+2025-07-23T19:30:55.5831260Z [0m
+2025-07-23T19:30:55.5831794Z [32m~~> Setting up the nix-daemon systemd service
+2025-07-23T19:30:55.6195270Z Created symlink /etc/systemd/system/nix-daemon.service → /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service.
+2025-07-23T19:30:55.8843291Z Created symlink /etc/systemd/system/nix-daemon.socket → /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.socket.
+2025-07-23T19:30:55.8845504Z Created symlink /etc/systemd/system/sockets.target.wants/nix-daemon.socket → /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.socket.
+2025-07-23T19:30:56.4371560Z [0m[32mAlright! We're done!
+2025-07-23T19:30:56.4392429Z [0mTry it! Open a new terminal, and type:
+2025-07-23T19:30:56.4392967Z 
+2025-07-23T19:30:56.4393234Z   $ nix-shell -p nix-info --run "nix-info -m"
+2025-07-23T19:30:56.4393571Z 
+2025-07-23T19:30:56.4394102Z Thank you for using this installer. If you have any feedback or need
+2025-07-23T19:30:56.4394692Z help, don't hesitate:
+2025-07-23T19:30:56.4394909Z 
+2025-07-23T19:30:56.4395059Z You can open an issue at
+2025-07-23T19:30:56.4395679Z https://github.com/NixOS/nix/issues/new?labels=installer&template=installer.md
+2025-07-23T19:30:56.4396196Z 
+2025-07-23T19:30:56.4396480Z Or get in touch with the community: https://nixos.org/community
+2025-07-23T19:30:56.4412575Z 
+2025-07-23T19:30:56.4413295Z [34m---- Reminders -----------------------------------------------------------------
+2025-07-23T19:30:56.4414224Z [0m[34m[ 1 ][0m
+2025-07-23T19:30:56.4415014Z Nix won't work in active shell sessions until you restart them.
+2025-07-23T19:30:56.4415430Z 
+2025-07-23T19:30:56.5111168Z ##[endgroup]
+2025-07-23T19:30:56.5169226Z ##[group]Run /home/runner/work/_actions/ava-labs/avalanchego/66ce7a7701db0c4b370f97b339478d5b5ebe919a/.github/actions/run-monitored-tmpnet-cmd/nix-develop.sh --command echo "dependencies installed"
+2025-07-23T19:30:56.5170603Z [36;1m/home/runner/work/_actions/ava-labs/avalanchego/66ce7a7701db0c4b370f97b339478d5b5ebe919a/.github/actions/run-monitored-tmpnet-cmd/nix-develop.sh --command echo "dependencies installed"[0m
+2025-07-23T19:30:56.5200320Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-07-23T19:30:56.5200626Z env:
+2025-07-23T19:30:56.5200805Z   TMPDIR: /home/runner/work/_temp
+2025-07-23T19:30:56.5201046Z ##[endgroup]
+2025-07-23T19:30:56.5267910Z No local flake found, will attempt to use avalanchego flake
+2025-07-23T19:30:56.5350591Z Starting nix shell for github:ava-labs/avalanchego?ref=v1.13.3-rc.1
+2025-07-23T19:30:56.7350350Z unpacking 'github:ava-labs/avalanchego/66ce7a7701db0c4b370f97b339478d5b5ebe919a' into the Git cache...
+2025-07-23T19:30:58.3945635Z copying path '/nix/store/i99indk3y6pc3sm0k1xx3nakm193lqzb-source' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7445169Z copying path '/nix/store/899rx4l5zz1za8nx7ijp7swv5ibc8wx2-git-2.47.2-doc' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7450941Z copying path '/nix/store/zpab59ialz19x6f65jbjf5xb8waa54av-iana-etc-20240318' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7474131Z copying path '/nix/store/dgzz9k53hz1qgklnj9667xzliyidj9cs-mailcap-2.1.54' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7480499Z copying path '/nix/store/hnpph37w6p5jfspwf5pksljpf0wqwjg3-perl5.40.0-Digest-HMAC-1.04' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7484836Z copying path '/nix/store/cnb01qfmg8c3irp630nplhwa201d7xsr-perl5.40.0-FCGI-ProcManager-0.28' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7486236Z copying path '/nix/store/v657ak4hdkixvq99rk3qvyh28in945dv-perl5.40.0-HTML-TagCloud-0.38' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7502209Z copying path '/nix/store/9qrv0d0yd9wss610gjzv3507ry6v9mzw-perl5.40.0-URI-5.21' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7506758Z copying path '/nix/store/pz7y4qd8lyhg9y6wmb9hynivx36f53zp-perl5.40.0-libnet-3.15' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7510214Z copying path '/nix/store/l6mypzy4rvkxd5kwzs18d88syirislib-tzdata-2024b' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7526236Z copying path '/nix/store/czlhi3r9b6ip4xyynwibfhm458ljwsir-gcc-13.3.0-libgcc' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7534048Z copying path '/nix/store/d8qbcrirc6jidfacy0qa50zy07i15xcz-gnu-config-2024-01-01' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7586503Z copying path '/nix/store/rscnjwdmhya0wcdmbygr3jpz6p39kvhr-perl5.40.0-Encode-Locale-1.05' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7590915Z copying path '/nix/store/w9yrswzdifcjhg0righ76aqb6bpslhkb-perl5.40.0-Mozilla-CA-20230821' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7593116Z copying path '/nix/store/74bbxwiamv62d2l089f1r8apv295vsry-perl5.40.0-HTML-Tagset-3.20' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7594818Z copying path '/nix/store/krx6xw6wxakapdkviirq57yh3nl3227h-perl5.40.0-IO-HTML-1.004' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7598037Z copying path '/nix/store/3r0pprxsd9n52nb2yqq3idwb75d0spzd-perl5.40.0-LWP-MediaTypes-6.04' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7690269Z copying path '/nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7694241Z copying path '/nix/store/dvsai0ym9czjl5mcsarcdwccb70615n4-linux-headers-6.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7705389Z copying path '/nix/store/x6i8jiz3yv3h209xfbz9a3ch1sm16167-dns-root-data-2024-06-20' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7708037Z copying path '/nix/store/5ahjfkydg49xvbr3vghhv317prgspnf3-mirrors-list' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7709749Z copying path '/nix/store/swnhrfysvmwjvibcafm0im377pcfs80v-curl-8.12.1-man' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7715293Z copying path '/nix/store/970fk2m63qra4ybkpp99rw7mld9fphlv-nghttp2-1.64.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7836642Z copying path '/nix/store/frpqzb3223826xq72s0fcjmjmj50wpyn-perl5.40.0-Authen-SASL-2.1700' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7886692Z copying path '/nix/store/ldlsmrf2rrq28s08mzjk245vr26dwwhi-perl5.40.0-Test-RequiresInternet-0.05' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7888406Z copying path '/nix/store/hz5m52dx8x6vvi5pp0yikxb3b05bmi2j-perl5.40.0-Test-Needs-0.002010' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7889972Z copying path '/nix/store/vlfgix8rcbj3l9yk0rna1damxkafbq18-perl5.40.0-Net-HTTP-6.23' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7901072Z copying path '/nix/store/vvjpgyk6jgd6k74pgpjrln6m6aqyiaig-perl5.40.0-Try-Tiny-0.31' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7905595Z copying path '/nix/store/6aqxgf5ygcscqsh4p9krd0dz2hc1cn0w-perl5.40.0-WWW-RobotRules-6.02' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7907315Z copying path '/nix/store/lj7p9q5kgmdcq768rvsgvjndi42mjcn8-publicsuffix-list-0-unstable-2024-10-25' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7908946Z copying path '/nix/store/5xvxvpl9armf0p6y9m4g1zl1mypvr9m7-perl5.40.0-TimeDate-2.33' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.7925639Z copying path '/nix/store/i9ymkbklv1q9yzl7wwx7300wbkqdln0r-update-autotools-gnu-config-scripts-hook' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8170577Z copying path '/nix/store/2h648f4xlzszyc01yf67xd2rgira65js-perl5.40.0-Test-Fatal-0.017' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8283200Z copying path '/nix/store/shx8jax9b662cd9nlml731hh9wks24v1-perl5.40.0-HTTP-Date-6.06' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8484773Z copying path '/nix/store/0m34prvcx3d3vd9f4djbaqji7yb9swsh-perl5.40.0-HTTP-CookieJar-0.014' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8486456Z copying path '/nix/store/i9hiqc4dfksm9cpqvff39smfpn49zbj6-perl5.40.0-File-Listing-6.16' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8839035Z copying path '/nix/store/23cshhh8k7z46gadr86krv15xphggawm-kubectl-1.31.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8844910Z copying path '/nix/store/1fqgvq0i498w4ynywyj224i49izzzqrk-protoc-gen-go-grpc-1.3.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8846457Z copying path '/nix/store/as8g73awbgrhpf5p6qjnrd5v9anw74ix-go-task-3.39.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8847822Z copying path '/nix/store/19402vwa1rndilww6fpbviz0lza8846p-kind-0.24.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:13.8849352Z copying path '/nix/store/i7r45jjmvfxiw8j7ihjx51jachylq1si-protoc-gen-go-1.35.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3491968Z copying path '/nix/store/vlgwyb076hkz7yv96sjnj9msb1jn1ggz-attr-2.5.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3494360Z copying path '/nix/store/8vpg72ik2kgxfj05lc56hkqrdrfl8xi9-bash-5.2p37' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3497658Z copying path '/nix/store/wg9gg3zkwcqhyycj0vkfnhgk5a4z9faq-ed-1.20.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3505639Z copying path '/nix/store/83s1wqvrx7yvy3g6dmdr2icgg3qqbjcp-brotli-1.1.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3507050Z copying path '/nix/store/c9z2sp8dyx1k0zk374v1142hmphashd0-buf-1.47.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3508467Z copying path '/nix/store/fcqfyri9kljs5jd7h556f004qmci1qin-expand-response-params' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3509894Z copying path '/nix/store/0hv5ymwkczx3ak8h3yldfbwbab33jnrw-expat-2.6.4' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3511207Z copying path '/nix/store/mhd0rk497xm0xnip7262xdw9bylvzh99-gcc-13.3.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3515305Z copying path '/nix/store/qiisx6c7qpyzq522j3icsfhj8ayw6ah4-bzip2-1.0.8' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3519548Z copying path '/nix/store/cfb4pxnfh2sf4csk8xh7abfqv96k66nh-glibc-2.40-66-getent' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3521192Z copying path '/nix/store/8k19h07hh2g1w5kp5yglzddswnvdmxpy-gmp-6.3.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3522590Z copying path '/nix/store/7zv1sq1k25gk2rvgxnm262vp5hydkv1a-gdbm-1.24-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3524128Z copying path '/nix/store/m3da56j3r7h4hp0kr8v1xsnk16x900yf-gnumake-4.4.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3527821Z copying path '/nix/store/2kiskq24j06g4qw3xs8zsy2dkawh4gxk-glibc-2.40-66-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3529337Z copying path '/nix/store/3p3fwczck2yn1wwfjnymzkz8w11vbvg7-gawk-5.3.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3648832Z copying path '/nix/store/3ks7b6p43dpvnlnxgvlcy2jaf1np37p2-gnused-4.9' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3738585Z copying path '/nix/store/1fby1pxf0z16lgl728i2sqwqr2hrw2h8-json-c-0.17' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3761536Z copying path '/nix/store/mwwpv4k7skbx4vr2qjc89pvs7mhmgapb-k9s-0.32.7' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3839657Z copying path '/nix/store/dyizbk50iglbibrbwbgw2mhgskwb6ham-acl-2.3.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3841848Z copying path '/nix/store/79kh226vw8rrk62jbs27hdad1clwy447-keyutils-1.6.3-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3935707Z copying path '/nix/store/r4p475lxvaklr9rj8l2a4sahkx5c0209-getent-glibc-2.40-66' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.3998337Z copying path '/nix/store/yyfzan4mn874v885jy6fs598gjb31c4l-bzip2-1.0.8-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4000725Z copying path '/nix/store/wnsn67xb3i072b6i496y002byvc3ipa3-kubernetes-helm-3.16.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4282854Z copying path '/nix/store/q57zi48njdcgxy4n8d5lm5pf746drc8f-isl-0.20' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4285260Z copying path '/nix/store/bpzy7snv1xr7s1z2xi7bw0q5z9j6g1gg-libantlr3c-3.4' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4368963Z copying path '/nix/store/0iabf1jhsfrrxkdi599kb8m37p82yr1z-audit-4.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4611654Z copying path '/nix/store/nc394xps4al1r99ziabqvajbkrhxr5b7-gzip-1.13' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4646621Z copying path '/nix/store/ky06iawcwsvxmx8yw66y2a7iy7b14yii-libapparmor-4.0.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4652826Z copying path '/nix/store/pmg7hw4ar16dhx5hk6jswvxy349wzsm7-gnutar-1.35' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4743494Z copying path '/nix/store/fx6mfndjsbb0dqn9jzf1ksz9wf1dlrq7-libcap-2.70-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4794557Z copying path '/nix/store/81awch8mhqanda1vy0c09bflgra4cxh0-glibc-2.40-66-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4815731Z copying path '/nix/store/7yf5ijcl2lh90xs5nkrdpfdvcmc9fnc5-libcbor-0.11.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.4859961Z copying path '/nix/store/bldybfhh9v9dvpms8kh87v1a6jp6i28p-libevent-2.1.12' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5129155Z copying path '/nix/store/wxgvd9mivxdbahxidq751gxyz7x7jb8n-libffi-3.4.6' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5295535Z copying path '/nix/store/p0c3g3dxr818lggbk6ms3nhm97g0pir9-libgpg-error-1.50' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5435761Z copying path '/nix/store/2w8a5z0rcs4fk3ds3fnd03x6syjjl1hb-libmnl-1.0.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5546315Z copying path '/nix/store/ywvi2y4yv3qyh0phw9y2ji17smh8nawj-libnfnetlink-1.0.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5828063Z copying path '/nix/store/dg6d7zs1bwnhwb3sd3xdbldvpa163a5z-libnl-3.10.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5903809Z copying path '/nix/store/xxc6rkndd68cq1225asn380bbj0512dg-libpsl-0.21.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.5996388Z copying path '/nix/store/qhs6zflzhdr11j6byf1c1j52z39hnaaw-db-4.8.30' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6109285Z copying path '/nix/store/8g8wdqid20924fbppbljsl6l7gr0p21j-gettext-0.21.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6219261Z copying path '/nix/store/dsxb6qvi21bzy21c98kb71wfbdj4lmz7-gmp-with-cxx-6.3.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6509333Z copying path '/nix/store/nn7nj7xq8gdfyxqhchphzia7i34rwb0v-gmp-with-cxx-6.3.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6516147Z copying path '/nix/store/rq8lq7r8vjqrbn2bgfglm9dxfi83gdg9-icu4c-74.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6643408Z copying path '/nix/store/96m2mjx55syyky6zymjnbl3pvgxlwchb-libnftnl-1.2.8' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6830341Z copying path '/nix/store/17195j62sjxjn0xwnmj3icr01n3d678r-libnetfilter_conntrack-1.1.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6876024Z copying path '/nix/store/68vmpyiabh89l7hbp9z2hmwci74vnfi4-libseccomp-2.5.5-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.6997611Z copying path '/nix/store/wr7w1x0x1j4qli60wm22q3bc02dga08c-libtasn1-4.20.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7196806Z copying path '/nix/store/hnh6ivl105y4sw0ifv4kbihrvbddmlkm-libxcrypt-4.4.36' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7381714Z copying path '/nix/store/9yh47sg27z9263ll65d414rgcyrclk57-libxml2-2.13.6' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7585622Z copying path '/nix/store/99jfkvhck3c2675n2cy71g40km6m0pf9-libassuan-2.5.7' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7686172Z copying path '/nix/store/h9c111ckc8wg3ksxb7kj8cwhgaj52118-libgcrypt-1.10.3-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7688132Z copying path '/nix/store/p9k3wzaw6d3wjgcbrfv2g1chj0mj2inb-lz4-1.10.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7806530Z copying path '/nix/store/yh2c9f04q1vcfhpkamidrg3sdnwk5bvy-mpdecimal-4.0.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7869269Z copying path '/nix/store/1h2yigiwy6bgpyzlywj36s5nqkgca8bv-libpcap-1.10.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.7977992Z copying path '/nix/store/9m68vvhnsq5cpkskphgw84ikl9m6wjwp-coreutils-9.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.8053053Z copying path '/nix/store/b75dbfz0gria25kn2qlfpnmp39h31spw-mpfr-4.2.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.8176482Z copying path '/nix/store/mgpn83jmnf37ky77a8qy6m466qqmlyqk-cln-1.3.7' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.8602809Z copying path '/nix/store/qvrp85i3yc9vw5x1vyx714m03jsf60rc-cvc4-1.8' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.8625491Z copying path '/nix/store/z7ndn3k8zfjrf713gq443q7a2ixzaab5-ncurses-6.4.20221231' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.9438530Z copying path '/nix/store/6s0zzvp9in28jkmzwh5p69v1zwpi5mi4-linux-pam-1.6.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.9568682Z copying path '/nix/store/q95qgxy40rx1ifa13j8l38sx3myvkhb9-nettle-3.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.9786597Z copying path '/nix/store/1w5jm9zaxwr5b8nvh41c7iz236my185m-nghttp2-1.64.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:14.9929784Z copying path '/nix/store/j4377imdqpm27h5hspds1skgsazyj0d9-nghttp2-1.64.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.0129610Z copying path '/nix/store/n9ya3i584zvcw6696326sdlg61d6lamf-npth-1.7' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.0142593Z copying path '/nix/store/kavgc464axad77kj4x4bza7s345nrhin-iptables-1.8.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.0323084Z copying path '/nix/store/pbjp09wrnbklrfy7n2h5qix15fl5ylhj-libmpc-1.3.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.0759965Z copying path '/nix/store/lr3cvmq5ahqcj29p8c6m0fdl1y8krc86-diffutils-3.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.0788429Z copying path '/nix/store/vc2d1bfy1a5y1195nq7k6p0zcm6q89nx-findutils-4.10.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.0861307Z copying path '/nix/store/isk8l71r4d1nl39mpv92ank2rs4cx3w9-openssl-3.3.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.1367243Z copying path '/nix/store/mqvgaq2bnb1701l7zcn0d6vd7w8b0z7l-openssl-3.3.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.2117561Z copying path '/nix/store/w8xb93nwhnhlkqd9kwahkzqvbg98qs74-nghttp2-1.64.0-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.2124199Z copying path '/nix/store/cjg4jmnnf26367irpagiiffrni9bk7z0-gnupg-2.4.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.2201154Z copying path '/nix/store/smd33cbgm2pwwnwj9l4b4fk39bdxfsfv-p11-kit-0.25.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.2327608Z copying path '/nix/store/zfjv48ikkqn3yhi8zi7lvqvxyscbg87n-patch-2.7.6' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.2815311Z copying path '/nix/store/9wwkzvmrlv43y71rbw8sbh9bamc62a16-patchelf-0.15.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3129389Z copying path '/nix/store/5md7gyz45fm4bmkg2kb9a1hnmg8ryk9j-pcre2-10.44' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3249490Z copying path '/nix/store/pgq4agv5wpanzr9a8mqlkncdbick7mn2-pcsclite-2.3.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3426512Z copying path '/nix/store/9sqpmkq9fcycsrldbsdxw93hvspy8pr9-perl5.40.0-Clone-0.46' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3439359Z copying path '/nix/store/jpk7s673pli65raimpl43jbhbg6ja4kx-perl5.40.0-FCGI-0.82' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3627076Z copying path '/nix/store/x4kgvzlrndlsc9mn2gyrx9dla0a5y7y3-perl5.40.0-TermReadKey-2.38' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3629480Z copying path '/nix/store/gda0f0dw64h74i98vkk7b7jwzxbkigzs-prometheus-2.55.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3669453Z copying path '/nix/store/mfj2pd4n7vbczdx381margrm9b9jkbpq-protoc-gen-connect-go-1.17.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3791066Z copying path '/nix/store/6hrwqlqxzvn3lry7fjyz4i6dkdmg38m6-perl5.40.0-HTTP-Message-6.45' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.3806390Z copying path '/nix/store/zwh1q2r2a1prmw4xxfpqa06ic7dl31yd-qrencode-4.1.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.4059846Z copying path '/nix/store/flw2dwllbq50954bk1qm6xwdzp8ikacl-systemd-minimal-libs-256.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.4181344Z copying path '/nix/store/88x6dfa5gnls0pmbvp4b9ci3bqqfja0n-util-linux-minimal-2.39.4-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.4184679Z copying path '/nix/store/7f8vg8z0q721jyahy1vjbg2x3irbk5az-unbound-1.22.0-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.4262633Z copying path '/nix/store/53rkjnnkbgg8pfn6ffpcdx4xbrl98yh8-readline-8.2p13' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.4286477Z copying path '/nix/store/mcr5gqxgkknqxa2vhnhixzd97vdsnsxi-perl5.40.0-HTML-Parser-3.81' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.4509527Z copying path '/nix/store/q73n7qdcl9yvlwh6p4n414vkxgnjjryp-perl5.40.0-HTTP-Cookies-6.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.5235645Z copying path '/nix/store/qjsj5vnbfpbg6r7jhd7znfgmcy0arn8n-gnugrep-3.11' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.5814059Z copying path '/nix/store/0z09m6fwgmc2a0zazp6lhyadfig10fd6-perl5.40.0-CGI-4.59' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.5966103Z copying path '/nix/store/qxp4rv76dpjbvs37c3sfq33ial7mxgb0-perl5.40.0-HTTP-Daemon-6.16' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.6034193Z copying path '/nix/store/q0fgny8kpagi6blmzyw15n4cmfx647kn-perl5.40.0-HTTP-Negotiate-6.01' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.6528757Z copying path '/nix/store/bhvah40258cfi5sj1wiy2zmdn5xgj4m1-krb5-1.21.3-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.6636992Z copying path '/nix/store/fvm65iknlk5kx9938xsc5485s9wzz1ig-lvm2-2.03.27-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.6817189Z copying path '/nix/store/pa7plncc30fhm909bis9haakh7gi0qbl-bash-interactive-5.2p37' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.6942825Z copying path '/nix/store/09pyjyjdr5mwmki9gb0yf809l54xr8p2-openssl-3.3.3-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.6946818Z copying path '/nix/store/dwyr8xvjby2l1zz92a5pfl6bq27jhrm6-krb5-1.21.3-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7024833Z copying path '/nix/store/6k8v1ffagipraln3nn12h1n22d5l9dvr-perl5.40.0-Net-SSLeay-1.92' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7095021Z copying path '/nix/store/j7k6mzbdydimzw4mf23ahq6a7rz2f7w2-util-linux-minimal-2.39.4-login' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7244135Z copying path '/nix/store/a9vgxnafcgb1khpjgn87ixmyv4dsqlp0-util-linux-minimal-2.39.4-mount' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7286621Z copying path '/nix/store/blkjagm7k01k9sghpyckw4y6dd6z0knl-util-linux-minimal-2.39.4-swap' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7436693Z copying path '/nix/store/sf31nmjhlsdp2h26vbwbpa7gwfn4i4na-xz-5.6.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7456489Z copying path '/nix/store/xv2bvwf6zv1hhlm9w4x0f7n0idhbsjh7-perl5.40.0-CGI-Fast-2.16' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7717815Z copying path '/nix/store/lmfya9by589b0qgc2pqps1zy4jhldkvq-cryptsetup-2.7.5' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7856127Z copying path '/nix/store/hgq0ircylcm0mx6y7ml9chcbwgrz9xg7-openssl-3.3.3-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7858620Z copying path '/nix/store/xxssfwyz4l32wiadvsrcf259nkb91myn-z3-4.11.2-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7915912Z copying path '/nix/store/vpg96mfr1jw5arlqg831i69g29v0sdb3-zlib-1.3.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7922155Z copying path '/nix/store/73pq792gn6i9qfywsnd347vg0152w8rw-perl5.40.0-IO-Socket-SSL-2.083' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.7956268Z copying path '/nix/store/6cf2yj12gf51jn5vdbdw01gmgvyj431s-zstd-1.5.6' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.8127613Z copying path '/nix/store/23j515bg7lgis34f0jkm9j6g00dpp2sh-binutils-2.43.1-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.8491903Z copying path '/nix/store/yk246qv4bbmr0mmh9y3gnfdkra5nnjgi-cracklib-2.10.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.8643474Z copying path '/nix/store/p751fjd81h3926ivxsq0x20lz5j7yscc-file-5.45' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.9017203Z copying path '/nix/store/yg4ahy7gahx91nq80achmzilrjyv0scj-gcc-13.3.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.9211463Z copying path '/nix/store/1md58p5vm4dixcwwpwrs78a7kjf6nnqk-gnutls-3.8.6' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.9484781Z copying path '/nix/store/nfdnparxrnv6sy627lw1c27pdqzpbfs2-kexec-tools-2.0.29' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.9551384Z copying path '/nix/store/n6zw4496n0bd9r6gjwkjmf5ja6757q32-krb5-1.21.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:15.9659812Z copying path '/nix/store/kc1sdzqnymjwy74chlnkq2xlxnmrg30x-libfido2-1.15.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.0294040Z copying path '/nix/store/yr9xanc3bgp95fj9kvbrrq47zhzni2i6-kmod-31' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.0490524Z copying path '/nix/store/qdypipr8zp0nkyrwqnakn3q3xhpghsrb-kmod-31-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.0804684Z copying path '/nix/store/6m49g3aqk5d5vdxp7chpgim5l6cfm7d6-libarchive-3.7.7-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.1055304Z copying path '/nix/store/pvyhn761hgn17fpr6fy168vcv1ciwsgl-libssh2-1.11.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.1181340Z copying path '/nix/store/22qnvg3zddkf7rbpckv676qpsc2najv9-binutils-2.43.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.1693070Z copying path '/nix/store/zfk4v9lxal3ch98qnf7zlciwgmk4w1ij-krb5-1.21.3-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.1877241Z copying path '/nix/store/17rp2wzkp8xfhxcd5zihx6qmnbaadlhs-libmicrohttpd-1.0.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.2304395Z copying path '/nix/store/qmz79v7x18zmi6g2iagxwazqfwbxzhra-libssh2-1.11.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.2735225Z copying path '/nix/store/q4j9jj8jw74216cw4chsqlwdnglwly6p-perl-5.40.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.2858040Z copying path '/nix/store/f2sjbvr2gbp1dl1fwak6b77j18wv2rm8-perl5.40.0-Net-SMTP-SSL-1.04' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.3207426Z copying path '/nix/store/w2m5p0fb6pmqq6dz2jqlvnyw7n4vcbpx-curl-8.12.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.3219915Z copying path '/nix/store/sh26c2jcz7w2gii2px77bqy64fd026jd-boost-1.81.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.3837053Z copying path '/nix/store/i7gfv740vcygvl9pgqwq29nkzmsp09ww-sqlite-3.46.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.4015800Z copying path '/nix/store/rbns8mzghhqxih4hj2js4mb4s6ivy5d1-xz-5.6.3-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.4017247Z copying path '/nix/store/ccrjbcfl5zcdp0n5mh69f4airrb9g8m4-zlib-1.3.1-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.4283498Z copying path '/nix/store/xmmli2ijsz2br6573z3sqsgg0spnj7i9-zstd-1.5.6-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.4822868Z copying path '/nix/store/lgfp6sl5hpykmld29rqvi9pam8ji8k24-curl-8.12.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.5038356Z copying path '/nix/store/0rg4nqym82ngd29dy8qm1bggm94dkry3-libssh2-1.11.1-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.5290197Z copying path '/nix/store/hsxp8g7zdr6wxk1mp812g8nbzvajzn4w-stdenv-linux' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.5876627Z copying path '/nix/store/gnnac2vpa466p2lpzskmbj5vjr6ikzhg-libpwquality-1.4.5-lib' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.5976179Z copying path '/nix/store/awbfciyq3cjvw6x8wd8wdjy8z2qxm98n-elfutils-0.191' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.6227974Z copying path '/nix/store/3hgwjb5hp0jm8fyi4vx9s4f3hjvp0n1r-tpm2-tss-4.1.3' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.6366376Z copying path '/nix/store/lhpwdis5hkyljz1d200bj1s6g51ljq9k-python3-3.12.8' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.6701949Z copying path '/nix/store/z9lnvmqymg80hk671fm2533ncczkf7z2-kbd-2.6.4' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.7488183Z copying path '/nix/store/8qf68jid6rr2f4c8ppyp0ixdlv0axnpn-curl-8.12.1-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.9819123Z copying path '/nix/store/007wiy8x5irdxzsdx3bdqx0k0a8hp6ji-shellcheck-0.10.0-bin' from 'https://cache.nixos.org'...
+2025-07-23T19:31:16.9820652Z copying path '/nix/store/f95nqmgp2vaz1h68n36k605ay1ixnj0a-libbpf-1.4.7' from 'https://cache.nixos.org'...
+2025-07-23T19:31:17.0428014Z copying path '/nix/store/04shrm4bvxw1yam87da7y9k872kqn777-curl-8.12.1-dev' from 'https://cache.nixos.org'...
+2025-07-23T19:31:17.1735276Z building '/nix/store/rkn5fk95kmnbxk65bxlyzqnmsmafh1f1-kind-with-registry.sh.drv'...
+2025-07-23T19:31:17.2480208Z copying path '/nix/store/w9qcpyhjrxsqrps91wkz8r4mqvg9zrxc-systemd-256.10' from 'https://cache.nixos.org'...
+2025-07-23T19:31:17.3457987Z copying path '/nix/store/00x4qvjp4kcm932rv281v8n9y4xk9dv1-solc-0.8.21' from 'https://cache.nixos.org'...
+2025-07-23T19:31:17.3569607Z copying path '/nix/store/1mv8pj4nxwnd9bbxshljc9p4cnl3rakj-binutils-wrapper-2.43.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:17.3988099Z copying path '/nix/store/ch1brsi5xwxgyv23csmvw1am9l40rf1c-shellcheck-0.10.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:18.3928347Z copying path '/nix/store/99accs107rzm78z74cj1wns59d0m1nh8-perl5.40.0-libwww-perl-6.72' from 'https://cache.nixos.org'...
+2025-07-23T19:31:18.4427014Z copying path '/nix/store/7s649psqfmp6bf2ij6kba3nbwjp50z0w-promtail-3.2.1' from 'https://cache.nixos.org'...
+2025-07-23T19:31:19.3718145Z copying path '/nix/store/1fwh9nv8n93rjc7i7j9gcm3whdqpgy84-git-2.47.2' from 'https://cache.nixos.org'...
+2025-07-23T19:31:20.3471146Z copying path '/nix/store/gnd8f9h2ycxrfrvrga508c4n9cxy6720-gcc-wrapper-13.3.0' from 'https://cache.nixos.org'...
+2025-07-23T19:31:20.3559070Z copying path '/nix/store/szfi0xd0cwdaldhkp8vlgi7jfv662nmd-stdenv-linux' from 'https://cache.nixos.org'...
+2025-07-23T19:31:20.4069895Z building '/nix/store/mbmxfdxryq3wr2wxm5brh42mcad1gvzy-kind-with-registry-1.0.0.drv'...
+2025-07-23T19:31:20.4979476Z building '/nix/store/gvy0rwami6li8s64cb1q1hv75mnglnjn-nix-shell-env.drv'...
+2025-07-23T19:31:20.9272594Z this path will be fetched (0.10 MiB download, 0.10 MiB unpacked):
+2025-07-23T19:31:20.9273342Z   /nix/store/hlv28jlwzk6kqj6vljm9cn8i7pw030nx-bash-interactive-5.2p37-man
+2025-07-23T19:31:20.9282846Z copying path '/nix/store/hlv28jlwzk6kqj6vljm9cn8i7pw030nx-bash-interactive-5.2p37-man' from 'https://cache.nixos.org'...
+2025-07-23T19:31:21.0821439Z dependencies installed
+2025-07-23T19:31:21.0886821Z ##[group]Run echo "::warning::Monitoring credentials not found. Skipping collector start. Is the PR from a fork branch?"
+2025-07-23T19:31:21.0888089Z [36;1mecho "::warning::Monitoring credentials not found. Skipping collector start. Is the PR from a fork branch?"[0m
+2025-07-23T19:31:21.0927464Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-07-23T19:31:21.0927969Z env:
+2025-07-23T19:31:21.0928266Z   TMPDIR: /home/runner/work/_temp
+2025-07-23T19:31:21.0928609Z ##[endgroup]
+2025-07-23T19:31:21.1011948Z ##[warning]Monitoring credentials not found. Skipping collector start. Is the PR from a fork branch?
+2025-07-23T19:31:21.1043315Z ##[group]Run AVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego/build /home/runner/work/_actions/ava-labs/avalanchego/66ce7a7701db0c4b370f97b339478d5b5ebe919a/.github/actions/run-monitored-tmpnet-cmd/nix-develop.sh --impure --command bash -x ./scripts/run_task.sh test-e2e-warp-ci
+2025-07-23T19:31:21.1046892Z [36;1mAVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego/build /home/runner/work/_actions/ava-labs/avalanchego/66ce7a7701db0c4b370f97b339478d5b5ebe919a/.github/actions/run-monitored-tmpnet-cmd/nix-develop.sh --impure --command bash -x ./scripts/run_task.sh test-e2e-warp-ci[0m
+2025-07-23T19:31:21.1083798Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-07-23T19:31:21.1084319Z env:
+2025-07-23T19:31:21.1084499Z   TMPDIR: /home/runner/work/_temp
+2025-07-23T19:31:21.1084742Z   TMPNET_START_METRICS_COLLECTOR: false
+2025-07-23T19:31:21.1084988Z   TMPNET_START_LOGS_COLLECTOR: false
+2025-07-23T19:31:21.1085227Z   TMPNET_CHECK_METRICS_COLLECTED: false
+2025-07-23T19:31:21.1085465Z   TMPNET_CHECK_LOGS_COLLECTED: false
+2025-07-23T19:31:21.1085674Z   LOKI_USERNAME: 
+2025-07-23T19:31:21.1085852Z   LOKI_PASSWORD: 
+2025-07-23T19:31:21.1086039Z   PROMETHEUS_USERNAME: 
+2025-07-23T19:31:21.1086235Z   PROMETHEUS_PASSWORD: 
+2025-07-23T19:31:21.1086422Z   GH_REPO: ava-labs/coreth
+2025-07-23T19:31:21.1086618Z   GH_WORKFLOW: CI
+2025-07-23T19:31:21.1086793Z   GH_RUN_ID: 16480013789
+2025-07-23T19:31:21.1086982Z   GH_RUN_NUMBER: 5026
+2025-07-23T19:31:21.1087162Z   GH_RUN_ATTEMPT: 1
+2025-07-23T19:31:21.1087338Z   GH_JOB_ID: e2e_warp
+2025-07-23T19:31:21.1087512Z ##[endgroup]
+2025-07-23T19:31:21.1311789Z No local flake found, will attempt to use avalanchego flake
+2025-07-23T19:31:21.1398039Z Starting nix shell for github:ava-labs/avalanchego?ref=v1.13.3-rc.1
+2025-07-23T19:31:23.4703777Z + set -euo pipefail
+2025-07-23T19:31:23.4704411Z + command -v task
+2025-07-23T19:31:23.4704754Z + exec task test-e2e-warp-ci
+2025-07-23T19:31:23.4930421Z task: [build] ./scripts/build.sh
+2025-07-23T19:31:23.5222390Z Using branch: d85ec0364
+2025-07-23T19:31:23.5239388Z Building Coreth @ GitCommit: d85ec0364204a0b3e07e9cdc140a65c53b4d6ce4 at /home/runner/.avalanchego/plugins/srEXiWaHuhNyGwPUi444Tu47ZEDwxTWrbQiuD7FmgSAQ6X7Dy
+2025-07-23T19:31:54.0361778Z task: [test-e2e-warp] ./scripts/run_ginkgo_warp.sh
+2025-07-23T19:31:54.0569916Z Using branch: d85ec0364
+2025-07-23T19:31:54.0586743Z Running with extra args: --avalanchego-path=/tmp/e2e/warp/avalanchego/build/avalanchego
+2025-07-23T19:32:11.2865231Z Running Suite: coreth warp e2e test - /home/runner/work/coreth/coreth/tests/warp
+2025-07-23T19:32:11.2865942Z ================================================================================
+2025-07-23T19:32:11.2866544Z Random Seed: [1m1753299114[0m
+2025-07-23T19:32:11.2866739Z 
+2025-07-23T19:32:11.2866907Z Will run [1m1[0m of [1m1[0m specs
+2025-07-23T19:32:11.2867282Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:11.2867659Z [0m[1m[SynchronizedBeforeSuite] [0m
+2025-07-23T19:32:11.2868238Z [38;5;243m/home/runner/work/coreth/coreth/tests/warp/warp_test.go:79[0m
+2025-07-23T19:32:11.2869371Z   > Enter [1m[SynchronizedBeforeSuite][0m TOP-LEVEL [38;5;243m- /home/runner/work/coreth/coreth/tests/warp/warp_test.go:79 @ 07/23/25 19:32:11.286[0m
+2025-07-23T19:32:11.2875272Z    [0;0mINFO[0;0m	waiting for network to start	{"timeoutSeconds": 120}
+2025-07-23T19:32:11.2876704Z    [0;0mINFO[0;0m	preparing configuration for new network	{"runtimeConfig": {"process":{"avalancheGoPath":"/tmp/e2e/warp/avalanchego/build/avalanchego","pluginDir":"/home/runner/.avalanchego/plugins"}}}
+2025-07-23T19:32:11.2998438Z    [0;0mINFO[0;0m	starting network	{"networkDir": "/home/runner/.tmpnet/networks/20250723-193211.287722-coreth-warp-e2e", "uuid": "831b7731-4dd7-401a-a2aa-7d4d54bfac1b"}
+2025-07-23T19:32:11.9026676Z    [0;0mINFO[0;0m	started local node	{"nodeID": "NodeID-3wsBNScnZA9m17LzxpzCGvmzcKf67tPHk", "dataDir": "/home/runner/.tmpnet/networks/20250723-193211.287722-coreth-warp-e2e/NodeID-3wsBNScnZA9m17LzxpzCGvmzcKf67tPHk", "isEphemeral": false}
+2025-07-23T19:32:12.4551147Z    [0;0mINFO[0;0m	started local node	{"nodeID": "NodeID-AjFCBTWUwfRZHTnySyCjdknRp12LaqFon", "dataDir": "/home/runner/.tmpnet/networks/20250723-193211.287722-coreth-warp-e2e/NodeID-AjFCBTWUwfRZHTnySyCjdknRp12LaqFon", "isEphemeral": false}
+2025-07-23T19:32:12.4553333Z    [0;0mINFO[0;0m	waiting for nodes to report healthy
+2025-07-23T19:32:14.4565017Z    [0;0mINFO[0;0m	node is healthy	{"nodeID": "NodeID-AjFCBTWUwfRZHTnySyCjdknRp12LaqFon", "uri": "http://127.0.0.1:35575"}
+2025-07-23T19:32:17.8564231Z    [0;0mINFO[0;0m	node is healthy	{"nodeID": "NodeID-3wsBNScnZA9m17LzxpzCGvmzcKf67tPHk", "uri": "http://127.0.0.1:43963"}
+2025-07-23T19:32:17.8566355Z    [0;0mINFO[0;0m	started network	{"networkDir": "/home/runner/.tmpnet/networks/20250723-193211.287722-coreth-warp-e2e", "uuid": "831b7731-4dd7-401a-a2aa-7d4d54bfac1b"}
+2025-07-23T19:32:17.8570530Z    [0;0mINFO[0;0m	metrics and logs available via grafana (collectors must be running)	{"url": "https://grafana-poc.avax-dev.network/d/kBQpRdWnk/avalanche-main-dashboard?&var-filter=network_uuid%7C%3D%7C831b7731-4dd7-401a-a2aa-7d4d54bfac1b&var-filter=is_ephemeral_node%7C%3D%7Cfalse&from=1753299131299&to=now", "linkPath": "/home/runner/.tmpnet/networks/20250723-193211.287722-coreth-warp-e2e/metrics.txt"}
+2025-07-23T19:32:17.8573190Z    [0;0mINFO[0;0m	network started successfully
+2025-07-23T19:32:17.8581182Z    [0;0mINFO[0;0m	network nodes are available	{"uris": [{"NodeID":"NodeID-3wsBNScnZA9m17LzxpzCGvmzcKf67tPHk","URI":"http://127.0.0.1:43963"},{"NodeID":"NodeID-AjFCBTWUwfRZHTnySyCjdknRp12LaqFon","URI":"http://127.0.0.1:35575"}]}
+2025-07-23T19:32:17.8583746Z   < Exit [1m[SynchronizedBeforeSuite][0m TOP-LEVEL [38;5;243m- /home/runner/work/coreth/coreth/tests/warp/warp_test.go:79 @ 07/23/25 19:32:17.857 (6.571s)[0m
+2025-07-23T19:32:17.8587785Z   > Enter [1m[SynchronizedBeforeSuite][0m TOP-LEVEL [38;5;243m- /home/runner/work/coreth/coreth/tests/warp/warp_test.go:79 @ 07/23/25 19:32:17.857[0m
+2025-07-23T19:32:17.8606402Z   < Exit [1m[SynchronizedBeforeSuite][0m TOP-LEVEL [38;5;243m- /home/runner/work/coreth/coreth/tests/warp/warp_test.go:79 @ 07/23/25 19:32:17.86 (2ms)[0m
+2025-07-23T19:32:17.8607797Z [38;5;10m[SynchronizedBeforeSuite] PASSED [6.574 seconds][0m
+2025-07-23T19:32:17.8608483Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:17.8608936Z [Warp]
+2025-07-23T19:32:17.8609537Z [38;5;243m/home/runner/work/coreth/coreth/tests/warp/warp_test.go:127[0m
+2025-07-23T19:32:17.8610657Z   [0m[1mC-Chain -> C-Chain[0m
+2025-07-23T19:32:17.8611495Z   [38;5;243m/home/runner/work/coreth/coreth/tests/warp/warp_test.go:156[0m
+2025-07-23T19:32:17.8613307Z   > Enter [1m[BeforeEach][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/metrics_link.go:27 @ 07/23/25 19:32:17.86[0m
+2025-07-23T19:32:17.8615605Z   < Exit [1m[BeforeEach][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/metrics_link.go:27 @ 07/23/25 19:32:17.86 (0s)[0m
+2025-07-23T19:32:17.8617342Z   > Enter [1m[It][0m C-Chain -> C-Chain [38;5;243m- /home/runner/work/coreth/coreth/tests/warp/warp_test.go:156 @ 07/23/25 19:32:17.86[0m
+2025-07-23T19:32:17.8618792Z   "level"=0 "msg"="Creating ethclient for blockchain A" "blockchainID"="2Nzr7CwuX11Vo42ayWGcy7D1nWEEdxJwe3qjjN4xXoizHUaLzo"
+2025-07-23T19:32:17.8620197Z   "level"=0 "msg"="Creating ethclient for blockchain A" "blockchainID"="2Nzr7CwuX11Vo42ayWGcy7D1nWEEdxJwe3qjjN4xXoizHUaLzo"
+2025-07-23T19:32:17.8621590Z   "level"=0 "msg"="Creating ethclient for blockchain B" "blockchainID"="2Nzr7CwuX11Vo42ayWGcy7D1nWEEdxJwe3qjjN4xXoizHUaLzo"
+2025-07-23T19:32:17.8625694Z   "level"=0 "msg"="Creating ethclient for blockchain B" "blockchainID"="2Nzr7CwuX11Vo42ayWGcy7D1nWEEdxJwe3qjjN4xXoizHUaLzo"
+2025-07-23T19:32:19.8672933Z   "level"=0 "msg"="Sending message from A to B"
+2025-07-23T19:32:19.8679833Z   "level"=0 "msg"="Sending sendWarpMessage transaction" "txHash"="0xcdd2c3e614865c0a389544350f188695a106bdab5883f66ee56725b3528fc8df"
+2025-07-23T19:32:19.8686332Z   "level"=0 "msg"="Waiting for transaction to be accepted"
+2025-07-23T19:32:20.8697313Z   "level"=0 "msg"="Constructing warp block hash unsigned message" "blockHash"="0x5c7afdebbd10e93279441062b28e528c80b6853d395915f4f5fbdd6730c0a77d"
+2025-07-23T19:32:20.8698273Z   "level"=0 "msg"="Fetching relevant warp logs from the newly produced block"
+2025-07-23T19:32:20.8701442Z   "level"=0 "msg"="Parsing logData as unsigned warp message"
+2025-07-23T19:32:20.8704174Z   "level"=0 "msg"="Parsed unsignedWarpMsg" "unsignedWarpMessageID"="2dJXPKGac79ZmsoVeyTQ2v4ZVMTDedMyvvqKY3Jfgvk65i8kKG" "unsignedWarpMessage"="UnsignedMessage(NetworkID = 88888, SourceChainID = 2Nzr7CwuX11Vo42ayWGcy7D1nWEEdxJwe3qjjN4xXoizHUaLzo, Payload = 000000000001000000148db97c7cece249c2b98bdc0226cc4c2a57bf52fc00000003010203)"
+2025-07-23T19:32:20.8706441Z   "level"=0 "msg"="client accepted the block containing SendWarpMessage" "client"=0 "height"=3
+2025-07-23T19:32:20.8709005Z   "level"=0 "msg"="client accepted the block containing SendWarpMessage" "client"=1 "height"=3
+2025-07-23T19:32:20.8709808Z   "level"=0 "msg"="Aggregating signatures via API"
+2025-07-23T19:32:20.8725761Z   "level"=0 "msg"="Aggregating signatures from validator set" "numValidators"=2 "totalWeight"=2000000000000000
+2025-07-23T19:32:20.8775430Z   "level"=0 "msg"="Aggregated signatures for warp messages" "addressedCallMessage"="000000015b38b5a4cf0874043005ee5ab1209c8edefd431257b7e6764199106d78747918698d00000025000000000001000000148db97c7cece249c2b98bdc0226cc4c2a57bf52fc00000003010203000000000000000103b28a349108202d40221da58363b9a8755547558dd59fb77399eb02252498c183cc8177ecaeec86374c981087acb3263e0aed71170f7493c1ad984c130d900eb157ec34e968ac4ef5ce4e9ab2e40983dfdff9032992815b5925648feb51540098" "blockPayloadMessage"="000000015b38b5a4cf0874043005ee5ab1209c8edefd431257b7e6764199106d78747918698d000000260000000000005c7afdebbd10e93279441062b28e528c80b6853d395915f4f5fbdd6730c0a77d000000000000000103b6de3a05d724fe7067ff3bd8d610c2417ac356327cce728126648600c597dc32e5f7c78fc326f914aeacae4840616f07139c390ee35c1aa059071140b39740dc2a94f71d5c161a91a13d9b1e8f4a647265d7410fafc4ca3cd808a8a9f84b1619"
+2025-07-23T19:32:20.8782372Z   "level"=0 "msg"="Aggregating signatures via p2p aggregator"
+2025-07-23T19:32:20.8783125Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:20.8794801Z   "level"=0 "msg"="Fetching block payload aggregate signature via p2p API"
+2025-07-23T19:32:20.8818010Z   "level"=0 "msg"="Delivering addressed call payload to receiving subnet"
+2025-07-23T19:32:20.8827960Z   "level"=0 "msg"="Sending getVerifiedWarpMessage transaction" "txHash"="0x2c84ac1a0bb1cb97d7c051142046368d4f828b9453583d497eb46195dfbc114c" "txBytes"="02f9017383015b3803843b9aca008534630b8a00834c4b4094020000000000000000000000000000000000000580a46f8253500000000000000000000000000000000000000000000000000000000000000000f8dff8dd940200000000000000000000000000000000000005f8c6a0000000015b38b5a4cf0874043005ee5ab1209c8edefd431257b7e6764199106da078747918698d00000025000000000001000000148db97c7cece249c2b98bdc02a026cc4c2a57bf52fc00000003010203000000000000000103b28a349108202d40a0221da58363b9a8755547558dd59fb77399eb02252498c183cc8177ecaeec8637a04c981087acb3263e0aed71170f7493c1ad984c130d900eb157ec34e968ac4ef5a0ce4e9ab2e40983dfdff9032992815b5925648feb51540098ff0000000000000001a0389ea93aa7de9afca4268aff0963288bc18581b29eb3b0163d441cea1520172ea0569686ef255a3df87c0edea9d8129a5e39c42e282b3e1ae62ddfde1822bfc099"
+2025-07-23T19:32:20.8833762Z   "level"=0 "msg"="Waiting for transaction to be accepted"
+2025-07-23T19:32:21.8842323Z   "level"=0 "msg"="Fetching relevant warp logs and receipts from new block"
+2025-07-23T19:32:21.8845195Z   "level"=0 "msg"="Delivering block hash payload to receiving subnet"
+2025-07-23T19:32:21.8856674Z   "level"=0 "msg"="Sending getVerifiedWarpBlockHash transaction" "txHash"="0x7232381eb0a29380f4cbc22793f6b6621bada7742612c6af889f805f22d74b06" "txBytes"="02f9017383015b3804843b9aca008534630b8a00834c4b4094020000000000000000000000000000000000000580a4ce7f59290000000000000000000000000000000000000000000000000000000000000000f8dff8dd940200000000000000000000000000000000000005f8c6a0000000015b38b5a4cf0874043005ee5ab1209c8edefd431257b7e6764199106da078747918698d000000260000000000005c7afdebbd10e93279441062b28e528ca080b6853d395915f4f5fbdd6730c0a77d000000000000000103b6de3a05d724fea07067ff3bd8d610c2417ac356327cce728126648600c597dc32e5f7c78fc326f9a014aeacae4840616f07139c390ee35c1aa059071140b39740dc2a94f71d5c161aa091a13d9b1e8f4a647265d7410fafc4ca3cd808a8a9f84b1619ff00000000000001a06b09e4593d91fbf3bdf3e6d2a3f91cf48322ecd89740f036eec6c8b269861b82a005128aeaf8540fe0ff729a244d8cd48aadfd9dd91b02d05815d9703c1c0e69d7"
+2025-07-23T19:32:21.8862841Z   "level"=0 "msg"="Waiting for transaction to be accepted"
+2025-07-23T19:32:22.8867952Z   "level"=0 "msg"="Fetching relevant warp logs and receipts from new block"
+2025-07-23T19:32:22.8870534Z   "level"=0 "msg"="Executing warp load test"
+2025-07-23T19:32:22.8875439Z   "level"=0 "msg"="Distributing funds on sending subnet" "numKeys"=2
+2025-07-23T19:32:27.4089287Z   "level"=0 "msg"="Distributing funds on receiving subnet" "numKeys"=2
+2025-07-23T19:32:29.0096990Z   "level"=0 "msg"="Creating workers for each subnet..."
+2025-07-23T19:32:29.0105130Z   "level"=0 "msg"="Subscribing to warp send events on sending subnet"
+2025-07-23T19:32:29.0108105Z   "level"=0 "msg"="Generating tx sequence to send warp messages..."
+2025-07-23T19:32:29.0127167Z   "level"=0 "msg"="Executing warp send loader..."
+2025-07-23T19:32:30.0353730Z   "level"=0 "msg"="Executing warp delivery sequences..."
+2025-07-23T19:32:30.0354585Z   "level"=0 "msg"="Executing warp delivery..."
+2025-07-23T19:32:30.0357086Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0358884Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0381993Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0403657Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0427877Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0441397Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0460714Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0471012Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0495871Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0510439Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0529751Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0549373Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0570581Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0587857Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0602726Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0618737Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0636601Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0653117Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0671616Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:30.0690977Z   "level"=0 "msg"="Fetching addressed call aggregate signature via p2p API"
+2025-07-23T19:32:33.0152384Z   "level"=0 "msg"="Completed warp delivery successfully."
+2025-07-23T19:32:33.0154990Z   < Exit [1m[It][0m C-Chain -> C-Chain [38;5;243m- /home/runner/work/coreth/coreth/tests/warp/warp_test.go:156 @ 07/23/25 19:32:33.015 (15.155s)[0m
+2025-07-23T19:32:33.0157347Z   > Enter [1m[AfterEach][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/metrics_link.go:33 @ 07/23/25 19:32:33.015[0m
+2025-07-23T19:32:33.0168779Z    [0;0mINFO[0;0m	metrics and logs available via grafana (collectors must be running)	{"uri": "https://grafana-poc.avax-dev.network/d/kBQpRdWnk/avalanche-main-dashboard?&var-filter=network_uuid%7C%3D%7C831b7731-4dd7-401a-a2aa-7d4d54bfac1b&var-filter=is_ephemeral_node%7C%3D%7Cfalse&from=1753299137860&to=1753299165015"}
+2025-07-23T19:32:33.0172225Z   < Exit [1m[AfterEach][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/metrics_link.go:33 @ 07/23/25 19:32:33.016 (1ms)[0m
+2025-07-23T19:32:33.0174994Z   > Enter [1m[DeferCleanup (Each)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0177589Z   < Exit [1m[DeferCleanup (Each)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0179637Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0181315Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0183239Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0185212Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0186780Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0188380Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0190435Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0192066Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0194370Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0196522Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0198200Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0200654Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0202309Z   > Enter [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0204450Z   < Exit [1m[DeferCleanup (Each)][0m [Warp] [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0205841Z [38;5;10m• [15.156 seconds][0m
+2025-07-23T19:32:33.0206353Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0206833Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0207832Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0209863Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0212309Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016 (0s)[0m
+2025-07-23T19:32:33.0213698Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0214441Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0214914Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0216027Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0218134Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.016[0m
+2025-07-23T19:32:33.0220601Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017 (0s)[0m
+2025-07-23T19:32:33.0221966Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0222530Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0223011Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0224299Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0226648Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017[0m
+2025-07-23T19:32:33.0229138Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017 (0s)[0m
+2025-07-23T19:32:33.0230521Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0231070Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0231556Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0232603Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0234906Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017[0m
+2025-07-23T19:32:33.0237460Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017 (0s)[0m
+2025-07-23T19:32:33.0238884Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0239477Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0239985Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0241054Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0243300Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017[0m
+2025-07-23T19:32:33.0246304Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017 (0s)[0m
+2025-07-23T19:32:33.0247555Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0248160Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0248662Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0249760Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0252013Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017[0m
+2025-07-23T19:32:33.0254817Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017 (0s)[0m
+2025-07-23T19:32:33.0256263Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0256871Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0257378Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0258500Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0260751Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017[0m
+2025-07-23T19:32:33.0263270Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017 (0s)[0m
+2025-07-23T19:32:33.0264314Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0264667Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0264971Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0265792Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0267027Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.017[0m
+2025-07-23T19:32:33.0267797Z    [0;0mINFO[0;0m	shutting down network
+2025-07-23T19:32:33.0971487Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.096 (80ms)[0m
+2025-07-23T19:32:33.0973091Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.080 seconds][0m
+2025-07-23T19:32:33.0973732Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0974442Z [0m[1m[DeferCleanup (Suite)] [0m
+2025-07-23T19:32:33.0975571Z [38;5;243m/home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96[0m
+2025-07-23T19:32:33.0977880Z   > Enter [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.096[0m
+2025-07-23T19:32:33.0980266Z   < Exit [1m[DeferCleanup (Suite)][0m TOP-LEVEL [38;5;243m- /home/runner/go/pkg/mod/github.com/ava-labs/avalanchego@v1.13.3-rc.1/tests/fixture/e2e/ginkgo_test_context.go:96 @ 07/23/25 19:32:33.096 (0s)[0m
+2025-07-23T19:32:33.0981703Z [38;5;10m[DeferCleanup (Suite)] PASSED [0.000 seconds][0m
+2025-07-23T19:32:33.0982293Z [38;5;243m------------------------------[0m
+2025-07-23T19:32:33.0982590Z 
+2025-07-23T19:32:33.0983110Z [38;5;10m[1mRan 1 of 1 Specs in 21.811 seconds[0m
+2025-07-23T19:32:33.0984259Z [38;5;10m[1mSUCCESS![0m -- [38;5;10m[1m1 Passed[0m | [38;5;9m[1m0 Failed[0m | [38;5;11m[1m0 Pending[0m | [38;5;14m[1m0 Skipped[0m
+2025-07-23T19:32:33.0984973Z PASS
+2025-07-23T19:32:33.1151644Z 
+2025-07-23T19:32:33.1152113Z Ginkgo ran 1 suite in 38.306979704s
+2025-07-23T19:32:33.1152524Z Test Suite Passed
+2025-07-23T19:32:33.1268502Z ##[group]Run actions/upload-artifact@v4
+2025-07-23T19:32:33.1268743Z with:
+2025-07-23T19:32:33.1268915Z   name: warp-tmpnet-data
+2025-07-23T19:32:33.1269311Z   path: ~/.tmpnet/networks
+~/.tmpnet/prometheus/prometheus.log
+~/.tmpnet/promtail/promtail.log
+
+2025-07-23T19:32:33.1269741Z   if-no-files-found: error
+2025-07-23T19:32:33.1269947Z   compression-level: 6
+2025-07-23T19:32:33.1270135Z   overwrite: false
+2025-07-23T19:32:33.1270326Z   include-hidden-files: false
+2025-07-23T19:32:33.1270525Z env:
+2025-07-23T19:32:33.1270696Z   TMPDIR: /home/runner/work/_temp
+2025-07-23T19:32:33.1270922Z ##[endgroup]
+2025-07-23T19:32:33.3555535Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2025-07-23T19:32:33.3557757Z The least common ancestor is /home/runner/.tmpnet. This will be the root directory of the artifact
+2025-07-23T19:32:33.3558415Z With the provided path, there will be 30 files uploaded
+2025-07-23T19:32:33.3562845Z Artifact name is valid!
+2025-07-23T19:32:33.3564382Z Root directory input is valid!
+2025-07-23T19:32:33.4713329Z Beginning upload of artifact content to blob storage
+2025-07-23T19:32:33.5880241Z Uploaded bytes 254232
+2025-07-23T19:32:33.6015135Z Finished uploading artifact content to blob storage!
+2025-07-23T19:32:33.6018287Z SHA256 digest of uploaded artifact zip is 97986e70a9422e37f591caac4d5b55a84772901452c11682c77e38ac53246095
+2025-07-23T19:32:33.6020358Z Finalizing artifact upload
+2025-07-23T19:32:33.6986944Z Artifact warp-tmpnet-data.zip successfully finalized. Artifact ID 3600323265
+2025-07-23T19:32:33.6988207Z Artifact warp-tmpnet-data has been successfully uploaded! Final size is 254232 bytes. Artifact ID is 3600323265
+2025-07-23T19:32:33.6994618Z Artifact download URL: https://github.com/ava-labs/coreth/actions/runs/16480013789/artifacts/3600323265

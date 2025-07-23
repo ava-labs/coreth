@@ -1,0 +1,85 @@
+﻿2025-07-23T19:28:55.3815735Z ##[group]Run actions/checkout@v4
+2025-07-23T19:28:55.3816640Z with:
+2025-07-23T19:28:55.3817040Z   repository: ava-labs/coreth
+2025-07-23T19:28:55.3817679Z   token: ***
+2025-07-23T19:28:55.3818068Z   ssh-strict: true
+2025-07-23T19:28:55.3818633Z   ssh-user: git
+2025-07-23T19:28:55.3819110Z   persist-credentials: true
+2025-07-23T19:28:55.3819551Z   clean: true
+2025-07-23T19:28:55.3819942Z   sparse-checkout-cone-mode: true
+2025-07-23T19:28:55.3820405Z   fetch-depth: 1
+2025-07-23T19:28:55.3820790Z   fetch-tags: false
+2025-07-23T19:28:55.3821186Z   show-progress: true
+2025-07-23T19:28:55.3821597Z   lfs: false
+2025-07-23T19:28:55.3821962Z   submodules: false
+2025-07-23T19:28:55.3822370Z   set-safe-directory: true
+2025-07-23T19:28:55.3823065Z ##[endgroup]
+2025-07-23T19:28:55.4877654Z Syncing repository: ava-labs/coreth
+2025-07-23T19:28:55.4879707Z ##[group]Getting Git version info
+2025-07-23T19:28:55.4880403Z Working directory is '/home/runner/work/coreth/coreth'
+2025-07-23T19:28:55.4881295Z [command]/usr/bin/git version
+2025-07-23T19:28:55.4927676Z git version 2.50.1
+2025-07-23T19:28:55.4960792Z ##[endgroup]
+2025-07-23T19:28:55.4971438Z Temporarily overriding HOME='/home/runner/work/_temp/befb0eca-fb3f-4a02-a4de-d1960c4d6cff' before making global git config changes
+2025-07-23T19:28:55.4974300Z Adding repository directory to the temporary git global config as a safe directory
+2025-07-23T19:28:55.4976292Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/coreth/coreth
+2025-07-23T19:28:55.5010645Z Deleting the contents of '/home/runner/work/coreth/coreth'
+2025-07-23T19:28:55.5014187Z ##[group]Initializing the repository
+2025-07-23T19:28:55.5017770Z [command]/usr/bin/git init /home/runner/work/coreth/coreth
+2025-07-23T19:28:55.5077736Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-07-23T19:28:55.5079549Z hint: is subject to change. To configure the initial branch name to use in all
+2025-07-23T19:28:55.5081003Z hint: of your new repositories, which will suppress this warning, call:
+2025-07-23T19:28:55.5082098Z hint:
+2025-07-23T19:28:55.5082629Z hint: 	git config --global init.defaultBranch <name>
+2025-07-23T19:28:55.5083213Z hint:
+2025-07-23T19:28:55.5083742Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-07-23T19:28:55.5084621Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-07-23T19:28:55.5085298Z hint:
+2025-07-23T19:28:55.5085746Z hint: 	git branch -m <name>
+2025-07-23T19:28:55.5086451Z hint:
+2025-07-23T19:28:55.5087133Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-07-23T19:28:55.5088051Z Initialized empty Git repository in /home/runner/work/coreth/coreth/.git/
+2025-07-23T19:28:55.5091680Z [command]/usr/bin/git remote add origin https://github.com/ava-labs/coreth
+2025-07-23T19:28:55.5122123Z ##[endgroup]
+2025-07-23T19:28:55.5123347Z ##[group]Disabling automatic garbage collection
+2025-07-23T19:28:55.5125739Z [command]/usr/bin/git config --local gc.auto 0
+2025-07-23T19:28:55.5156323Z ##[endgroup]
+2025-07-23T19:28:55.5157488Z ##[group]Setting up auth
+2025-07-23T19:28:55.5163531Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-07-23T19:28:55.5194669Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-07-23T19:28:55.5476758Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-07-23T19:28:55.5508036Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-07-23T19:28:55.5751461Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-07-23T19:28:55.5797110Z ##[endgroup]
+2025-07-23T19:28:55.5797932Z ##[group]Fetching the repository
+2025-07-23T19:28:55.5807792Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +d85ec0364204a0b3e07e9cdc140a65c53b4d6ce4:refs/remotes/pull/1065/merge
+2025-07-23T19:28:56.1034350Z From https://github.com/ava-labs/coreth
+2025-07-23T19:28:56.1036189Z  * [new ref]         d85ec0364204a0b3e07e9cdc140a65c53b4d6ce4 -> pull/1065/merge
+2025-07-23T19:28:56.1061344Z ##[endgroup]
+2025-07-23T19:28:56.1062647Z ##[group]Determining the checkout info
+2025-07-23T19:28:56.1064147Z ##[endgroup]
+2025-07-23T19:28:56.1069022Z [command]/usr/bin/git sparse-checkout disable
+2025-07-23T19:28:56.1107291Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-07-23T19:28:56.1136096Z ##[group]Checking out the ref
+2025-07-23T19:28:56.1140603Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/1065/merge
+2025-07-23T19:28:56.2232869Z Note: switching to 'refs/remotes/pull/1065/merge'.
+2025-07-23T19:28:56.2234317Z 
+2025-07-23T19:28:56.2235227Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-07-23T19:28:56.2237304Z changes and commit them, and you can discard any commits you make in this
+2025-07-23T19:28:56.2239474Z state without impacting any branches by switching back to a branch.
+2025-07-23T19:28:56.2240207Z 
+2025-07-23T19:28:56.2240754Z If you want to create a new branch to retain commits you create, you may
+2025-07-23T19:28:56.2242093Z do so (now or later) by using -c with the switch command. Example:
+2025-07-23T19:28:56.2243009Z 
+2025-07-23T19:28:56.2243317Z   git switch -c <new-branch-name>
+2025-07-23T19:28:56.2243762Z 
+2025-07-23T19:28:56.2244071Z Or undo this operation with:
+2025-07-23T19:28:56.2244514Z 
+2025-07-23T19:28:56.2244775Z   git switch -
+2025-07-23T19:28:56.2245160Z 
+2025-07-23T19:28:56.2245733Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-07-23T19:28:56.2246726Z 
+2025-07-23T19:28:56.2247777Z HEAD is now at d85ec03 Merge d5f0d87367784f954ad4b3b1df561902a97b92fd into 8fa714aa59bcec3f418c1cc8312789585993b1b1
+2025-07-23T19:28:56.2251123Z ##[endgroup]
+2025-07-23T19:28:56.2281486Z [command]/usr/bin/git log -1 --format=%H
+2025-07-23T19:28:56.2303766Z d85ec0364204a0b3e07e9cdc140a65c53b4d6ce4
