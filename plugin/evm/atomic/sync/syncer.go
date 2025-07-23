@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
@@ -26,6 +27,9 @@ const (
 	MinNumWorkers     = 1
 	MaxNumWorkers     = 64
 	DefaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
+
+	MinRequestSize = 1
+	MaxRequestSize = 1024 // Matches [maxLeavesLimit] in sync/handlers/leafs_request.go
 
 	// TrieNode represents a leaf node that belongs to the atomic trie.
 	TrieNode message.NodeType = 2
@@ -40,6 +44,13 @@ var (
 
 	// ErrTooManyWorkers is returned when numWorkers exceeds the maximum.
 	ErrTooManyWorkers = errors.New("numWorkers above maximum")
+
+	ErrNilClient           = errors.New("Client cannot be nil")
+	ErrNilDatabase         = errors.New("Database cannot be nil")
+	ErrNilAtomicTrie       = errors.New("AtomicTrie cannot be nil")
+	ErrEmptyTargetRoot     = errors.New("TargetRoot cannot be empty")
+	ErrInvalidTargetHeight = errors.New("TargetHeight must be greater than 0")
+	ErrInvalidRequestSize  = errors.New("RequestSize must be between 1 and 1024")
 
 	_ Syncer                  = (*syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
@@ -75,16 +86,38 @@ type Config struct {
 
 // Validate checks if the configuration is valid and returns an error if not.
 func (c *Config) Validate() error {
-	// Use default workers if not specified
+	if c.Client == nil {
+		return ErrNilClient
+	}
+	if c.Database == nil {
+		return ErrNilDatabase
+	}
+	if c.AtomicTrie == nil {
+		return ErrNilAtomicTrie
+	}
+	if c.TargetRoot == (common.Hash{}) {
+		return ErrEmptyTargetRoot
+	}
+	if c.TargetHeight == 0 {
+		return ErrInvalidTargetHeight
+	}
+
+	// Set default RequestSize if not specified.
+	if c.RequestSize == 0 {
+		c.RequestSize = config.DefaultStateSyncRequestSize
+	}
+	if c.RequestSize < MinRequestSize || c.RequestSize > MaxRequestSize {
+		return fmt.Errorf("%w: %d (must be between %d and %d)", ErrInvalidRequestSize, c.RequestSize, MinRequestSize, MaxRequestSize)
+	}
+
+	// Validate NumWorkers.
 	numWorkers := c.NumWorkers
 	if numWorkers == 0 {
 		numWorkers = DefaultNumWorkers
 	}
-
 	if numWorkers < MinNumWorkers {
 		return fmt.Errorf("%w: %d (minimum: %d)", ErrTooFewWorkers, numWorkers, MinNumWorkers)
 	}
-
 	if numWorkers > MaxNumWorkers {
 		return fmt.Errorf("%w: %d (maximum: %d)", ErrTooManyWorkers, numWorkers, MaxNumWorkers)
 	}
