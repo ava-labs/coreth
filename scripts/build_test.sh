@@ -25,21 +25,25 @@ fi
 # This is useful for flaky tests
 MAX_RUNS=4
 
+# Function to get all test names from packages
 get_all_tests() {
     local packages="$1"
+
+    # Compute directories for each package under current build tags/platform
     local dirs
     dirs=$(printf '%s\n' "$packages" | xargs go list -f '{{.Dir}}')
+
+    # Grep top-level Test functions in *_test.go and emit unique sorted names
     grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+(Test[[:alnum:]_]+)\(' \
          $dirs |
     sed -E 's/^.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' |
     sort -u
 }
 
-# Get all packages to test
+# Get all packages to test (excluding the pure tests directory)
 PACKAGES=$(go list ./... | grep -v github.com/ava-labs/coreth/tests)
 
-for ((i = 1; i <= MAX_RUNS; i++));
-do
+for ((i = 1; i <= MAX_RUNS; i++)); do
     echo "Test run $i of $MAX_RUNS"
     
     # Get expected tests (for comparison) on first run
@@ -51,7 +55,8 @@ do
     
     # Run tests with JSON output for better tracking
     echo "Running tests..."
-    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
+    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" \
+                   -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
     
     # Extract test results for analysis
     echo "$test_output" > test.json
