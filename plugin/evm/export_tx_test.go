@@ -94,13 +94,14 @@ func createExportTxOptions(t *testing.T, vm *atomicvm.VM, sharedMemory *avalanch
 		t.Fatal(err)
 	}
 
-	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
-	exportTxs := make([]*atomic.Tx, 0, 3)
 	state, err := vm.Blockchain().State()
-	extState := extstate.New(state)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
+	exportTxs := make([]*atomic.Tx, 0, 3)
+	extState := extstate.New(state)
 	for _, addr := range testShortIDAddrs {
 		exportTx, err := atomic.NewExportTx(vm.Ctx, vm.CurrentRules(), extState, vm.Ctx.AVAXAssetID, uint64(5000000), vm.Ctx.XChainID, addr, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 		if err != nil {

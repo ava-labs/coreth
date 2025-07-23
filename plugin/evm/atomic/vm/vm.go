@@ -813,13 +813,11 @@ func (vm *VM) NewExportTx(
 		return nil, err
 	}
 
-	extState := extstate.New(state)
-
 	// Create the transaction
 	tx, err := atomic.NewExportTx(
 		vm.Ctx,            // Context
 		vm.CurrentRules(), // VM rules
-		extState,
+		extstate.New(state),
 		assetID, // AssetID
 		amount,  // Amount
 		chainID, // ID of the chain to send the funds to
