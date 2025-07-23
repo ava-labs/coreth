@@ -96,7 +96,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				// Create account
 				statedb.CreateAccount(userAddr1)
 				// Set balance to pay for gas fee
@@ -121,7 +120,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				// Create account
 				statedb.CreateAccount(userAddr1)
 				// Set balance to pay for gas fee
@@ -149,7 +147,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				// Create account
 				statedb.CreateAccount(userAddr1)
 				// Set balance to pay for gas fee
