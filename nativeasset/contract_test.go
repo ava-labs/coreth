@@ -227,7 +227,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
@@ -263,7 +262,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
@@ -301,7 +299,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, big.NewInt(50))
@@ -371,7 +368,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
@@ -394,7 +390,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
@@ -429,7 +424,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
@@ -452,7 +446,6 @@ func TestStatefulPrecompile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-
 				statedb.SetBalance(userAddr1, u256Hundred)
 				state := extstate.New(statedb)
 				state.AddBalanceMultiCoin(userAddr1, assetID, bigHundred)
