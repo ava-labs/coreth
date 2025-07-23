@@ -225,53 +225,134 @@ func TestConfigValidation(t *testing.T) {
 	}
 }
 
-func TestSyncer(t *testing.T) {
-	rand.Seed(1)
-	targetHeight := 10 * uint64(testCommitInterval)
-	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicstate.TrieKeyLength)
+// TestSyncerScenarios is a parameterized test that covers basic syncing scenarios with different worker configurations.
+func TestSyncerScenarios(t *testing.T) {
+	tests := []struct {
+		name        string
+		numWorkers  int
+		description string
+	}{
+		{
+			name:        "sync with single worker",
+			numWorkers:  1,
+			description: "should sync correctly with single worker",
+		},
+		{
+			name:        "sync with parallel workers",
+			numWorkers:  4,
+			description: "should sync correctly with parallel workers",
+		},
+		{
+			name:        "sync with default workers",
+			numWorkers:  0, // Will use default
+			description: "should sync correctly with default workers",
+		},
+	}
 
-	testSyncer(t, serverTrieDB, targetHeight, root, nil, int64(targetHeight))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rand.Seed(1)
+			targetHeight := 10 * uint64(testCommitInterval)
+			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicstate.TrieKeyLength)
+
+			testSyncer(t, serverTrieDB, targetHeight, root, nil, int64(targetHeight), tt.numWorkers)
+		})
+	}
 }
 
-func TestSyncerResume(t *testing.T) {
-	rand.Seed(1)
-	targetHeight := 10 * uint64(testCommitInterval)
-	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
-	root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys, atomicstate.TrieKeyLength)
-
-	testSyncer(t, serverTrieDB, targetHeight, root, []atomicSyncTestCheckpoint{
+// TestSyncerResumeScenarios is a parameterized test that covers resume scenarios with different worker configurations.
+func TestSyncerResumeScenarios(t *testing.T) {
+	tests := []struct {
+		name        string
+		numWorkers  int
+		description string
+	}{
 		{
-			targetRoot:              root,
-			targetHeight:            targetHeight,
-			leafCutoff:              testCommitInterval*5 - 1,
-			expectedNumLeavesSynced: testCommitInterval * 4,
+			name:        "resume with single worker",
+			numWorkers:  1,
+			description: "should resume syncing correctly with single worker",
 		},
-	}, int64(targetHeight)+testCommitInterval-1) // we will resync the last commitInterval - 1 leafs
+		{
+			name:        "resume with parallel workers",
+			numWorkers:  4,
+			description: "should resume syncing correctly with parallel workers",
+		},
+		{
+			name:        "resume with default workers",
+			numWorkers:  0, // Will use default
+			description: "should resume syncing correctly with default workers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rand.Seed(1)
+			targetHeight := 10 * uint64(testCommitInterval)
+			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+			numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
+			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys, atomicstate.TrieKeyLength)
+
+			testSyncer(t, serverTrieDB, targetHeight, root, []atomicSyncTestCheckpoint{
+				{
+					targetRoot:              root,
+					targetHeight:            targetHeight,
+					leafCutoff:              testCommitInterval*5 - 1,
+					expectedNumLeavesSynced: testCommitInterval * 4,
+				},
+			}, int64(targetHeight)+testCommitInterval-1, tt.numWorkers) // we will resync the last commitInterval - 1 leafs
+		})
+	}
 }
 
-func TestSyncerResumeNewRootCheckpoint(t *testing.T) {
-	rand.Seed(1)
-	targetHeight1 := 10 * uint64(testCommitInterval)
-	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis
-	root1, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys1, atomicstate.TrieKeyLength)
-
-	targetHeight2 := 20 * uint64(testCommitInterval)
-	numTrieKeys2 := int(targetHeight2) - 1 // no atomic ops for genesis
-	root2, _, _ := statesynctest.FillTrie(
-		t, numTrieKeys1, numTrieKeys2, atomicstate.TrieKeyLength, serverTrieDB, root1,
-	)
-
-	testSyncer(t, serverTrieDB, targetHeight1, root1, []atomicSyncTestCheckpoint{
+// TestSyncerResumeNewRootCheckpointScenarios is a parameterized test that covers resume with new root scenarios with different worker configurations.
+func TestSyncerResumeNewRootCheckpointScenarios(t *testing.T) {
+	tests := []struct {
+		name        string
+		numWorkers  int
+		description string
+	}{
 		{
-			targetRoot:              root2,
-			targetHeight:            targetHeight2,
-			leafCutoff:              testCommitInterval*5 - 1,
-			expectedNumLeavesSynced: testCommitInterval * 4,
+			name:        "resume new root with single worker",
+			numWorkers:  1,
+			description: "should resume with new root correctly with single worker",
 		},
-	}, int64(targetHeight2)+testCommitInterval-1) // we will resync the last commitInterval - 1 leafs
+		{
+			name:        "resume new root with parallel workers",
+			numWorkers:  4,
+			description: "should resume with new root correctly with parallel workers",
+		},
+		{
+			name:        "resume new root with default workers",
+			numWorkers:  0, // Will use default
+			description: "should resume with new root correctly with default workers",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rand.Seed(1)
+			targetHeight1 := 10 * uint64(testCommitInterval)
+			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
+			numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis
+			root1, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys1, atomicstate.TrieKeyLength)
+
+			targetHeight2 := 20 * uint64(testCommitInterval)
+			numTrieKeys2 := int(targetHeight2) - 1 // no atomic ops for genesis
+			root2, _, _ := statesynctest.FillTrie(
+				t, numTrieKeys1, numTrieKeys2, atomicstate.TrieKeyLength, serverTrieDB, root1,
+			)
+
+			testSyncer(t, serverTrieDB, targetHeight1, root1, []atomicSyncTestCheckpoint{
+				{
+					targetRoot:              root2,
+					targetHeight:            targetHeight2,
+					leafCutoff:              testCommitInterval*5 - 1,
+					expectedNumLeavesSynced: testCommitInterval * 4,
+				},
+			}, int64(targetHeight2)+testCommitInterval-1, tt.numWorkers) // we will resync the last commitInterval - 1 leafs
+		})
+	}
 }
 
 // TestSyncerParallelizationScenarios is a parameterized test that covers different parallelization scenarios.
@@ -410,7 +491,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 
 // testSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
 // starting at [targetRoot], and stopping and resuming at each of the [checkpoints].
-func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64, targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64) {
+func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64, targetRoot common.Hash, checkpoints []atomicSyncTestCheckpoint, finalExpectedNumLeaves int64, numWorkers int) {
 	ctx, mockClient, atomicBackend, clientDB := setupTestInfrastructure(t, serverTrieDB)
 
 	numLeaves := 0
@@ -426,7 +507,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			TargetRoot:   targetRoot,
 			TargetHeight: targetHeight,
 			RequestSize:  config.DefaultStateSyncRequestSize,
-			NumWorkers:   1,
+			NumWorkers:   numWorkers,
 		}
 		syncer, err := newSyncer(&syncerConfig)
 		require.NoError(t, err, "could not create syncer")
@@ -459,7 +540,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		TargetRoot:   targetRoot,
 		TargetHeight: targetHeight,
 		RequestSize:  config.DefaultStateSyncRequestSize,
-		NumWorkers:   1,
+		NumWorkers:   numWorkers,
 	}
 	syncer, err := newSyncer(&syncerConfig)
 	require.NoError(t, err, "could not create syncer")
