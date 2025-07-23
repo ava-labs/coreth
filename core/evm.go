@@ -77,8 +77,8 @@ func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm
 	return args
 }
 
-func wrapStateDB(rules params.Rules, stateDB vm.StateDB) vm.StateDB {
-	wrappedStateDB := extstate.New(stateDB.(*state.StateDB))
+func wrapStateDB(rules params.Rules, statedb vm.StateDB) vm.StateDB {
+	wrappedStateDB := extstate.New(statedb.(*state.StateDB))
 	if params.GetRulesExtra(rules).IsApricotPhase1 {
 		return wrappedStateDB
 	}
