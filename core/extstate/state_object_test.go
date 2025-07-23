@@ -4,28 +4,26 @@
 package extstate
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStateObjectPartition(t *testing.T) {
-	h1 := common.Hash{}
-	normalizeCoinID(&h1)
-
-	h2 := common.Hash{}
-	normalizeStateKey(&h2)
-	if bytes.Equal(h1.Bytes(), h2.Bytes()) {
-		t.Fatalf("Expected normalized hashes to be unique")
+	keys := []common.Hash{
+		{},
+		{0xff},
 	}
-
-	h3 := common.Hash([32]byte{0xff})
-	normalizeCoinID(&h3)
-
-	h4 := common.Hash([32]byte{0xff})
-	normalizeStateKey(&h4)
-	if bytes.Equal(h3.Bytes(), h4.Bytes()) {
-		t.Fatal("Expected normalized hashes to be unqiue")
+	for _, key := range keys {
+		t.Run(key.Hex(), func(t *testing.T) {
+			var (
+				coin  = key
+				state = key
+			)
+			normalizeCoinID(&coin)
+			normalizeStateKey(&state)
+			assert.NotEqual(t, coin, state, "Expected normalized hashes to be unique")
+		})
 	}
 }
