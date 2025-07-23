@@ -20,8 +20,8 @@ import (
 )
 
 func TestMultiCoinOperations(t *testing.T) {
-	rawdb := rawdb.NewMemoryDatabase()
-	db := state.NewDatabase(rawdb)
+	memdb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memdb)
 	stateDB, err := state.New(types.EmptyRootHash, db, nil)
 	require.NoError(t, err, "creating empty statedb")
 
@@ -30,38 +30,38 @@ func TestMultiCoinOperations(t *testing.T) {
 
 	stateDB.AddBalance(addr, new(uint256.Int))
 
-	state := New(stateDB)
-	balance := state.GetBalanceMultiCoin(addr, assetID)
+	wrappedStateDB := New(stateDB)
+	balance := wrappedStateDB.GetBalanceMultiCoin(addr, assetID)
 	require.Equal(t, "0", balance.String(), "expected zero big.Int multicoin balance as string")
 
-	state.AddBalanceMultiCoin(addr, assetID, big.NewInt(10))
-	state.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
-	state.AddBalanceMultiCoin(addr, assetID, big.NewInt(3))
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID, big.NewInt(10))
+	wrappedStateDB.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID, big.NewInt(3))
 
-	balance = state.GetBalanceMultiCoin(addr, assetID)
+	balance = wrappedStateDB.GetBalanceMultiCoin(addr, assetID)
 	require.Equal(t, "8", balance.String(), "unexpected multicoin balance string")
 }
 
 func TestMultiCoinSnapshot(t *testing.T) {
-	rawdb := rawdb.NewMemoryDatabase()
-	db := state.NewDatabase(rawdb)
+	memdb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memdb)
 
 	// Create empty [snapshot.Tree] and [StateDB]
 	root := common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	// Use the root as both the stateRoot and blockHash for this test.
-	snapTree := snapshot.NewTestTree(rawdb, root, root)
+	snapTree := snapshot.NewTestTree(memdb, root, root)
 
 	addr := common.Address{1}
 	assetID1 := common.Hash{1}
 	assetID2 := common.Hash{2}
-	assertBalances := func(t *testing.T, state *StateDB, regular, multicoin1, multicoin2 int64) {
+	assertBalances := func(t *testing.T, sdb *StateDB, regular, multicoin1, multicoin2 int64) {
 		t.Helper()
 
-		balance := state.GetBalance(addr)
+		balance := sdb.GetBalance(addr)
 		require.Equal(t, uint256.NewInt(uint64(regular)), balance, "incorrect non-multicoin balance")
-		balanceBig := state.GetBalanceMultiCoin(addr, assetID1)
+		balanceBig := sdb.GetBalanceMultiCoin(addr, assetID1)
 		require.Equal(t, big.NewInt(multicoin1).String(), balanceBig.String(), "incorrect multicoin1 balance")
-		balanceBig = state.GetBalanceMultiCoin(addr, assetID2)
+		balanceBig = sdb.GetBalanceMultiCoin(addr, assetID2)
 		require.Equal(t, big.NewInt(multicoin2).String(), balanceBig.String(), "incorrect multicoin2 balance")
 	}
 
@@ -139,9 +139,9 @@ func TestGenerateMultiCoinAccounts(t *testing.T) {
 	stateDB, err := state.New(common.Hash{}, database, nil)
 	require.NoError(t, err, "creating statedb")
 
-	state := New(stateDB)
-	state.AddBalanceMultiCoin(addr, assetID, assetBalance)
-	root, err := state.Commit(0, false)
+	wrappedStateDB := New(stateDB)
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID, assetBalance)
+	root, err := wrappedStateDB.Commit(0, false)
 	require.NoError(t, err, "committing statedb")
 
 	triedb := database.TrieDB()

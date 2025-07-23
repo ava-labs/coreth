@@ -1969,8 +1969,8 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			extState := extstate.New(stateDB)
-			tx, err = atomic.NewExportTx(tvm.vm.ctx, tvm.vm.currentRules(), extState, tid, exportAmount, tvm.vm.ctx.XChainID, exportId, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
+			wrappedStateDB := extstate.New(stateDB)
+			tx, err = atomic.NewExportTx(tvm.vm.ctx, tvm.vm.currentRules(), wrappedStateDB, tid, exportAmount, tvm.vm.ctx.XChainID, exportId, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1995,23 +1995,22 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			stdb, err := tvm.vm.blockChain.State()
+			stateDB, err = tvm.vm.blockChain.State()
 			if err != nil {
 				t.Fatal(err)
 			}
-			exstdb := extstate.New(stdb)
-			err = exportTx.EVMStateTransfer(tvm.vm.ctx, exstdb)
+			wrappedStateDB := extstate.New(stateDB)
+			err = exportTx.EVMStateTransfer(tvm.vm.ctx, wrappedStateDB)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			addr := testKeys[0].EthAddress()
-			if stdb.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
-				t.Fatalf("address balance %s equal %s not %s", addr.String(), stdb.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
+			if wrappedStateDB.GetBalance(addr).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
+				t.Fatalf("address balance %s equal %s not %s", addr.String(), wrappedStateDB.GetBalance(addr), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
-			state := extstate.New(stdb)
-			if state.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
-				t.Fatalf("address balance multicoin %s equal %s not %s", addr.String(), state.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
+			if wrappedStateDB.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
+				t.Fatalf("address balance multicoin %s equal %s not %s", addr.String(), wrappedStateDB.GetBalanceMultiCoin(addr, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
 			}
 		})
 	}

@@ -16,6 +16,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// Register the state key normalization to libevm's [state.StateDB]. This will
+// normalize all state keys passing through the implementation unless
+// [stateconf.SkipStateKeyTransformation] is provided as an option.
 func init() {
 	state.RegisterExtras(normalizeStateKeysHook{})
 }
