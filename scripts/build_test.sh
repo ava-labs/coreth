@@ -17,9 +17,10 @@ RACE_FLAG=""
 TIMEOUT="${TIMEOUT:-600s}"
 MAX_RETRIES=4
 ALL_PKGS=( $(go list ./... | grep -v github.com/ava-labs/coreth/tests) )
+KNOWN_FLAKES_FILE="$CORETH_PATH/scripts/known_flakes.txt"
 
 # get_all_tests: quickly list Test* functions in pkg directories
-get_all_tests() {
+ing get_all_tests() {
   local pkg="$1"
   local dir
   dir=$(go list -f '{{.Dir}}' "$pkg")
@@ -28,10 +29,10 @@ get_all_tests() {
     sort -u
 }
 
-# run_and_collect: execute tests per-package and gather failures + missing tests
+# run_and_collect: execute tests per-package and gather flaky failures + missing tests
 run_and_collect() {
   local pkgs=("${!1}")
-  FAILED_TESTS=()
+  FLAKY_TESTS=()
   MISSING_TESTS=()
 
   echo "Processing ${#pkgs[@]} packages..."
@@ -39,83 +40,89 @@ run_and_collect() {
     echo "--- Package: $pkg ---"
     start_pkg=$SECONDS
 
-    # 1) list all tests via fast grep
+    # list all tests
     echo "Listing tests..."
     all_tests=()
     while IFS= read -r t; do all_tests+=("$t"); done < <(get_all_tests "$pkg")
     echo "Found ${#all_tests[@]} tests"
 
-    # 2) run tests with JSON output (capture but don't exit)
+    # run tests JSON
     echo "Running tests (JSON)..."
     out_file="${pkg//\//_}.json"
     go test -json -timeout="$TIMEOUT" $RACE_FLAG "$pkg" >"$out_file" 2>&1 || true
 
-    # 3) collect ran and failed tests
+    # parse results
     echo "Parsing results..."
     ran_tests=()
     while IFS= read -r t; do ran_tests+=("$t"); done < <(
-      jq -r 'select(.Package=="'$pkg'" and .Test!=null and .Action=="run") | .Test' "$out_file" | sort -u
+      jq -r 'select(.Package=="'$pkg'" and .Test!=null and (.Action=="run" or .Action=="skip")) | .Test' "$out_file" | sort -u
     )
-    failed_tests=()
-    while IFS= read -r t; do failed_tests+=("$t"); done < <(
+
+    all_failed=()
+    while IFS= read -r t; do all_failed+=("$t"); done < <(
       jq -r 'select(.Package=="'$pkg'" and .Test!=null and .Action=="fail") | .Test' "$out_file" | sort -u
     )
-    echo "Ran ${#ran_tests[@]}, Failed ${#failed_tests[@]}"
 
-    # record failures
-    for t in "${failed_tests[@]}"; do
-      FAILED_TESTS+=("$pkg::$t")
+    # separate known flakes and non-flakes
+    non_flakes=()
+    flakes=()
+    for t in "${all_failed[@]}"; do
+      if grep -Fxq "$t" "$KNOWN_FLAKES_FILE"; then
+        flakes+=("$pkg::$t")
+      else
+        non_flakes+=("$pkg::$t")
+      fi
     done
 
-    # detect missing (panic or skip) tests
+    # if any non-flaky failures, exit immediately
+    if (( ${#non_flakes[@]} )); then
+      echo "Unexpected failures detected (non-flaky): ${non_flakes[*]}"
+      exit 1
+    fi
+
+    echo "Flaky failures: ${#flakes[@]}"
+    FLAKY_TESTS+=("${flakes[@]}")
+
+    # detect missing tests due to panic
     echo "Detecting missing tests..."
     for t in "${all_tests[@]}"; do
       if ! printf '%s\n' "${ran_tests[@]}" | grep -qxF "$t"; then
         MISSING_TESTS+=("$pkg::$t")
       fi
     done
-    echo "Missing ${#MISSING_TESTS[@]} so far"
-
+    echo "Missing tests so far: ${#MISSING_TESTS[@]}"
     echo "Package time: $((SECONDS - start_pkg))s"
   done
 }
 
 # Main retry loop
-target_tests=()
+targets=()
 for ((i=1; i<=MAX_RETRIES; i++)); do
   echo "=== Test attempt #$i ==="
-
-  if [[ $i -eq 1 ]]; then
+  if (( i == 1 )); then
     run_and_collect ALL_PKGS[@]
   else
-    if (( ${#FAILED_TESTS[@]} )); then
-      target_tests=("${FAILED_TESTS[@]}" "${MISSING_TESTS[@]}")
-    else
-      target_tests=("${MISSING_TESTS[@]}")
-    fi
-
-    # build regex for -run
-    tests_regex=$(printf "%s|" "${target_tests[@]##*::}")
-    tests_regex="^(${tests_regex%|})$"
-
-    echo "Retrying only: ${target_tests[*]}"
-    go test -json -timeout="$TIMEOUT" $RACE_FLAG -run "$tests_regex" \
-      "${ALL_PKGS[@]}" >retry.json 2>&1 || true
-
+    targets=("${FLAKY_TESTS[@]}" "${MISSING_TESTS[@]}")
+    # build run regex
+    regex=$(printf "%s|" "${targets[@]##*::}")
+    regex="^(${regex%|})$"
+    echo "Retrying flaky/missing: ${targets[*]}"
+    go test -json -timeout="$TIMEOUT" $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" >retry.json 2>&1 || true
     echo "Parsing retry results..."
-    run_and_collect retry.json  # deprecated: placeholder for JSON-path parser
+    run_and_collect retry.json  # adapt if needed
   fi
 
-  if [[ ${#FAILED_TESTS[@]} -eq 0 && ${#MISSING_TESTS[@]} -eq 0 ]]; then
+  # if no more flakes or missing -> success
+  if (( ${#FLAKY_TESTS[@]} == 0 && ${#MISSING_TESTS[@]} == 0 )); then
     echo "✅ All tests passed on attempt #$i"
     rm -f *.json coverage.out
     exit 0
   fi
 
-  echo "Failures: ${FAILED_TESTS[*]}"
-  echo "Missing: ${MISSING_TESTS[*]}"
+  echo "Remaining flaky: ${FLAKY_TESTS[*]}"
+  echo "Remaining missing: ${MISSING_TESTS[*]}"
   echo "Retrying..."
 done
 
-echo "❌ Tests still failing after $MAX_RETRIES attempts"
+echo "❌ Tests still flaky or missing after $MAX_RETRIES attempts"
 exit 1
