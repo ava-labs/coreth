@@ -2171,27 +2171,23 @@ func golangBindings(t *testing.T, overload bool) {
 	// Convert the package to go modules and use the current source for go-ethereum
 	moder := exec.Command(gocmd, "mod", "init", "bindtest")
 	moder.Dir = pkg
-	t.Logf("running command: %s", moder.String())
 	if out, err := moder.CombinedOutput(); err != nil {
 		t.Fatalf("failed to convert binding test to modules: %v\n%s", err, out)
 	}
 	pwd, _ := os.Getwd()
 	replacer := exec.Command(gocmd, "mod", "edit", "-x", "-require", "github.com/ava-labs/coreth@v0.0.0", "-replace", "github.com/ava-labs/coreth="+filepath.Join(pwd, "..", "..", "..")) // Repo root
 	replacer.Dir = pkg
-	t.Logf("running command: %s", replacer.String())
 	if out, err := replacer.CombinedOutput(); err != nil {
 		t.Fatalf("failed to replace binding test dependency to current source tree: %v\n%s", err, out)
 	}
 	tidier := exec.Command(gocmd, "mod", "tidy", "-compat=1.23")
 	tidier.Dir = pkg
-	t.Logf("running command: %s", tidier.String())
 	if out, err := tidier.CombinedOutput(); err != nil {
 		t.Fatalf("failed to tidy Go module file: %v\n%s", err, out)
 	}
 	// Test the entire package and report any failures
 	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
 	cmd.Dir = pkg
-	t.Logf("running command: %s", cmd.String())
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to run binding test: %v\n%s", err, out)
 	}
