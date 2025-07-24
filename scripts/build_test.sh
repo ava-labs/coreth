@@ -5,13 +5,19 @@ set -o nounset
 set -o pipefail
 
 # ---------------------------------------------
-# Build & Test Script with Flake Handling 
+# Build & Test Script with Flake Handling via gotestsum
 # Behavior matrix:
 # 1) All run, only known flakes: retry flaky tests only
 # 2) Partial panics: retry failed + missing tests
 # 3) Unexpected failures: exit immediately
 # 4) All pass: exit immediately
 # ---------------------------------------------
+
+# Ensure gotestsum is installed
+if ! command -v gotestsum &> /dev/null; then
+  echo "Error: gotestsum is required but not installed."
+  exit 1
+fi
 
 # avalanche root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,30 +34,28 @@ TIMEOUT="${TIMEOUT:-600s}"
 MAX_RETRIES=4
 
 # Gather all packages under test (exclude internal tests)
-ALL_PKGS=()
-while IFS= read -r pkg; do ALL_PKGS+=("$pkg"); done < <(
+mapfile -t ALL_PKGS < <(
   go list ./... | grep -v github.com/ava-labs/coreth/tests
 )
 
 # Known flaky tests file
 KNOWN_FLAKES_FILE="$CORETH_PATH/scripts/known_flakes.txt"
 
-# Coverage/shuffle flags matching original behavior
+# Coverage/shuffle flags
 COVER_PROFILE="coverage.out"
 COVER_MODE="atomic"
 SHUFFLE="on"
 
 # get_all_tests: list Test* functions by grepping *_test.go files
 get_all_tests() {
-  local pkg="$1"
-  go list -f '{{.Dir}}' "$pkg" | \
+  go list -f '{{.Dir}}' "$1" | \
     xargs grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+Test' | \
     sed -E 's/.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' | sort -u
 }
 
 # run_and_collect:
-#  - Uses go test -json to gather run/fail/skip events
-#  - Captures flaky failures and missing tests (due to panics/skips)
+#  - Single gotestsum invocation: human-friendly + JSON output
+#  - Captures flaky failures and missing tests
 #  - Exits on non-flaky failures
 run_and_collect() {
   local pkgs=("$@")
@@ -68,28 +72,33 @@ run_and_collect() {
       continue
     fi
 
-    # Run tests with JSON output
-    echo "Running: go test -json (coverage & shuffle)"
-    out_file="${pkg//\//_}.json"
-    command go test -json \
+    # Run tests via gotestsum
+    json_out=$(mktemp)
+    test_out=$(mktemp)
+    echo "Running tests for $pkg via gotestsum"
+    gotestsum \
+      --format=standard-verbose \
+      --jsonfile="$json_out" \
+      -- \
       -timeout="$TIMEOUT" \
+      -shuffle="$SHUFFLE" \
       -coverprofile="$COVER_PROFILE" \
       -covermode="$COVER_MODE" \
-      -shuffle="$SHUFFLE" \
-      $RACE_FLAG "$pkg" > "$out_file" 2>&1 || true
+      $RACE_FLAG \
+      "$pkg" | tee "$test_out" || command_status=$?
 
-    # Parse results
-    # ran_tests: tests with Action=run or skip
+    # Parse machine JSON output
     ran_tests=()
     while IFS= read -r t; do ran_tests+=("$t"); done < <(
-      jq -r 'select(.Package=="'$pkg'" and .Test!=null and (.Action=="run" or .Action=="skip")) | .Test' "$out_file" | sort -u
+      jq -r 'select(.Package=="'$pkg'" and .Test!=null and (.Action=="run" or .Action=="skip")) | .Test' "$json_out" | sort -u
     )
 
-    # all_failed: tests with Action=fail
     all_failed=()
     while IFS= read -r t; do all_failed+=("$t"); done < <(
-      jq -r 'select(.Package=="'$pkg'" and .Test!=null and .Action=="fail") | .Test' "$out_file" | sort -u
+      jq -r 'select(.Package=="'$pkg'" and .Test!=null and .Action=="fail") | .Test' "$json_out" | sort -u
     )
+
+    rm "$json_out"
 
     # Separate non-flaky vs flaky
     non_flakes=()
@@ -104,15 +113,14 @@ run_and_collect() {
 
     # Exit on any non-flaky failure
     if (( ${#non_flakes[@]} )); then
-      echo "Unexpected (non-flake) failure: ${non_flakes[*]}"
+      echo "Unexpected failure (exit immediately): ${non_flakes[*]}"
       exit 1
     fi
 
-    # Collect flaky tests for retry
     FLAKY_TESTS+=("${flakes[@]}")
     echo "Flaky failures: ${#flakes[@]}"
 
-    # Detect missing tests due to panic/skips
+    # Missing tests detection
     all_tests=()
     while IFS= read -r t; do all_tests+=("$t"); done < <(get_all_tests "$pkg")
     missing=()
@@ -124,7 +132,7 @@ run_and_collect() {
     MISSING_TESTS+=("${missing[@]}")
     echo "Tests ran: ${#ran_tests[@]}, missing: ${#missing[@]}"
 
-    rm "$out_file"
+    rm "$test_out"
   done
 }
 
@@ -132,31 +140,30 @@ run_and_collect() {
 for ((i=1; i<=MAX_RETRIES; i++)); do
   echo "--- Attempt #$i ---"
   run_and_collect "${ALL_PKGS[@]}"
-
-  # All tests passed?
   if [[ ${#FLAKY_TESTS[@]} -eq 0 && ${#MISSING_TESTS[@]} -eq 0 ]]; then
     echo "✅ All tests passed"
     exit 0
   fi
 
-  # Prepare to retry only flakes + missing
   tests=("${FLAKY_TESTS[@]}" "${MISSING_TESTS[@]}")
   regex="^($(printf '%s|' "${tests[@]##*::}") )$"
   echo "Retrying only flaky + missing tests: ${tests[*]}"
 
-  # Retry
-  command go test -json \
+  gotestsum \
+    --format=standard-verbose \
+    --jsonfile=retry.json \
+    -- \
     -timeout="$TIMEOUT" \
+    -shuffle="$SHUFFLE" \
     -coverprofile="$COVER_PROFILE" \
     -covermode="$COVER_MODE" \
-    -shuffle="$SHUFFLE" \
-    $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" > retry.json 2>&1 || true
+    $RACE_FLAG \
+    -test.run="$regex" \
+    "${ALL_PKGS[@]}" | tee retry.out || true
 
-  # Re-collect for further attempts
   run_and_collect "${ALL_PKGS[@]}"
 done
 
-# Final exit
 if [[ ${#FLAKY_TESTS[@]} -gt 0 || ${#MISSING_TESTS[@]} -gt 0 ]]; then
   echo "❌ Tests still flaky or missing after $MAX_RETRIES attempts"
   echo "  Flaky: ${FLAKY_TESTS[*]}"
