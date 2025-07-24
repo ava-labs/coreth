@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-
-set -o errexit
-set -o nounset
-set -o pipefail
+set -euo pipefail
 
 # avalanche root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,137 +8,73 @@ CORETH_PATH="${CORETH_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 # Load the constants
 source "$CORETH_PATH/scripts/constants.sh"
 
-# We pass in the arguments to this script directly to enable easily passing parameters such as enabling race detection,
-# parallelism, and test coverage.
-# DO NOT RUN tests from the top level "tests" directory since they are run by ginkgo
+# CLI flags
 NO_RACE="${NO_RACE:-}"
 RACE_FLAG=""
 (( NO_RACE )) || RACE_FLAG="-race"
-
-# Test settings
 TIMEOUT="${TIMEOUT:-600s}"
-# MAX_RUNS bounds the attempts to retry the tests before giving up
-# This is useful for flaky tests
 MAX_RETRIES=4
 ALL_PKGS=( $(go list ./... | grep -v github.com/ava-labs/coreth/tests) )
 KNOWN_FLAKES_FILE="$CORETH_PATH/scripts/known_flakes.txt"
-COVERFLAGS="-coverprofile=coverage.out -covermode=atomic"
+COVER_FLAGS="-coverprofile=coverage.out -covermode=atomic -shuffle=on"
 
-# get_all_tests: quickly list Test* functions in pkg directories
-get_all_tests() {
-  local pkg="$1"
-  local dir
-  dir=$(go list -f '{{.Dir}}' "$pkg")
-  grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+(Test[[:alnum:]_]+)\(' "$dir" |
-    sed -E 's/^.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' |
-    sort -u
-}
+# get_all_tests: list Test functions without invoking go test
+get_all_tests() { local pkg="$1"; go list -f '{{.Dir}}' "$pkg" | xargs grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+Test' | sed -E 's/.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' | sort -u; }
 
-# run_and_collect: execute tests per-package and gather flaky failures + missing tests
 run_and_collect() {
   local pkgs=("${!1}")
   FLAKY_TESTS=()
   MISSING_TESTS=()
 
-  echo "Processing ${#pkgs[@]} packages..."
   for pkg in "${pkgs[@]}"; do
-    echo "--- Package: $pkg ---"
-    start_pkg=$SECONDS
-
-    # list all tests
-    echo "Listing tests..."
-    all_tests=()
-    while IFS= read -r t; do all_tests+=("$t"); done < <(get_all_tests "$pkg")
-    if [[ ${#all_tests[@]} -eq 0 ]]; then
-      echo "Skipping $pkg: no tests found"
+    echo "=== Package: $pkg ==="
+    # skip empty
+    dir=$(go list -f '{{.Dir}}' "$pkg")
+    if [[ ! -d "$dir" || -z $(ls "$dir"/*_test.go 2>/dev/null) ]]; then
+      echo "?   $pkg [no test files]"
       continue
     fi
-    echo "Found ${#all_tests[@]} tests"
 
-    # run tests JSON with coverage
-    echo "Running tests (JSON + coverage)..."
-    out_file="${pkg//\//_}.json"
-    go test -shuffle=on -json $COVERFLAGS -timeout="$TIMEOUT" $RACE_FLAG "$@" "$pkg" >"$out_file" 2>&1 || true
-
-    # parse results
-    echo "Parsing results..."
-    ran_tests=()
-    while IFS= read -r t; do ran_tests+=("$t"); done < <(
-      jq -r 'select(.Package=="'$pkg'" and .Test!=null and (.Action=="run" or .Action=="skip")) | .Test' "$out_file" | sort -u
-    )
-
-    all_failed=()
-    while IFS= read -r t; do all_failed+=("$t"); done < <(
-      jq -r 'select(.Package=="'$pkg'" and .Test!=null and .Action=="fail") | .Test' "$out_file" | sort -u
-    )
-
-    # separate non-flakes vs flakes
-    non_flakes=()
-    flakes=()
-    for t in "${all_failed[@]}"; do
-      if grep -Fxq "$t" "$KNOWN_FLAKES_FILE"; then
-        flakes+=("$pkg::$t")
-      else
-        non_flakes+=("$pkg::$t")
-      fi
-    done
-
-    # exit on non-flaky failures
-    if (( ${#non_flakes[@]} )); then
-      echo "Unexpected (non-flaky) failures: ${non_flakes[*]}"
-      exit 1
+    # initial test run with tee
+    echo "ok?  $pkg"
+    test_out="$(mktemp)"
+    go test $COVER_FLAGS -timeout="$TIMEOUT" $RACE_FLAG "$@" "$pkg" | tee "$test_out" || command_status=$?
+    if [[ ${command_status:-0} -ne 0 ]]; then
+      # parse failures
+      failures=$(grep '^--- FAIL' "$test_out" | awk '{print $3}' | sort -u)
+      for t in $failures; do
+        [[ $(grep -Fxq "$t" "$KNOWN_FLAKES_FILE"; echo $?) -eq 1 ]] && { echo "Unexpected failure: $t"; exit 1; }
+        FLAKY_TESTS+=("$pkg::$t")
+      done
     fi
 
-    echo "Flaky failures: ${#flakes[@]}"
-    FLAKY_TESTS+=("${flakes[@]}")
+    # detect missing due to panic
+    all_tests=( $(get_all_tests "$pkg") )
+    ran_tests=( $(grep -E '^=== RUN' "$test_out" | awk '{print $3}' | sort -u) )
+    missing=()
+    for t in "${all_tests[@]}"; do [[ ! " ${ran_tests[*]} " =~ " $t " ]] && missing+=("$pkg::$t"); done
+    echo "Tests ran: ${#ran_tests[@]}, missing: ${#missing[@]}"
+    MISSING_TESTS+=("${missing[@]}")
 
-    # detect missing tests due to panic
-    echo "Detecting missing tests..."
-    for t in "${all_tests[@]}"; do
-      if ! printf '%s\n' "${ran_tests[@]}" | grep -qxF "$t"; then
-        MISSING_TESTS+=("$pkg::$t")
-      fi
-    done
-    echo "Missing tests so far: ${#MISSING_TESTS[@]}"
-    echo "Package time: $((SECONDS - start_pkg))s"
+    rm "$test_out"
   done
 }
 
-# Main retry loop
-targets=()
-for ((i=1; i<=MAX_RETRIES; i++)); do
-  echo "=== Test attempt #$i ==="
-  if (( i == 1 )); then
-    run_and_collect ALL_PKGS[@]
-  else
-    targets=("${FLAKY_TESTS[@]}" "${MISSING_TESTS[@]}")
-    if [[ ${#targets[@]} -eq 0 ]]; then break; fi
-    # build run regex
-    regex=$(printf "%s|" "${targets[@]##*::}")
-    regex="^(${regex%|})$"
-    echo "Retrying flaky/missing: ${targets[*]}"
-    go test $COVERFLAGS -json -timeout="$TIMEOUT" $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" >retry.json 2>&1 || true
-    echo "Parsing retry results..."
-    # parse retry results by treating retry.json as if pkg list containing all pkgs
-    run_and_collect ALL_PKGS[@]
-  fi
-
-  # exit success if none remain
-  if (( ${#FLAKY_TESTS[@]} == 0 && ${#MISSING_TESTS[@]} == 0 )); then
-    echo "✅ All tests passed on attempt #$i"
-    rm -f *.json coverage.out
-    exit 0
-  fi
-
-  echo "Remaining flaky: ${FLAKY_TESTS[*]}"
-  echo "Remaining missing: ${MISSING_TESTS[*]}"
-  echo "Retrying..."
+# main loop
+for ((i=1;i<=MAX_RETRIES;i++)); do
+  echo "--- Attempt #$i ---"
+  run_and_collect ALL_PKGS[@]
+  if [[ ${#MISSING_TESTS[@]} -eq 0 && ${#FLAKY_TESTS[@]} -eq 0 ]]; then echo "✅ All tests passed"; exit 0; fi
+  # retry only flaky and missing
+  tests=(${FLAKY_TESTS[@]} ${MISSING_TESTS[@]})
+  regex="^($(printf '%s|' "${tests[@]##*::}") )$"
+  echo "Retrying: ${tests[*]}"
+  go test $COVER_FLAGS -timeout="$TIMEOUT" $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" | tee retry.out || true
+  mv retry.out "${test_out:-retry.out}"
 done
 
-# final exit
-if (( ${#FLAKY_TESTS[@]} || ${#MISSING_TESTS[@]} )); then
-  echo "❌ Tests still flaky or missing after $MAX_RETRIES attempts"
+if [[ ${#FLAKY_TESTS[@]} -gt 0 || ${#MISSING_TESTS[@]} -gt 0 ]]; then
+  echo "❌ Failures after retries: ${FLAKY_TESTS[*]} ${MISSING_TESTS[*]}"
   exit 1
-else
-  exit 0
 fi
+exit 0
