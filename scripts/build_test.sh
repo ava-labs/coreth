@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # avalanche root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,16 +11,21 @@ CORETH_PATH="${CORETH_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 # Load the constants
 source "$CORETH_PATH/scripts/constants.sh"
 
-# Configure race detection
+# We pass in the arguments to this script directly to enable easily passing parameters such as enabling race detection,
+# parallelism, and test coverage.
+# DO NOT RUN tests from the top level "tests" directory since they are run by ginkgo
 NO_RACE="${NO_RACE:-}"
 RACE_FLAG=""
 (( NO_RACE )) || RACE_FLAG="-race"
 
 # Test settings
 TIMEOUT="${TIMEOUT:-600s}"
+# MAX_RUNS bounds the attempts to retry the tests before giving up
+# This is useful for flaky tests
 MAX_RETRIES=4
 ALL_PKGS=( $(go list ./... | grep -v github.com/ava-labs/coreth/tests) )
 KNOWN_FLAKES_FILE="$CORETH_PATH/scripts/known_flakes.txt"
+COVERFLAGS="-coverprofile=coverage.out -covermode=atomic"
 
 # get_all_tests: quickly list Test* functions in pkg directories
 get_all_tests() {
@@ -44,12 +52,16 @@ run_and_collect() {
     echo "Listing tests..."
     all_tests=()
     while IFS= read -r t; do all_tests+=("$t"); done < <(get_all_tests "$pkg")
+    if [[ ${#all_tests[@]} -eq 0 ]]; then
+      echo "Skipping $pkg: no tests found"
+      continue
+    fi
     echo "Found ${#all_tests[@]} tests"
 
-    # run tests JSON
-    echo "Running tests (JSON)..."
+    # run tests JSON with coverage
+    echo "Running tests (JSON + coverage)..."
     out_file="${pkg//\//_}.json"
-    go test -json -timeout="$TIMEOUT" $RACE_FLAG "$pkg" >"$out_file" 2>&1 || true
+    go test -shuffle=on -json $COVERFLAGS -timeout="$TIMEOUT" $RACE_FLAG "$@" "$pkg" >"$out_file" 2>&1 || true
 
     # parse results
     echo "Parsing results..."
@@ -63,7 +75,7 @@ run_and_collect() {
       jq -r 'select(.Package=="'$pkg'" and .Test!=null and .Action=="fail") | .Test' "$out_file" | sort -u
     )
 
-    # separate known flakes and non-flakes
+    # separate non-flakes vs flakes
     non_flakes=()
     flakes=()
     for t in "${all_failed[@]}"; do
@@ -74,9 +86,9 @@ run_and_collect() {
       fi
     done
 
-    # if any non-flaky failures, exit immediately
+    # exit on non-flaky failures
     if (( ${#non_flakes[@]} )); then
-      echo "Unexpected failures detected (non-flaky): ${non_flakes[*]}"
+      echo "Unexpected (non-flaky) failures: ${non_flakes[*]}"
       exit 1
     fi
 
@@ -103,16 +115,18 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
     run_and_collect ALL_PKGS[@]
   else
     targets=("${FLAKY_TESTS[@]}" "${MISSING_TESTS[@]}")
+    if [[ ${#targets[@]} -eq 0 ]]; then break; fi
     # build run regex
     regex=$(printf "%s|" "${targets[@]##*::}")
     regex="^(${regex%|})$"
     echo "Retrying flaky/missing: ${targets[*]}"
-    go test -json -timeout="$TIMEOUT" $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" >retry.json 2>&1 || true
+    go test $COVERFLAGS -json -timeout="$TIMEOUT" $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" >retry.json 2>&1 || true
     echo "Parsing retry results..."
-    run_and_collect retry.json  # adapt if needed
+    # parse retry results by treating retry.json as if pkg list containing all pkgs
+    run_and_collect ALL_PKGS[@]
   fi
 
-  # if no more flakes or missing -> success
+  # exit success if none remain
   if (( ${#FLAKY_TESTS[@]} == 0 && ${#MISSING_TESTS[@]} == 0 )); then
     echo "✅ All tests passed on attempt #$i"
     rm -f *.json coverage.out
@@ -124,5 +138,10 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
   echo "Retrying..."
 done
 
-echo "❌ Tests still flaky or missing after $MAX_RETRIES attempts"
-exit 1
+# final exit
+if (( ${#FLAKY_TESTS[@]} || ${#MISSING_TESTS[@]} )); then
+  echo "❌ Tests still flaky or missing after $MAX_RETRIES attempts"
+  exit 1
+else
+  exit 0
+fi
