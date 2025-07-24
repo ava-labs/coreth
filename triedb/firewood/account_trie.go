@@ -5,6 +5,7 @@ package firewood
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
@@ -59,27 +60,32 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 		// If the value is empty, it indicates deletion
 		// Invariant: All encoded values have length > 0
 		if len(updateValue) == 0 {
+			fmt.Println("Deleted account:", addr.Hex())
 			return nil, nil
 		}
 		// Decode and return the updated account
 		account := new(types.StateAccount)
 		err := rlp.DecodeBytes(updateValue, account)
+		fmt.Println("Found pending update for account:", addr.Hex())
 		return account, err
 	}
 
 	// No pending update found, read from the underlying reader
 	accountBytes, err := a.reader.Node(common.Hash{}, key, common.Hash{})
 	if err != nil {
+		fmt.Println("Error reading account from trie:", err)
 		return nil, err
 	}
 
 	if accountBytes == nil {
+		fmt.Println("Account not found in trie:", addr.Hex())
 		return nil, nil
 	}
 
 	// Decode the account node
 	account := new(types.StateAccount)
 	err = rlp.DecodeBytes(accountBytes, account)
+	fmt.Println("Found account in trie:", addr.Hex(), "Nonce:", account.Nonce)
 	return account, err
 }
 
