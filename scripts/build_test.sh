@@ -57,7 +57,8 @@ get_missing_tests_after_panic() {
     local failed_tests="$3"
     
     # Get all tests in the package
-    local all_tests=$(get_package_tests "$package")
+    local all_tests
+    all_tests=$(get_package_tests "$package")
     
     # Find tests that didn't run (not in failed_tests and not in successful output)
     local missing_tests=""
@@ -85,16 +86,17 @@ run_specific_test() {
     local output_file="$2"
     
     # Extract package name from test name (assuming format: PackageName.TestName)
-    local package=$(echo "$test_name" | sed 's/\.[^.]*$//')
+    local package
+    package="${test_name%.*}"
     
     # Run the specific test
     go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -run "^${test_name}$" "$package" 2>&1 | tee "$output_file"
-    return ${PIPESTATUS[0]}
+    return "${PIPESTATUS[0]}"
 }
 
 # Initial test run
 echo "Running initial test suite..."
-go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" $(go list ./... | grep -v github.com/ava-labs/coreth/tests) | tee test.out || command_status=$?
+go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$(go list ./... | grep -v github.com/ava-labs/coreth/tests)" | tee test.out || command_status=$?
 
 # If initial run passes, exit successfully
 if [[ ${command_status:-0} == 0 ]]; then
@@ -134,8 +136,8 @@ tests_to_retry="$failed_tests"
 for ((attempt = 1; attempt <= MAX_RUNS; attempt++)); do
     echo "Retry attempt $attempt for tests: $tests_to_retry"
     
-    local still_failing=""
-    local panic_affected_packages=""
+    still_failing=""
+    panic_affected_packages=""
     
     # Retry each failed test
     for test in $tests_to_retry; do
@@ -151,16 +153,16 @@ for ((attempt = 1; attempt <= MAX_RUNS; attempt++)); do
             continue
         fi
         
-        # Check if this is still a known flake
+        # Check if this is an unexpected failure
         if ! is_known_flake "$test"; then
-            echo "Test $test is no longer a known flake and failed"
+            echo "Test $test failed and is not a known flake"
             exit 1
         fi
         
         # Check for panics
         if detect_panics "$retry_output"; then
             echo "Test $test panicked on attempt $attempt"
-            package=$(echo "$test" | sed 's/\.[^.]*$//')
+            package="${test%.*}"
             panic_affected_packages="$panic_affected_packages $package"
             
             # Get tests that didn't run due to panic
@@ -193,7 +195,7 @@ for ((attempt = 1; attempt <= MAX_RUNS; attempt++)); do
     echo "Tests still failing after attempt $attempt: $tests_to_retry"
     
     # If this was the last attempt, fail
-    if [[ $attempt == $MAX_RUNS ]]; then
+    if [[ $attempt == "$MAX_RUNS" ]]; then
         echo "Tests failed all $MAX_RUNS attempts: $tests_to_retry"
         exit 1
     fi
