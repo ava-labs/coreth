@@ -176,7 +176,7 @@ type storageEntry struct {
 
 // StorageRangeAt returns the storage at the given block height and transaction index.
 func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
-	if api.eth.blockchain.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
+	if api.isFirewood() {
 		return StorageRangeResult{}, errFirewoodNotSupported
 	}
 
@@ -238,7 +238,7 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 //
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
-	if api.eth.blockchain.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
+	if api.isFirewood() {
 		return nil, errFirewoodNotSupported
 	}
 
@@ -269,7 +269,7 @@ func (api *DebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64
 //
 // With one parameter, returns the list of accounts modified in the specified block.
 func (api *DebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
-	if api.eth.blockchain.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
+	if api.isFirewood() {
 		return nil, errFirewoodNotSupported
 	}
 
@@ -339,6 +339,9 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 	if api.eth.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
 		return 0, errors.New("state history is not yet available in path-based scheme")
 	}
+	if api.isFirewood() {
+		return 0, errFirewoodNotSupported
+	}
 	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
 		// We don't have state for pending (-2), so treat it as latest
 		if num.Int64() < 0 {
@@ -383,4 +386,8 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		}
 	}
 	return 0, errors.New("no state found")
+}
+
+func (api *DebugAPI) isFirewood() bool {
+	return api.eth.blockchain.CacheConfig().StateScheme == customrawdb.FirewoodScheme
 }
