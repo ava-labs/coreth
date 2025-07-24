@@ -185,20 +185,6 @@ func (mr *MockStateDBMockRecorder) GetState(arg0, arg1 any, arg2 ...any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockStateDB)(nil).GetState), varargs...)
 }
 
-// GetTxHash mocks base method.
-func (m *MockStateDB) GetTxHash() common.Hash {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTxHash")
-	ret0, _ := ret[0].(common.Hash)
-	return ret0
-}
-
-// GetTxHash indicates an expected call of GetTxHash.
-func (mr *MockStateDBMockRecorder) GetTxHash() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxHash", reflect.TypeOf((*MockStateDB)(nil).GetTxHash))
-}
-
 // Logs mocks base method.
 func (m *MockStateDB) Logs() []*types.Log {
 	m.ctrl.T.Helper()
@@ -278,6 +264,20 @@ func (m *MockStateDB) SubBalanceMultiCoin(arg0 common.Address, arg1 common.Hash,
 func (mr *MockStateDBMockRecorder) SubBalanceMultiCoin(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubBalanceMultiCoin", reflect.TypeOf((*MockStateDB)(nil).SubBalanceMultiCoin), arg0, arg1, arg2)
+}
+
+// TxHash mocks base method.
+func (m *MockStateDB) TxHash() common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxHash")
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// TxHash indicates an expected call of TxHash.
+func (mr *MockStateDBMockRecorder) TxHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxHash", reflect.TypeOf((*MockStateDB)(nil).TxHash))
 }
 
 // MockAccessibleState is a mock of AccessibleState interface.

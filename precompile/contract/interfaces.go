@@ -43,7 +43,7 @@ type StateDB interface {
 	Logs() []*ethtypes.Log
 	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
 
-	GetTxHash() common.Hash
+	TxHash() common.Hash
 
 	Snapshot() int
 	RevertToSnapshot(int)

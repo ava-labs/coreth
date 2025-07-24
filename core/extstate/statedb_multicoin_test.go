@@ -20,116 +20,110 @@ import (
 )
 
 func TestMultiCoinOperations(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	s, _ := state.New(types.EmptyRootHash, state.NewDatabase(db), nil)
+	memdb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memdb)
+	statedb, err := state.New(types.EmptyRootHash, db, nil)
+	require.NoError(t, err, "creating empty statedb")
+
 	addr := common.Address{1}
 	assetID := common.Hash{2}
 
-	root, err := s.Commit(0, false)
-	require.NoError(t, err, "committing state")
-	s, err = state.New(
-		root,
-		state.NewDatabase(db),
-		nil,
-	)
-	require.NoError(t, err, "creating statedb")
+	statedb.AddBalance(addr, new(uint256.Int))
 
-	s.AddBalance(addr, new(uint256.Int))
-
-	ws := New(s)
-	balance := ws.GetBalanceMultiCoin(addr, assetID)
+	wrappedStateDB := New(statedb)
+	balance := wrappedStateDB.GetBalanceMultiCoin(addr, assetID)
 	require.Equal(t, "0", balance.String(), "expected zero big.Int multicoin balance as string")
 
-	ws.AddBalanceMultiCoin(addr, assetID, big.NewInt(10))
-	ws.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
-	ws.AddBalanceMultiCoin(addr, assetID, big.NewInt(3))
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID, big.NewInt(10))
+	wrappedStateDB.SubBalanceMultiCoin(addr, assetID, big.NewInt(5))
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID, big.NewInt(3))
 
-	balance = ws.GetBalanceMultiCoin(addr, assetID)
+	balance = wrappedStateDB.GetBalanceMultiCoin(addr, assetID)
 	require.Equal(t, "8", balance.String(), "unexpected multicoin balance string")
 }
 
 func TestMultiCoinSnapshot(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	sdb := state.NewDatabase(db)
+	memdb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memdb)
 
 	// Create empty [snapshot.Tree] and [StateDB]
 	root := common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	// Use the root as both the stateRoot and blockHash for this test.
-	snapTree := snapshot.NewTestTree(db, root, root)
+	snapTree := snapshot.NewTestTree(memdb, root, root)
 
 	addr := common.Address{1}
 	assetID1 := common.Hash{1}
 	assetID2 := common.Hash{2}
-	assertBalances := func(t *testing.T, stateDB *StateDB, regular, multicoin1, multicoin2 int64) {
+	assertBalances := func(t *testing.T, wrappedStateDB *StateDB, regular, multicoin1, multicoin2 int64) {
 		t.Helper()
 
-		balance := stateDB.GetBalance(addr)
+		balance := wrappedStateDB.GetBalance(addr)
 		require.Equal(t, uint256.NewInt(uint64(regular)), balance, "incorrect non-multicoin balance")
-		balanceBig := stateDB.GetBalanceMultiCoin(addr, assetID1)
+		balanceBig := wrappedStateDB.GetBalanceMultiCoin(addr, assetID1)
 		require.Equal(t, big.NewInt(multicoin1).String(), balanceBig.String(), "incorrect multicoin1 balance")
-		balanceBig = stateDB.GetBalanceMultiCoin(addr, assetID2)
+		balanceBig = wrappedStateDB.GetBalanceMultiCoin(addr, assetID2)
 		require.Equal(t, big.NewInt(multicoin2).String(), balanceBig.String(), "incorrect multicoin2 balance")
 	}
 
 	// Create new state
-	stateDB, err := state.New(root, sdb, snapTree)
+	statedb, err := state.New(root, db, snapTree)
 	require.NoError(t, err, "creating statedb")
 
-	ws := New(stateDB)
-	assertBalances(t, ws, 0, 0, 0)
+	wrappedStateDB := New(statedb)
+	assertBalances(t, wrappedStateDB, 0, 0, 0)
 
-	ws.AddBalance(addr, uint256.NewInt(10))
-	assertBalances(t, ws, 10, 0, 0)
+	wrappedStateDB.AddBalance(addr, uint256.NewInt(10))
+	assertBalances(t, wrappedStateDB, 10, 0, 0)
 
 	// Commit and get the new root
 	snapshotOpt := snapshot.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, err = ws.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+	root, err = wrappedStateDB.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
 	require.NoError(t, err, "committing statedb")
-	assertBalances(t, ws, 10, 0, 0)
+	assertBalances(t, wrappedStateDB, 10, 0, 0)
 
 	// Create a new state from the latest root, add a multicoin balance, and
 	// commit it to the tree.
-	stateDB, err = state.New(root, sdb, snapTree)
+	statedb, err = state.New(root, db, snapTree)
 	require.NoError(t, err, "creating statedb")
 
-	ws = New(stateDB)
-	ws.AddBalanceMultiCoin(addr, assetID1, big.NewInt(10))
+	wrappedStateDB = New(statedb)
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(10))
 	snapshotOpt = snapshot.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, err = ws.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+	root, err = wrappedStateDB.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
 	require.NoError(t, err, "committing statedb")
-	assertBalances(t, ws, 10, 10, 0)
+	assertBalances(t, wrappedStateDB, 10, 10, 0)
 
 	// Add more layers than the cap and ensure the balances and layers are correct
 	for i := 0; i < 256; i++ {
-		stateDB, err = state.New(root, sdb, snapTree)
+		statedb, err = state.New(root, db, snapTree)
 		require.NoErrorf(t, err, "creating statedb %d", i)
 
-		ws = New(stateDB)
-		ws.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
-		ws.AddBalanceMultiCoin(addr, assetID2, big.NewInt(2))
+		wrappedStateDB = New(statedb)
+		wrappedStateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
+		wrappedStateDB.AddBalanceMultiCoin(addr, assetID2, big.NewInt(2))
 		snapshotOpt = snapshot.WithBlockHashes(common.Hash{}, common.Hash{})
-		root, err = ws.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+		root, err = wrappedStateDB.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
 		require.NoErrorf(t, err, "committing statedb %d", i)
 	}
-	assertBalances(t, ws, 10, 266, 512)
+	assertBalances(t, wrappedStateDB, 10, 266, 512)
 
 	// Do one more add, including the regular balance which is now in the
 	// collapsed snapshot
-	stateDB, err = state.New(root, sdb, snapTree)
+	statedb, err = state.New(root, db, snapTree)
 	require.NoError(t, err, "creating statedb")
 
-	ws = New(stateDB)
-	ws.AddBalance(addr, uint256.NewInt(1))
-	ws.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
+	wrappedStateDB = New(statedb)
+	wrappedStateDB.AddBalance(addr, uint256.NewInt(1))
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID1, big.NewInt(1))
 	snapshotOpt = snapshot.WithBlockHashes(common.Hash{}, common.Hash{})
-	root, err = ws.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+	root, err = wrappedStateDB.Commit(0, false, stateconf.WithSnapshotUpdateOpts(snapshotOpt))
 	require.NoError(t, err, "committing statedb")
 
-	stateDB, err = state.New(root, sdb, snapTree)
+	statedb, err = state.New(root, db, snapTree)
 	require.NoError(t, err, "creating statedb")
 
-	ws = New(stateDB)
-	assertBalances(t, ws, 11, 267, 512)
+	wrappedStateDB = New(statedb)
+	assertBalances(t, wrappedStateDB, 11, 267, 512)
 }
 
 func TestGenerateMultiCoinAccounts(t *testing.T) {
@@ -142,12 +136,12 @@ func TestGenerateMultiCoinAccounts(t *testing.T) {
 	assetID := common.BytesToHash([]byte("coin1"))
 	assetBalance := big.NewInt(10)
 
-	stateDB, err := state.New(common.Hash{}, database, nil)
+	statedb, err := state.New(common.Hash{}, database, nil)
 	require.NoError(t, err, "creating statedb")
 
-	ws := New(stateDB)
-	ws.AddBalanceMultiCoin(addr, assetID, assetBalance)
-	root, err := ws.Commit(0, false)
+	wrappedStateDB := New(statedb)
+	wrappedStateDB.AddBalanceMultiCoin(addr, assetID, assetBalance)
+	root, err := wrappedStateDB.Commit(0, false)
 	require.NoError(t, err, "committing statedb")
 
 	triedb := database.TrieDB()
