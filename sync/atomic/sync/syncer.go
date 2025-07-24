@@ -15,9 +15,10 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 
-	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	synccommon "github.com/ava-labs/coreth/sync"
+	atomicstate "github.com/ava-labs/coreth/sync/atomic/state"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
 	"github.com/ava-labs/libevm/trie"
@@ -36,9 +37,6 @@ const (
 )
 
 var (
-	// errWaitBeforeStart is returned when Wait() is called before Start().
-	errWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
-
 	// errTooFewWorkers is returned when numWorkers is below the minimum.
 	errTooFewWorkers = errors.New("numWorkers below minimum")
 
@@ -55,7 +53,7 @@ var (
 	// Pre-allocate zero bytes to avoid repeated allocations.
 	zeroBytes = bytes.Repeat([]byte{0x00}, common.HashLength)
 
-	_ Syncer                  = (*syncer)(nil)
+	_ synccommon.Syncer       = (*syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 )
 
@@ -123,15 +121,6 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
-}
-
-// Syncer represents a step in state sync,
-// along with Start/Wait methods to control
-// and monitor progress.
-// Error returns an error if any was encountered.
-type Syncer interface {
-	Start(ctx context.Context) error
-	Wait(ctx context.Context) error
 }
 
 // syncer is used to sync the atomic trie from the network. The CallbackLeafSyncer
@@ -299,7 +288,7 @@ func (s *syncer) onSyncFailure(error) error {
 // This method must be called after Start() has been called.
 func (s *syncer) Wait(ctx context.Context) error {
 	if s.cancel == nil {
-		return errWaitBeforeStart
+		return synccommon.ErrWaitBeforeStart
 	}
 
 	select {

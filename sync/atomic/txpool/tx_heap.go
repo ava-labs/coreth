@@ -7,7 +7,7 @@ import (
 	"container/heap"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/sync/atomic"
 )
 
 // txEntry is used to track the [gasPrice] transactions pay to be included in

@@ -11,10 +11,10 @@ import (
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+	"github.com/ava-labs/coreth/sync/atomic"
 	"github.com/ava-labs/coreth/utils"
 
 	"github.com/ava-labs/libevm/common"

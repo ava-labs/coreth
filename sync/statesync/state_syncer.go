@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
@@ -22,6 +23,8 @@ const (
 	numMainTrieSegments    = 8
 	defaultNumWorkers      = 8
 )
+
+var _ synccommon.Syncer = (*stateSync)(nil)
 
 type StateSyncerConfig struct {
 	Root                     common.Hash
@@ -60,9 +63,12 @@ type stateSync struct {
 	triesInProgressSem chan struct{}
 	done               chan error
 	stats              *trieSyncStats
+
+	// cancel is used to cancel the sync operation
+	cancel context.CancelFunc
 }
 
-func NewStateSyncer(config *StateSyncerConfig) (*stateSync, error) {
+func NewStateSyncer(config *StateSyncerConfig) (synccommon.Syncer, error) {
 	ss := &stateSync{
 		batchSize:       config.BatchSize,
 		db:              config.DB,
@@ -218,9 +224,13 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Start(ctx context.Context) error {
+	ctx, t.cancel = context.WithCancel(ctx)
+
 	// Start the code syncer and leaf syncer.
 	eg, egCtx := errgroup.WithContext(ctx)
-	t.codeSyncer.start(egCtx) // start the code syncer first since the leaf syncer may add code tasks
+	if err := t.codeSyncer.Start(egCtx); err != nil { // start the code syncer first since the leaf syncer may add code tasks
+		return err
+	}
 	t.syncer.Start(egCtx, defaultNumWorkers, t.onSyncFailure)
 	eg.Go(func() error {
 		if err := <-t.syncer.Done(); err != nil {
@@ -244,7 +254,22 @@ func (t *stateSync) Start(ctx context.Context) error {
 	return nil
 }
 
-func (t *stateSync) Done() <-chan error { return t.done }
+// Wait blocks until the sync operation completes and returns any error that occurred.
+// It respects context cancellation and returns ctx.Err() if the context is cancelled.
+// This method must be called after Start() has been called.
+func (s *stateSync) Wait(ctx context.Context) error {
+	if s.cancel == nil {
+		return synccommon.ErrWaitBeforeStart
+	}
+
+	select {
+	case err := <-s.done:
+		return err
+	case <-ctx.Done():
+		s.cancel()
+		return ctx.Err()
+	}
+}
 
 // addTrieInProgress tracks the root as being currently synced.
 func (t *stateSync) addTrieInProgress(root common.Hash, trie *trieToSync) {

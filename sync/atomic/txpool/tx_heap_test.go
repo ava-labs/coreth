@@ -6,7 +6,7 @@ package txpool
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/sync/atomic"
 	"github.com/stretchr/testify/assert"
 )
 

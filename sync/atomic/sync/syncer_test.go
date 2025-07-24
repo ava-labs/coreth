@@ -17,11 +17,12 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	synccommon "github.com/ava-labs/coreth/sync"
+	"github.com/ava-labs/coreth/sync/atomic/atomictest"
+	"github.com/ava-labs/coreth/sync/atomic/state"
+	atomicstate "github.com/ava-labs/coreth/sync/atomic/state"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -399,7 +400,7 @@ func TestSyncerWaitScenarios(t *testing.T) {
 		{
 			name:        "wait without start",
 			startSyncer: false,
-			expectedErr: errWaitBeforeStart,
+			expectedErr: synccommon.ErrWaitBeforeStart,
 			description: "should return ErrWaitBeforeStart when called before Start()",
 		},
 		{

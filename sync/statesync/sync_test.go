@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"runtime/pprof"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -68,10 +67,15 @@ func testSync(t *testing.T, test syncTest) {
 	})
 	require.NoError(t, err, "failed to create state syncer")
 	// begin sync
-	s.Start(ctx)
-	waitFor(t, s.Done(), test.expectedError, testSyncTimeout)
+	if err := s.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	errWait := s.Wait(ctx)
 	if test.expectedError != nil {
+		require.ErrorIs(t, errWait, test.expectedError, "result of sync did not match expected error")
 		return
+	} else if errWait != nil {
+		t.Fatal(errWait)
 	}
 
 	assertDBConsistency(t, root, clientDB, serverTrieDB, triedb.NewDatabase(clientDB, nil))
@@ -83,23 +87,6 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 	for _, test := range steps {
 		testSync(t, test)
 		stepCallback()
-	}
-}
-
-// waitFor waits for a result on the [result] channel to match [expected], or a timeout.
-func waitFor(t *testing.T, result <-chan error, expected error, timeout time.Duration) {
-	t.Helper()
-	select {
-	case err := <-result:
-		require.ErrorIs(t, err, expected, "result of sync did not match expected error")
-	case <-time.After(timeout):
-		// print a stack trace to assist with debugging
-		// if the test times out.
-		var stackBuf bytes.Buffer
-		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
-		t.Log(stackBuf.String())
-		// fail the test
-		t.Fatal("unexpected timeout waiting for sync result")
 	}
 }
 

@@ -16,8 +16,8 @@ import (
 	"github.com/ava-labs/libevm/common"
 
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
+	"github.com/ava-labs/coreth/sync/atomic"
+	atomicvm "github.com/ava-labs/coreth/sync/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
