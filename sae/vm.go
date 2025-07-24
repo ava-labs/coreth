@@ -11,12 +11,12 @@ import (
 	avalanchedb "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	corethdb "github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	sae "github.com/ava-labs/strevm"
 	"github.com/prometheus/client_golang/prometheus"
 )

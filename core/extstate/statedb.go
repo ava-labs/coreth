@@ -16,6 +16,21 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// Register the state key normalization to libevm's [state.StateDB]. This will
+// normalize all state keys passing through the implementation unless
+// [stateconf.SkipStateKeyTransformation] is provided as an option.
+func init() {
+	state.RegisterExtras(normalizeStateKeysHook{})
+}
+
+type normalizeStateKeysHook struct{}
+
+// TransformStateKey transforms all keys with [normalizeStateKey].
+func (normalizeStateKeysHook) TransformStateKey(_ common.Address, key common.Hash) common.Hash {
+	normalizeStateKey(&key)
+	return key
+}
+
 type StateDB struct {
 	*state.StateDB
 
@@ -59,7 +74,7 @@ func (s *StateDB) GetPredicateStorageSlots(address common.Address, index int) ([
 
 // Retrieve the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int {
-	NormalizeCoinID(&coinID)
+	normalizeCoinID(&coinID)
 	return s.GetState(addr, coinID, stateconf.SkipStateKeyTransformation()).Big()
 }
 
@@ -75,7 +90,7 @@ func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 	}
 
 	newAmount := new(big.Int).Add(s.GetBalanceMultiCoin(addr, coinID), amount)
-	NormalizeCoinID(&coinID)
+	normalizeCoinID(&coinID)
 	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
 }
 
@@ -91,14 +106,18 @@ func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 		state.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
 	}
 	newAmount := new(big.Int).Sub(s.GetBalanceMultiCoin(addr, coinID), amount)
-	NormalizeCoinID(&coinID)
+	normalizeCoinID(&coinID)
 	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
 }
 
-// NormalizeCoinID ORs the 0th bit of the first byte in
-// `coinID`, which ensures this bit will be 1 and all other
-// bits are left the same.
+// normalizeStateKey sets the 0th bit of the first byte in `key` to 0.
+// This partitions normal state storage from multicoin storage.
+func normalizeStateKey(key *common.Hash) {
+	key[0] &^= 0x01
+}
+
+// normalizeCoinID sets the 0th bit of the first byte in `coinID` to 1.
 // This partitions multicoin storage from normal state storage.
-func NormalizeCoinID(coinID *common.Hash) {
+func normalizeCoinID(coinID *common.Hash) {
 	coinID[0] |= 0x01
 }

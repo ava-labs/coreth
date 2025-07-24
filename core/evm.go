@@ -34,11 +34,11 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm/stateconf"
@@ -77,14 +77,25 @@ func (hooks) OverrideEVMResetArgs(rules params.Rules, args *vm.EVMResetArgs) *vm
 	return args
 }
 
-func wrapStateDB(rules params.Rules, db vm.StateDB) vm.StateDB {
-	stateDB := extstate.New(db.(*state.StateDB))
+func wrapStateDB(rules params.Rules, statedb vm.StateDB) vm.StateDB {
+	wrappedStateDB := extstate.New(statedb.(*state.StateDB))
 	if params.GetRulesExtra(rules).IsApricotPhase1 {
-		return stateDB
+		return wrappedStateDB
 	}
-	return &StateDBAP0{stateDB}
+	return &StateDBAP0{wrappedStateDB}
 }
 
+// StateDBAP0 implements the GetCommittedState behavior that existed prior to
+// the AP1 upgrade.
+//
+// Since launch, state keys have been normalized to allow for multicoin
+// balances. However, at launch GetCommittedState was not updated. This meant
+// that gas refunds were not calculated as expected for SSTORE opcodes.
+//
+// This oversight was fixed in AP1, but in order to execute blocks prior to AP1
+// and generate the same merkle root, this behavior must be maintained.
+//
+// See the [extstate] package for details around state key normalization.
 type StateDBAP0 struct {
 	*extstate.StateDB
 }
