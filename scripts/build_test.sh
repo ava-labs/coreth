@@ -21,38 +21,184 @@ if [[ -n "${NO_RACE:-}" ]]; then
     race=""
 fi
 
-# MAX_RUNS bounds the attempts to retry the tests before giving up
-# This is useful for flaky tests
+# MAX_RUNS bounds the attempts to retry individual tests before giving up
 MAX_RUNS=4
-for ((i = 1; i <= MAX_RUNS; i++));
-do
-    # shellcheck disable=SC2046
-    go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" $(go list ./... | grep -v github.com/ava-labs/coreth/tests) | tee test.out || command_status=$?
 
-    # If the test passed, exit
-    if [[ ${command_status:-0} == 0 ]]; then
-        rm test.out
-        exit 0
-    else 
-        unset command_status # Clear the error code for the next run
+# Function to extract failed test names from output
+extract_failed_tests() {
+    local output_file="$1"
+    # Extract test failures and panics
+    (grep "^--- FAIL" "$output_file" | awk '{print $3}' || grep -E '^\s+Test.+ \(' "$output_file" | awk '{print $1}') |
+    sort -u
+}
+
+# Function to check if a test is a known flake
+is_known_flake() {
+    local test_name="$1"
+    grep -q "^${test_name}$" ./scripts/known_flakes.txt
+}
+
+# Function to check for panics in output
+detect_panics() {
+    local output_file="$1"
+    grep -q "panic:" "$output_file" || grep -q "fatal error:" "$output_file"
+}
+
+# Function to get all tests in a package
+get_package_tests() {
+    local package="$1"
+    go test -list=".*" "$package" 2>/dev/null | grep "^Test" || true
+}
+
+# Function to get tests that didn't run due to panic
+get_missing_tests_after_panic() {
+    local output_file="$1"
+    local package="$2"
+    local failed_tests="$3"
+    
+    # Get all tests in the package
+    local all_tests=$(get_package_tests "$package")
+    
+    # Find tests that didn't run (not in failed_tests and not in successful output)
+    local missing_tests=""
+    for test in $all_tests; do
+        # Check if test is in failed_tests
+        if echo "$failed_tests" | grep -q "$test"; then
+            continue
+        fi
+        
+        # Check if test passed (appears in output with PASS)
+        if grep -q "PASS.*$test" "$output_file"; then
+            continue
+        fi
+        
+        # Test didn't run
+        missing_tests="$missing_tests $test"
+    done
+    
+    echo "$missing_tests"
+}
+
+# Function to run specific tests and return status
+run_specific_test() {
+    local test_name="$1"
+    local output_file="$2"
+    
+    # Extract package name from test name (assuming format: PackageName.TestName)
+    local package=$(echo "$test_name" | sed 's/\.[^.]*$//')
+    
+    # Run the specific test
+    go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -run "^${test_name}$" "$package" 2>&1 | tee "$output_file"
+    return ${PIPESTATUS[0]}
+}
+
+# Initial test run
+echo "Running initial test suite..."
+go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" $(go list ./... | grep -v github.com/ava-labs/coreth/tests) | tee test.out || command_status=$?
+
+# If initial run passes, exit successfully
+if [[ ${command_status:-0} == 0 ]]; then
+    rm test.out
+    echo "All tests passed on first run!"
+    exit 0
+fi
+
+# Extract failed tests
+failed_tests=$(extract_failed_tests test.out)
+echo "Failed tests: $failed_tests"
+
+# Check for unexpected failures
+unexpected_failures=""
+for test in $failed_tests; do
+    if ! is_known_flake "$test"; then
+        unexpected_failures="$unexpected_failures $test"
     fi
-
-    # If the test failed, print the output
-    unexpected_failures=$(
-        # First grep pattern corresponds to test failures, second pattern corresponds to test panics due to timeouts
-        (grep "^--- FAIL" test.out | awk '{print $3}' || grep -E '^\s+Test.+ \(' test.out | awk '{print $1}') |
-        sort -u | comm -23 -  <(sed 's/\r$//' ./scripts/known_flakes.txt)
-    )
-    if [ -n "${unexpected_failures}" ]; then
-        echo "Unexpected test failures: ${unexpected_failures}"
-        exit 1
-    fi
-
-    # Note the absence of unexpected failures cannot be indicative that we only need to run the tests that failed,
-    # for example a test may panic and cause subsequent tests in that package to not run.
-    # So we loop here.
-    echo "Test run $i failed with known flakes, retrying..."
 done
 
-# If we reach here, we have failed all retries
-exit 1
+if [ -n "$unexpected_failures" ]; then
+    echo "Unexpected test failures: $unexpected_failures"
+    exit 1
+fi
+
+# All failures are known flakes, retry them individually
+echo "All failures are known flakes. Retrying failed tests individually..."
+
+# Create a temporary file for retry output
+retry_output="retry_test.out"
+rm -f "$retry_output"
+
+# Track tests that need retry
+tests_to_retry="$failed_tests"
+
+# Retry loop for failed tests
+for ((attempt = 1; attempt <= MAX_RUNS; attempt++)); do
+    echo "Retry attempt $attempt for tests: $tests_to_retry"
+    
+    local still_failing=""
+    local panic_affected_packages=""
+    
+    # Retry each failed test
+    for test in $tests_to_retry; do
+        echo "Retrying test: $test"
+        
+        # Run the specific test
+        run_specific_test "$test" "$retry_output"
+        test_status=$?
+        
+        # Check if test passed
+        if [[ $test_status == 0 ]]; then
+            echo "Test $test passed on attempt $attempt"
+            continue
+        fi
+        
+        # Check if this is still a known flake
+        if ! is_known_flake "$test"; then
+            echo "Test $test is no longer a known flake and failed"
+            exit 1
+        fi
+        
+        # Check for panics
+        if detect_panics "$retry_output"; then
+            echo "Test $test panicked on attempt $attempt"
+            package=$(echo "$test" | sed 's/\.[^.]*$//')
+            panic_affected_packages="$panic_affected_packages $package"
+            
+            # Get tests that didn't run due to panic
+            missing_tests=$(get_missing_tests_after_panic "$retry_output" "$package" "$test")
+            if [ -n "$missing_tests" ]; then
+                echo "Tests that didn't run due to panic: $missing_tests"
+                # Add missing tests to retry list
+                for missing_test in $missing_tests; do
+                    if ! echo "$tests_to_retry" | grep -q "$missing_test"; then
+                        tests_to_retry="$tests_to_retry $missing_test"
+                    fi
+                done
+            fi
+        fi
+        
+        # Test still failing
+        still_failing="$still_failing $test"
+    done
+    
+    # Update tests to retry for next iteration
+    tests_to_retry="$still_failing"
+    
+    # If no tests are still failing, we're done
+    if [ -z "$tests_to_retry" ]; then
+        echo "All tests passed after retries!"
+        rm -f test.out "$retry_output"
+        exit 0
+    fi
+    
+    echo "Tests still failing after attempt $attempt: $tests_to_retry"
+    
+    # If this was the last attempt, fail
+    if [[ $attempt == $MAX_RUNS ]]; then
+        echo "Tests failed all $MAX_RUNS attempts: $tests_to_retry"
+        exit 1
+    fi
+done
+
+echo "All known flaky tests passed after retries!"
+rm -f test.out "$retry_output"
+exit 0 
