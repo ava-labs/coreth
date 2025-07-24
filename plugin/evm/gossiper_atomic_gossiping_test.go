@@ -6,10 +6,11 @@ package evm
 import (
 	"context"
 	"encoding/binary"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"

@@ -4,8 +4,9 @@
 package atomictest
 
 import (
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"math/rand"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"

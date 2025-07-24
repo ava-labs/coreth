@@ -5,6 +5,7 @@ package state
 
 import (
 	"fmt"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"

@@ -6,14 +6,15 @@ package evm
 import (
 	"context"
 	"fmt"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"math/big"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

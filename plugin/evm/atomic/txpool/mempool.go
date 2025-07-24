@@ -6,8 +6,9 @@ package txpool
 import (
 	"errors"
 	"fmt"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"sync"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/ids"

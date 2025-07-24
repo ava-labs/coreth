@@ -39,7 +39,6 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
@@ -53,6 +52,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/utils/rpc"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 )
@@ -782,9 +782,9 @@ func (vm *VM) GetAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error
 }
 
 func (vm *VM) NewImportTx(
-	chainID ids.ID,               // chain to import from
-	to common.Address,            // Address of recipient
-	baseFee *big.Int,             // fee to use post-AP3
+	chainID ids.ID, // chain to import from
+	to common.Address, // Address of recipient
+	baseFee *big.Int, // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Keys to import the funds
 ) (*atomic.Tx, error) {
 	kc := secp256k1fx.NewKeychain()
@@ -802,11 +802,11 @@ func (vm *VM) NewImportTx(
 
 // newExportTx returns a new ExportTx
 func (vm *VM) NewExportTx(
-	assetID ids.ID,               // AssetID of the tokens to export
-	amount uint64,                // Amount of tokens to export
-	chainID ids.ID,               // Chain to send the UTXOs to
-	to ids.ShortID,               // Address of chain recipient
-	baseFee *big.Int,             // fee to use post-AP3
+	assetID ids.ID, // AssetID of the tokens to export
+	amount uint64, // Amount of tokens to export
+	chainID ids.ID, // Chain to send the UTXOs to
+	to ids.ShortID, // Address of chain recipient
+	baseFee *big.Int, // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*atomic.Tx, error) {
 	statedb, err := vm.InnerVM.Blockchain().State()

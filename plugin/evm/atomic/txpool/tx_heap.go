@@ -5,6 +5,7 @@ package txpool
 
 import (
 	"container/heap"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	"github.com/ava-labs/avalanchego/ids"

@@ -4,6 +4,7 @@ package atomic
 
 import (
 	"fmt"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"

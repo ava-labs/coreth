@@ -5,11 +5,12 @@ package evm
 
 import (
 	"context"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"math/big"
 	"strings"
 	"testing"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 

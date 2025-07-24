@@ -5,9 +5,10 @@ package evm
 
 import (
 	"context"
+	"testing"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-	"testing"
 
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"

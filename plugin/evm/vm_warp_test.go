@@ -7,10 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"math/big"
 	"testing"
 	"time"
+
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 
 	_ "embed"
 

@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"

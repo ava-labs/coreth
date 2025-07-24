@@ -6,8 +6,9 @@ package state
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"time"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"

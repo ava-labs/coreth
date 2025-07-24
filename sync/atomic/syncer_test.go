@@ -7,11 +7,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-	state2 "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"math"
 	"math/rand"
 	"testing"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	state2 "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 
 	"github.com/stretchr/testify/require"
 
