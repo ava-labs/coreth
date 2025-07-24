@@ -1,137 +1,79 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -o errexit
-set -o nounset
-set -o pipefail
+CORETH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+source "$CORETH_ROOT/scripts/constants.sh"
 
-# Avalanche root directory
-CORETH_PATH=$(
-  cd "$(dirname "${BASH_SOURCE[0]}")"
-  cd .. && pwd
-)
+NO_RACE="${NO_RACE:-}"
+RACE_FLAG=""
+(( NO_RACE )) || RACE_FLAG="-race"
+TIMEOUT="${TIMEOUT:-600s}"
+MAX_RETRIES=4
+ALL_PKGS=( $(go list ./... | grep -v github.com/ava-labs/coreth/tests) )
 
-# Load the constants
-source "$CORETH_PATH"/scripts/constants.sh
+run_and_collect() {
+  local pkgs=("${!1}")
+  FAILED_TESTS=()
+  MISSING_TESTS=()
 
-# We pass in the arguments to this script directly to enable easily passing parameters such as enabling race detection,
-# parallelism, and test coverage.
-# DO NOT RUN tests from the top level "tests" directory since they are run by ginkgo
-race="-race"
-if [[ -n "${NO_RACE:-}" ]]; then
-    race=""
-fi
+  # Iterate per-package so we can list tests
+  for pkg in "${pkgs[@]}"; do
+    # 1) list all tests in this pkg
+    mapfile -t all_tests < <(go test -list . "$pkg" | grep '^Test')
 
-# MAX_RUNS bounds the attempts to retry the tests before giving up
-# This is useful for flaky tests
-MAX_RUNS=4
+    # 2) run tests with JSON output
+    go test -json -timeout="$TIMEOUT" $RACE_FLAG "$pkg" >"${pkg//\//_}.json" 2>&1 || true
 
-get_all_tests() {
-    local packages="$1"
-    # Map import paths → directories matching your build tags/platform
-    local dirs
-    dirs=$(printf '%s\n' "$packages" | xargs go list -f '{{.Dir}}')
-    # Grep for top-level Test functions in *_test.go
-    grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+(Test[[:alnum:]_]+)\(' \
-         "$dirs" |
-    sed -E 's/^.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' |
-    sort -u
+    # 3) collect which tests ran & failed
+    mapfile -t ran_tests < <(
+      jq -r 'select(.Package=="'"$pkg"'" and .Test!=null and .Action=="run") | "\(.Test)"' \
+        "${pkg//\//_}.json" | sort -u
+    )
+    mapfile -t failed_tests < <(
+      jq -r 'select(.Package=="'"$pkg"'" and .Test!=null and .Action=="fail") | "\(.Test)"' \
+        "${pkg//\//_}.json" | sort -u
+    )
+
+    # 4) record failures
+    for t in "${failed_tests[@]}"; do
+      FAILED_TESTS+=("$pkg::$t")
+    done
+
+    # 5) detect missing (panic/skipped) tests
+    for t in "${all_tests[@]}"; do
+      if ! printf '%s\n' "${ran_tests[@]}" | grep -qxF "$t"; then
+        MISSING_TESTS+=("$pkg::$t")
+      fi
+    done
+  done
 }
 
-# Get all packages to test
-PACKAGES=$(go list ./... | grep -v github.com/ava-labs/coreth/tests)
+# Main retry loop
+TARGET_PKGS=( "${ALL_PKGS[@]}" )
+for ((i=1; i<=MAX_RETRIES; i++)); do
+  echo ">>> Attempt #$i"
+  run_and_collect TARGET_PKGS[@]
 
-for ((i = 1; i <= MAX_RUNS; i++));
-do
-    echo "Test run $i of $MAX_RUNS"
-    
-    # Get expected tests (for comparison) on first run
-    if [[ $i -eq 1 ]]; then
-        echo "Getting expected test list..."
-        EXPECTED_TESTS=$(get_all_tests "$PACKAGES")
-        echo "Expected tests: $(echo "$EXPECTED_TESTS" | wc -l | tr -d ' ') tests"
-    fi
-    
-    # Run tests with JSON output for better tracking
-    echo "Running tests..."
-    test_output=$(go test -json -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$PACKAGES" 2>&1) || command_status=$?
-    
-    # Extract test results for analysis
-    echo "$test_output" > test.json
-    
-    # Get tests that actually ran (including panics) and skipped
-    RAN_TESTS=$(echo "$test_output" \
-        | jq -r '
-            select(
-              .Action == "run"
-              or .Action == "pass"
-              or .Action == "fail"
-              or .Action == "skip"
-            )
-            | .Test
-          ' 2>/dev/null \
-        | sort || echo "")
- 
-    # Get tests that failed
-    FAILED_TESTS=$(echo "$test_output" | jq -r 'select(.Action == "fail") | .Test' 2>/dev/null | sort || echo "")
-    
-    # Check if all expected tests ran
-    MISSING_TESTS=$(comm -23 <(echo "$EXPECTED_TESTS") <(echo "$RAN_TESTS") 2>/dev/null || echo "")
-    
-    if [[ -n "$MISSING_TESTS" ]]; then
-        echo "WARNING: Some tests did not run due to panics or other issues:"
-        echo "$MISSING_TESTS"
-    fi
+  if [[ ${#FAILED_TESTS[@]} -eq 0 && ${#MISSING_TESTS[@]} -eq 0 ]]; then
+    echo "✅ All tests passed!"
+    exit 0
+  fi
 
-    # If the test passed, exit
-    if [[ ${command_status:-0} == 0 ]]; then
-        echo "All tests passed!"
-        rm -f test.json test.out
-        exit 0
-    else 
-        unset command_status # Clear the error code for the next run
-    fi
+  echo "Will retry the following tests:"
+  printf '  %s\n' "${FAILED_TESTS[@]}" "${MISSING_TESTS[@]}"
 
-    # Check for unexpected failures
-    unexpected_failures=$(comm -23 <(echo "$FAILED_TESTS") <(sed 's/\r$//' ./scripts/known_flakes.txt) 2>/dev/null || echo "")
-    if [ -n "${unexpected_failures}" ]; then
-        echo "Unexpected test failures: ${unexpected_failures}"
-        exit 1
-    fi
+  # Next pass: run only those specific tests
+  TARGET_PKGS=()  # not needed when rerunning individual tests
+  # build a regexp for -run
+  RUN_REGEX=$(printf "%s|" "${FAILED_TESTS[@]##*::}" "${MISSING_TESTS[@]##*::}")
+  RUN_REGEX="^(${RUN_REGEX%|})\$"
 
-    # Determine which tests to retry based on what happened
-    TESTS_TO_RETRY=""
-    
-    if [[ -z "$MISSING_TESTS" ]]; then
-        # All tests ran, only retry the failed ones
-        echo "All tests ran successfully. Retrying only failed tests..."
-        TESTS_TO_RETRY="$FAILED_TESTS"
-    else
-        # Some tests didn't run due to panics, retry missing + failed tests
-        echo "Some tests did not run due to panics. Retrying missing and failed tests..."
-        TESTS_TO_RETRY=$(echo -e "$MISSING_TESTS\n$FAILED_TESTS" | sort -u)
-    fi
-    
-    # Retry the specific tests that need it
-    if [[ -n "$TESTS_TO_RETRY" ]]; then
-        echo "Retrying tests: $TESTS_TO_RETRY"
-        for test in $TESTS_TO_RETRY; do
-            echo "Retrying $test"
-            # find the package directory containing that test
-            pkg_dir=$(grep -R --include='*_test.go' -l "func[[:space:]]\+${test}\(" "$CORETH_PATH" | head -n1)
-            if [[ -n "$pkg_dir" ]]; then
-              pkg=$(dirname "$pkg_dir" | xargs go list -f '{{.ImportPath}}' 2>/dev/null)
-            else
-              pkg="$PACKAGES"
-            fi
-            echo " → in package $pkg"
-            # run only that test in its package
-            go test -run "^${test}$" ${race:-} -timeout="${TIMEOUT:-600s}" "$@" "$pkg"
-        done
-    fi
-    
-    echo "Test run $i failed with known flakes, retrying..."
+  # re-run them all together
+  go test -json -timeout="$TIMEOUT" $RACE_FLAG -run "$RUN_REGEX" \
+    "${ALL_PKGS[@]}" >retry.json 2>&1 || true
+
+  # parse retry.json again… (you can refactor run_and_collect to accept a file)
 done
 
-# If we reach here, we have failed all retries
-echo "All retry attempts failed"
+echo "❌ Tests still failing after $MAX_RETRIES retries"
 exit 1
