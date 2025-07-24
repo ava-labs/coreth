@@ -598,17 +598,20 @@ func (bc *BlockChain) startAcceptor() {
 	for next := range bc.acceptorQueue {
 		start := time.Now()
 		acceptorQueueGauge.Dec(1)
+		fmt.Println("Acceptor processing block", next.Hash(), "at height", next.NumberU64())
 
 		if err := bc.flattenSnapshot(func() error {
 			return bc.stateManager.AcceptTrie(next)
 		}, next.Hash()); err != nil {
 			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
 		}
+		fmt.Println("Acceptor flattened snapshot for block", next.Hash(), "at height", next.NumberU64())
 
 		// Update last processed and transaction lookup index
 		if err := bc.writeBlockAcceptedIndices(next); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
 		}
+		fmt.Println("Acceptor wrote accepted indices for block", next.Hash(), "at height", next.NumberU64())
 
 		// Ensure [hc.acceptedNumberCache] and [acceptedLogsCache] have latest content
 		bc.hc.acceptedNumberCache.Put(next.NumberU64(), next.Header())
@@ -1099,7 +1102,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	// accepting, we need to trigger a reorg.
 	canonical := bc.GetCanonicalHash(block.NumberU64())
 	if canonical != block.Hash() {
-		log.Debug("Accepting block in non-canonical chain", "number", block.Number(), "hash", block.Hash())
+		fmt.Println("Accepting block in non-canonical chain", "number", block.Number(), "hash", block.Hash())
 		if err := bc.setPreference(block); err != nil {
 			return fmt.Errorf("could not set new preferred block %d:%s as preferred: %w", block.Number(), block.Hash(), err)
 		}
@@ -1107,6 +1110,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
+	fmt.Println("Adding block to acceptor queue", "number", block.Number(), "hash", block.Hash())
 	bc.addAcceptorQueue(block)
 	acceptedBlockGasUsedCounter.Inc(int64(block.GasUsed()))
 	acceptedTxsCounter.Inc(int64(len(block.Transactions())))
@@ -1162,6 +1166,7 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
+		fmt.Println("Starting reorg", "current", current.Root.Hex(), "block", block.Root().Hex())
 		if err := bc.reorg(current, block); err != nil {
 			return err
 		}

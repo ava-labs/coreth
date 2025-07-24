@@ -1038,6 +1038,7 @@ func ReorgReInsertTest(t *testing.T, create createFunc) {
 	if err := blockchain.InsertBlock(chain[1]); err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println("Finished inserting block 1")
 	if err := blockchain.SetPreference(chain[0]); err != nil {
 		t.Fatal(err)
 	}

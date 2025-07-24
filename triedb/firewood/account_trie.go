@@ -37,6 +37,7 @@ type AccountTrie struct {
 }
 
 func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
+	fmt.Printf("Creating new AccountTrie with root: %s\n", root.Hex())
 	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
