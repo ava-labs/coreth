@@ -22,7 +22,8 @@ COVER_FLAGS="-coverprofile=coverage.out -covermode=atomic -shuffle=on"
 get_all_tests() { local pkg="$1"; go list -f '{{.Dir}}' "$pkg" | xargs grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+Test' | sed -E 's/.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' | sort -u; }
 
 run_and_collect() {
-  local pkgs=("${!1}")
+  # Accept package list as positional args
+  local pkgs=("$@")
   FLAKY_TESTS=()
   MISSING_TESTS=()
 
@@ -43,7 +44,10 @@ run_and_collect() {
       # parse failures
       failures=$(grep '^--- FAIL' "$test_out" | awk '{print $3}' | sort -u)
       for t in $failures; do
-        [[ $(grep -Fxq "$t" "$KNOWN_FLAKES_FILE"; echo $?) -eq 1 ]] && { echo "Unexpected failure: $t"; exit 1; }
+        if ! grep -Fxq "$t" "$KNOWN_FLAKES_FILE"; then
+          echo "Unexpected failure: $t"
+          exit 1
+        fi
         FLAKY_TESTS+=("$pkg::$t")
       done
     fi
@@ -52,7 +56,11 @@ run_and_collect() {
     all_tests=( $(get_all_tests "$pkg") )
     ran_tests=( $(grep -E '^=== RUN' "$test_out" | awk '{print $3}' | sort -u) )
     missing=()
-    for t in "${all_tests[@]}"; do [[ ! " ${ran_tests[*]} " =~ " $t " ]] && missing+=("$pkg::$t"); done
+    for t in "${all_tests[@]}"; do
+      if ! printf '%s' "${ran_tests[@]}" | grep -qxF "$t"; then
+        missing+=("$pkg::$t")
+      fi
+    done
     echo "Tests ran: ${#ran_tests[@]}, missing: ${#missing[@]}"
     MISSING_TESTS+=("${missing[@]}")
 
@@ -63,14 +71,21 @@ run_and_collect() {
 # main loop
 for ((i=1;i<=MAX_RETRIES;i++)); do
   echo "--- Attempt #$i ---"
-  run_and_collect ALL_PKGS[@]
-  if [[ ${#MISSING_TESTS[@]} -eq 0 && ${#FLAKY_TESTS[@]} -eq 0 ]]; then echo "✅ All tests passed"; exit 0; fi
-  # retry only flaky and missing
-  tests=(${FLAKY_TESTS[@]} ${MISSING_TESTS[@]})
+  # run initial collection over all packages
+  run_and_collect "${ALL_PKGS[@]}"
+  if [[ ${#MISSING_TESTS[@]} -eq 0 && ${#FLAKY_TESTS[@]} -eq 0 ]]; then
+    echo "✅ All tests passed"
+    exit 0
+  fi
+
+  # prepare retry
+  tests=("${FLAKY_TESTS[@]}" "${MISSING_TESTS[@]}")
   regex="^($(printf '%s|' "${tests[@]##*::}") )$"
   echo "Retrying: ${tests[*]}"
   go test $COVER_FLAGS -timeout="$TIMEOUT" $RACE_FLAG -run "$regex" "${ALL_PKGS[@]}" | tee retry.out || true
-  mv retry.out "${test_out:-retry.out}"
+
+  # parse retry results same way
+  run_and_collect "${ALL_PKGS[@]}"
 done
 
 if [[ ${#FLAKY_TESTS[@]} -gt 0 || ${#MISSING_TESTS[@]} -gt 0 ]]; then
