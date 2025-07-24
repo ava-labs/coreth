@@ -17,8 +17,6 @@ import (
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
-
-	. "github.com/ava-labs/coreth/core/extstate"
 )
 
 func TestMultiCoinOperations(t *testing.T) {
