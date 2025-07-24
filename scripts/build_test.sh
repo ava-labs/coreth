@@ -96,7 +96,8 @@ run_specific_test() {
 
 # Initial test run
 echo "Running initial test suite..."
-go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" "$(go list ./... | grep -v github.com/ava-labs/coreth/tests)" | tee test.out || command_status=$?
+# shellcheck disable=SC2046
+go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -coverprofile=coverage.out -covermode=atomic "$@" $(go list ./... | grep -v github.com/ava-labs/coreth/tests) | tee test.out || command_status=$?
 
 # If initial run passes, exit successfully
 if [[ ${command_status:-0} == 0 ]]; then
