@@ -3,10 +3,10 @@ set -euo pipefail
 
 # avalanche root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CORETH_ROOT="${CORETH_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+CORETH_PATH="${CORETH_PATH:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 # Load the constants
-source "$CORETH_ROOT/scripts/constants.sh"
+source "$CORETH_PATH/scripts/constants.sh"
 
 # Configure race detection
 NO_RACE="${NO_RACE:-}"
