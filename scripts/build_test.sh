@@ -20,7 +20,7 @@ ALL_PKGS=( $(go list ./... | grep -v github.com/ava-labs/coreth/tests) )
 KNOWN_FLAKES_FILE="$CORETH_PATH/scripts/known_flakes.txt"
 
 # get_all_tests: quickly list Test* functions in pkg directories
-ing get_all_tests() {
+get_all_tests() {
   local pkg="$1"
   local dir
   dir=$(go list -f '{{.Dir}}' "$pkg")
