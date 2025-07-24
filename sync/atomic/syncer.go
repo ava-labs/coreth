@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package sync
+package atomic
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -18,7 +19,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	synccommon "github.com/ava-labs/coreth/sync"
-	atomicstate "github.com/ava-labs/coreth/sync/atomic/state"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 
 	"github.com/ava-labs/libevm/trie"

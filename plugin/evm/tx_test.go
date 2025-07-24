@@ -5,6 +5,8 @@ package evm
 
 import (
 	"context"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"math/big"
 	"strings"
 	"testing"
@@ -16,8 +18,6 @@ import (
 	"github.com/ava-labs/libevm/common"
 
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/sync/atomic"
-	atomicvm "github.com/ava-labs/coreth/sync/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -84,14 +84,14 @@ func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 
 type atomicTxTest struct {
 	// setup returns the atomic transaction for the test
-	setup func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
+	setup func(t *testing.T, vm *vm.VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
 	// define a string that should be contained in the error message if the tx fails verification
 	// at some point. If the strings are empty, then the tx should pass verification at the
 	// respective step.
 	semanticVerifyErr, evmStateTransferErr, acceptErr string
 	// checkState is called iff building and verifying a block containing the transaction is successful. Verifies
 	// the state of the VM following the block's acceptance.
-	checkState func(t *testing.T, vm *atomicvm.VM)
+	checkState func(t *testing.T, vm *vm.VM)
 
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool
@@ -117,7 +117,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	lastAcceptedBlock := tvm.vm.LastAcceptedExtendedBlock()
-	backend := atomicvm.NewVerifierBackend(tvm.atomicVM, rules)
+	backend := vm.NewVerifierBackend(tvm.atomicVM, rules)
 	if err := backend.SemanticVerify(tx, lastAcceptedBlock, baseFee); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
 	} else if len(test.semanticVerifyErr) != 0 {

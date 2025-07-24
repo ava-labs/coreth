@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -16,6 +17,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 
 	"github.com/ava-labs/avalanchego/api/metrics"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -43,9 +47,6 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -182,7 +183,7 @@ type testVMConfig struct {
 
 type testVM struct {
 	t            *testing.T
-	atomicVM     *atomicvm.VM
+	atomicVM     *vm.VM
 	vm           *VM
 	db           *prefixdb.Database
 	atomicMemory *avalancheatomic.Memory
@@ -214,7 +215,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
 
 	innerVM := &VM{}
-	atomicVM := atomicvm.WrapVM(innerVM)
+	atomicVM := vm.WrapVM(innerVM)
 	appSender := &enginetest.Sender{
 		T:                 t,
 		CantSendAppGossip: true,
@@ -515,7 +516,7 @@ func testImportMissingUTXOs(t *testing.T, scheme string) {
 	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
 	require.NoError(t, err)
 	err = vm2Blk.Verify(context.Background())
-	require.ErrorIs(t, err, atomicvm.ErrMissingUTXOs)
+	require.ErrorIs(t, err, vm.ErrMissingUTXOs)
 
 	// This should not result in a bad block since the missing UTXO should
 	// prevent InsertBlockManual from being called.
@@ -770,7 +771,7 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 		t.Fatalf("Found unexpected blkID for parent of blk2")
 	}
 
-	restartedVM := atomicvm.WrapVM(&VM{})
+	restartedVM := vm.WrapVM(&VM{})
 	newCTX := snowtest.Context(t, snowtest.CChainID)
 	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
 	newCTX.ChainDataDir = tvm.vm.ctx.ChainDataDir
@@ -939,8 +940,8 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomicvm.ErrConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomicvm.ErrConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, vm.ErrConflictingAtomicInputs) {
+		t.Fatalf("Expected to fail with err: %s, but found err: %s", vm.ErrConflictingAtomicInputs, err)
 	}
 
 	if !rules.IsApricotPhase5 {
@@ -976,8 +977,8 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, atomicvm.ErrConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", atomicvm.ErrConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, vm.ErrConflictingAtomicInputs) {
+		t.Fatalf("Expected to fail with err: %s, but found err: %s", vm.ErrConflictingAtomicInputs, err)
 	}
 }
 
@@ -991,8 +992,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 
 func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 	kc := secp256k1fx.NewKeychain(testKeys...)
-	tests := map[string]func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
-		"single UTXO override": func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+	tests := map[string]func(t *testing.T, vm *vm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
+		"single UTXO override": func(t *testing.T, vm *vm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
 			if err != nil {
 				t.Fatal(err)
@@ -1015,7 +1016,7 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 
 			return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
 		},
-		"one of two UTXOs overrides": func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+		"one of two UTXOs overrides": func(t *testing.T, vm *vm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo1, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
 			if err != nil {
 				t.Fatal(err)
@@ -1042,7 +1043,7 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 
 			return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
 		},
-		"hola": func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
+		"hola": func(t *testing.T, vm *vm.VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo1, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, testShortIDAddrs[0])
 			if err != nil {
 				t.Fatal(err)
@@ -2534,10 +2535,10 @@ func testEmptyBlock(t *testing.T, scheme string) {
 		t.Fatal(err)
 	}
 
-	if _, err := tvm.vm.ParseBlock(context.Background(), emptyBlock.Bytes()); !errors.Is(err, atomicvm.ErrEmptyBlock) {
+	if _, err := tvm.vm.ParseBlock(context.Background(), emptyBlock.Bytes()); !errors.Is(err, vm.ErrEmptyBlock) {
 		t.Fatalf("VM should have failed with errEmptyBlock but got %s", err.Error())
 	}
-	if err := emptyBlock.Verify(context.Background()); !errors.Is(err, atomicvm.ErrEmptyBlock) {
+	if err := emptyBlock.Verify(context.Background()); !errors.Is(err, vm.ErrEmptyBlock) {
 		t.Fatalf("block should have failed verification with errEmptyBlock but got %s", err.Error())
 	}
 }
@@ -3915,7 +3916,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	require.NoError(t, tvm.vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(t, blk.Accept(context.Background()))
 
-	reinitVM := atomicvm.WrapVM(&VM{})
+	reinitVM := vm.WrapVM(&VM{})
 	// use the block's timestamp instead of 0 since rewind to genesis
 	// is hardcoded to be allowed in core/genesis.go.
 	newCTX := snowtest.Context(t, tvm.vm.ctx.ChainID)
@@ -3926,7 +3927,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	err = reinitVM.Initialize(context.Background(), newCTX, tvm.db, genesis, []byte{}, []byte{}, []*commonEng.Fx{}, tvm.appSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
-	reinitVM = atomicvm.WrapVM(&VM{})
+	reinitVM = vm.WrapVM(&VM{})
 	newCTX.Metrics = metrics.NewPrefixGatherer()
 
 	// try again with skip-upgrade-check
@@ -4315,11 +4316,11 @@ func TestWaitForEvent(t *testing.T) {
 
 	for _, testCase := range []struct {
 		name     string
-		testCase func(*testing.T, *VM, *atomicvm.VM, common.Address, *ecdsa.PrivateKey)
+		testCase func(*testing.T, *VM, *vm.VM, common.Address, *ecdsa.PrivateKey)
 	}{
 		{
 			name: "WaitForEvent with context cancelled returns 0",
-			testCase: func(t *testing.T, vm *VM, _ *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, _ *vm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
 				defer cancel()
 
@@ -4339,7 +4340,7 @@ func TestWaitForEvent(t *testing.T) {
 		},
 		{
 			name: "WaitForEvent returns when a transaction is added to the mempool",
-			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, atomicVM *vm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				require.NoError(t, err)
 
@@ -4360,7 +4361,7 @@ func TestWaitForEvent(t *testing.T) {
 		},
 		{
 			name: "WaitForEvent doesn't return once a block is built and accepted",
-			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, atomicVM *vm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				require.NoError(t, err)
 
@@ -4430,7 +4431,7 @@ func TestWaitForEvent(t *testing.T) {
 		},
 		{
 			name: "WaitForEvent waits some time after a block is built",
-			testCase: func(t *testing.T, vm *VM, atomicVM *atomicvm.VM, address common.Address, key *ecdsa.PrivateKey) {
+			testCase: func(t *testing.T, vm *VM, atomicVM *vm.VM, address common.Address, key *ecdsa.PrivateKey) {
 				importTx, err := atomicVM.NewImportTx(vm.ctx.XChainID, address, initialBaseFee, []*secp256k1.PrivateKey{testKeys[0]})
 				require.NoError(t, err)
 

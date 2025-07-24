@@ -4,6 +4,7 @@
 package atomictest
 
 import (
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"math/rand"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -15,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/sync/atomic"
 )
 
 // TODO: Remove this and use actual codec and transactions (export, import)

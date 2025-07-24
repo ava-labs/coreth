@@ -239,8 +239,8 @@ func (t *stateSync) Start(ctx context.Context) error {
 		return t.onSyncComplete()
 	})
 	eg.Go(func() error {
-		err := <-t.codeSyncer.Done()
-		return err
+		// Wait for the code syncer to complete.
+		return t.codeSyncer.Wait(egCtx)
 	})
 	eg.Go(func() error {
 		return t.storageTrieProducer(egCtx)

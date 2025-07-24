@@ -275,6 +275,3 @@ func (c *codeSyncer) setError(err error) {
 		c.errChan <- err
 	})
 }
-
-// Done returns an error channel to indicate the return status of code syncing.
-func (c *codeSyncer) Done() <-chan error { return c.errChan }

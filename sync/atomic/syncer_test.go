@@ -1,12 +1,14 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package sync
+package atomic
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	state2 "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"math"
 	"math/rand"
 	"testing"
@@ -20,9 +22,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	synccommon "github.com/ava-labs/coreth/sync"
-	"github.com/ava-labs/coreth/sync/atomic/atomictest"
-	"github.com/ava-labs/coreth/sync/atomic/state"
-	atomicstate "github.com/ava-labs/coreth/sync/atomic/state"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -255,7 +254,7 @@ func TestSyncerScenarios(t *testing.T) {
 			rand.Seed(1)
 			targetHeight := 10 * uint64(testCommitInterval)
 			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicstate.TrieKeyLength)
+			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), state2.TrieKeyLength)
 
 			testSyncer(t, serverTrieDB, targetHeight, root, nil, int64(targetHeight), tt.numWorkers)
 		})
@@ -292,7 +291,7 @@ func TestSyncerResumeScenarios(t *testing.T) {
 			targetHeight := 10 * uint64(testCommitInterval)
 			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 			numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
-			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys, atomicstate.TrieKeyLength)
+			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys, state2.TrieKeyLength)
 
 			testSyncer(t, serverTrieDB, targetHeight, root, []atomicSyncTestCheckpoint{
 				{
@@ -336,12 +335,12 @@ func TestSyncerResumeNewRootCheckpointScenarios(t *testing.T) {
 			targetHeight1 := 10 * uint64(testCommitInterval)
 			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 			numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis
-			root1, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys1, atomicstate.TrieKeyLength)
+			root1, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys1, state2.TrieKeyLength)
 
 			targetHeight2 := 20 * uint64(testCommitInterval)
 			numTrieKeys2 := int(targetHeight2) - 1 // no atomic ops for genesis
 			root2, _, _ := statesynctest.FillTrie(
-				t, numTrieKeys1, numTrieKeys2, atomicstate.TrieKeyLength, serverTrieDB, root1,
+				t, numTrieKeys1, numTrieKeys2, state2.TrieKeyLength, serverTrieDB, root1,
 			)
 
 			testSyncer(t, serverTrieDB, targetHeight1, root1, []atomicSyncTestCheckpoint{
@@ -454,10 +453,10 @@ func TestSyncerContextCancellation(t *testing.T) {
 
 // setupParallelizationTest creates the common test infrastructure for parallelization tests.
 // It returns the context, mock client, atomic backend, and root hash for testing.
-func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Context, *syncclient.TestClient, *state.AtomicBackend, common.Hash) {
+func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Context, *syncclient.TestClient, *state2.AtomicBackend, common.Hash) {
 	// Create a simple test trie with some data.
 	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), atomicstate.TrieKeyLength)
+	root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), state2.TrieKeyLength)
 
 	ctx, mockClient, atomicBackend, _ := setupTestInfrastructure(t, serverTrieDB)
 
@@ -465,7 +464,7 @@ func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Contex
 }
 
 // runParallelizationTest executes a parallelization test with the given parameters.
-func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int, useDefaultWorkers bool) {
+func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, atomicBackend *state2.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int, useDefaultWorkers bool) {
 	config := createTestConfig(mockClient, atomicBackend, root, targetHeight)
 
 	// Set worker count based on test type
@@ -605,29 +604,29 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 
 // setupTestInfrastructure creates the common test infrastructure components.
 // It returns the context, mock client, atomic backend, and client database.
-func setupTestInfrastructure(t *testing.T, serverTrieDB *triedb.Database) (context.Context, *syncclient.TestClient, *state.AtomicBackend, *versiondb.Database) {
+func setupTestInfrastructure(t *testing.T, serverTrieDB *triedb.Database) (context.Context, *syncclient.TestClient, *state2.AtomicBackend, *versiondb.Database) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	mockClient := syncclient.NewTestClient(
 		message.Codec,
-		handlers.NewLeafsRequestHandler(serverTrieDB, state.TrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
+		handlers.NewLeafsRequestHandler(serverTrieDB, state2.TrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats()),
 		nil,
 		nil,
 	)
 
 	clientDB := versiondb.New(memdb.New())
-	repo, err := state.NewAtomicTxRepository(clientDB, message.Codec, 0)
+	repo, err := state2.NewAtomicTxRepository(clientDB, message.Codec, 0)
 	require.NoError(t, err, "could not initialize atomic tx repository")
 
-	atomicBackend, err := state.NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, 0, common.Hash{}, testCommitInterval)
+	atomicBackend, err := state2.NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, 0, common.Hash{}, testCommitInterval)
 	require.NoError(t, err, "could not initialize atomic backend")
 
 	return ctx, mockClient, atomicBackend, clientDB
 }
 
 // createTestConfig creates a test configuration with default values.
-func createTestConfig(mockClient *syncclient.TestClient, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64) Config {
+func createTestConfig(mockClient *syncclient.TestClient, atomicBackend *state2.AtomicBackend, root common.Hash, targetHeight uint64) Config {
 	return Config{
 		Client:       mockClient,
 		Database:     versiondb.New(memdb.New()),

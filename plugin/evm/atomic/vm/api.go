@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/formatting"
@@ -15,8 +17,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-	"github.com/ava-labs/coreth/sync/atomic"
-
 	"github.com/ava-labs/libevm/log"
 )
 

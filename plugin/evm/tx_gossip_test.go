@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
+
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
@@ -35,8 +38,6 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/sync/atomic"
-	atomicvm "github.com/ava-labs/coreth/sync/atomic/vm"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/core/types"
 )
@@ -59,7 +60,7 @@ func TestEthTxGossip(t *testing.T) {
 		SentAppResponse: make(chan []byte, 1),
 	}
 	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := vm.WrapVM(innerVM)
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -189,7 +190,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		SentAppResponse: make(chan []byte, 1),
 	}
 	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := vm.WrapVM(innerVM)
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -314,7 +315,7 @@ func TestEthTxPushGossipOutbound(t *testing.T) {
 	}
 
 	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := vm.WrapVM(innerVM)
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
@@ -370,7 +371,7 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 
 	sender := &enginetest.Sender{}
 	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := vm.WrapVM(innerVM)
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
@@ -441,7 +442,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := vm.WrapVM(innerVM)
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -508,7 +509,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	sender := &enginetest.Sender{}
 	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := vm.WrapVM(innerVM)
 
 	require.NoError(vm.Initialize(
 		ctx,

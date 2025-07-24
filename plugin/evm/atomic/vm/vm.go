@@ -11,6 +11,12 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicsync "github.com/ava-labs/coreth/sync/atomic"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
@@ -43,10 +49,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
-	"github.com/ava-labs/coreth/sync/atomic"
-	atomicstate "github.com/ava-labs/coreth/sync/atomic/state"
-	atomicsync "github.com/ava-labs/coreth/sync/atomic/sync"
-	"github.com/ava-labs/coreth/sync/atomic/txpool"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/utils/rpc"
 	"github.com/ava-labs/libevm/common"
@@ -777,9 +779,9 @@ func (vm *VM) GetAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error
 }
 
 func (vm *VM) NewImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
+	chainID ids.ID,               // chain to import from
+	to common.Address,            // Address of recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Keys to import the funds
 ) (*atomic.Tx, error) {
 	kc := secp256k1fx.NewKeychain()
@@ -797,11 +799,11 @@ func (vm *VM) NewImportTx(
 
 // newExportTx returns a new ExportTx
 func (vm *VM) NewExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
+	assetID ids.ID,               // AssetID of the tokens to export
+	amount uint64,                // Amount of tokens to export
+	chainID ids.ID,               // Chain to send the UTXOs to
+	to ids.ShortID,               // Address of chain recipient
+	baseFee *big.Int,             // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*atomic.Tx, error) {
 	state, err := vm.InnerVM.Blockchain().State()
