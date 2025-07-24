@@ -339,9 +339,6 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 	if api.eth.blockchain.TrieDB().Scheme() == rawdb.PathScheme {
 		return 0, errors.New("state history is not yet available in path-based scheme")
 	}
-	if api.isFirewood() {
-		return 0, errFirewoodNotSupported
-	}
 	var resolveNum = func(num rpc.BlockNumber) (uint64, error) {
 		// We don't have state for pending (-2), so treat it as latest
 		if num.Int64() < 0 {
@@ -381,7 +378,7 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 		if h == nil {
 			return 0, fmt.Errorf("missing header %d", i)
 		}
-		if ok, _ := api.eth.ChainDb().Has(h.Root[:]); ok {
+		if api.eth.BlockChain().HasState(h.Root) {
 			return uint64(i), nil
 		}
 	}
