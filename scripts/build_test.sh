@@ -18,6 +18,18 @@ TIMEOUT="${TIMEOUT:-600s}"
 MAX_RETRIES=4
 ALL_PKGS=( $(go list ./... | grep -v github.com/ava-labs/coreth/tests) )
 
+# get_all_tests: quickly list Test* functions in pkg directories
+get_all_tests() {
+  local pkg="$1"
+  # Resolve package directory
+  local dir
+  dir=$(go list -f '{{.Dir}}' "$pkg")
+  # Grep for top-level Test functions in *_test.go
+  grep -R --include '*_test.go' -E '^[[:space:]]*func[[:space:]]+(Test[[:alnum:]_]+)\(' "$dir" |
+  sed -E 's/^.*func[[:space:]]+(Test[[:alnum:]_]+).*/\1/' |
+  sort -u
+}
+
 # run_and_collect: execute tests per-package and gather failures + missing tests
 run_and_collect() {
   local pkgs=("${!1}")
@@ -25,8 +37,8 @@ run_and_collect() {
   MISSING_TESTS=()
 
   for pkg in "${pkgs[@]}"; do
-    # 1) list all tests in this package
-    mapfile -t all_tests < <(go test -list . "$pkg" | grep '^Test')
+    # 1) list all tests via fast grep
+    mapfile -t all_tests < <(get_all_tests "$pkg")
 
     # 2) run tests with JSON output (capture but don't exit)
     go test -json -timeout="$TIMEOUT" $RACE_FLAG "$pkg" >"${pkg//\//_}.json" 2>&1 || true
@@ -46,8 +58,7 @@ run_and_collect() {
 
     # detect missing (panic or skip) tests
     for t in "${all_tests[@]}"; do
-      if ! printf '%s
-' "${ran_tests[@]}" | grep -qxF "$t"; then
+      if ! printf '%s\n' "${ran_tests[@]}" | grep -qxF "$t"; then
         MISSING_TESTS+=("$pkg::$t")
       fi
     done
@@ -79,7 +90,7 @@ for ((i=1; i<=MAX_RETRIES; i++)); do
       "${ALL_PKGS[@]}" >retry.json 2>&1 || true
 
     # collect results from retry file
-    run_and_collect retry.json  # if refactor to accept JSON path
+    run_and_collect retry.json  # adapt if accepting JSON path instead of pkg list
   fi
 
   # exit conditions
