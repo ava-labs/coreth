@@ -260,31 +260,13 @@ func (t *stateSync) Wait(ctx context.Context) error {
 		return errWaitBeforeStart
 	}
 
-	// Monitor the Wait context in a separate goroutine
-	// If it gets cancelled, cancel the sync operations
-	waitCancelled := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			// Wait context was cancelled, cancel the sync operations
-			t.cancelFunc()
-			close(waitCancelled)
-		case <-t.done:
-			// Sync completed before Wait context was cancelled
-			close(waitCancelled)
-		}
-	}()
-
 	select {
 	case err := <-t.done:
 		return err
-	case <-waitCancelled:
-		// Wait context was cancelled
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		// If we reach here, sync completed normally
-		return <-t.done
+	case <-ctx.Done():
+		t.cancelFunc() // cancel the sync operations if the context is done
+		<-t.done       // wait for the sync operations to finish
+		return ctx.Err()
 	}
 }
 
