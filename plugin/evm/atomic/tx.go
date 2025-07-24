@@ -23,7 +23,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/state"
 	"github.com/holiman/uint256"
 )
 
@@ -136,6 +135,20 @@ type UnsignedTx interface {
 	SignedBytes() []byte
 }
 
+type StateDB interface {
+	AddBalance(common.Address, *uint256.Int)
+	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+
+	SubBalance(common.Address, *uint256.Int)
+	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+
+	GetBalance(common.Address) *uint256.Int
+	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
+
+	GetNonce(common.Address) uint64
+	SetNonce(common.Address, uint64)
+}
+
 // UnsignedAtomicTx is an unsigned operation that can be atomically accepted
 type UnsignedAtomicTx interface {
 	UnsignedTx
@@ -153,7 +166,7 @@ type UnsignedAtomicTx interface {
 	// The set of atomic requests must be returned in a consistent order.
 	AtomicOps() (ids.ID, *atomic.Requests, error)
 
-	EVMStateTransfer(ctx *snow.Context, state *state.StateDB) error
+	EVMStateTransfer(ctx *snow.Context, state StateDB) error
 }
 
 // Tx is a signed transaction

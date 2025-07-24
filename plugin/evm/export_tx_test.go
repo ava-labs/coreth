@@ -441,7 +441,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), avaxBalance, test.avaxBalance)
 			}
 
-			ws := extstate.New(stateDB)
 			for assetID, expectedBalance := range test.balances {
 				balance := wrappedStateDB.GetBalanceMultiCoin(ethAddr, common.Hash(assetID))
 				if avaxBalance.Cmp(test.avaxBalance) != 0 {

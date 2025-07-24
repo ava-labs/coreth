@@ -21,12 +21,10 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/log"
 	"github.com/holiman/uint256"
 )
@@ -220,7 +218,7 @@ func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 func NewExportTx(
 	ctx *snow.Context,
 	rules extras.Rules,
-	stateDB *state.StateDB,
+	stateDB StateDB,
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export
 	chainID ids.ID, // Chain to send the UTXOs to
@@ -311,8 +309,7 @@ func NewExportTx(
 }
 
 // EVMStateTransfer executes the state update from the atomic export transaction
-func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.StateDB) error {
-	ws := extstate.New(stateDB)
+func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB StateDB) error {
 	addrs := map[[20]byte]uint64{}
 	for _, from := range utx.Ins {
 		if from.AssetID == ctx.AVAXAssetID {
@@ -323,25 +320,25 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.
 				uint256.NewInt(from.Amount),
 				uint256.NewInt(X2CRate.Uint64()),
 			)
-			if ws.GetBalance(from.Address).Cmp(amount) < 0 {
+			if stateDB.GetBalance(from.Address).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			ws.SubBalance(from.Address, amount)
+			stateDB.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("export_tx", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
-			if ws.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
+			if stateDB.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			ws.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
+			stateDB.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
-		if ws.GetNonce(from.Address) != from.Nonce {
+		if stateDB.GetNonce(from.Address) != from.Nonce {
 			return errInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
 	}
 	for addr, nonce := range addrs {
-		ws.SetNonce(addr, nonce+1)
+		stateDB.SetNonce(addr, nonce+1)
 	}
 	return nil
 }
@@ -353,12 +350,11 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB *state.
 // [tx.Sign] which supports multiple keys on a single input.
 func getSpendableFunds(
 	ctx *snow.Context,
-	stateDB *state.StateDB,
+	stateDB StateDB,
 	keys []*secp256k1.PrivateKey,
 	assetID ids.ID,
 	amount uint64,
 ) ([]EVMInput, [][]*secp256k1.PrivateKey, error) {
-	ws := extstate.New(stateDB)
 	inputs := []EVMInput{}
 	signers := [][]*secp256k1.PrivateKey{}
 	// Note: we assume that each key in [keys] is unique, so that iterating over
@@ -372,9 +368,9 @@ func getSpendableFunds(
 		if assetID == ctx.AVAXAssetID {
 			// If the asset is AVAX, we divide by the x2cRate to convert back to the correct
 			// denomination of AVAX that can be exported.
-			balance = new(uint256.Int).Div(ws.GetBalance(addr), X2CRate).Uint64()
+			balance = new(uint256.Int).Div(stateDB.GetBalance(addr), X2CRate).Uint64()
 		} else {
-			balance = ws.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
+			balance = stateDB.GetBalanceMultiCoin(addr, common.Hash(assetID)).Uint64()
 		}
 		if balance == 0 {
 			continue
@@ -382,7 +378,7 @@ func getSpendableFunds(
 		if amount < balance {
 			balance = amount
 		}
-		nonce := ws.GetNonce(addr)
+		nonce := stateDB.GetNonce(addr)
 
 		inputs = append(inputs, EVMInput{
 			Address: addr,
@@ -411,7 +407,7 @@ func getSpendableFunds(
 // [tx.Sign] which supports multiple keys on a single input.
 func getSpendableAVAXWithFee(
 	ctx *snow.Context,
-	stateDB *state.StateDB,
+	stateDB StateDB,
 	keys []*secp256k1.PrivateKey,
 	amount uint64,
 	cost uint64,
