@@ -7,9 +7,9 @@ import (
 	"math/big"
 	"testing"
 
-	atomic "github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/vm"
-
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
@@ -1272,16 +1272,17 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 			checkState: func(t *testing.T, vm *vm.VM) {
 				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
-				sdb, err := vm.Blockchain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
+				statedb, err := vm.Blockchain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assetBalance := sdb.GetBalanceMultiCoin(testEthAddrs[0], common.Hash(assetID))
+				wrappedStateDB := extstate.New(statedb)
+				assetBalance := wrappedStateDB.GetBalanceMultiCoin(testEthAddrs[0], common.Hash(assetID))
 				if assetBalance.Cmp(common.Big1) != 0 {
 					t.Fatalf("Expected asset balance to be %d, found balance: %d", common.Big1, assetBalance)
 				}
-				avaxBalance := sdb.GetBalance(testEthAddrs[0])
+				avaxBalance := wrappedStateDB.GetBalance(testEthAddrs[0])
 				if avaxBalance.Cmp(common.U2560) != 0 {
 					t.Fatalf("Expected AVAX balance to be 0, found balance: %d", avaxBalance)
 				}

@@ -114,12 +114,6 @@ type Client interface {
 	Error() error
 }
 
-// Syncer represents a step in state sync,
-// along with Start/Done methods to control
-// and monitor progress.
-// Error returns an error if any was encountered.
-
-
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
 func (client *client) StateSyncEnabled(context.Context) (bool, error) {
 	return client.Enabled, nil

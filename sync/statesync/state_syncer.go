@@ -64,8 +64,8 @@ type stateSync struct {
 	done               chan error
 	stats              *trieSyncStats
 
-	// cancel is used to cancel the sync operation
-	cancel context.CancelFunc
+	// context cancellation management
+	cancelFunc context.CancelFunc
 }
 
 func NewStateSyncer(config *StateSyncerConfig) (synccommon.Syncer, error) {
@@ -224,13 +224,14 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Start(ctx context.Context) error {
-	ctx, t.cancel = context.WithCancel(ctx)
+	ctx, t.cancelFunc = context.WithCancel(ctx)
 
 	// Start the code syncer and leaf syncer.
 	eg, egCtx := errgroup.WithContext(ctx)
 	if err := t.codeSyncer.Start(egCtx); err != nil { // start the code syncer first since the leaf syncer may add code tasks
 		return err
 	}
+
 	t.syncer.Start(egCtx, defaultNumWorkers, t.onSyncFailure)
 	eg.Go(func() error {
 		if err := <-t.syncer.Done(); err != nil {
@@ -257,16 +258,18 @@ func (t *stateSync) Start(ctx context.Context) error {
 // Wait blocks until the sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
 // This method must be called after Start() has been called.
-func (s *stateSync) Wait(ctx context.Context) error {
-	if s.cancel == nil {
+func (t *stateSync) Wait(ctx context.Context) error {
+	// This should only be called after Start, so we can assume cancelFunc is set.
+	if t.cancelFunc == nil {
 		return synccommon.ErrWaitBeforeStart
 	}
 
 	select {
-	case err := <-s.done:
+	case err := <-t.done:
 		return err
 	case <-ctx.Done():
-		s.cancel()
+		t.cancelFunc() // cancel the sync operations if the context is done
+		<-t.done       // wait for the sync operations to finish
 		return ctx.Err()
 	}
 }
