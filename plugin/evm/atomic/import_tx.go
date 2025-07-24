@@ -331,18 +331,18 @@ func NewImportTx(
 
 // EVMStateTransfer performs the state transfer to increase the balances of
 // accounts accordingly with the imported EVMOutputs
-func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, stateDB StateDB) error {
+func (utx *UnsignedImportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
 	for _, to := range utx.Outs {
 		if to.AssetID == ctx.AVAXAssetID {
 			log.Debug("import_tx", "src", utx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", "AVAX")
 			// If the asset is AVAX, convert the input amount in nAVAX to gWei by
 			// multiplying by the x2c rate.
 			amount := new(uint256.Int).Mul(uint256.NewInt(to.Amount), X2CRate)
-			stateDB.AddBalance(to.Address, amount)
+			state.AddBalance(to.Address, amount)
 		} else {
 			log.Debug("import_tx", "src", utx.SourceChain, "addr", to.Address, "amount", to.Amount, "assetID", to.AssetID)
 			amount := new(big.Int).SetUint64(to.Amount)
-			stateDB.AddBalanceMultiCoin(to.Address, common.Hash(to.AssetID), amount)
+			state.AddBalanceMultiCoin(to.Address, common.Hash(to.AssetID), amount)
 		}
 	}
 	return nil

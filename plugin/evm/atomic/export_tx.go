@@ -309,7 +309,7 @@ func NewExportTx(
 }
 
 // EVMStateTransfer executes the state update from the atomic export transaction
-func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB StateDB) error {
+func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) error {
 	addrs := map[[20]byte]uint64{}
 	for _, from := range utx.Ins {
 		if from.AssetID == ctx.AVAXAssetID {
@@ -320,25 +320,25 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, stateDB StateDB
 				uint256.NewInt(from.Amount),
 				uint256.NewInt(X2CRate.Uint64()),
 			)
-			if stateDB.GetBalance(from.Address).Cmp(amount) < 0 {
+			if state.GetBalance(from.Address).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			stateDB.SubBalance(from.Address, amount)
+			state.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("export_tx", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
-			if stateDB.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
+			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
 				return errInsufficientFunds
 			}
-			stateDB.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
+			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
-		if stateDB.GetNonce(from.Address) != from.Nonce {
+		if state.GetNonce(from.Address) != from.Nonce {
 			return errInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
 	}
 	for addr, nonce := range addrs {
-		stateDB.SetNonce(addr, nonce+1)
+		state.SetNonce(addr, nonce+1)
 	}
 	return nil
 }
