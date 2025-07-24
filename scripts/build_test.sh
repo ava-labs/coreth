@@ -73,7 +73,7 @@ run_and_collect() {
     # Run tests with coverage + shuffle, tee output to inspect failures
     echo "ok?  $pkg"
     test_out=$(mktemp)
-    command go test "${COVER_FLAGS[@]}" -timeout="$TIMEOUT" $RACE_FLAG "$pkg" \
+    command go test -v "${COVER_FLAGS[@]}" -timeout="$TIMEOUT" $RACE_FLAG "$pkg" \
       | tee "$test_out" || command_status=$?
 
     # Handle failures: separate flakes vs unexpected
