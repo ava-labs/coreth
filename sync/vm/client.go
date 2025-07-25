@@ -5,6 +5,7 @@ package vm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -30,11 +31,22 @@ import (
 	"github.com/ava-labs/libevm/log"
 )
 
-// ParentsToFetch is the number of the block parents the state syncs to.
-// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
-const ParentsToFetch = 256
+const (
+	// ParentsToFetch is the number of the block parents the state syncs to.
+	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
+	ParentsToFetch = 256
 
-var stateSyncSummaryKey = []byte("stateSyncSummary")
+	atomicStateSyncOperationName = "Atomic State Sync"
+	evmStateSyncOperationName    = "EVM State Sync"
+)
+
+// Sentinel errors for sync failures
+var (
+	ErrEVMStateSyncFailed    = errors.New("EVM state sync failed")
+	ErrAtomicStateSyncFailed = errors.New("atomic state sync failed")
+
+	stateSyncSummaryKey = []byte("stateSyncSummary")
+)
 
 // BlockAcceptor is an interface that allows for accepting blocks.
 type BlockAcceptor interface {
@@ -88,6 +100,21 @@ type client struct {
 	err     error
 }
 
+type syncerInfo struct {
+	name    string
+	syncer  synccommon.Syncer
+	errInit error
+}
+
+// newSyncerInfo creates a new syncerInfo struct with optional error
+func newSyncerInfo(name string, syncer synccommon.Syncer, err error) syncerInfo {
+	return syncerInfo{
+		name:    name,
+		syncer:  syncer,
+		errInit: err,
+	}
+}
+
 func NewClient(config *ClientConfig) Client {
 	return &client{
 		ClientConfig: config,
@@ -95,12 +122,12 @@ func NewClient(config *ClientConfig) Client {
 }
 
 type Client interface {
-	// methods that implement the client side of [block.StateSyncableVM]
+	// StateSyncEnabled methods that implement the client side of [block.StateSyncableVM]
 	StateSyncEnabled(context.Context) (bool, error)
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
 	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
 
-	// additional methods required by the evm package
+	// ClearOngoingSummary additional methods required by the evm package
 	ClearOngoingSummary() error
 	Shutdown() error
 	Error() error
@@ -154,14 +181,31 @@ func (client *client) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	type syncerInfo struct {
-		syncer        synccommon.Syncer
-		operationName string
+	syncers := client.createSyncers(ctx)
+
+	for _, s := range syncers {
+		if s.errInit != nil {
+			switch s.name {
+			case atomicStateSyncOperationName:
+				log.Error("Atomic state sync failed, but continuing with EVM sync", "err", s.errInit)
+			default:
+				return s.errInit
+			}
+		}
+
+		if err := client.runSync(ctx, s.name, s.syncer, client.Client, client.VerDB, client.summary); err != nil {
+			// For EVM sync or other critical syncers, fail immediately.
+			return fmt.Errorf("%s failed: %w", s.name, err)
+		}
 	}
 
-	syncers := make([]syncerInfo, 0)
+	return nil
+}
 
-	// Create EVM state syncer.
+func (client *client) createSyncers(ctx context.Context) []syncerInfo {
+	var syncers []syncerInfo
+
+	// Add EVM state syncer.
 	stateSyncer, err := statesync.NewSyncer(&statesync.Config{
 		Client:                   client.Client,
 		Root:                     client.summary.GetBlockRoot(),
@@ -171,38 +215,41 @@ func (client *client) stateSync(ctx context.Context) error {
 		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
 		RequestSize:              client.RequestSize,
 	})
+
 	if err != nil {
-		return fmt.Errorf("failed to create state syncer: %w", err)
+		syncers = append(syncers, newSyncerInfo(evmStateSyncOperationName, stateSyncer, fmt.Errorf("%w: %v", ErrEVMStateSyncFailed, err)))
+	} else {
+		syncers = append(syncers, newSyncerInfo(evmStateSyncOperationName, stateSyncer, nil))
 	}
 
-	syncers = append(syncers, syncerInfo{
-		syncer:        stateSyncer,
-		operationName: "EVM State Sync",
-	})
-
-	// Handle atomic sync if extender is configured
+	// Add atomic syncer if configured.
 	if client.AtomicExtender != nil {
-		// Create atomic state syncer.
 		atomicSyncer, err := client.AtomicExtender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
 		if err != nil {
-			return fmt.Errorf("failed to create atomic syncer: %w", err)
-		}
-
-		syncers = append(syncers, syncerInfo{
-			syncer:        atomicSyncer,
-			operationName: "Atomic State Sync",
-		})
-	} else {
-		log.Info("Atomic state sync is not enabled, skipping")
-	}
-
-	for _, s := range syncers {
-		if err := synccommon.RunSync(ctx, s.operationName, s.syncer, client.Client, client.VerDB, client.summary); err != nil {
-			return fmt.Errorf("%s failed: %w", s.operationName, err)
+			syncers = append(syncers, newSyncerInfo(atomicStateSyncOperationName, atomicSyncer, fmt.Errorf("%w: %v", ErrAtomicStateSyncFailed, err)))
+		} else {
+			syncers = append(syncers, newSyncerInfo(atomicStateSyncOperationName, atomicSyncer, nil))
 		}
 	}
 
-	return nil
+	return syncers
+}
+
+// runSync executes the complete sync operation for a given syncer.
+// This encapsulates the entire lifecycle: start → wait.
+func (client *client) runSync(ctx context.Context, operationName string, syncer synccommon.Syncer, syncClient syncclient.Client, verDB *versiondb.Database, summary message.Syncable) error {
+	log.Info(operationName+" starting", "summary", summary)
+
+	// Start syncer
+	if err := syncer.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start %s: %w", operationName, err)
+	}
+
+	// Wait for completion
+	err := syncer.Wait(ctx)
+	log.Info(operationName+" finished", "summary", summary, "err", err)
+
+	return err
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
