@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"sync"
 
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	synccommon "github.com/ava-labs/coreth/sync"
+	"github.com/ava-labs/coreth/sync/atomic"
 	syncclient "github.com/ava-labs/coreth/sync/client"
+	"github.com/ava-labs/coreth/sync/statesync"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -19,7 +23,6 @@ import (
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/sync/statesync"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -33,6 +36,7 @@ const ParentsToFetch = 256
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
 
+// BlockAcceptor is an interface that allows for accepting blocks.
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
 }
@@ -44,28 +48,7 @@ type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
-// Extender is an interface that allows for extending the state sync process.
-type Extender interface {
-	// Sync is called to perform any extension-specific state sync logic.
-	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
-	// OnFinishBeforeCommit is called after the state sync process has completed but before the state sync summary is committed.
-	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
-	// OnFinishAfterCommit is called after the state sync process has completed and the state sync summary is committed.
-	OnFinishAfterCommit(summaryHeight uint64) error
-}
-
-// ClientConfig defines the options and dependencies needed to construct a Client
 type ClientConfig struct {
-	Enabled    bool
-	SkipResume bool
-	// Specifies the number of blocks behind the latest state summary that the chain must be
-	// in order to prefer performing state sync over falling back to the normal bootstrapping
-	// algorithm.
-	MinBlocks   uint64
-	RequestSize uint16 // number of key/value pairs to ask peers for per request
-
-	LastAcceptedHeight uint64
-
 	Chain      *eth.Ethereum
 	State      *chain.State
 	ChaindDB   ethdb.Database
@@ -73,14 +56,23 @@ type ClientConfig struct {
 	VerDB      *versiondb.Database
 	MetadataDB database.Database
 
-	// Extension points
+	// Extension points.
 	Parser message.SyncableParser
+
 	// Extender is an optional extension point for the state sync process, and can be nil.
-	Extender Extender
+	AtomicExtender *atomic.Extender
+	Client         syncclient.Client
+	StateSyncDone  chan struct{}
+	AtomicBackend  *atomicstate.AtomicBackend
 
-	Client syncclient.Client
-
-	StateSyncDone chan struct{}
+	// Specifies the number of blocks behind the latest state summary that the chain must be
+	// in order to prefer performing state sync over falling back to the normal bootstrapping
+	// algorithm.
+	MinBlocks          uint64
+	LastAcceptedHeight uint64
+	RequestSize        uint16 // number of key/value pairs to ask peers for per request
+	Enabled            bool
+	SkipResume         bool
 }
 
 type client struct {
@@ -157,21 +149,59 @@ func (client *client) ParseStateSummary(_ context.Context, summaryBytes []byte) 
 	return client.Parser.Parse(summaryBytes, client.acceptSyncSummary)
 }
 
-// stateSync blockingly performs the state sync for the EVM state and the atomic state
-// to [client.syncSummary]. returns an error if one occurred.
 func (client *client) stateSync(ctx context.Context) error {
 	if err := client.syncBlocks(ctx, client.summary.GetBlockHash(), client.summary.Height(), ParentsToFetch); err != nil {
 		return err
 	}
 
-	// Sync the EVM trie.
-	if err := client.syncStateTrie(ctx); err != nil {
-		return err
+	type syncerInfo struct {
+		syncer        synccommon.Syncer
+		operationName string
 	}
 
-	if client.Extender != nil {
-		return client.Extender.Sync(ctx, client.Client, client.VerDB, client.summary)
+	syncers := make([]syncerInfo, 0)
+
+	// Create EVM state syncer.
+	stateSyncer, err := statesync.NewSyncer(&statesync.Config{
+		Client:                   client.Client,
+		Root:                     client.summary.GetBlockRoot(),
+		BatchSize:                ethdb.IdealBatchSize,
+		DB:                       client.ChaindDB,
+		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
+		RequestSize:              client.RequestSize,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create state syncer: %w", err)
 	}
+
+	syncers = append(syncers, syncerInfo{
+		syncer:        stateSyncer,
+		operationName: "EVM State Sync",
+	})
+
+	// Handle atomic sync if extender is configured
+	if client.AtomicExtender != nil {
+		// Create atomic state syncer.
+		atomicSyncer, err := client.AtomicExtender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
+		if err != nil {
+			return fmt.Errorf("failed to create atomic syncer: %w", err)
+		}
+
+		syncers = append(syncers, syncerInfo{
+			syncer:        atomicSyncer,
+			operationName: "Atomic State Sync",
+		})
+	} else {
+		log.Info("Atomic state sync is not enabled, skipping")
+	}
+
+	for _, s := range syncers {
+		if err := synccommon.RunSync(ctx, s.operationName, s.syncer, client.Client, client.VerDB, client.summary); err != nil {
+			return fmt.Errorf("%s failed: %w", s.operationName, err)
+		}
+	}
+
 	return nil
 }
 
@@ -292,28 +322,6 @@ func (client *client) syncBlocks(ctx context.Context, fromHash common.Hash, from
 	return batch.Write()
 }
 
-func (client *client) syncStateTrie(ctx context.Context) error {
-	log.Info("state sync: sync starting", "root", client.summary.GetBlockRoot())
-	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
-		Client:                   client.Client,
-		Root:                     client.summary.GetBlockRoot(),
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.ChaindDB,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.RequestSize,
-	})
-	if err != nil {
-		return err
-	}
-	if err := evmSyncer.Start(ctx); err != nil {
-		return err
-	}
-	err = evmSyncer.Wait(ctx)
-	log.Info("state sync: sync finished", "root", client.summary.GetBlockRoot(), "err", err)
-	return err
-}
-
 func (client *client) Shutdown() error {
 	if client.cancel != nil {
 		client.cancel()
@@ -366,8 +374,8 @@ func (client *client) finishSync() error {
 		return err
 	}
 
-	if client.Extender != nil {
-		if err := client.Extender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.summary); err != nil {
+	if client.AtomicExtender != nil {
+		if err := client.AtomicExtender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.summary); err != nil {
 			return err
 		}
 	}
@@ -380,8 +388,8 @@ func (client *client) finishSync() error {
 		return err
 	}
 
-	if client.Extender != nil {
-		return client.Extender.OnFinishAfterCommit(block.NumberU64())
+	if client.AtomicExtender != nil {
+		return client.AtomicExtender.OnFinishAfterCommit(block.NumberU64())
 	}
 
 	return nil
