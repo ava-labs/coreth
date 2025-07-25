@@ -28,7 +28,7 @@ import (
 const (
 	minNumWorkers     = 1
 	maxNumWorkers     = 64
-	defaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
+	DefaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
 
 	minRequestSize = 1
 	maxRequestSize = 1024 // Matches [maxLeavesLimit] in sync/handlers/leafs_request.go
@@ -54,7 +54,7 @@ var (
 	// Pre-allocate zero bytes to avoid repeated allocations.
 	zeroBytes = bytes.Repeat([]byte{0x00}, common.HashLength)
 
-	_ synccommon.Syncer       = (*syncer)(nil)
+	_ synccommon.Syncer       = (*Syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 )
 
@@ -112,7 +112,7 @@ func (c *Config) Validate() error {
 	// Validate NumWorkers.
 	numWorkers := c.NumWorkers
 	if numWorkers == 0 {
-		numWorkers = defaultNumWorkers
+		numWorkers = DefaultNumWorkers
 	}
 	if numWorkers < minNumWorkers {
 		return fmt.Errorf("%w: %d (minimum: %d)", errTooFewWorkers, numWorkers, minNumWorkers)
@@ -124,10 +124,10 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// syncer is used to sync the atomic trie from the network. The CallbackLeafSyncer
-// is responsible for orchestrating the sync while syncer is responsible for maintaining
+// Syncer is used to sync the atomic trie from the network. The CallbackLeafSyncer
+// is responsible for orchestrating the sync while Syncer is responsible for maintaining
 // the state of progress and writing the actual atomic trie to the trieDB.
-type syncer struct {
+type Syncer struct {
 	db           *versiondb.Database
 	atomicTrie   *atomicstate.AtomicTrie
 	trie         *trie.Trie // used to update the atomic trie
@@ -157,7 +157,7 @@ func addZeroes(height uint64) []byte {
 }
 
 // newSyncer returns a new syncer instance that will sync the atomic trie from the network.
-func newSyncer(config *Config) (*syncer, error) {
+func NewSyncer(config *Config) (*Syncer, error) {
 	// Validate the configuration
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func newSyncer(config *Config) (*syncer, error) {
 	// Use default workers if not specified.
 	numWorkers := config.NumWorkers
 	if numWorkers == 0 {
-		numWorkers = defaultNumWorkers
+		numWorkers = DefaultNumWorkers
 	}
 
 	lastCommittedRoot, lastCommit := config.AtomicTrie.LastCommitted()
@@ -175,7 +175,7 @@ func newSyncer(config *Config) (*syncer, error) {
 		return nil, err
 	}
 
-	syncer := &syncer{
+	syncer := &Syncer{
 		db:           config.Database,
 		atomicTrie:   config.AtomicTrie,
 		trie:         trie,
@@ -194,11 +194,12 @@ func newSyncer(config *Config) (*syncer, error) {
 	close(tasks)
 
 	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, config.RequestSize)
+
 	return syncer, nil
 }
 
 // Start begins syncing the target atomic root with the configured number of worker goroutines.
-func (s *syncer) Start(ctx context.Context) error {
+func (s *Syncer) Start(ctx context.Context) error {
 	ctx, s.cancel = context.WithCancel(ctx)
 	s.syncer.Start(ctx, s.numWorkers, s.onSyncFailure)
 
@@ -206,7 +207,7 @@ func (s *syncer) Start(ctx context.Context) error {
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
-func (s *syncer) onLeafs(keys [][]byte, values [][]byte) error {
+func (s *Syncer) onLeafs(keys [][]byte, values [][]byte) error {
 	for i, key := range keys {
 		if len(key) != atomicstate.TrieKeyLength {
 			return fmt.Errorf("unexpected key len (%d) in atomic trie sync", len(key))
@@ -254,7 +255,7 @@ func (s *syncer) onLeafs(keys [][]byte, values [][]byte) error {
 
 // onFinish is called when sync for this trie is complete.
 // commit the trie to disk and perform the final checks that we synced the target root correctly.
-func (s *syncer) onFinish() error {
+func (s *Syncer) onFinish() error {
 	// commit the trie on finish
 	root, nodes, err := s.trie.Commit(false)
 	if err != nil {
@@ -280,14 +281,14 @@ func (s *syncer) onFinish() error {
 
 // onSyncFailure is a no-op since we flush progress to disk at the regular commit interval when syncing
 // the atomic trie.
-func (s *syncer) onSyncFailure(error) error {
+func (s *Syncer) onSyncFailure(error) error {
 	return nil
 }
 
 // Wait blocks until the sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
 // This method must be called after Start() has been called.
-func (s *syncer) Wait(ctx context.Context) error {
+func (s *Syncer) Wait(ctx context.Context) error {
 	if s.cancel == nil {
 		return synccommon.ErrWaitBeforeStart
 	}
@@ -302,7 +303,7 @@ func (s *syncer) Wait(ctx context.Context) error {
 }
 
 type syncerLeafTask struct {
-	syncer *syncer
+	syncer *Syncer
 }
 
 func (a *syncerLeafTask) Start() []byte                  { return addZeroes(a.syncer.lastHeight + 1) }

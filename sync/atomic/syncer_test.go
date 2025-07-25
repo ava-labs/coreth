@@ -60,7 +60,7 @@ func TestConfigValidation(t *testing.T) {
 		TargetRoot:   root,
 		TargetHeight: 100,
 		RequestSize:  config.DefaultStateSyncRequestSize,
-		NumWorkers:   defaultNumWorkers,
+		NumWorkers:   DefaultNumWorkers,
 	}
 
 	tests := []struct {
@@ -470,7 +470,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 
 	// Set worker count based on test type
 	if useDefaultWorkers {
-		config.NumWorkers = defaultNumWorkers
+		config.NumWorkers = DefaultNumWorkers
 	} else {
 		config.NumWorkers = numWorkers
 	}
@@ -510,7 +510,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			RequestSize:  config.DefaultStateSyncRequestSize,
 			NumWorkers:   numWorkers,
 		}
-		syncer, err := newSyncer(&syncerConfig)
+		syncer, err := NewSyncer(&syncerConfig)
 		require.NoError(t, err, "could not create syncer")
 		mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
@@ -543,7 +543,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		RequestSize:  config.DefaultStateSyncRequestSize,
 		NumWorkers:   numWorkers,
 	}
-	syncer, err := newSyncer(&syncerConfig)
+	syncer, err := NewSyncer(&syncerConfig)
 	require.NoError(t, err, "could not create syncer")
 	mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 		// Increment the number of leaves and return the original response
@@ -640,8 +640,8 @@ func createTestConfig(mockClient *syncclient.TestClient, atomicBackend *state.At
 }
 
 // createTestSyncer creates a test syncer with the given configuration.
-func createTestSyncer(t *testing.T, config Config) *syncer {
-	syncer, err := newSyncer(&config)
+func createTestSyncer(t *testing.T, config Config) *Syncer {
+	syncer, err := NewSyncer(&config)
 	require.NoError(t, err, "could not create syncer")
 	return syncer
 }

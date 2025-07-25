@@ -57,20 +57,19 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
-	s, err := NewStateSyncer(&StateSyncerConfig{
-		Client:                   mockClient,
+	s, err := NewSyncer(&Config{
 		Root:                     root,
+		Client:                   mockClient,
 		DB:                       clientDB,
 		BatchSize:                1000, // Use a lower batch size in order to get test coverage of batches being written early.
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
 		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
 		RequestSize:              1024,
 	})
 	require.NoError(t, err, "failed to create state syncer")
 	// begin sync
-	if err := s.Start(ctx); err != nil {
-		t.Fatal(err)
-	}
+	err = s.Start(ctx)
+	require.NoError(t, err, "failed to start state syncer")
 
 	waitFor(t, context.Background(), s.Wait, test.expectedError, testSyncTimeout)
 
@@ -619,13 +618,13 @@ func TestDifferentWaitContext(t *testing.T) {
 		return resp, nil
 	}
 
-	s, err := NewStateSyncer(&StateSyncerConfig{
-		Client:                   mockClient,
+	s, err := NewSyncer(&Config{
 		Root:                     root,
+		Client:                   mockClient,
 		DB:                       clientDB,
 		BatchSize:                1000,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
 		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
 		RequestSize:              1024,
 	})
 	if err != nil {
@@ -649,4 +648,161 @@ func TestDifferentWaitContext(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	requestsAfterWait := atomic.LoadInt64(&requestCount)
 	require.Equal(t, requestsWhenWaitReturned, requestsAfterWait, "Sync should not continue after Wait returned with different context")
+}
+
+// TestConfigValidation is a parameterized test that covers all config validation scenarios.
+func TestConfigValidation(t *testing.T) {
+	clientDB := rawdb.NewMemoryDatabase()
+	serverDB := rawdb.NewMemoryDatabase()
+	serverTrieDB := triedb.NewDatabase(serverDB, nil)
+
+	// Create a simple test trie
+	root := common.HexToHash("0x1234567890abcdef")
+
+	// Create mock client
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
+
+	// Create a valid base config
+	validConfig := Config{
+		Root:                     root,
+		Client:                   mockClient,
+		DB:                       clientDB,
+		BatchSize:                ethdb.IdealBatchSize,
+		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
+		RequestSize:              1024,
+	}
+
+	tests := []struct {
+		name             string
+		configModifyFunc func(*Config)
+		expectedErr      error
+		description      string
+	}{
+		// Basic validation tests
+		{
+			name:             "valid config",
+			configModifyFunc: func(c *Config) {}, // No modification for valid case.
+			expectedErr:      nil,
+			description:      "should accept valid configuration",
+		},
+		{
+			name:             "nil client",
+			configModifyFunc: func(c *Config) { c.Client = nil },
+			expectedErr:      errNilClient,
+			description:      "should reject nil client",
+		},
+		{
+			name:             "nil database",
+			configModifyFunc: func(c *Config) { c.DB = nil },
+			expectedErr:      errNilDatabase,
+			description:      "should reject nil database",
+		},
+		{
+			name:             "empty root",
+			configModifyFunc: func(c *Config) { c.Root = common.Hash{} },
+			expectedErr:      errEmptyRoot,
+			description:      "should reject empty root",
+		},
+		{
+			name:             "zero batch size",
+			configModifyFunc: func(c *Config) { c.BatchSize = 0 },
+			expectedErr:      errInvalidBatchSize,
+			description:      "should reject zero batch size",
+		},
+		{
+			name:             "negative batch size",
+			configModifyFunc: func(c *Config) { c.BatchSize = -1 },
+			expectedErr:      errInvalidBatchSize,
+			description:      "should reject negative batch size",
+		},
+		{
+			name:             "zero max outstanding code hashes",
+			configModifyFunc: func(c *Config) { c.MaxOutstandingCodeHashes = 0 },
+			expectedErr:      errInvalidMaxOutstandingCodeHashes,
+			description:      "should reject zero max outstanding code hashes",
+		},
+		{
+			name:             "negative max outstanding code hashes",
+			configModifyFunc: func(c *Config) { c.MaxOutstandingCodeHashes = -1 },
+			expectedErr:      errInvalidMaxOutstandingCodeHashes,
+			description:      "should reject negative max outstanding code hashes",
+		},
+		{
+			name:             "zero num code fetching workers",
+			configModifyFunc: func(c *Config) { c.NumCodeFetchingWorkers = 0 },
+			expectedErr:      errInvalidNumCodeFetchingWorkers,
+			description:      "should reject zero num code fetching workers",
+		},
+		{
+			name:             "negative num code fetching workers",
+			configModifyFunc: func(c *Config) { c.NumCodeFetchingWorkers = -1 },
+			expectedErr:      errInvalidNumCodeFetchingWorkers,
+			description:      "should reject negative num code fetching workers",
+		},
+		{
+			name:             "zero request size",
+			configModifyFunc: func(c *Config) { c.RequestSize = 0 },
+			expectedErr:      errInvalidRequestSize,
+			description:      "should reject zero request size",
+		},
+		// Boundary tests
+		{
+			name:             "minimum valid batch size",
+			configModifyFunc: func(c *Config) { c.BatchSize = 1 },
+			expectedErr:      nil,
+			description:      "should accept minimum valid batch size",
+		},
+		{
+			name:             "minimum valid max outstanding code hashes",
+			configModifyFunc: func(c *Config) { c.MaxOutstandingCodeHashes = 1 },
+			expectedErr:      nil,
+			description:      "should accept minimum valid max outstanding code hashes",
+		},
+		{
+			name:             "minimum valid num code fetching workers",
+			configModifyFunc: func(c *Config) { c.NumCodeFetchingWorkers = 1 },
+			expectedErr:      nil,
+			description:      "should accept minimum valid num code fetching workers",
+		},
+		{
+			name:             "minimum valid request size",
+			configModifyFunc: func(c *Config) { c.RequestSize = 1 },
+			expectedErr:      nil,
+			description:      "should accept minimum valid request size",
+		},
+		// Multiple field validation tests
+		{
+			name: "multiple invalid fields",
+			configModifyFunc: func(c *Config) {
+				c.Client = nil
+				c.DB = nil
+				c.BatchSize = 0
+			},
+			expectedErr: errNilClient, // Should return first error encountered
+			description: "should return first validation error when multiple fields are invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a copy of the valid config
+			config := validConfig
+
+			// Apply the modification function
+			tt.configModifyFunc(&config)
+
+			// Test the validation
+			err := config.Validate()
+
+			// Assert the result
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr, tt.description)
+			} else {
+				require.NoError(t, err, tt.description)
+			}
+		})
+	}
 }
