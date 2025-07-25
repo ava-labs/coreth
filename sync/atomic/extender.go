@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	state2 "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/libevm/log"
@@ -20,13 +20,13 @@ var _ vm.Extender = (*Extender)(nil)
 
 // Extender is the sync extender for the atomic VM.
 type Extender struct {
-	backend     *state2.AtomicBackend
-	trie        *state2.AtomicTrie
+	backend     *state.AtomicBackend
+	trie        *state.AtomicTrie
 	requestSize uint16 // maximum number of leaves to sync in a single request
 }
 
 // Initialize initializes the sync extender with the backend and trie and request size.
-func (a *Extender) Initialize(backend *state2.AtomicBackend, trie *state2.AtomicTrie, requestSize uint16) {
+func (a *Extender) Initialize(backend *state.AtomicBackend, trie *state.AtomicTrie, requestSize uint16) {
 	a.backend = backend
 	a.trie = trie
 	a.requestSize = requestSize

@@ -74,10 +74,12 @@ func testSync(t *testing.T, test syncTest) {
 
 	waitFor(t, context.Background(), s.Wait, test.expectedError, testSyncTimeout)
 
-	// Only assert database consistency if the sync was expected to succeed
-	if test.expectedError == nil {
-		assertDBConsistency(t, root, clientDB, serverTrieDB, triedb.NewDatabase(clientDB, nil))
+	// Only assert database consistency if the sync was expected to succeed.
+	if test.expectedError != nil {
+		return
 	}
+
+	assertDBConsistency(t, root, clientDB, serverTrieDB, triedb.NewDatabase(clientDB, nil))
 }
 
 // testSyncResumes tests a series of syncTests work as expected, invoking a callback function after each
