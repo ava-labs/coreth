@@ -7,7 +7,10 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/core/types"
 )
 
@@ -30,4 +33,16 @@ type Syncer interface {
 // SummaryProvider is an interface for providing state summaries.
 type SummaryProvider interface {
 	StateSummaryAtBlock(ethBlock *types.Block) (block.StateSummary, error)
+}
+
+// Extender is an interface that allows for extending the state sync process.
+type Extender interface {
+	// CreateSyncer creates a syncer instance for the given client, database, and summary.
+	CreateSyncer(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, summary message.Syncable) (Syncer, error)
+
+	// OnFinishBeforeCommit is called before committing the sync results.
+	OnFinishBeforeCommit(lastAcceptedHeight uint64, summary message.Syncable) error
+
+	// OnFinishAfterCommit is called after committing the sync results.
+	OnFinishAfterCommit(summaryHeight uint64) error
 }

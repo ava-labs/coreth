@@ -11,7 +11,6 @@ import (
 
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	synccommon "github.com/ava-labs/coreth/sync"
-	"github.com/ava-labs/coreth/sync/atomic"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
 
@@ -71,8 +70,8 @@ type ClientConfig struct {
 	// Extension points.
 	Parser message.SyncableParser
 
-	// Extender is an optional extension point for the state sync process, and can be nil.
-	AtomicExtender *atomic.Extender
+	// AtomicExtender is an optional extension point for the state sync process, and can be nil.
+	AtomicExtender synccommon.Extender
 	Client         syncclient.Client
 	StateSyncDone  chan struct{}
 	AtomicBackend  *atomicstate.AtomicBackend
@@ -122,12 +121,12 @@ func NewClient(config *ClientConfig) Client {
 }
 
 type Client interface {
-	// StateSyncEnabled methods that implement the client side of [block.StateSyncableVM]
+	// StateSyncEnabled methods that implement the client side of [block.StateSyncableVM].
 	StateSyncEnabled(context.Context) (bool, error)
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
 	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
 
-	// ClearOngoingSummary additional methods required by the evm package
+	// ClearOngoingSummary additional methods required by the evm package.
 	ClearOngoingSummary() error
 	Shutdown() error
 	Error() error
@@ -222,7 +221,7 @@ func (client *client) createSyncers(ctx context.Context) []syncerInfo {
 		syncers = append(syncers, newSyncerInfo(evmStateSyncOperationName, stateSyncer, nil))
 	}
 
-	// Add atomic syncer if configured.
+	// Add atomic syncer if configured
 	if client.AtomicExtender != nil {
 		atomicSyncer, err := client.AtomicExtender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
 		if err != nil {

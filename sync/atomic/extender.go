@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
@@ -28,8 +29,8 @@ func (a *Extender) Initialize(backend *state.AtomicBackend, trie *state.AtomicTr
 	a.requestSize = requestSize
 }
 
-// NewSyncExtender creates the atomic syncer with the given client and verDB.
-func (a *Extender) CreateSyncer(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, summary message.Syncable) (*Syncer, error) {
+// CreateSyncer creates the atomic syncer with the given client and verDB.
+func (a *Extender) CreateSyncer(ctx context.Context, client syncclient.LeafClient, verDB *versiondb.Database, summary message.Syncable) (synccommon.Syncer, error) {
 	atomicSummary, ok := summary.(*Summary)
 	if !ok {
 		return nil, fmt.Errorf("expected *Summary, got %T", summary)
