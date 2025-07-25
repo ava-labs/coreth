@@ -84,13 +84,9 @@ get_missing_tests_after_panic() {
 run_specific_test() {
     local test_name="$1"
     local output_file="$2"
-    
-    # Extract package name from test name (assuming format: PackageName.TestName)
-    local package
-    package="${test_name%.*}"
-    
-    # Run the specific test
-    go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" -run "^${test_name}$" "$package" 2>&1 | tee "$output_file"
+    local package="$3"
+    go test -shuffle=on ${race:-} -timeout="${TIMEOUT:-600s}" \
+      -run "^${test_name}$" "$package" 2>&1 | tee "$output_file"
     return "${PIPESTATUS[0]}"
 }
 
@@ -109,6 +105,19 @@ fi
 # Extract failed tests
 failed_tests=$(extract_failed_tests test.out)
 echo "Failed tests: $failed_tests"
+
+# Build a map of “test → package” by scanning each failing package just once
+failing_packages=$(grep "^FAIL" test.out | awk '{print $2}' | sort -u)
+echo "Failing packages: $failing_packages"
+
+declare -A test_pkg_map
+for pkg in $failing_packages; do
+  for t in $(get_package_tests "$pkg"); do
+    if echo "$failed_tests" | grep -x "$t" >/dev/null; then
+      test_pkg_map["$t"]="$pkg"
+    fi
+  done
+done
 
 # Check for unexpected failures
 unexpected_failures=""
@@ -142,10 +151,13 @@ for ((attempt = 1; attempt <= MAX_RUNS; attempt++)); do
     
     # Retry each failed test
     for test in $tests_to_retry; do
-        echo "Retrying test: $test"
-        
-        # Run the specific test
-        run_specific_test "$test" "$retry_output"
+        pkg="${test_pkg_map[$test]:-}"
+        if [[ -z "$pkg" ]]; then
+            echo "ERROR: no package mapping for test $test" >&2
+            exit 1
+        fi
+        echo "Retrying test: $test in package: $pkg"
+        run_specific_test "$test" "$retry_output" "$pkg"
         test_status=$?
         
         # Check if test passed
