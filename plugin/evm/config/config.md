@@ -14,6 +14,13 @@ _Integer_
 
 The target gas per second that this node will attempt to use when creating blocks. If this config is not specified, the node will default to use the parent block's target gas per second. Defaults to using the parent block's target.
 
+### `initial-target-excess`
+
+_Integer_
+
+The initial target excess that this node will start the chain with. If this
+config is not specified, the initial target excess defaults to `0`.
+
 ## State Sync
 
 ### `state-sync-enabled`
