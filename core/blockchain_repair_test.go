@@ -35,6 +35,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
@@ -529,7 +530,12 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	}
 	defer db.Close() // Might double close, should be fine
 
-	blockDb := ethblockdb.NewMock(db)
+	blockDb, err := blockdb.New(blockdb.DefaultConfig().WithDir(datadir), nil)
+	if err != nil {
+		t.Fatalf("Failed to create block database: %v", err)
+	}
+	defer blockDb.Close()
+	ethblockDb := ethblockdb.New(blockDb, db)
 
 	// Initialize a fresh chain
 	var (
@@ -557,7 +563,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
 	}
-	chain, err := NewBlockChain(db, blockDb, config, gspec, engine, vm.Config{}, common.Hash{}, false)
+	chain, err := NewBlockChain(db, ethblockDb, config, gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
@@ -568,7 +574,8 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	var sideblocks types.Blocks
 	if tt.sidechainBlocks > 0 {
 		genDb := rawdb.NewMemoryDatabase()
-		gspec.MustCommit(genDb, blockDb, triedb.NewDatabase(genDb, nil))
+		genBlockDb := ethblockdb.NewMock(genDb)
+		gspec.MustCommit(genDb, genBlockDb, triedb.NewDatabase(genDb, nil))
 		sideblocks, _, err = GenerateChain(gspec.Config, gspec.ToBlock(), engine, genDb, tt.sidechainBlocks, 10, func(i int, b *BlockGen) {
 			b.SetCoinbase(common.Address{0x01})
 			tx, err := types.SignTx(types.NewTransaction(b.TxNonce(addr1), common.Address{0x01}, big.NewInt(10000), params.TxGas, big.NewInt(ap3.InitialBaseFee), nil), signer, key1)
@@ -581,7 +588,8 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		}
 	}
 	genDb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(genDb, blockDb, triedb.NewDatabase(genDb, nil))
+	genBlockDb := ethblockdb.NewMock(genDb)
+	gspec.MustCommit(genDb, genBlockDb, triedb.NewDatabase(genDb, nil))
 	canonblocks, _, err := GenerateChain(gspec.Config, gspec.ToBlock(), engine, genDb, tt.canonicalBlocks, 10, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0x02})
 		b.SetDifficulty(big.NewInt(1000000))
@@ -611,6 +619,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	// Pull the plug on the database, simulating a hard crash
 	chain.triedb.Close()
 	db.Close()
+	blockDb.Close()
 	chain.stopWithoutSaving()
 
 	// Start a new blockchain back up and see where the repair leads us
@@ -622,8 +631,13 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
 	defer db.Close()
-
-	newChain, err := NewBlockChain(db, blockDb, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)
+	blockDb, err = blockdb.New(blockdb.DefaultConfig().WithDir(datadir), nil)
+	if err != nil {
+		t.Fatalf("Failed to create block database: %v", err)
+	}
+	defer blockDb.Close()
+	ethblockDb = ethblockdb.New(blockDb, db)
+	newChain, err := NewBlockChain(db, ethblockDb, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

@@ -295,7 +295,6 @@ func (client *client) syncBlocks(ctx context.Context, fromHash common.Hash, from
 		}
 		for _, block := range blocks {
 			client.BlockDb.WriteBlock(block)
-			rawdb.WriteHeaderNumber(batch, block.Hash(), block.NumberU64())
 			rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
 
 			i--

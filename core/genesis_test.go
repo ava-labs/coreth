@@ -188,7 +188,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				t.Errorf("returned hash %s, want %s", hash.Hex(), test.wantHash.Hex())
 			} else if err == nil {
 				// Check database content.
-				stored := rawdb.ReadBlock(db, test.wantHash, 0)
+				stored := blockDb.ReadBlock(0)
 				if stored.Hash() != test.wantHash {
 					t.Errorf("block in DB has hash %s, want %s", stored.Hash(), test.wantHash)
 				}
@@ -281,7 +281,7 @@ func TestGenesisWriteUpgradesRegression(t *testing.T) {
 		Extra:      nil,
 		Time:       timestamp,
 	}, nil, nil, nil, trie.NewStackTrie(nil))
-	rawdb.WriteBlock(db, lastAcceptedBlock)
+	blockDb.WriteBlock(lastAcceptedBlock)
 
 	// Attempt restart after the chain has advanced past the activation of the precompile upgrade.
 	// This tests a regression where the UpgradeConfig would not be written to disk correctly.

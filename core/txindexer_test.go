@@ -251,8 +251,6 @@ func TestTransactionSkipIndexing(t *testing.T) {
 	// and old indices are removed up to the tail, but [tail, current) indices are still there.
 	conf.TransactionHistory = 2
 	conf.SkipTxIndexing = true
-	chainDB = rawdb.NewMemoryDatabase()
-	blockDb = ethblockdb.NewMock(chainDB)
 	chain, err = createAndInsertChain(chainDB, blockDb, conf, gspec, blocks2[0:1], chain.CurrentHeader().Hash(),
 		func(b *types.Block) {
 			bNumber := b.NumberU64()

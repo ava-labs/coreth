@@ -328,7 +328,6 @@ func (g *Genesis) Commit(db ethdb.Database, blockDb ethblockdb.Database, triedb 
 	}
 	log.Info("Writing genesis block with hash", "hash", block.Hash())
 	blockDb.WriteBlock(block)
-	rawdb.WriteHeaderNumber(db, block.Hash(), block.Header().Number.Uint64())
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
 	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(db, block.Hash())

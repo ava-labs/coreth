@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
@@ -121,6 +122,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 // must not be started and will be started by this method.
 func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
 	chaindb := rawdb.NewMemoryDatabase()
+	blockdb := ethblockdb.NewMock(chaindb)
 	clock := &mockable.Clock{}
 	clock.Set(time.Unix(0, 0))
 
@@ -129,7 +131,7 @@ func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backe
 	)
 
 	backend, err := eth.New(
-		stack, conf, &fakePushGossiper{}, chaindb, eth.Settings{}, common.Hash{},
+		stack, conf, &fakePushGossiper{}, chaindb, blockdb, eth.Settings{}, common.Hash{},
 		engine, clock,
 	)
 	if err != nil {

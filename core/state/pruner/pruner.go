@@ -40,6 +40,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/ethblockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -88,16 +89,37 @@ type Pruner struct {
 	config      Config
 	chainHeader *types.Header
 	db          ethdb.Database
+	blockDb     ethblockdb.Database
 	stateBloom  *stateBloom
 	snaptree    *snapshot.Tree
 }
 
+func ReadHeadBlock(db ethdb.Database, blockDb ethblockdb.Database) *types.Block {
+	headBlockHash := rawdb.ReadHeadBlockHash(db)
+	if headBlockHash == (common.Hash{}) {
+		return nil
+	}
+	headBlockNumber := rawdb.ReadHeaderNumber(db, headBlockHash)
+	if headBlockNumber == nil {
+		return nil
+	}
+
+	block := blockDb.ReadBlock(*headBlockNumber)
+
+	// if head block is not in blockdb, it could be a sidechain block so check chaindb
+	if block == nil || block.Hash() != headBlockHash {
+		return rawdb.ReadHeadBlock(db)
+	}
+	return block
+}
+
 // NewPruner creates the pruner instance.
-func NewPruner(db ethdb.Database, config Config) (*Pruner, error) {
-	headBlock := rawdb.ReadHeadBlock(db)
+func NewPruner(db ethdb.Database, blockDb ethblockdb.Database, config Config) (*Pruner, error) {
+	headBlock := ReadHeadBlock(db, blockDb)
 	if headBlock == nil {
 		return nil, errors.New("failed to load head block")
 	}
+
 	// Offline pruning is only supported in legacy hash based scheme.
 	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 
@@ -128,6 +150,7 @@ func NewPruner(db ethdb.Database, config Config) (*Pruner, error) {
 		config:      config,
 		chainHeader: headBlock.Header(),
 		db:          db,
+		blockDb:     blockDb,
 		stateBloom:  stateBloom,
 		snaptree:    snaptree,
 	}, nil
@@ -268,7 +291,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 		return err
 	}
 	if stateBloomRoot != (common.Hash{}) {
-		return RecoverPruning(p.config.Datadir, p.db)
+		return RecoverPruning(p.config.Datadir, p.db, p.blockDb)
 	}
 
 	// If the target state root is not specified, return a fatal error.
@@ -292,7 +315,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	}
 	// Traverse the genesis, put all genesis state entries into the
 	// bloom filter too.
-	if err := extractGenesis(p.db, p.stateBloom); err != nil {
+	if err := extractGenesis(p.db, p.blockDb, p.stateBloom); err != nil {
 		return err
 	}
 	filterName := bloomFilterName(p.config.Datadir, root)
@@ -312,7 +335,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 // pruning can be resumed. What's more if the bloom filter is constructed, the
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
-func RecoverPruning(datadir string, db ethdb.Database) error {
+func RecoverPruning(datadir string, db ethdb.Database, blockDb ethblockdb.Database) error {
 	stateBloomPath, stateBloomRoot, err := findBloomFilter(datadir)
 	if err != nil {
 		return err
@@ -320,7 +343,7 @@ func RecoverPruning(datadir string, db ethdb.Database) error {
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
-	headBlock := rawdb.ReadHeadBlock(db)
+	headBlock := ReadHeadBlock(db, blockDb)
 	if headBlock == nil {
 		return errors.New("failed to load head block")
 	}
@@ -341,12 +364,12 @@ func RecoverPruning(datadir string, db ethdb.Database) error {
 
 // extractGenesis loads the genesis state and commits all the state entries
 // into the given bloomfilter.
-func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
+func extractGenesis(db ethdb.Database, blockDb ethblockdb.Database, stateBloom *stateBloom) error {
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
 	if genesisHash == (common.Hash{}) {
 		return errors.New("missing genesis hash")
 	}
-	genesis := rawdb.ReadBlock(db, genesisHash, 0)
+	genesis := blockDb.ReadBlock(0)
 	if genesis == nil {
 		return errors.New("missing genesis block")
 	}

@@ -109,7 +109,7 @@ func testChainIndexer(t *testing.T, count int) {
 		if number > 0 {
 			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
 		}
-		rawdb.WriteHeader(db, header)
+		blockdb.WriteBlock(types.NewBlockWithHeader(header))
 		rawdb.WriteCanonicalHash(db, header.Hash(), number)
 	}
 	// Start indexer with an already existing chain

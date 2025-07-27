@@ -92,6 +92,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
+	blockDb ethblockdb.Database
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -165,7 +166,7 @@ func New(
 		// Since RecoverPruning will only continue a pruning run that already began, we do not need to ensure that
 		// reprocessState has already been called and completed successfully. To ensure this, we must maintain
 		// that Prune is only run after reprocessState has finished successfully.
-		if err := pruner.RecoverPruning(config.OfflinePruningDataDirectory, chainDb); err != nil {
+		if err := pruner.RecoverPruning(config.OfflinePruningDataDirectory, chainDb, blockDb); err != nil {
 			log.Error("Failed to recover state", "error", err)
 		}
 	}
@@ -178,6 +179,7 @@ func New(
 		config:            config,
 		gossiper:          gossiper,
 		chainDb:           chainDb,
+		blockDb:           blockDb,
 		eventMux:          new(event.TypeMux),
 		accountManager:    stack.AccountManager(),
 		engine:            engine,
@@ -399,6 +401,8 @@ func (s *Ethereum) Stop() error {
 
 	s.chainDb.Close()
 	log.Info("Closed chaindb")
+	s.blockDb.Close()
+	log.Info("Closed blockdb")
 	s.eventMux.Stop()
 	log.Info("Stopped EventMux")
 	return nil
@@ -475,7 +479,7 @@ func (s *Ethereum) handleOfflinePruning(cacheConfig *core.CacheConfig, gspec *co
 		Datadir:   s.config.OfflinePruningDataDirectory,
 	}
 
-	pruner, err := pruner.NewPruner(s.chainDb, prunerConfig)
+	pruner, err := pruner.NewPruner(s.chainDb, s.blockDb, prunerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create new pruner with data directory: %s, size: %d, due to: %w", s.config.OfflinePruningDataDirectory, s.config.OfflinePruningBloomFilterSize, err)
 	}

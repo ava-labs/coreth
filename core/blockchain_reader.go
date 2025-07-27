@@ -88,13 +88,11 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 		return nil
 	}
 
-	isCanonical := *number <= bc.lastAccepted.NumberU64()
+	block := bc.blockDb.ReadBlock(*number)
 	var body *types.Body
-	if isCanonical {
-		body = bc.blockDb.ReadBody(*number)
-	} else {
-		block := bc.blockDb.ReadBlock(*number)
-		if block != nil && block.Hash() != hash {
+	if block != nil {
+		body = block.Body()
+		if block.Hash() != hash {
 			body = rawdb.ReadBody(bc.db, hash, *number)
 		}
 	}
@@ -102,6 +100,19 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	if body == nil {
 		return nil
 	}
+
+	// todo: Should we not store sidechain blocks after the last accepted block?
+	// if so, we can not check for chainId if requesting a canonical block
+	// isCanonical := *number <= bc.lastAccepted.NumberU64()
+	// var body *types.Body
+	// if isCanonical {
+	// 	body = bc.blockDb.ReadBody(*number)
+	// } else {
+	// 	block := bc.blockDb.ReadBlock(*number)
+	// 	if block != nil && block.Hash() != hash {
+	// 		body = rawdb.ReadBody(bc.db, hash, *number)
+	// 	}
+	// }
 
 	bc.bodyCache.Add(hash, body)
 	return body
@@ -112,9 +123,20 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
-	isCanonical := number <= bc.lastAccepted.NumberU64()
-	if isCanonical {
-		return bc.blockDb.HasBlock(number)
+
+	// todo: Should we not store sidechain blocks after the last accepted block?
+	// if so, we can not check for chainId if requesting a canonical block
+	// isCanonical := number <= bc.lastAccepted.NumberU64()
+	// if isCanonical {
+	// 	return bc.blockDb.HasBlock(number)
+	// }
+
+	// note: a block can be in chaindb but is rejected, so we need to check
+	// if the block exists via ReadHeaderNumber, which stores all non-rejected
+	// hash->number mappings of blocks.
+	headerNumber := rawdb.ReadHeaderNumber(bc.db, hash)
+	if headerNumber == nil {
+		return false
 	}
 
 	header := bc.blockDb.ReadHeader(number)
@@ -146,14 +168,24 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 
 	block := bc.blockDb.ReadBlock(number)
 
-	// the block could be in chainDb if its not canonical not found in blockdb
+	// the block could be in chainDb if its not found in blockdb
 	if block != nil && block.Hash() != hash {
-		if bc.lastAccepted != nil && number > bc.lastAccepted.NumberU64() {
-			block = rawdb.ReadBlock(bc.db, hash, number)
-		} else {
-			block = nil
-		}
+		block = rawdb.ReadBlock(bc.db, hash, number)
 	}
+
+	// todo: Should we not store sidechain blocks after the last accepted block?
+	// if so, we can not check for chainId if requesting a canonical block
+	// Note: currently tests in blockchain_repair_test.go rely on being able to
+	// fetch sidechain blocks at heights at or before last accepted (see `verifyCutoff`), therefore
+	// GetBlock/GetHeader/GetBody currently cannot just return nil if requesting a block
+	// <= last accepted height if it is not in blockdb.
+	// if block != nil && block.Hash() != hash {
+	// 	if bc.lastAccepted != nil && number > bc.lastAccepted.NumberU64() {
+	// 		block = rawdb.ReadBlock(bc.db, hash, number)
+	// 	} else {
+	// 		block = nil
+	// 	}
+	// }
 
 	if block == nil {
 		return nil
@@ -211,10 +243,17 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if number == nil {
 		return nil
 	}
-	header := bc.GetHeader(hash, *number)
+	header := bc.hc.blockDb.ReadHeader(*number)
+
 	if header == nil {
 		return nil
 	}
+
+	// if block is not in blockdb, read it from chaindb.
+	if header.Hash() != hash {
+		return rawdb.ReadReceipts(bc.db, hash, *number, header.Time, bc.chainConfig)
+	}
+
 	receipts := bc.blockDb.ReadReceipts(hash, *number, header.Time, bc.chainConfig)
 	if receipts == nil {
 		return nil
@@ -244,6 +283,9 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 		return item.lookup, item.transaction, nil
 	}
 	tx, blockHash, blockNumber, txIndex := bc.blockDb.ReadTransaction(hash)
+	if tx != nil && tx.Hash() != hash {
+		tx, blockHash, blockNumber, txIndex = rawdb.ReadTransaction(bc.db, hash)
+	}
 	if tx == nil {
 		// The transaction is already indexed, the transaction is either
 		// not existent or not in the range of index, returning null.

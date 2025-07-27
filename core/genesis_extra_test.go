@@ -93,7 +93,7 @@ func TestGenesisEthUpgrades(t *testing.T) {
 		},
 		nil, nil, nil, nil,
 	)
-	rawdb.WriteBlock(db, block)
+	blockDb.WriteBlock(block)
 
 	// We should still be able to re-initialize
 	config = *preEthUpgrades

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/meterblockdb"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/x/blockdb"
@@ -46,7 +47,11 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	if err != nil {
 		return err
 	}
-	vm.blockdb = ethblockdb.New(blockDatabase, vm.chaindb)
+	meteredBlockDB, err := meterblockdb.New(vm.sdkMetrics, "blockdb", blockDatabase)
+	if err != nil {
+		return err
+	}
+	vm.blockdb = ethblockdb.New(meteredBlockDB, vm.chaindb)
 
 	return nil
 }

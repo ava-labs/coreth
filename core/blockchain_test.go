@@ -315,7 +315,7 @@ func TestBlockChainOfflinePruningUngracefulShutdown(t *testing.T) {
 			BloomSize: 256,
 		}
 
-		pruner, err := pruner.NewPruner(db, prunerConfig)
+		pruner, err := pruner.NewPruner(db, blockDb, prunerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("offline pruning failed (%s, %d): %w", tempDir, 256, err)
 		}
@@ -508,7 +508,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 				foundTxs = append(foundTxs, tx.Hash())
 			}
 		} else {
-			// If > 3, all txs should be accessible on lookup
+			// If > 3, all txs should not be accessible on lookup
 			for _, tx := range block.Transactions() {
 				missingTxs = append(missingTxs, tx.Hash())
 			}

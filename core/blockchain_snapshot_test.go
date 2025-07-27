@@ -39,6 +39,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
@@ -93,12 +94,14 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 		}
 		engine = dummy.NewFullFaker()
 	)
-	blockDb := ethblockdb.NewMock(db)
-	chain, err := NewBlockChain(db, blockDb, DefaultCacheConfigWithScheme(basic.scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
+	basic.datadir = datadir
+	basic.db = db
+	basic.blockDb = basic.newBlockDb(t)
+	chain, err := NewBlockChain(db, basic.blockDb, DefaultCacheConfigWithScheme(basic.scheme), gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {
 		t.Fatalf("Failed to create chain: %v", err)
 	}
-	genDb, genBlocksDb, blocks, _, _ := GenerateChainWithGenesis(gspec, engine, basic.chainBlocks, 10, func(i int, b *BlockGen) {})
+	genDb, _, blocks, _, _ := GenerateChainWithGenesis(gspec, engine, basic.chainBlocks, 10, func(i int, b *BlockGen) {})
 
 	// genesis as last accepted
 	basic.lastAcceptedHash = chain.GetBlockByNumber(0).Hash()
@@ -134,13 +137,11 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	}
 
 	// Set runtime fields
-	basic.datadir = datadir
 	basic.ancient = ancient
 	basic.db = db
 	basic.genDb = genDb
 	basic.engine = engine
 	basic.gspec = gspec
-	basic.blockDb = genBlocksDb
 	return chain, blocks
 }
 
@@ -217,6 +218,7 @@ func (basic *snapshotTestBasic) dump() string {
 func (basic *snapshotTestBasic) teardown() {
 	basic.db.Close()
 	basic.genDb.Close()
+	basic.blockDb.Close()
 	os.RemoveAll(basic.datadir)
 	os.RemoveAll(basic.ancient)
 }
@@ -250,6 +252,14 @@ type crashSnapshotTest struct {
 	snapshotTestBasic
 }
 
+func (snaptest *snapshotTestBasic) newBlockDb(t *testing.T) ethblockdb.Database {
+	blockDb, err := blockdb.New(blockdb.DefaultConfig().WithDir(snaptest.datadir).WithSyncToDisk(false), nil)
+	if err != nil {
+		t.Fatalf("Failed to create block database: %v", err)
+	}
+	return ethblockdb.New(blockDb, snaptest.db)
+}
+
 func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
 	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
@@ -261,6 +271,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	db.Close()
 	chain.stopWithoutSaving()
 	chain.triedb.Close()
+	chain.blockDb.Close()
 
 	// Start a new blockchain back up and see where the repair leads us
 	newdb, err := rawdb.Open(rawdb.OpenOptions{
@@ -270,20 +281,22 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
+	snaptest.db = newdb
+	newBlockDb := snaptest.newBlockDb(t)
+	defer newBlockDb.Close()
 	defer newdb.Close()
 
 	// The interesting thing is: instead of starting the blockchain after
 	// the crash, we do restart twice here: one after the crash and one
 	// after the normal stop. It's used to ensure the broken snapshot
 	// can be detected all the time.
-	blockDb := ethblockdb.NewMock(newdb)
-	newchain, err := NewBlockChain(newdb, blockDb, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
+	newchain, err := NewBlockChain(newdb, newBlockDb, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}
 	newchain.Stop()
 
-	newchain, err = NewBlockChain(newdb, blockDb, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
+	newchain, err = NewBlockChain(newdb, newBlockDb, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, snaptest.engine, vm.Config{}, snaptest.lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
 	}

@@ -743,7 +743,6 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 func (bc *BlockChain) loadGenesisState() error {
 	// Prepare the genesis block and reinitialise the chain
 	bc.blockDb.WriteBlock(bc.genesisBlock)
-	rawdb.WriteHeaderNumber(bc.db, bc.genesisBlock.Hash(), bc.genesisBlock.NumberU64())
 	bc.writeHeadBlock(bc.genesisBlock)
 
 	// Last update all in-memory chain markers
@@ -1096,6 +1095,8 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		rawdb.DeleteBody(batch, block.Hash(), block.NumberU64())
 		// add back the hash->number mapping since DeleteHeader will have removed it
 		rawdb.WriteHeaderNumber(batch, block.Hash(), block.NumberU64())
+		// save the sidechain block back to the chaindb
+		rawdb.WriteBlock(batch, savedBlock)
 		if err := batch.Write(); err != nil {
 			return fmt.Errorf("failed to write delete block batch: %w", err)
 		}
@@ -1217,7 +1218,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 	blockNumber := block.NumberU64()
 	if !bc.blockDb.HasBlock(blockNumber) {
 		bc.blockDb.WriteBlock(block)
-		rawdb.WriteHeaderNumber(blockBatch, block.Hash(), blockNumber)
 	} else {
 		// write block to the chaindb if we already stored a block at the same height
 		rawdb.WriteBlock(bc.db, block)

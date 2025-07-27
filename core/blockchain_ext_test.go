@@ -177,6 +177,7 @@ func checkBlockChainState(
 	if err != nil {
 		t.Fatal(err)
 	}
+	originalBlockDb = ethblockdb.Copy(originalBlockDb, originalDB)
 	restartedChain, err := create(originalDB, originalBlockDb, gspec, lastAcceptedBlock.Hash())
 	if err != nil {
 		t.Fatal(err)
@@ -1215,6 +1216,7 @@ func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create func(db eth
 	blockchain.Stop()
 
 	chainDB = rawdb.NewMemoryDatabase()
+	blockDb = ethblockdb.NewMock(chainDB)
 	blockchain, err = create(chainDB, blockDb, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
