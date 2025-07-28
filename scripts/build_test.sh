@@ -1,13 +1,8 @@
-#!/usr/local/bin/bash
+#!/usr/bin/env bash
 
 set -o errexit
 set -o nounset
 set -o pipefail
-
-# Debug: Show bash version and shell info
-echo "Bash version: $(bash --version | head -n1)"
-echo "Shell: $SHELL"
-echo "Current shell: $(ps -p $$ -o comm=)"
 
 # Avalanche root directory
 CORETH_PATH=$(
@@ -53,6 +48,18 @@ detect_panics() {
 get_package_tests() {
     local package="$1"
     go test -list=".*" "$package" 2>/dev/null | grep "^Test" || true
+}
+
+# Lookup helper: given a test name, echo its package
+get_pkg_for_test() {
+  local test_name="$1"
+  for i in "${!test_pkg_keys[@]}"; do
+    if [[ "${test_pkg_keys[i]}" == "$test_name" ]]; then
+      printf '%s' "${test_pkg_vals[i]}"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # Function to get tests that didn't run due to panic
@@ -115,14 +122,19 @@ echo "Failed tests: $failed_tests"
 failing_packages=$(grep "^FAIL" test.out | awk '{print $2}' | sort -u)
 echo "Failing packages: $failing_packages"
 
-declare -A test_pkg_map
+test_pkg_keys=()
+test_pkg_vals=()
+
+# Build the map
 for pkg in $failing_packages; do
   for t in $(get_package_tests "$pkg"); do
-    if echo "$failed_tests" | grep -x "$t" >/dev/null; then
-      test_pkg_map["$t"]="$pkg"
+    if grep -x "$t" <<<"$failed_tests" >/dev/null; then
+      test_pkg_keys+=( "$t" )
+      test_pkg_vals+=( "$pkg" )
     fi
   done
 done
+
 
 # Check for unexpected failures
 unexpected_failures=""
@@ -156,11 +168,10 @@ for ((attempt = 1; attempt <= MAX_RUNS; attempt++)); do
     
     # Retry each failed test
     for test in $tests_to_retry; do
-        pkg="${test_pkg_map[$test]:-}"
-        if [[ -z "$pkg" ]]; then
-            echo "ERROR: no package mapping for test $test" >&2
+        pkg=$(get_pkg_for_test "$test") || {
+            echo "ERROR: no package mapping for $test" >&2
             exit 1
-        fi
+        }
         echo "Retrying test: $test in package: $pkg"
         run_specific_test "$test" "$retry_output" "$pkg"
         test_status=$?
