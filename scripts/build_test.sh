@@ -4,6 +4,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Debug: Show bash version and shell info
+echo "Bash version: $(bash --version | head -n1)"
+echo "Shell: $SHELL"
+echo "Current shell: $(ps -p $$ -o comm=)"
+
 # Avalanche root directory
 CORETH_PATH=$(
   cd "$(dirname "${BASH_SOURCE[0]}")"
