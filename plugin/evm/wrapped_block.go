@@ -127,8 +127,9 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 		return nil
 	}
 
-	// Read receipts from disk
-	receipts := b.vm.blockdb.ReadReceipts(b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.ethBlock.Time(), b.vm.chainConfig)
+	// Read receipts from disk or ethdb
+	receipts := b.vm.blockChain.GetReceiptsByHash(b.ethBlock.Hash())
+
 	// If there are no receipts, ReadReceipts may be nil, so we check the length and confirm the ReceiptHash
 	// is empty to ensure that missing receipts results in an error on accept.
 	if len(receipts) == 0 && b.ethBlock.ReceiptHash() != types.EmptyRootHash {
