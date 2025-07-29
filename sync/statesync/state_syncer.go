@@ -5,7 +5,6 @@ package statesync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -25,16 +24,6 @@ const (
 	defaultNumWorkers      = 8
 )
 
-var (
-	errNilClient                       = errors.New("Client cannot be nil")
-	errNilDatabase                     = errors.New("DB cannot be nil")
-	errEmptyRoot                       = errors.New("Root cannot be empty")
-	errInvalidBatchSize                = errors.New("BatchSize must be greater than 0")
-	errInvalidMaxOutstandingCodeHashes = errors.New("MaxOutstandingCodeHashes must be greater than 0")
-	errInvalidNumCodeFetchingWorkers   = errors.New("NumCodeFetchingWorkers must be greater than 0")
-	errInvalidRequestSize              = errors.New("RequestSize must be greater than 0")
-)
-
 var _ synccommon.Syncer = (*stateSync)(nil)
 
 type Config struct {
@@ -45,33 +34,6 @@ type Config struct {
 	MaxOutstandingCodeHashes int    // Maximum number of code hashes in the code syncer queue
 	NumCodeFetchingWorkers   int    // Number of code syncing threads
 	RequestSize              uint16 // Number of leafs to request from a peer at a time
-}
-
-// Validate checks if the configuration is valid and returns an error if not.
-func (c *Config) Validate() error {
-	if c.Client == nil {
-		return errNilClient
-	}
-	if c.DB == nil {
-		return errNilDatabase
-	}
-	if c.Root == (common.Hash{}) {
-		return errEmptyRoot
-	}
-	if c.BatchSize <= 0 {
-		return errInvalidBatchSize
-	}
-	if c.MaxOutstandingCodeHashes <= 0 {
-		return errInvalidMaxOutstandingCodeHashes
-	}
-	if c.NumCodeFetchingWorkers <= 0 {
-		return errInvalidNumCodeFetchingWorkers
-	}
-	if c.RequestSize == 0 {
-		return errInvalidRequestSize
-	}
-
-	return nil
 }
 
 // stateSync keeps the state of the entire state sync operation.
@@ -107,11 +69,6 @@ type stateSync struct {
 }
 
 func NewSyncer(config *Config) (synccommon.Syncer, error) {
-	// Validate the configuration
-	if err := config.Validate(); err != nil {
-		return nil, err
-	}
-
 	ss := &stateSync{
 		batchSize:       config.BatchSize,
 		db:              config.DB,
