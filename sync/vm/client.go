@@ -5,7 +5,6 @@ package vm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -39,13 +38,7 @@ const (
 	evmStateSyncOperationName    = "EVM State Sync"
 )
 
-// Sentinel errors for sync failures
-var (
-	ErrEVMStateSyncFailed    = errors.New("EVM state sync failed")
-	ErrAtomicStateSyncFailed = errors.New("atomic state sync failed")
-
-	stateSyncSummaryKey = []byte("stateSyncSummary")
-)
+var stateSyncSummaryKey = []byte("stateSyncSummary")
 
 // BlockAcceptor is an interface that allows for accepting blocks.
 type BlockAcceptor interface {
@@ -106,12 +99,12 @@ func NewClient(config *ClientConfig) Client {
 }
 
 type Client interface {
-	// StateSyncEnabled methods that implement the client side of [block.StateSyncableVM].
+	// Methods that implement the client side of [block.StateSyncableVM].
 	StateSyncEnabled(context.Context) (bool, error)
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
 	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
 
-	// ClearOngoingSummary additional methods required by the evm package.
+	// Additional methods required by the evm package.
 	ClearOngoingSummary() error
 	Shutdown() error
 	Error() error

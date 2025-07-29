@@ -67,9 +67,8 @@ func testSync(t *testing.T, test syncTest) {
 		RequestSize:              1024,
 	})
 	require.NoError(t, err, "failed to create state syncer")
-	// begin sync
-	err = s.Start(ctx)
-	require.NoError(t, err, "failed to start state syncer")
+
+	require.NoError(t, s.Start(ctx), "failed to start state syncer")
 
 	waitFor(t, context.Background(), s.Wait, test.expectedError, testSyncTimeout)
 

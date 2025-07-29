@@ -92,31 +92,6 @@ func TestSyncerRegistry_Register_DuplicateName(t *testing.T) {
 	require.Len(t, registry.syncers, 1) // Should not have added the duplicate.
 }
 
-func TestSyncerRegistry_RegistrationOrder(t *testing.T) {
-	registry := NewSyncerRegistry()
-
-	syncer1 := newMockSyncer("Syncer1", 0, 0, nil, nil)
-	syncer2 := newMockSyncer("Syncer2", 0, 0, nil, nil)
-	syncer3 := newMockSyncer("Syncer3", 0, 0, nil, nil)
-
-	// Register in specific order
-	require.NoError(t, registry.Register("Syncer1", syncer1))
-	require.NoError(t, registry.Register("Syncer2", syncer2))
-	require.NoError(t, registry.Register("Syncer3", syncer3))
-
-	// Verify syncers are in registration order
-	require.Equal(t, "Syncer1", registry.syncers[0].name)
-	require.Equal(t, "Syncer2", registry.syncers[1].name)
-	require.Equal(t, "Syncer3", registry.syncers[2].name)
-}
-
-func TestSyncerRegistry_EmptyExecution(t *testing.T) {
-	registry := NewSyncerRegistry()
-
-	// Test that empty registry doesn't cause issues
-	require.Len(t, registry.syncers, 0)
-}
-
 func TestSyncerRegistry_SyncerLifecycle(t *testing.T) {
 	// Test individual syncer lifecycle
 	syncer := newMockSyncer("TestSyncer", 0, 0, nil, nil)

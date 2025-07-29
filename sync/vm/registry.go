@@ -26,8 +26,7 @@ type SyncerRegistry struct {
 // NewSyncerRegistry creates a new empty syncer registry.
 func NewSyncerRegistry() *SyncerRegistry {
 	return &SyncerRegistry{
-		syncers: make([]SyncerTask, 0),
-		names:   make(map[string]bool),
+		names: make(map[string]bool),
 	}
 }
 
