@@ -165,7 +165,9 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	}
 
 	// If the tx was either already in the mempool or was added to the mempool,
-	// we push it to the network for inclusion.
+	// we push it to the network for inclusion. If the tx was previously added
+	// to the mempool through p2p gossip, this will ensure this node also pushes
+	// it to the network.
 	service.vm.AtomicTxPushGossiper.Add(tx)
 	return nil
 }
