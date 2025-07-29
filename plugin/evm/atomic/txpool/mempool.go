@@ -18,8 +18,8 @@ import (
 var (
 	_ gossip.Set[*atomic.Tx] = (*Mempool)(nil)
 
-	ErrTxAlreadyKnown  = errors.New("tx already known")
-	ErrConflictingTx   = errors.New("conflicting tx present")
+	ErrAlreadyKnown    = errors.New("already known")
+	ErrConflict        = errors.New("conflict present")
 	ErrInsufficientFee = errors.New("insufficient fee")
 	ErrMempoolFull     = errors.New("mempool full")
 )
@@ -68,7 +68,7 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 
 	err := m.addTx(tx, false, false)
 	// Do not attempt to discard the tx if it was already known
-	if errors.Is(err, ErrTxAlreadyKnown) {
+	if errors.Is(err, ErrAlreadyKnown) {
 		return err
 	}
 
@@ -90,7 +90,7 @@ func (m *Mempool) AddLocalTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, true, false)
-	if errors.Is(err, ErrTxAlreadyKnown) {
+	if errors.Is(err, ErrAlreadyKnown) {
 		return nil
 	}
 
@@ -151,17 +151,17 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	// If [txID] has already been issued or is in the currentTxs map
 	// there's no need to add it.
 	if _, exists := m.issuedTxs[txID]; exists {
-		return fmt.Errorf("%w: tx %s was issued previously", ErrTxAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s was issued previously", ErrAlreadyKnown, tx.ID())
 	}
 	if _, exists := m.currentTxs[txID]; exists {
-		return fmt.Errorf("%w: tx %s is being built into a block", ErrTxAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s is being built into a block", ErrAlreadyKnown, tx.ID())
 	}
 	if _, exists := m.txHeap.Get(txID); exists {
-		return fmt.Errorf("%w: tx %s is pending", ErrTxAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s is pending", ErrAlreadyKnown, tx.ID())
 	}
 	if !local {
 		if _, exists := m.discardedTxs.Get(txID); exists {
-			return fmt.Errorf("%w: tx %s was discarded", ErrTxAlreadyKnown, tx.ID())
+			return fmt.Errorf("%w: tx %s was discarded", ErrAlreadyKnown, tx.ID())
 		}
 	}
 	if !force && m.verify != nil {
@@ -182,7 +182,7 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 		if highestGasPrice >= gasPrice {
 			return fmt.Errorf(
 				"%w: issued tx (%s) gas price %d <= conflict tx (%s) gas price %d (%d total conflicts in mempool)",
-				ErrConflictingTx,
+				ErrConflict,
 				txID,
 				gasPrice,
 				highestGasPriceConflictTxID,
