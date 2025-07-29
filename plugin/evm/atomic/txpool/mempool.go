@@ -61,7 +61,7 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 
 	err := m.addTx(tx, false, false)
 	// Do not attempt to discard the tx if it was already known
-	if errors.Is(err, errTxAlreadyKnown) {
+	if errors.Is(err, ErrTxAlreadyKnown) {
 		return err
 	}
 
@@ -83,7 +83,7 @@ func (m *Mempool) AddLocalTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, true, false)
-	if errors.Is(err, errTxAlreadyKnown) {
+	if errors.Is(err, ErrTxAlreadyKnown) {
 		return nil
 	}
 
@@ -144,17 +144,17 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	// If [txID] has already been issued or is in the currentTxs map
 	// there's no need to add it.
 	if _, exists := m.issuedTxs[txID]; exists {
-		return fmt.Errorf("%w: tx %s was issued previously", errTxAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s was issued previously", ErrTxAlreadyKnown, tx.ID())
 	}
 	if _, exists := m.currentTxs[txID]; exists {
-		return fmt.Errorf("%w: tx %s is being built into a block", errTxAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s is being built into a block", ErrTxAlreadyKnown, tx.ID())
 	}
 	if _, exists := m.txHeap.Get(txID); exists {
-		return fmt.Errorf("%w: tx %s is pending", errTxAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s is pending", ErrTxAlreadyKnown, tx.ID())
 	}
 	if !local {
 		if _, exists := m.discardedTxs.Get(txID); exists {
-			return fmt.Errorf("%w: tx %s was discarded", errTxAlreadyKnown, tx.ID())
+			return fmt.Errorf("%w: tx %s was discarded", ErrTxAlreadyKnown, tx.ID())
 		}
 	}
 	if !force && m.verify != nil {

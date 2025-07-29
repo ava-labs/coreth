@@ -18,8 +18,8 @@ import (
 const discardedTxsCacheSize = 50
 
 var (
-	errTxAlreadyKnown  = errors.New("tx already known")
-	errNoGasUsed       = errors.New("no gas used")
+	ErrTxAlreadyKnown  = errors.New("tx already known")
+	ErrNoGasUsed       = errors.New("no gas used")
 	ErrConflictingTx   = errors.New("conflicting tx present")
 	ErrInsufficientFee = errors.New("insufficient fee")
 	ErrMempoolFull     = errors.New("mempool full")
@@ -90,7 +90,7 @@ func (t *Txs) atomicTxGasPrice(tx *atomic.Tx) (uint64, error) {
 		return 0, err
 	}
 	if gasUsed == 0 {
-		return 0, errNoGasUsed
+		return 0, ErrNoGasUsed
 	}
 	burned, err := tx.Burned(t.ctx.AVAXAssetID)
 	if err != nil {

@@ -62,7 +62,7 @@ func TestMempoolAdd(t *testing.T) {
 
 	require.NoError(m.Add(tx))
 	err = m.Add(tx)
-	require.ErrorIs(err, errTxAlreadyKnown)
+	require.ErrorIs(err, ErrTxAlreadyKnown)
 }
 
 func TestAtomicMempoolIterate(t *testing.T) {
