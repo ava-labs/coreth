@@ -105,13 +105,6 @@ func (m *Mempool) ForceAddTx(tx *atomic.Tx) error {
 	return m.addTx(tx, true, true)
 }
 
-func (m *Mempool) GetFilter() ([]byte, []byte) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	return m.bloom.Marshal()
-}
-
 // checkConflictTx checks for any transactions in the mempool that spend the same input UTXOs as [tx].
 // If any conflicts are present, it returns the highest gas price of any conflicting transaction, the
 // txID of the corresponding tx and the full list of transactions that conflict with [tx].
@@ -262,4 +255,11 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	m.addPending()
 
 	return nil
+}
+
+func (m *Mempool) GetFilter() ([]byte, []byte) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	return m.bloom.Marshal()
 }
