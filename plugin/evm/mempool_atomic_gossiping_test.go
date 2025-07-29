@@ -7,11 +7,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// try to add a conflicting tx
 			err = tvm.atomicVM.AtomicMempool.AddLocalTx(conflictingTx)
-			assert.ErrorIs(err, atomictxpool.ErrConflictingAtomicTx)
+			assert.ErrorIs(err, atomictxpool.ErrConflict)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 
