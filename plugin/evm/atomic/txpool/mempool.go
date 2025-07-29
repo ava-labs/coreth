@@ -175,7 +175,7 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 		if highestGasPrice >= gasPrice {
 			return fmt.Errorf(
 				"%w: issued tx (%s) gas price %d <= conflict tx (%s) gas price %d (%d total conflicts in mempool)",
-				ErrConflictingAtomicTx,
+				ErrConflictingTx,
 				txID,
 				gasPrice,
 				highestGasPriceConflictTxID,
@@ -200,7 +200,7 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 			if minGasPrice >= gasPrice {
 				return fmt.Errorf(
 					"%w currentMin=%d provided=%d",
-					ErrInsufficientAtomicTxFee,
+					ErrInsufficientFee,
 					minGasPrice,
 					gasPrice,
 				)
@@ -210,7 +210,7 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 		} else {
 			// This could occur if we have used our entire size allowance on
 			// transactions that are currently processing.
-			return ErrTooManyAtomicTx
+			return ErrMempoolFull
 		}
 	}
 

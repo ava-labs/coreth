@@ -170,7 +170,7 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 	// try to add one more tx
 	tx2 := atomictest.GenerateTestImportTx()
 	err = mempool.AddRemoteTx(tx2)
-	require.ErrorIs(err, ErrTooManyAtomicTx)
+	require.ErrorIs(err, ErrMempoolFull)
 	require.False(mempool.Has(tx2.ID()))
 }
 
@@ -192,7 +192,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 
 	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
 	err = mempool.AddRemoteTx(tx2)
-	require.ErrorIs(err, ErrInsufficientAtomicTxFee)
+	require.ErrorIs(err, ErrInsufficientFee)
 	require.True(mempool.Has(tx1.ID()))
 	require.False(mempool.Has(tx2.ID()))
 

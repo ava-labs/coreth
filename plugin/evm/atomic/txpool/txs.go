@@ -18,11 +18,11 @@ import (
 const discardedTxsCacheSize = 50
 
 var (
-	errTxAlreadyKnown          = errors.New("tx already known")
-	errNoGasUsed               = errors.New("no gas used")
-	ErrConflictingAtomicTx     = errors.New("conflicting atomic tx present")
-	ErrInsufficientAtomicTxFee = errors.New("atomic tx fee too low for atomic mempool")
-	ErrTooManyAtomicTx         = errors.New("too many atomic tx")
+	errTxAlreadyKnown  = errors.New("tx already known")
+	errNoGasUsed       = errors.New("no gas used")
+	ErrConflictingTx   = errors.New("conflicting tx present")
+	ErrInsufficientFee = errors.New("insufficient fee")
+	ErrMempoolFull     = errors.New("mempool full")
 )
 
 type Txs struct {
