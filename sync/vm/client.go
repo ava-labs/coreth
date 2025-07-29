@@ -99,21 +99,6 @@ type client struct {
 	err     error
 }
 
-type syncerInfo struct {
-	name    string
-	syncer  synccommon.Syncer
-	errInit error
-}
-
-// newSyncerInfo creates a new syncerInfo struct with optional error
-func newSyncerInfo(name string, syncer synccommon.Syncer, err error) syncerInfo {
-	return syncerInfo{
-		name:    name,
-		syncer:  syncer,
-		errInit: err,
-	}
-}
-
 func NewClient(config *ClientConfig) Client {
 	return &client{
 		ClientConfig: config,
@@ -180,32 +165,45 @@ func (client *client) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	syncers := client.createSyncers(ctx)
+	// Create and register all syncers.
+	registry := NewSyncerRegistry()
 
-	for _, s := range syncers {
-		if s.errInit != nil {
-			switch s.name {
-			case atomicStateSyncOperationName:
-				log.Error("Atomic state sync failed, but continuing with EVM sync", "err", s.errInit)
-			default:
-				return s.errInit
-			}
+	if err := client.registerSyncers(ctx, registry); err != nil {
+		return err
+	}
+
+	// Run all registered syncers concurrently.
+	return registry.RunSyncerTasks(ctx, client)
+}
+
+func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegistry) error {
+	// Register EVM state syncer.
+	evmSyncer, err := client.createEVMSyncer()
+	if err != nil {
+		return fmt.Errorf("failed to create EVM syncer: %w", err)
+	}
+
+	if err := registry.Register(evmStateSyncOperationName, evmSyncer); err != nil {
+		return fmt.Errorf("failed to register EVM syncer: %w", err)
+	}
+
+	// Register atomic syncer.
+	if client.AtomicExtender != nil {
+		atomicSyncer, err := client.createAtomicSyncer(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
 
-		if err := client.runSync(ctx, s.name, s.syncer, client.Client, client.VerDB, client.summary); err != nil {
-			// For EVM sync or other critical syncers, fail immediately.
-			return fmt.Errorf("%s failed: %w", s.name, err)
+		if err := registry.Register(atomicStateSyncOperationName, atomicSyncer); err != nil {
+			return fmt.Errorf("failed to register atomic syncer: %w", err)
 		}
 	}
 
 	return nil
 }
 
-func (client *client) createSyncers(ctx context.Context) []syncerInfo {
-	var syncers []syncerInfo
-
-	// Add EVM state syncer.
-	stateSyncer, err := statesync.NewSyncer(&statesync.Config{
+func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
+	return statesync.NewSyncer(&statesync.Config{
 		Client:                   client.Client,
 		Root:                     client.summary.GetBlockRoot(),
 		BatchSize:                ethdb.IdealBatchSize,
@@ -214,41 +212,10 @@ func (client *client) createSyncers(ctx context.Context) []syncerInfo {
 		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
 		RequestSize:              client.RequestSize,
 	})
-
-	if err != nil {
-		syncers = append(syncers, newSyncerInfo(evmStateSyncOperationName, stateSyncer, fmt.Errorf("%w: %v", ErrEVMStateSyncFailed, err)))
-	} else {
-		syncers = append(syncers, newSyncerInfo(evmStateSyncOperationName, stateSyncer, nil))
-	}
-
-	// Add atomic syncer if configured
-	if client.AtomicExtender != nil {
-		atomicSyncer, err := client.AtomicExtender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
-		if err != nil {
-			syncers = append(syncers, newSyncerInfo(atomicStateSyncOperationName, atomicSyncer, fmt.Errorf("%w: %v", ErrAtomicStateSyncFailed, err)))
-		} else {
-			syncers = append(syncers, newSyncerInfo(atomicStateSyncOperationName, atomicSyncer, nil))
-		}
-	}
-
-	return syncers
 }
 
-// runSync executes the complete sync operation for a given syncer.
-// This encapsulates the entire lifecycle: start → wait.
-func (client *client) runSync(ctx context.Context, operationName string, syncer synccommon.Syncer, syncClient syncclient.Client, verDB *versiondb.Database, summary message.Syncable) error {
-	log.Info(operationName+" starting", "summary", summary)
-
-	// Start syncer
-	if err := syncer.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start %s: %w", operationName, err)
-	}
-
-	// Wait for completion
-	err := syncer.Wait(ctx)
-	log.Info(operationName+" finished", "summary", summary, "err", err)
-
-	return err
+func (client *client) createAtomicSyncer(ctx context.Context) (synccommon.Syncer, error) {
+	return client.AtomicExtender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
