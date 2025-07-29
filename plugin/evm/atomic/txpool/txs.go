@@ -17,13 +17,7 @@ import (
 
 const discardedTxsCacheSize = 50
 
-var (
-	ErrTxAlreadyKnown  = errors.New("tx already known")
-	ErrNoGasUsed       = errors.New("no gas used")
-	ErrConflictingTx   = errors.New("conflicting tx present")
-	ErrInsufficientFee = errors.New("insufficient fee")
-	ErrMempoolFull     = errors.New("mempool full")
-)
+var ErrNoGasUsed = errors.New("no gas used")
 
 type Txs struct {
 	ctx     *snow.Context

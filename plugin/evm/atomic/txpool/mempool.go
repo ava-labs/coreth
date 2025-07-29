@@ -15,7 +15,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var _ gossip.Set[*atomic.Tx] = (*Mempool)(nil)
+var (
+	_ gossip.Set[*atomic.Tx] = (*Mempool)(nil)
+
+	ErrTxAlreadyKnown  = errors.New("tx already known")
+	ErrConflictingTx   = errors.New("conflicting tx present")
+	ErrInsufficientFee = errors.New("insufficient fee")
+	ErrMempoolFull     = errors.New("mempool full")
+)
 
 // Mempool is a simple mempool for atomic transactions
 type Mempool struct {
