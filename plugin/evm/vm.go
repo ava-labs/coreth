@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
+	"github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -41,8 +42,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -533,6 +534,15 @@ func (vm *VM) initializeMetrics() error {
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
 	}
+
+	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == customrawdb.FirewoodScheme {
+		if err := ffi.StartMetrics(); err != nil {
+			return fmt.Errorf("failed to start firewood metrics collection: %w", err)
+		}
+		if err := vm.ctx.Metrics.Register("firewood", ffi.Gatherer{}); err != nil {
+			return fmt.Errorf("failed to register firewood metrics: %w", err)
+		}
+	}
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
 
@@ -674,7 +684,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		MinBlocks:          vm.config.StateSyncMinBlocks,
 		RequestSize:        vm.config.StateSyncRequestSize,
 		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
-		ChaindDB:           vm.chaindb,
+		ChainDB:            vm.chaindb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
 		Acceptor:           vm,

@@ -17,6 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+
+	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
+
 	"github.com/ava-labs/avalanchego/api/metrics"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
@@ -43,9 +48,6 @@ import (
 	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -263,7 +265,7 @@ func getConfig(scheme, otherConfig string) string {
 		if len(innerConfig) > 0 {
 			innerConfig += ", "
 		}
-		innerConfig += fmt.Sprintf(`"state-scheme": "%s", "snapshot-cache": 0, "pruning-enabled": true, "state-sync-enabled": false`, customrawdb.FirewoodScheme)
+		innerConfig += fmt.Sprintf(`"state-scheme": "%s", "snapshot-cache": 0, "pruning-enabled": true, "state-sync-enabled": false, "metrics-expensive-enabled": false`, customrawdb.FirewoodScheme)
 	}
 
 	return fmt.Sprintf(`{%s}`, innerConfig)
