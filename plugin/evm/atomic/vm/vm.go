@@ -150,7 +150,7 @@ func (vm *VM) Initialize(
 		Handler:    leafHandler,
 	}
 
-	txPoolTxs := txpool.NewTxs(chainCtx, defaultMempoolSize)
+	atomicTxs := txpool.NewTxs(chainCtx, defaultMempoolSize)
 	extensionConfig := &extension.Config{
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
 		BlockExtender:              blockExtender,
@@ -158,7 +158,7 @@ func (vm *VM) Initialize(
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
-		ExtraMempool:               txPoolTxs,
+		ExtraMempool:               atomicTxs,
 		Clock:                      &vm.clock,
 	}
 	if err := vm.InnerVM.SetExtensionConfig(extensionConfig); err != nil {
@@ -179,12 +179,11 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize inner VM: %w", err)
 	}
 
-	// Now we can initialize the mempool and so
-	mempool, err := txpool.NewMempool(txPoolTxs, vm.InnerVM.MetricRegistry(), vm.verifyTxAtTip)
+	atomicMempool, err := txpool.NewMempool(atomicTxs, vm.InnerVM.MetricRegistry(), vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
-	vm.AtomicMempool = mempool
+	vm.AtomicMempool = atomicMempool
 
 	// initialize bonus blocks on mainnet
 	var (
