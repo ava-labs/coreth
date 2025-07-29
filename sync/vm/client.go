@@ -202,7 +202,7 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 }
 
 func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Hash, fromHeight uint64, parentsToGet int) (synccommon.Syncer, error) {
-	return blocksync.NewBlockSyncer(&blocksync.BlockSyncerConfig{
+	return blocksync.NewSyncer(&blocksync.Config{
 		ChainDB:      client.ChainDB,
 		Client:       client.Client,
 		FromHash:     fromHash,
