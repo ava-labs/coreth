@@ -65,11 +65,8 @@ func TestSyncerRegistry_Register(t *testing.T) {
 	syncer1 := newMockSyncer("TestSyncer1", 0, 0, nil, nil)
 	syncer2 := newMockSyncer("TestSyncer2", 0, 0, nil, nil)
 
-	err := registry.Register("Syncer1", syncer1)
-	require.NoError(t, err)
-
-	err = registry.Register("Syncer2", syncer2)
-	require.NoError(t, err)
+	require.NoError(t, registry.Register("Syncer1", syncer1))
+	require.NoError(t, registry.Register("Syncer2", syncer2))
 
 	require.Len(t, registry.syncers, 2)
 	require.Equal(t, "Syncer1", registry.syncers[0].name)
@@ -85,12 +82,11 @@ func TestSyncerRegistry_Register_DuplicateName(t *testing.T) {
 	syncer2 := newMockSyncer("TestSyncer", 0, 0, nil, nil)
 
 	// First registration should succeed.
-	err := registry.Register("TestSyncer", syncer1)
-	require.NoError(t, err)
+	require.NoError(t, registry.Register("TestSyncer", syncer1))
 	require.Len(t, registry.syncers, 1)
 
 	// Second registration with same name should fail.
-	err = registry.Register("TestSyncer", syncer2)
+	err := registry.Register("TestSyncer", syncer2)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "syncer with name 'TestSyncer' is already registered")
 	require.Len(t, registry.syncers, 1) // Should not have added the duplicate.
@@ -104,14 +100,9 @@ func TestSyncerRegistry_RegistrationOrder(t *testing.T) {
 	syncer3 := newMockSyncer("Syncer3", 0, 0, nil, nil)
 
 	// Register in specific order
-	err := registry.Register("Syncer1", syncer1)
-	require.NoError(t, err)
-
-	err = registry.Register("Syncer2", syncer2)
-	require.NoError(t, err)
-
-	err = registry.Register("Syncer3", syncer3)
-	require.NoError(t, err)
+	require.NoError(t, registry.Register("Syncer1", syncer1))
+	require.NoError(t, registry.Register("Syncer2", syncer2))
+	require.NoError(t, registry.Register("Syncer3", syncer3))
 
 	// Verify syncers are in registration order
 	require.Equal(t, "Syncer1", registry.syncers[0].name)
@@ -133,13 +124,11 @@ func TestSyncerRegistry_SyncerLifecycle(t *testing.T) {
 	ctx := context.Background()
 
 	// Test successful execution
-	err := syncer.Start(ctx)
-	require.NoError(t, err)
+	require.NoError(t, syncer.Start(ctx))
 	require.True(t, syncer.startCalled)
 	require.Equal(t, 1, syncer.startCallCount)
 
-	err = syncer.Wait(ctx)
-	require.NoError(t, err)
+	require.NoError(t, syncer.Wait(ctx))
 	require.True(t, syncer.waitCalled)
 	require.Equal(t, 1, syncer.waitCallCount)
 }
@@ -171,11 +160,8 @@ func TestSyncerRegistry_SyncerDelays(t *testing.T) {
 	ctx := context.Background()
 	start := time.Now()
 
-	err := syncer.Start(ctx)
-	require.NoError(t, err)
-
-	err = syncer.Wait(ctx)
-	require.NoError(t, err)
+	require.NoError(t, syncer.Start(ctx))
+	require.NoError(t, syncer.Wait(ctx))
 
 	duration := time.Since(start)
 
