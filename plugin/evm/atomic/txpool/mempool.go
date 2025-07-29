@@ -89,12 +89,7 @@ func (m *Mempool) AddLocalTx(tx *atomic.Tx) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	err := m.addTx(tx, true, false)
-	if errors.Is(err, ErrAlreadyKnown) {
-		return nil
-	}
-
-	return err
+	return m.addTx(tx, true, false)
 }
 
 // ForceAddTx forcibly adds a *atomic.Tx to the mempool and bypasses all verification.
