@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockSyncer implements synccommon.Syncer for testing
+// mockSyncer implements synccommon.Syncer for testing.
 type mockSyncer struct {
 	name           string
 	startDelay     time.Duration
@@ -41,6 +41,7 @@ func (m *mockSyncer) Start(ctx context.Context) error {
 	if m.startDelay > 0 {
 		time.Sleep(m.startDelay)
 	}
+
 	return m.startError
 }
 
@@ -50,6 +51,7 @@ func (m *mockSyncer) Wait(ctx context.Context) error {
 	if m.waitDelay > 0 {
 		time.Sleep(m.waitDelay)
 	}
+
 	return m.waitError
 }
 
@@ -60,86 +62,199 @@ func TestNewSyncerRegistry(t *testing.T) {
 }
 
 func TestSyncerRegistry_Register(t *testing.T) {
-	registry := NewSyncerRegistry()
+	tests := []struct {
+		name          string
+		registrations []struct {
+			name   string
+			syncer *mockSyncer
+		}
+		expectedError string
+		expectedCount int
+	}{
+		{
+			name: "successful registrations",
+			registrations: []struct {
+				name   string
+				syncer *mockSyncer
+			}{
+				{"Syncer1", newMockSyncer("TestSyncer1", 0, 0, nil, nil)},
+				{"Syncer2", newMockSyncer("TestSyncer2", 0, 0, nil, nil)},
+			},
+			expectedError: "",
+			expectedCount: 2,
+		},
+		{
+			name: "duplicate name registration",
+			registrations: []struct {
+				name   string
+				syncer *mockSyncer
+			}{
+				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
+				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
+			},
+			expectedError: "syncer with name 'Syncer1' is already registered",
+			expectedCount: 1,
+		},
+		{
+			name: "preserve registration order",
+			registrations: []struct {
+				name   string
+				syncer *mockSyncer
+			}{
+				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
+				{"Syncer2", newMockSyncer("Syncer2", 0, 0, nil, nil)},
+				{"Syncer3", newMockSyncer("Syncer3", 0, 0, nil, nil)},
+			},
+			expectedCount: 3,
+		},
+	}
 
-	syncer1 := newMockSyncer("TestSyncer1", 0, 0, nil, nil)
-	syncer2 := newMockSyncer("TestSyncer2", 0, 0, nil, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewSyncerRegistry()
+			var errLast error
 
-	require.NoError(t, registry.Register("Syncer1", syncer1))
-	require.NoError(t, registry.Register("Syncer2", syncer2))
+			// Perform registrations.
+			for _, reg := range tt.registrations {
+				err := registry.Register(reg.name, reg.syncer)
+				if err != nil {
+					errLast = err
+					break
+				}
+			}
 
-	require.Len(t, registry.syncers, 2)
-	require.Equal(t, "Syncer1", registry.syncers[0].name)
-	require.Equal(t, syncer1, registry.syncers[0].syncer)
-	require.Equal(t, "Syncer2", registry.syncers[1].name)
-	require.Equal(t, syncer2, registry.syncers[1].syncer)
+			// Check error expectations.
+			if tt.expectedError != "" {
+				require.Error(t, errLast)
+				require.Contains(t, errLast.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, errLast)
+			}
+
+			// Verify registration count.
+			require.Len(t, registry.syncers, tt.expectedCount)
+
+			// Verify registration order for successful cases.
+			if tt.expectedError == "" {
+				for i, reg := range tt.registrations {
+					require.Equal(t, reg.name, registry.syncers[i].name)
+					require.Equal(t, reg.syncer, registry.syncers[i].syncer)
+				}
+			}
+		})
+	}
 }
 
-func TestSyncerRegistry_Register_DuplicateName(t *testing.T) {
-	registry := NewSyncerRegistry()
+func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
+	tests := []struct {
+		name    string
+		syncers []struct {
+			name       string
+			startDelay time.Duration
+			waitDelay  time.Duration
+			startError error
+			waitError  error
+		}
+		expectedError string
+		assertState   func(t *testing.T, mockSyncers []*mockSyncer, expectedError string)
+	}{
+		{
+			name: "successful execution",
+			syncers: []struct {
+				name       string
+				startDelay time.Duration
+				waitDelay  time.Duration
+				startError error
+				waitError  error
+			}{
+				{"Syncer1", 0, 0, nil, nil},
+				{"Syncer2", 0, 0, nil, nil},
+			},
+			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
+				for i, mockSyncer := range mockSyncers {
+					require.True(t, mockSyncer.startCalled, "Syncer %d should have been started", i)
+					require.True(t, mockSyncer.waitCalled, "Syncer %d should have been waited on", i)
+				}
+			},
+		},
+		{
+			name: "start error stops execution",
+			syncers: []struct {
+				name       string
+				startDelay time.Duration
+				waitDelay  time.Duration
+				startError error
+				waitError  error
+			}{
+				{"Syncer1", 0, 0, errors.New("start failed"), nil},
+				{"Syncer2", 0, 0, nil, nil},
+			},
+			expectedError: "failed to start Syncer1",
+			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
+				// First syncer should be started but not waited on.
+				require.True(t, mockSyncers[0].startCalled, "First syncer should have been started")
+				require.False(t, mockSyncers[0].waitCalled, "First syncer should not have been waited on due to start error")
+				// Second syncer should not be started.
+				require.False(t, mockSyncers[1].startCalled, "Second syncer should not have been started")
+				require.False(t, mockSyncers[1].waitCalled, "Second syncer should not have been waited on")
+			},
+		},
+		{
+			name: "wait error stops execution",
+			syncers: []struct {
+				name       string
+				startDelay time.Duration
+				waitDelay  time.Duration
+				startError error
+				waitError  error
+			}{
+				{"Syncer1", 0, 0, nil, errors.New("wait failed")},
+				{"Syncer2", 0, 0, nil, nil},
+			},
+			expectedError: "Syncer1 failed",
+			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
+				// First syncer should be started and waited on (but wait failed).
+				require.True(t, mockSyncers[0].startCalled, "First syncer should have been started")
+				require.True(t, mockSyncers[0].waitCalled, "First syncer should have been waited on")
+				// Second syncer should not be started.
+				require.False(t, mockSyncers[1].startCalled, "Second syncer should not have been started")
+				require.False(t, mockSyncers[1].waitCalled, "Second syncer should not have been waited on")
+			},
+		},
+	}
 
-	syncer1 := newMockSyncer("TestSyncer", 0, 0, nil, nil)
-	syncer2 := newMockSyncer("TestSyncer", 0, 0, nil, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registry := NewSyncerRegistry()
+			mockSyncers := make([]*mockSyncer, len(tt.syncers))
 
-	// First registration should succeed.
-	require.NoError(t, registry.Register("TestSyncer", syncer1))
-	require.Len(t, registry.syncers, 1)
+			// Register syncers.
+			for i, syncerConfig := range tt.syncers {
+				mockSyncer := newMockSyncer(
+					syncerConfig.name,
+					syncerConfig.startDelay,
+					syncerConfig.waitDelay,
+					syncerConfig.startError,
+					syncerConfig.waitError,
+				)
+				mockSyncers[i] = mockSyncer
+				require.NoError(t, registry.Register(syncerConfig.name, mockSyncer))
+			}
 
-	// Second registration with same name should fail.
-	err := registry.Register("TestSyncer", syncer2)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "syncer with name 'TestSyncer' is already registered")
-	require.Len(t, registry.syncers, 1) // Should not have added the duplicate.
-}
+			ctx := context.Background()
+			mockClient := &client{}
 
-func TestSyncerRegistry_SyncerLifecycle(t *testing.T) {
-	// Test individual syncer lifecycle
-	syncer := newMockSyncer("TestSyncer", 0, 0, nil, nil)
+			err := registry.RunSyncerTasks(ctx, mockClient)
 
-	ctx := context.Background()
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
 
-	// Test successful execution
-	require.NoError(t, syncer.Start(ctx))
-	require.True(t, syncer.startCalled)
-	require.Equal(t, 1, syncer.startCallCount)
-
-	require.NoError(t, syncer.Wait(ctx))
-	require.True(t, syncer.waitCalled)
-	require.Equal(t, 1, syncer.waitCallCount)
-}
-
-func TestSyncerRegistry_SyncerErrors(t *testing.T) {
-	// Test syncer error handling
-	startError := errors.New("start failed")
-	waitError := errors.New("wait failed")
-
-	syncer := newMockSyncer("TestSyncer", 0, 0, startError, waitError)
-
-	ctx := context.Background()
-
-	// Test start error
-	err := syncer.Start(ctx)
-	require.Error(t, err)
-	require.Equal(t, startError, err)
-
-	// Test wait error
-	err = syncer.Wait(ctx)
-	require.Error(t, err)
-	require.Equal(t, waitError, err)
-}
-
-func TestSyncerRegistry_SyncerDelays(t *testing.T) {
-	// Test syncer with delays
-	syncer := newMockSyncer("TestSyncer", 10*time.Millisecond, 20*time.Millisecond, nil, nil)
-
-	ctx := context.Background()
-	start := time.Now()
-
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
-
-	duration := time.Since(start)
-
-	// Should take at least the sum of delays
-	require.GreaterOrEqual(t, duration, 30*time.Millisecond)
+			// Use custom assertion function for each test case.
+			tt.assertState(t, mockSyncers, tt.expectedError)
+		})
+	}
 }

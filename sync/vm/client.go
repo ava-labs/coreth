@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 
-	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -63,11 +62,10 @@ type ClientConfig struct {
 	// Extension points.
 	Parser message.SyncableParser
 
-	// AtomicExtender is an optional extension point for the state sync process, and can be nil.
-	AtomicExtender synccommon.Extender
-	Client         syncclient.Client
-	StateSyncDone  chan struct{}
-	AtomicBackend  *atomicstate.AtomicBackend
+	// Extender is an optional extension point for the state sync process, and can be nil.
+	Extender      synccommon.Extender
+	Client        syncclient.Client
+	StateSyncDone chan struct{}
 
 	// Specifies the number of blocks behind the latest state summary that the chain must be
 	// in order to prefer performing state sync over falling back to the normal bootstrapping
@@ -181,7 +179,7 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 	}
 
 	// Register atomic syncer.
-	if client.AtomicExtender != nil {
+	if client.Extender != nil {
 		atomicSyncer, err := client.createAtomicSyncer(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
@@ -208,7 +206,7 @@ func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
 }
 
 func (client *client) createAtomicSyncer(ctx context.Context) (synccommon.Syncer, error) {
-	return client.AtomicExtender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
+	return client.Extender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -380,8 +378,8 @@ func (client *client) finishSync() error {
 		return err
 	}
 
-	if client.AtomicExtender != nil {
-		if err := client.AtomicExtender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.summary); err != nil {
+	if client.Extender != nil {
+		if err := client.Extender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.summary); err != nil {
 			return err
 		}
 	}
@@ -394,8 +392,8 @@ func (client *client) finishSync() error {
 		return err
 	}
 
-	if client.AtomicExtender != nil {
-		return client.AtomicExtender.OnFinishAfterCommit(block.NumberU64())
+	if client.Extender != nil {
+		return client.Extender.OnFinishAfterCommit(block.NumberU64())
 	}
 
 	return nil

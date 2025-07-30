@@ -689,7 +689,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		MetadataDB:         vm.metadataDB,
 		Acceptor:           vm,
 		Parser:             vm.extensionConfig.SyncableParser,
-		AtomicExtender:     vm.extensionConfig.SyncExtender,
+		Extender:           vm.extensionConfig.SyncExtender,
 	})
 
 	// If StateSync is disabled, clear any ongoing summary so that we will not attempt to resume
