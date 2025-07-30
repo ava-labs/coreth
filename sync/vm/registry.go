@@ -17,7 +17,7 @@ type SyncerTask struct {
 	syncer synccommon.Syncer
 }
 
-// SyncerRegistry manages a collection of syncers for concurrent execution.
+// SyncerRegistry manages a collection of syncers for sequential execution.
 type SyncerRegistry struct {
 	syncers         []SyncerTask
 	registeredNames map[string]bool // Track registered names to prevent duplicates.

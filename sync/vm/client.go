@@ -39,7 +39,9 @@ const (
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
 
-// BlockAcceptor is an interface that allows for accepting blocks.
+// BlockAcceptor provides a mechanism to update the last accepted block ID during state synchronization.
+// This interface is used by the state sync process to ensure the blockchain state
+// is properly updated when new blocks are synchronized from the network.
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
 }
@@ -163,7 +165,7 @@ func (client *client) stateSync(ctx context.Context) error {
 		return err
 	}
 
-	// Run all registered syncers concurrently.
+	// Run all registered syncers sequentially.
 	return registry.RunSyncerTasks(ctx, client)
 }
 

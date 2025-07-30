@@ -14,8 +14,12 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 )
 
-// ErrWaitBeforeStart is returned when Wait() is called before Start().
-var ErrWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
+var (
+	// ErrWaitBeforeStart is returned when Wait() is called before Start().
+	ErrWaitBeforeStart = errors.New("Wait() called before Start() - call Start() first")
+	// ErrSyncerAlreadyStarted is returned when Start() is called on a syncer that has already been started.
+	ErrSyncerAlreadyStarted = errors.New("syncer already started")
+)
 
 // Syncer is the common interface for all sync operations.
 // This provides a unified interface for atomic state sync and state trie sync.

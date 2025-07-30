@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	synccommon "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -647,4 +648,37 @@ func TestDifferentWaitContext(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	requestsAfterWait := atomic.LoadInt64(&requestCount)
 	require.Equal(t, requestsWhenWaitReturned, requestsAfterWait, "Sync should not continue after Wait returned with different context")
+}
+
+// TestSyncer_MultipleStart verifies that the syncer prevents multiple Start() calls.
+func TestStateSyncer_MultipleStart(t *testing.T) {
+	serverDB := rawdb.NewMemoryDatabase()
+	serverTrieDB := triedb.NewDatabase(serverDB, nil)
+	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 100)
+	clientDB := rawdb.NewMemoryDatabase()
+
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
+
+	s, err := NewSyncer(&Config{
+		Root:                     root,
+		Client:                   mockClient,
+		DB:                       clientDB,
+		BatchSize:                1000,
+		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
+		RequestSize:              1024,
+	})
+	require.NoError(t, err, "failed to create state syncer")
+
+	ctx := context.Background()
+
+	// First Start() call should succeed.
+	err = s.Start(ctx)
+	require.NoError(t, err, "first Start() call should succeed")
+
+	// Second Start() call should fail with sentinel error.
+	err = s.Start(ctx)
+	require.ErrorIs(t, err, synccommon.ErrSyncerAlreadyStarted, "should return ErrSyncerAlreadyStarted")
 }

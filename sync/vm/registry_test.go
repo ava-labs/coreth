@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	synccommon "github.com/ava-labs/coreth/sync"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,6 +24,7 @@ type mockSyncer struct {
 	waitCalled     bool
 	startCallCount int
 	waitCallCount  int
+	started        bool // Track if already started
 }
 
 func newMockSyncer(name string, startDelay, waitDelay time.Duration, startError, waitError error) *mockSyncer {
@@ -36,12 +38,16 @@ func newMockSyncer(name string, startDelay, waitDelay time.Duration, startError,
 }
 
 func (m *mockSyncer) Start(ctx context.Context) error {
+	if m.started {
+		return synccommon.ErrSyncerAlreadyStarted
+	}
+
+	m.started = true
 	m.startCalled = true
 	m.startCallCount++
 	if m.startDelay > 0 {
 		time.Sleep(m.startDelay)
 	}
-
 	return m.startError
 }
 

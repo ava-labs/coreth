@@ -224,6 +224,10 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Start(ctx context.Context) error {
+	if t.cancelFunc != nil {
+		return synccommon.ErrSyncerAlreadyStarted
+	}
+
 	ctx, t.cancelFunc = context.WithCancel(ctx)
 
 	// Start the code syncer and leaf syncer.
