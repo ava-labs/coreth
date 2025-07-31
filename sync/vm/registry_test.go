@@ -189,7 +189,8 @@ func TestSyncerRegistry_Register(t *testing.T) {
 			}{
 				{"Syncer1", nil},
 			},
-			expectedCount: 1, // Nil syncer should be allowed
+			expectedError: errSyncerCannotBeNil.Error(),
+			expectedCount: 0,
 		},
 	}
 

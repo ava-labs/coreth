@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 
 	synccommon "github.com/ava-labs/coreth/sync"
@@ -14,7 +15,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var errClientCannotProvideSummary = errors.New("client cannot provide a summary")
+var (
+	errClientCannotProvideSummary = errors.New("client cannot provide a summary")
+	errSyncerCannotBeNil          = errors.New("syncer cannot be nil")
+)
 
 // SyncerTask represents a single syncer with its name for identification.
 type SyncerTask struct {
@@ -33,8 +37,15 @@ func NewSyncerRegistry() *SyncerRegistry {
 }
 
 // Register adds a syncer to the registry.
-// Returns an error if a syncer with the same name is already registered.
+// Returns an error if a syncer with the same name is already registered or if the syncer is nil.
 func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
+	// Use reflection to check for nil because in Go, a nil concrete type is not equal to a nil interface [synccommon.Syncer].
+	// When a nil concrete type is assigned to an interface, the interface contains type information even though the value is nil.
+	// reflect.ValueOf(syncer).IsNil() properly detects nil concrete types.
+	if syncer == nil || reflect.ValueOf(syncer).IsNil() {
+		return errSyncerCannotBeNil
+	}
+
 	task := SyncerTask{name, syncer}
 	if _, loaded := r.syncers.LoadOrStore(name, task); loaded {
 		return fmt.Errorf("syncer with name '%s' is already registered", name)
