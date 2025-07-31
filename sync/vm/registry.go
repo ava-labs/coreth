@@ -5,6 +5,7 @@ package vm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"golang.org/x/sync/errgroup"
 )
+
+var errClientCannotProvideSummary = errors.New("client cannot provide a summary")
 
 // SyncerTask represents a single syncer with its name for identification.
 type SyncerTask struct {
@@ -42,6 +45,10 @@ func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
 
 // RunSyncerTasks executes all registered syncers concurrently.
 func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) error {
+	if client == nil || client.summary == nil {
+		return errClientCannotProvideSummary
+	}
+
 	// Collect all syncers from the map
 	var syncers []SyncerTask
 	r.syncers.Range(func(key, value any) bool {
@@ -50,7 +57,10 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		return true
 	})
 
+	summaryHex := client.summary.GetBlockHash().Hex()
+
 	if len(syncers) == 0 {
+		log.Info("no sync operations are configured to run", "summary", summaryHex)
 		return nil
 	}
 
@@ -59,19 +69,13 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 	// Use sync.Map to collect errors in a thread-safe way.
 	var errorMap sync.Map
 
-	// Calculate summary string once since client doesn't change
-	summaryStr := ""
-	if client != nil && client.summary != nil {
-		summaryStr = client.summary.GetBlockHash().String()
-	}
-
 	for i, task := range syncers {
-		log.Info("starting syncer", "name", task.name, "summary", summaryStr)
+		log.Info("starting syncer", "name", task.name, "summary", summaryHex)
 
 		g.Go(func() error {
 			// Start syncer.
 			if err := task.syncer.Start(ctx); err != nil {
-				log.Error("failed to start", "name", task.name, "summary", summaryStr, "err", err)
+				log.Error("failed to start", "name", task.name, "summary", summaryHex, "err", err)
 				errorMap.Store(i, fmt.Errorf("failed to start %s: %w", task.name, err))
 				return fmt.Errorf("failed to start %s: %w", task.name, err)
 			}
@@ -94,9 +98,9 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 	// Log completion results in registration order.
 	for i, task := range syncers {
 		if err, ok := errorMap.Load(i); ok {
-			log.Error("failed to complete", "name", task.name, "summary", summaryStr, "err", err)
+			log.Error("failed to complete", "name", task.name, "summary", summaryHex, "err", err)
 		} else {
-			log.Info("completed successfully", "name", task.name, "summary", summaryStr)
+			log.Info("completed successfully", "name", task.name, "summary", summaryHex)
 		}
 	}
 

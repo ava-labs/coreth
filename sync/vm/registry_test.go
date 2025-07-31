@@ -10,7 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	synccommon "github.com/ava-labs/coreth/sync"
+	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,12 +75,47 @@ func (m *mockSyncer) Wait(ctx context.Context) error {
 	return m.waitError
 }
 
+type mockSummary struct {
+	blockHash common.Hash
+	height    uint64
+}
+
+func (m *mockSummary) GetBlockHash() common.Hash {
+	return m.blockHash
+}
+
+func (m *mockSummary) Height() uint64 {
+	return m.height
+}
+
+func (m *mockSummary) GetBlockRoot() common.Hash {
+	return m.blockHash // Use blockHash as root for simplicity.
+}
+
+func (m *mockSummary) Accept(context.Context) (block.StateSyncMode, error) {
+	return block.StateSyncSkipped, nil
+}
+
+func (m *mockSummary) Bytes() []byte {
+	return []byte("mock summary")
+}
+
+func (m *mockSummary) ID() ids.ID {
+	return ids.FromStringOrPanic("mock-summary-id")
+}
+
+// Interface checks to ensure mocks implement the expected interfaces.
+var (
+	_ synccommon.Syncer = (*mockSyncer)(nil)
+	_ message.Syncable  = (*mockSummary)(nil)
+)
+
 func TestNewSyncerRegistry(t *testing.T) {
 	t.Parallel()
 	registry := NewSyncerRegistry()
 	require.NotNil(t, registry)
 
-	// Check that the registry is empty
+	// Check that the registry is empty.
 	count := 0
 	registry.syncers.Range(func(key, value any) bool {
 		count++
@@ -214,6 +253,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 		name           string
 		syncers        []syncerConfig
 		useNilClient   bool
+		useNilSummary  bool
 		contextTimeout time.Duration
 		expectedError  string
 		assertState    func(t *testing.T, mockSyncers []*mockSyncer, err error)
@@ -306,10 +346,26 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			syncers: []syncerConfig{
 				{"Syncer1", 0, 0, nil, nil},
 			},
-			useNilClient: true,
+			useNilClient:  true,
+			expectedError: errClientCannotProvideSummary.Error(),
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
-				require.True(t, mockSyncers[0].startCalled, "Syncer should have been started")
-				require.True(t, mockSyncers[0].waitCalled, "Syncer should have been waited on")
+				// With nil client, syncers should not be started
+				require.False(t, mockSyncers[0].startCalled, "Syncer should not have been started with nil client")
+				require.False(t, mockSyncers[0].waitCalled, "Syncer should not have been waited on with nil client")
+			},
+		},
+		{
+			name: "nil summary",
+			syncers: []syncerConfig{
+				{"Syncer1", 0, 0, nil, nil},
+			},
+			useNilClient:  false,
+			useNilSummary: true,
+			expectedError: errClientCannotProvideSummary.Error(),
+			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
+				// With nil summary, syncers should not be started
+				require.False(t, mockSyncers[0].startCalled, "Syncer should not have been started with nil summary")
+				require.False(t, mockSyncers[0].waitCalled, "Syncer should not have been waited on with nil summary")
 			},
 		},
 		{
@@ -355,6 +411,11 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer3", 0, 0, nil, nil},
 				{"Syncer4", 0, 0, nil, nil},
 				{"Syncer5", 0, 0, nil, nil},
+				{"Syncer6", 0, 0, nil, nil},
+				{"Syncer7", 0, 0, nil, nil},
+				{"Syncer8", 0, 0, nil, nil},
+				{"Syncer9", 0, 0, nil, nil},
+				{"Syncer10", 0, 0, nil, nil},
 			},
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
 				// All syncers should have been started and waited on
@@ -362,16 +423,6 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 					require.True(t, mockSyncer.startCalled, "Syncer %d should have been started", i)
 					require.True(t, mockSyncer.waitCalled, "Syncer %d should have been waited on", i)
 				}
-			},
-		},
-		{
-			name: "registry reuse",
-			syncers: []syncerConfig{
-				{"Syncer1", 0, 0, nil, nil},
-			},
-			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
-				require.True(t, mockSyncers[0].startCalled, "Syncer should have been started")
-				require.True(t, mockSyncers[0].waitCalled, "Syncer should have been waited on")
 			},
 		},
 	}
@@ -409,7 +460,18 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			}
 
 			if !tt.useNilClient {
-				mockClient = &client{}
+				if tt.useNilSummary {
+					mockClient = &client{
+						summary: nil,
+					}
+				} else {
+					mockClient = &client{
+						summary: &mockSummary{
+							blockHash: common.HexToHash("0x1234567890abcdef"),
+							height:    100,
+						},
+					}
+				}
 			}
 
 			err := registry.RunSyncerTasks(ctx, mockClient)
@@ -456,5 +518,10 @@ func TestSyncerRegistry_ConcurrentRegistration(t *testing.T) {
 	require.Equal(t, 5, count)
 
 	// Run the syncers to verify they work.
-	require.NoError(t, registry.RunSyncerTasks(context.Background(), &client{}))
+	require.NoError(t, registry.RunSyncerTasks(context.Background(), &client{
+		summary: &mockSummary{
+			blockHash: common.HexToHash("0x1234567890abcdef"),
+			height:    100,
+		},
+	}))
 }
