@@ -107,6 +107,11 @@ type stateSync struct {
 }
 
 func NewSyncer(config *Config) (synccommon.Syncer, error) {
+	// Validate the configuration.
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
 	ss := &stateSync{
 		batchSize:       config.BatchSize,
 		db:              config.DB,
