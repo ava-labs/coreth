@@ -28,7 +28,7 @@ import (
 	"github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/prometheus/client_golang/prometheus"
 
-	corethprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
+	avalanchegoprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
@@ -530,7 +530,7 @@ func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
 func (vm *VM) initializeMetrics() error {
 	metrics.Enabled = true
 	vm.sdkMetrics = prometheus.NewRegistry()
-	gatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
+	gatherer := avalanchegoprometheus.NewGatherer(metrics.DefaultRegistry)
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
 	}
