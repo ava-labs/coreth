@@ -34,7 +34,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
-	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
+	corethprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"

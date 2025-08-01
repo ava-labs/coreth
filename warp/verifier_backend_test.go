@@ -18,7 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/metrics/metricstest"
+	"github.com/ava-labs/avalanchego/vms/evm/metrics/metricstest"
 	"github.com/ava-labs/coreth/warp/warptest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
