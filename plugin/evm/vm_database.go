@@ -42,7 +42,7 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	// Initialize block database
 	versionPath := strconv.FormatUint(uint64(blockdb.IndexFileVersion), 10)
 	blockDBPath := filepath.Join(vm.ctx.ChainDataDir, blockDbFolder, versionPath)
-	config := blockdb.DefaultConfig().WithDir(blockDBPath).WithSyncToDisk(false)
+	config := blockdb.DefaultConfig().WithDir(blockDBPath).WithSyncToDisk(false).WithCompressBlocks(true)
 	blockDatabase, err := blockdb.New(config, vm.ctx.Log)
 	if err != nil {
 		return err
