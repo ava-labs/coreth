@@ -19,6 +19,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var testBlockHash = common.HexToHash("0xdeadbeef")
+
 // mockSyncer implements synccommon.Syncer for testing.
 type mockSyncer struct {
 	name           string
@@ -126,21 +128,23 @@ func TestNewSyncerRegistry(t *testing.T) {
 
 func TestSyncerRegistry_Register(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
+
+	type registration struct {
+		name   string
+		syncer *mockSyncer
+	}
+
+	type testCase struct {
 		name          string
-		registrations []struct {
-			name   string
-			syncer *mockSyncer
-		}
+		registrations []registration
 		expectedError string
 		expectedCount int
-	}{
+	}
+
+	tests := []testCase{
 		{
 			name: "successful registrations",
-			registrations: []struct {
-				name   string
-				syncer *mockSyncer
-			}{
+			registrations: []registration{
 				{"Syncer1", newMockSyncer("TestSyncer1", 0, 0, nil, nil)},
 				{"Syncer2", newMockSyncer("TestSyncer2", 0, 0, nil, nil)},
 			},
@@ -149,10 +153,7 @@ func TestSyncerRegistry_Register(t *testing.T) {
 		},
 		{
 			name: "duplicate name registration",
-			registrations: []struct {
-				name   string
-				syncer *mockSyncer
-			}{
+			registrations: []registration{
 				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
 				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
 			},
@@ -161,10 +162,7 @@ func TestSyncerRegistry_Register(t *testing.T) {
 		},
 		{
 			name: "preserve registration order",
-			registrations: []struct {
-				name   string
-				syncer *mockSyncer
-			}{
+			registrations: []registration{
 				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
 				{"Syncer2", newMockSyncer("Syncer2", 0, 0, nil, nil)},
 				{"Syncer3", newMockSyncer("Syncer3", 0, 0, nil, nil)},
@@ -173,20 +171,14 @@ func TestSyncerRegistry_Register(t *testing.T) {
 		},
 		{
 			name: "empty name registration",
-			registrations: []struct {
-				name   string
-				syncer *mockSyncer
-			}{
+			registrations: []registration{
 				{"", newMockSyncer("EmptyName", 0, 0, nil, nil)},
 			},
 			expectedCount: 1, // Empty name should be allowed
 		},
 		{
 			name: "nil syncer registration",
-			registrations: []struct {
-				name   string
-				syncer *mockSyncer
-			}{
+			registrations: []registration{
 				{"Syncer1", nil},
 			},
 			expectedError: errSyncerCannotBeNil.Error(),
@@ -468,7 +460,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				} else {
 					mockClient = &client{
 						summary: &mockSummary{
-							blockHash: common.HexToHash("0x1234567890abcdef"),
+							blockHash: testBlockHash,
 							height:    100,
 						},
 					}
@@ -490,13 +482,87 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 	}
 }
 
+// TestSyncerRegistry_LifecycleScenarios tests the lifecycle of the syncer registry.
+func TestSyncerRegistry_LifecycleScenarios(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name                 string
+		registerBeforeRun    bool // if true we register a syncer before the first run
+		expectRegisterError  bool
+		expectSecondRunError bool
+	}
+
+	tests := []testCase{
+		{
+			name:                 "late Register is rejected",
+			registerBeforeRun:    true,
+			expectRegisterError:  true,
+			expectSecondRunError: true,
+		},
+		{
+			name:                 "second RunSyncerTasks is rejected",
+			registerBeforeRun:    true,
+			expectRegisterError:  true,
+			expectSecondRunError: true,
+		},
+		{
+			name:                 "normal lifecycle succeeds",
+			registerBeforeRun:    true,
+			expectRegisterError:  true, // late Register still fails
+			expectSecondRunError: true, // second run still fails
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			registry := NewSyncerRegistry()
+
+			// Optionally register one syncer *before* running.
+			if tt.registerBeforeRun {
+				require.NoError(t,
+					registry.Register("Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)),
+				)
+			}
+
+			ctx := context.Background()
+			mockClient := &client{
+				summary: &mockSummary{
+					blockHash: testBlockHash,
+					height:    42,
+				},
+			}
+
+			// First run should always succeed.
+			require.NoError(t, registry.RunSyncerTasks(ctx, mockClient))
+
+			// Late Register attempt.
+			err := registry.Register("LateSyncer", newMockSyncer("LateSyncer", 0, 0, nil, nil))
+			if tt.expectRegisterError {
+				require.ErrorIs(t, err, errCannotRegisterNewSyncer, "expect error when registering after RunSyncerTasks")
+			} else {
+				require.NoError(t, err)
+			}
+
+			// Second RunSyncerTasks attempt.
+			err = registry.RunSyncerTasks(ctx, mockClient)
+			if tt.expectSecondRunError {
+				require.ErrorIs(t, err, errCannotRunSyncerTasksTwice, "expect error when running syncer tasks again")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 // TestSyncerRegistry_ConcurrentRegistration tests that the registry handles concurrent registration safely.
 func TestSyncerRegistry_ConcurrentRegistration(t *testing.T) {
 	t.Parallel()
 
 	registry := NewSyncerRegistry()
 
-	// Register syncers concurrently using errgroup
+	// Register syncers concurrently using errgroup.
 	g, _ := errgroup.WithContext(context.Background())
 
 	for i := 0; i < 5; i++ {
@@ -521,7 +587,7 @@ func TestSyncerRegistry_ConcurrentRegistration(t *testing.T) {
 	// Run the syncers to verify they work.
 	require.NoError(t, registry.RunSyncerTasks(context.Background(), &client{
 		summary: &mockSummary{
-			blockHash: common.HexToHash("0x1234567890abcdef"),
+			blockHash: testBlockHash,
 			height:    100,
 		},
 	}))
