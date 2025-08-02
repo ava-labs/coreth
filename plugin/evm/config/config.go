@@ -97,6 +97,8 @@ type Config struct {
 	// default to use the parent block's target gas per second.
 	GasTarget *gas.Gas `json:"gas-target,omitempty"`
 
+	InitialTargetExcess *gas.Gas `json:"initial-target-excess,omitempty"`
+
 	// Coreth APIs
 	AdminAPIEnabled       bool   `json:"admin-api-enabled"`
 	AdminAPIDir           string `json:"admin-api-dir"`
