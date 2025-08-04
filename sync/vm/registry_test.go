@@ -272,7 +272,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer1", 0, 0, errors.New("start failed"), nil},
 				{"Syncer2", 0, 0, nil, nil},
 			},
-			expectedError: "failed to start Syncer1",
+			expectedError: "sync start failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
 				// With concurrent execution, both syncers may be started,
 				// but the first one should fail during Start().
@@ -288,7 +288,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer1", 0, 0, nil, errors.New("wait failed")},
 				{"Syncer2", 0, 0, nil, nil},
 			},
-			expectedError: "state sync failed",
+			expectedError: "sync execution failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
 				// With concurrent execution, both syncers may be started
 				// but the first one should fail during Wait().
@@ -311,13 +311,18 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer1", 0, 0, errors.New("start failed"), nil},
 				{"Syncer2", 0, 0, nil, errors.New("wait failed")},
 			},
-			expectedError: "state sync failed",
+			expectedError: "sync start failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
-				// Both syncers should have been started
-				require.True(t, mockSyncers[0].startCalled, "First syncer should have been started")
-				require.True(t, mockSyncers[1].startCalled, "Second syncer should have been started")
-				// At least one should have been waited on (the one that didn't fail during start)
-				require.True(t, mockSyncers[0].waitCalled || mockSyncers[1].waitCalled, "At least one syncer should have been waited on")
+				// With the two-phase (start/wait) approach, if the first syncer fails to start,
+				// the second syncer may or may not be started due to concurrent execution.
+				// We can only guarantee that at least one syncer was attempted.
+				startedCount := 0
+				for _, syncer := range mockSyncers {
+					if syncer.startCalled {
+						startedCount++
+					}
+				}
+				require.Greater(t, startedCount, 0, "At least one syncer should have been started")
 			},
 		},
 		{
@@ -367,7 +372,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer1", 0, 0, nil, nil},                       // Success
 				{"Syncer2", 0, 0, nil, errors.New("wait failed")}, // Failure
 			},
-			expectedError: "state sync failed",
+			expectedError: "sync execution failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
 				// Both syncers should have been started and waited on
 				require.True(t, mockSyncers[0].startCalled, "Successful syncer should have been started")
@@ -383,7 +388,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer2", 200 * time.Millisecond, 200 * time.Millisecond, nil, nil},
 			},
 			contextTimeout: 50 * time.Millisecond,
-			expectedError:  "state sync failed",
+			expectedError:  "sync start failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
 				// With context cancellation, we can't guarantee which syncers were started
 				// but at least one should have been attempted

@@ -89,44 +89,46 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		return nil
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	// Phase 1: Start all syncers concurrently.
+	startGroup, startCtx := errgroup.WithContext(ctx)
+	for _, task := range syncers {
+		startGroup.Go(func() error {
+			log.Info("starting syncer", "name", task.name, "summary", summaryHex)
 
-	// Use sync.Map to collect errors in a thread-safe way.
-	var errorMap sync.Map
-
-	for i, task := range syncers {
-		log.Info("starting syncer", "name", task.name, "summary", summaryHex)
-
-		g.Go(func() error {
-			// Start syncer.
-			if err := task.syncer.Start(ctx); err != nil {
-				log.Error("failed to start", "name", task.name, "summary", summaryHex, "err", err)
-				errorMap.Store(i, fmt.Errorf("failed to start %s: %w", task.name, err))
+			if err := task.syncer.Start(startCtx); err != nil {
+				log.Error("syncer failed to start", "name", task.name, "summary", summaryHex, "err", err)
 				return fmt.Errorf("failed to start %s: %w", task.name, err)
 			}
 
-			// Wait for completion.
-			err := task.syncer.Wait(ctx)
-			if err != nil {
-				errorMap.Store(i, fmt.Errorf("%s failed: %w", task.name, err))
+			log.Info("syncer started successfully", "name", task.name, "summary", summaryHex)
+			return nil
+		})
+	}
+
+	// Wait for all syncers to start.
+	if err := startGroup.Wait(); err != nil {
+		return fmt.Errorf("sync start failed: %w", err)
+	}
+
+	log.Info("all syncers started", "count", len(syncers))
+
+	// Phase 2: Wait for all syncers to complete.
+	waitGroup, waitCtx := errgroup.WithContext(ctx)
+	for _, task := range syncers {
+		waitGroup.Go(func() error {
+			if err := task.syncer.Wait(waitCtx); err != nil {
+				log.Error("syncer failed to complete", "name", task.name, "summary", summaryHex, "err", err)
+				return fmt.Errorf("failed to complete %s: %w", task.name, err)
 			}
 
-			return err
+			log.Info("syncer completed successfully", "name", task.name, "summary", summaryHex)
+			return nil
 		})
 	}
 
 	// Wait for all syncers to complete.
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("state sync failed: %w", err)
-	}
-
-	// Log completion results in registration order.
-	for i, task := range syncers {
-		if err, ok := errorMap.Load(i); ok {
-			log.Error("failed to complete", "name", task.name, "summary", summaryHex, "err", err)
-		} else {
-			log.Info("completed successfully", "name", task.name, "summary", summaryHex)
-		}
+	if err := waitGroup.Wait(); err != nil {
+		return fmt.Errorf("sync execution failed: %w", err)
 	}
 
 	return nil
