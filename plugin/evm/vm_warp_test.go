@@ -11,9 +11,14 @@ import (
 	"testing"
 	"time"
 
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
+
 	_ "embed"
 
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/avalanchego/network/p2p/acp118"
+	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
@@ -32,8 +37,8 @@ import (
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/precompile/contract"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -45,6 +50,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -69,10 +75,19 @@ const (
 )
 
 func TestSendWarpMessage(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testSendWarpMessage(t, scheme)
+		})
+	}
+}
+
+func testSendWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		fork: &fork,
+		fork:       &fork,
+		configJSON: getConfig(scheme, ""),
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -106,14 +121,15 @@ func TestSendWarpMessage(t *testing.T) {
 	errs := tvm.vm.txPool.AddRemotesSync([]*types.Transaction{signedTx0})
 	require.NoError(errs[0])
 
-	<-tvm.toEngine
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
+
 	blk, err := tvm.vm.BuildBlock(context.Background())
 	require.NoError(err)
 
 	require.NoError(blk.Verify(context.Background()))
 
 	// Verify that the constructed block contains the expected log with an unsigned warp message in the log data
-	ethBlock1 := blk.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlock1 := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	require.Len(ethBlock1.Transactions(), 1)
 	receipts := rawdb.ReadReceipts(tvm.vm.chaindb, ethBlock1.Hash(), ethBlock1.NumberU64(), ethBlock1.Time(), tvm.vm.chainConfig)
 	require.Len(receipts, 1)
@@ -172,6 +188,14 @@ func TestSendWarpMessage(t *testing.T) {
 }
 
 func TestValidateWarpMessage(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateWarpMessage(t, scheme)
+		})
+	}
+}
+
+func testValidateWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	sourceAddress := common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2")
@@ -194,10 +218,18 @@ func TestValidateWarpMessage(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, true, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, true, exampleWarpPayload)
 }
 
 func TestValidateInvalidWarpMessage(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateInvalidWarpMessage(t, scheme)
+		})
+	}
+}
+
+func testValidateInvalidWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	sourceAddress := common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2")
@@ -217,10 +249,18 @@ func TestValidateInvalidWarpMessage(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, false, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, false, exampleWarpPayload)
 }
 
 func TestValidateWarpBlockHash(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateWarpBlockHash(t, scheme)
+		})
+	}
+}
+
+func testValidateWarpBlockHash(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	blockHash := ids.GenerateTestID()
@@ -238,10 +278,18 @@ func TestValidateWarpBlockHash(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, true, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, true, exampleWarpPayload)
 }
 
 func TestValidateInvalidWarpBlockHash(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateInvalidWarpBlockHash(t, scheme)
+		})
+	}
+}
+
+func testValidateInvalidWarpBlockHash(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	blockHash := ids.GenerateTestID()
@@ -257,14 +305,15 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, false, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, false, exampleWarpPayload)
 }
 
-func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
+func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		fork: &fork,
+		fork:       &fork,
+		configJSON: getConfig(scheme, ""),
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -374,7 +423,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 		blockCtx.PChainHeight = minimumValidPChainHeight
 	}
 	tvm.vm.clock.Set(tvm.vm.clock.Time().Add(2 * time.Second))
-	<-tvm.toEngine
+	require.Equal(commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	warpBlock, err := tvm.vm.BuildBlockWithContext(context.Background(), blockCtx)
 	require.NoError(err)
@@ -389,7 +438,7 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 	require.NoError(warpBlock.Accept(context.Background()))
 	tvm.vm.blockChain.DrainAcceptorQueue()
 
-	ethBlock := warpBlock.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlock := warpBlock.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	verifiedMessageReceipts := tvm.vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
 	require.Len(verifiedMessageReceipts, 2)
 	for i, receipt := range verifiedMessageReceipts {
@@ -414,10 +463,19 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 }
 
 func TestReceiveWarpMessage(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testReceiveWarpMessageWithScheme(t, scheme)
+		})
+	}
+}
+
+func testReceiveWarpMessageWithScheme(t *testing.T, scheme string) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		fork: &fork,
+		fork:       &fork,
+		configJSON: getConfig(scheme, ""),
 	})
 	defer func() {
 		require.NoError(tvm.vm.Shutdown(context.Background()))
@@ -507,14 +565,14 @@ func TestReceiveWarpMessage(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testReceiveWarpMessage(
-				t, tvm.toEngine, tvm.vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
+				t, tvm.vm, test.sourceChainID, test.msgFrom, test.useSigners, test.blockTime,
 			)
 		})
 	}
 }
 
 func testReceiveWarpMessage(
-	t *testing.T, issuer chan commonEng.Message, vm *VM,
+	t *testing.T, vm *VM,
 	sourceChainID ids.ID,
 	msgFrom warpMsgFrom, useSigners useWarpMsgSigners,
 	blockTime time.Time,
@@ -655,13 +713,15 @@ func testReceiveWarpMessage(
 		PChainHeight: minimumValidPChainHeight,
 	}
 	vm.clock.Set(blockTime)
-	<-issuer
+	msg, err := vm.WaitForEvent(context.Background())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
 	block2, err := vm.BuildBlockWithContext(context.Background(), validProposerCtx)
 	require.NoError(err)
 
 	// Require the block was built with a successful predicate result
-	ethBlock := block2.(*chain.BlockWrapper).Block.(*Block).ethBlock
+	ethBlock := block2.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 	rules := params.GetExtra(vm.chainConfig).GetAvalancheRules(ethBlock.Time())
 	headerPredicateResultsBytes := customheader.PredicateBytesFromExtra(rules, ethBlock.Extra())
 	results, err := predicate.ParseResults(headerPredicateResultsBytes)
@@ -731,128 +791,133 @@ func testReceiveWarpMessage(
 	require.JSONEq(string(txTraceResultBytes), string(blockTxTraceResultBytes))
 }
 
-func TestMessageSignatureRequestsToVM(t *testing.T) {
-	fork := upgradetest.Durango
-	tvm := newVM(t, testVMConfig{
-		fork: &fork,
-	})
-	defer func() {
-		require.NoError(t, tvm.vm.Shutdown(context.Background()))
-	}()
-
-	// Generate a new warp unsigned message and add to warp backend
-	warpMessage, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, []byte{1, 2, 3})
-	require.NoError(t, err)
-
-	// Add the known message and get its signature to confirm.
-	require.NoError(t, tvm.vm.warpBackend.AddMessage(warpMessage))
-	signature, err := tvm.vm.warpBackend.GetMessageSignature(context.TODO(), warpMessage)
-	require.NoError(t, err)
-	var knownSignature [bls.SignatureLen]byte
-	copy(knownSignature[:], signature)
-
-	tests := map[string]struct {
-		messageID        ids.ID
-		expectedResponse [bls.SignatureLen]byte
-	}{
-		"known": {
-			messageID:        warpMessage.ID(),
-			expectedResponse: knownSignature,
-		},
-		"unknown": {
-			messageID:        ids.GenerateTestID(),
-			expectedResponse: [bls.SignatureLen]byte{},
-		},
-	}
-
-	for name, test := range tests {
-		calledSendAppResponseFn := false
-		tvm.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
-			calledSendAppResponseFn = true
-			var response message.SignatureResponse
-			_, err := message.Codec.Unmarshal(responseBytes, &response)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedResponse, response.Signature)
-
-			return nil
-		}
-		t.Run(name, func(t *testing.T) {
-			var signatureRequest message.Request = message.MessageSignatureRequest{
-				MessageID: test.messageID,
-			}
-
-			requestBytes, err := message.Codec.Marshal(message.Version, &signatureRequest)
-			require.NoError(t, err)
-
-			// Send the app request and make sure we called SendAppResponseFn
-			deadline := time.Now().Add(60 * time.Second)
-			require.NoError(t, tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes))
-			require.True(t, calledSendAppResponseFn)
+func TestSignatureRequestsToVM(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testSignatureRequestsToVM(t, scheme)
 		})
 	}
 }
 
-func TestBlockSignatureRequestsToVM(t *testing.T) {
+func testSignatureRequestsToVM(t *testing.T, scheme string) {
 	fork := upgradetest.Durango
 	tvm := newVM(t, testVMConfig{
-		fork: &fork,
+		fork:       &fork,
+		configJSON: getConfig(scheme, ""),
 	})
 	defer func() {
 		require.NoError(t, tvm.vm.Shutdown(context.Background()))
 	}()
 
+	// Setup known message
+	knownPayload, err := payload.NewAddressedCall([]byte{0, 0, 0}, []byte("test"))
+	require.NoError(t, err)
+	knownWarpMessage, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, knownPayload.Bytes())
+	require.NoError(t, err)
+
+	// Add the known message and get its signature to confirm
+	require.NoError(t, tvm.vm.warpBackend.AddMessage(knownWarpMessage))
+	knownMessageSignature, err := tvm.vm.warpBackend.GetMessageSignature(context.TODO(), knownWarpMessage)
+	require.NoError(t, err)
+
+	// Setup known block
 	lastAcceptedID, err := tvm.vm.LastAccepted(context.Background())
 	require.NoError(t, err)
-
-	signature, err := tvm.vm.warpBackend.GetBlockSignature(context.TODO(), lastAcceptedID)
+	knownBlockSignature, err := tvm.vm.warpBackend.GetBlockSignature(context.TODO(), lastAcceptedID)
 	require.NoError(t, err)
-	var knownSignature [bls.SignatureLen]byte
-	copy(knownSignature[:], signature)
 
-	tests := map[string]struct {
-		blockID          ids.ID
-		expectedResponse [bls.SignatureLen]byte
-	}{
-		"known": {
-			blockID:          lastAcceptedID,
-			expectedResponse: knownSignature,
+	type testCase struct {
+		name             string
+		message          *avalancheWarp.UnsignedMessage
+		expectedResponse []byte
+		err              *commonEng.AppError
+	}
+
+	tests := []testCase{
+		{
+			name:             "known message",
+			message:          knownWarpMessage,
+			expectedResponse: knownMessageSignature,
 		},
-		"unknown": {
-			blockID:          ids.GenerateTestID(),
-			expectedResponse: [bls.SignatureLen]byte{},
+		{
+			name: "unknown message",
+			message: func() *avalancheWarp.UnsignedMessage {
+				unknownPayload, err := payload.NewAddressedCall([]byte{1, 1, 1}, []byte("unknown"))
+				require.NoError(t, err)
+				msg, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, unknownPayload.Bytes())
+				require.NoError(t, err)
+				return msg
+			}(),
+			err: &commonEng.AppError{Code: warp.ParseErrCode},
+		},
+		{
+			name: "known block",
+			message: func() *avalancheWarp.UnsignedMessage {
+				payload, err := payload.NewHash(lastAcceptedID)
+				require.NoError(t, err)
+				msg, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, payload.Bytes())
+				require.NoError(t, err)
+				return msg
+			}(),
+			expectedResponse: knownBlockSignature,
+		},
+		{
+			name: "unknown block",
+			message: func() *avalancheWarp.UnsignedMessage {
+				payload, err := payload.NewHash(ids.GenerateTestID())
+				require.NoError(t, err)
+				msg, err := avalancheWarp.NewUnsignedMessage(tvm.vm.ctx.NetworkID, tvm.vm.ctx.ChainID, payload.Bytes())
+				require.NoError(t, err)
+				return msg
+			}(),
+			err: &commonEng.AppError{Code: warp.VerifyErrCode},
 		},
 	}
 
-	for name, test := range tests {
-		calledSendAppResponseFn := false
-		tvm.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
-			calledSendAppResponseFn = true
-			var response message.SignatureResponse
-			_, err := message.Codec.Unmarshal(responseBytes, &response)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedResponse, response.Signature)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			calledSendAppResponseFn := false
+			calledSendAppErrorFn := false
 
-			return nil
-		}
-		t.Run(name, func(t *testing.T) {
-			var signatureRequest message.Request = message.BlockSignatureRequest{
-				BlockID: test.blockID,
+			tvm.appSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
+				calledSendAppResponseFn = true
+				var response sdk.SignatureResponse
+				if err := proto.Unmarshal(responseBytes, &response); err != nil {
+					return err
+				}
+				require.Equal(t, test.expectedResponse, response.Signature)
+				return nil
 			}
 
-			requestBytes, err := message.Codec.Marshal(message.Version, &signatureRequest)
-			require.NoError(t, err)
+			tvm.appSender.SendAppErrorF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, errCode int32, errString string) error {
+				calledSendAppErrorFn = true
+				require.ErrorIs(t, test.err, test.err)
+				return nil
+			}
 
-			// Send the app request and make sure we called SendAppResponseFn
+			protoMsg := &sdk.SignatureRequest{Message: test.message.Bytes()}
+			requestBytes, err := proto.Marshal(protoMsg)
+			require.NoError(t, err)
+			msg := p2p.PrefixMessage(p2p.ProtocolPrefix(acp118.HandlerID), requestBytes)
+
+			// Send the app request and verify the response
 			deadline := time.Now().Add(60 * time.Second)
-			require.NoError(t, tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, requestBytes))
-			require.True(t, calledSendAppResponseFn)
+			appErr := tvm.vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, msg)
+			require.Nil(t, appErr)
+
+			if test.err != nil {
+				require.True(t, calledSendAppErrorFn)
+			} else {
+				require.True(t, calledSendAppResponseFn)
+			}
 		})
 	}
 }
 
 func TestClearWarpDB(t *testing.T) {
-	ctx, db, genesisBytes, issuer, _ := setupGenesis(t, upgradetest.Latest)
-	vm := &VM{}
+	ctx, db, genesisBytes, _ := setupGenesis(t, upgradetest.Latest)
+	innerVM := &VM{}
+	vm := atomicvm.WrapVM(innerVM)
 	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,
@@ -860,7 +925,6 @@ func TestClearWarpDB(t *testing.T) {
 		genesisBytes,
 		[]byte{},
 		[]byte{},
-		issuer,
 		[]*commonEng.Fx{},
 		&enginetest.Sender{}))
 
@@ -870,11 +934,11 @@ func TestClearWarpDB(t *testing.T) {
 
 	// add all messages
 	for _, payload := range payloads {
-		unsignedMsg, err := avalancheWarp.NewUnsignedMessage(vm.ctx.NetworkID, vm.ctx.ChainID, payload)
+		unsignedMsg, err := avalancheWarp.NewUnsignedMessage(vm.Ctx.NetworkID, vm.Ctx.ChainID, payload)
 		require.NoError(t, err)
-		require.NoError(t, vm.warpBackend.AddMessage(unsignedMsg))
+		require.NoError(t, innerVM.warpBackend.AddMessage(unsignedMsg))
 		// ensure that the message was added
-		_, err = vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMsg)
+		_, err = innerVM.warpBackend.GetMessageSignature(context.TODO(), unsignedMsg)
 		require.NoError(t, err)
 		messages = append(messages, unsignedMsg)
 	}
@@ -882,9 +946,10 @@ func TestClearWarpDB(t *testing.T) {
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// Restart VM with the same database default should not prune the warp db
-	vm = &VM{}
+	innerVM = &VM{}
+	vm = atomicvm.WrapVM(innerVM)
 	// we need new context since the previous one has registered metrics.
-	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
+	ctx, _, _, _ = setupGenesis(t, upgradetest.Latest)
 	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,
@@ -892,13 +957,12 @@ func TestClearWarpDB(t *testing.T) {
 		genesisBytes,
 		[]byte{},
 		[]byte{},
-		issuer,
 		[]*commonEng.Fx{},
 		&enginetest.Sender{}))
 
 	// check messages are still present
 	for _, message := range messages {
-		bytes, err := vm.warpBackend.GetMessageSignature(context.TODO(), message)
+		bytes, err := innerVM.warpBackend.GetMessageSignature(context.TODO(), message)
 		require.NoError(t, err)
 		require.NotEmpty(t, bytes)
 	}
@@ -906,9 +970,10 @@ func TestClearWarpDB(t *testing.T) {
 	require.NoError(t, vm.Shutdown(context.Background()))
 
 	// restart the VM with pruning enabled
-	vm = &VM{}
+	innerVM = &VM{}
+	vm = atomicvm.WrapVM(innerVM)
 	config := `{"prune-warp-db-enabled": true}`
-	ctx, _, _, _, _ = setupGenesis(t, upgradetest.Latest)
+	ctx, _, _, _ = setupGenesis(t, upgradetest.Latest)
 	require.NoError(t, vm.Initialize(
 		context.Background(),
 		ctx,
@@ -916,17 +981,16 @@ func TestClearWarpDB(t *testing.T) {
 		genesisBytes,
 		[]byte{},
 		[]byte(config),
-		issuer,
 		[]*commonEng.Fx{},
 		&enginetest.Sender{}))
 
-	it := vm.warpDB.NewIterator()
+	it := innerVM.warpDB.NewIterator()
 	require.False(t, it.Next())
 	it.Release()
 
 	// ensure all messages have been deleted
 	for _, message := range messages {
-		_, err := vm.warpBackend.GetMessageSignature(context.TODO(), message)
+		_, err := innerVM.warpBackend.GetMessageSignature(context.TODO(), message)
 		require.ErrorIs(t, err, &commonEng.AppError{Code: warp.ParseErrCode})
 	}
 }

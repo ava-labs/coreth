@@ -40,12 +40,12 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
@@ -1111,6 +1111,10 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 	}
 	if timestamp := overrideExtra.FortunaTimestamp; timestamp != nil {
 		params.GetExtra(copy).FortunaTimestamp = timestamp
+		canon = false
+	}
+	if timestamp := overrideExtra.GraniteTimestamp; timestamp != nil {
+		params.GetExtra(copy).GraniteTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {

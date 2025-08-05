@@ -8,6 +8,9 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/stretchr/testify/assert"
@@ -24,9 +27,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
@@ -715,7 +715,7 @@ func BenchmarkAtomicTrieIterate(b *testing.B) {
 	assert.NoError(b, err)
 	writeTxs(b, repo, 1, lastAcceptedHeight, constTxsPerHeight(3), nil, operationsMap)
 
-	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), map[uint64]ids.ID{}, repo, lastAcceptedHeight, common.Hash{}, 5000)
+	atomicBackend, err := NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, lastAcceptedHeight, common.Hash{}, 5000)
 	assert.NoError(b, err)
 	atomicTrie := atomicBackend.AtomicTrie()
 

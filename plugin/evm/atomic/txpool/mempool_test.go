@@ -16,8 +16,13 @@ import (
 
 func TestMempoolAddTx(t *testing.T) {
 	require := require.New(t)
+
 	ctx := snowtest.Context(t, snowtest.CChainID)
-	m, err := NewMempool(ctx, prometheus.NewRegistry(), 5_000, nil)
+	m, err := NewMempool(
+		NewTxs(ctx, 5_000),
+		prometheus.NewRegistry(),
+		nil,
+	)
 	require.NoError(err)
 
 	txs := make([]*atomic.Tx, 0)
@@ -40,8 +45,13 @@ func TestMempoolAddTx(t *testing.T) {
 // Add should return an error if a tx is already known
 func TestMempoolAdd(t *testing.T) {
 	require := require.New(t)
+
 	ctx := snowtest.Context(t, snowtest.CChainID)
-	m, err := NewMempool(ctx, prometheus.NewRegistry(), 5_000, nil)
+	m, err := NewMempool(
+		NewTxs(ctx, 5_000),
+		prometheus.NewRegistry(),
+		nil,
+	)
 	require.NoError(err)
 
 	tx := &atomic.Tx{
@@ -52,7 +62,7 @@ func TestMempoolAdd(t *testing.T) {
 
 	require.NoError(m.Add(tx))
 	err = m.Add(tx)
-	require.ErrorIs(err, errTxAlreadyKnown)
+	require.ErrorIs(err, ErrAlreadyKnown)
 }
 
 func TestAtomicMempoolIterate(t *testing.T) {
@@ -104,8 +114,13 @@ func TestAtomicMempoolIterate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require := require.New(t)
+
 			ctx := snowtest.Context(t, snowtest.CChainID)
-			m, err := NewMempool(ctx, prometheus.NewRegistry(), 10, nil)
+			m, err := NewMempool(
+				NewTxs(ctx, 10),
+				prometheus.NewRegistry(),
+				nil,
+			)
 			require.NoError(err)
 
 			for _, add := range tt.add {
@@ -136,7 +151,11 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 	require := require.New(t)
 
 	ctx := snowtest.Context(t, snowtest.CChainID)
-	mempool, err := NewMempool(ctx, prometheus.NewRegistry(), 1, nil)
+	mempool, err := NewMempool(
+		NewTxs(ctx, 1),
+		prometheus.NewRegistry(),
+		nil,
+	)
 	require.NoError(err)
 	// create candidate tx (we will drop before validation)
 	tx := atomictest.GenerateTestImportTx()
@@ -151,7 +170,7 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 	// try to add one more tx
 	tx2 := atomictest.GenerateTestImportTx()
 	err = mempool.AddRemoteTx(tx2)
-	require.ErrorIs(err, ErrTooManyAtomicTx)
+	require.ErrorIs(err, ErrMempoolFull)
 	require.False(mempool.Has(tx2.ID()))
 }
 
@@ -160,7 +179,11 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	require := require.New(t)
 
 	ctx := snowtest.Context(t, snowtest.CChainID)
-	mempool, err := NewMempool(ctx, prometheus.NewRegistry(), 1, nil)
+	mempool, err := NewMempool(
+		NewTxs(ctx, 1),
+		prometheus.NewRegistry(),
+		nil,
+	)
 	require.NoError(err)
 
 	tx1 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
@@ -169,7 +192,7 @@ func TestMempoolPriorityDrop(t *testing.T) {
 
 	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
 	err = mempool.AddRemoteTx(tx2)
-	require.ErrorIs(err, ErrInsufficientAtomicTxFee)
+	require.ErrorIs(err, ErrInsufficientFee)
 	require.True(mempool.Has(tx1.ID()))
 	require.False(mempool.Has(tx2.ID()))
 

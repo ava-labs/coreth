@@ -7,36 +7,43 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/holiman/uint256"
 )
 
-type VmStateDB interface {
-	vm.StateDB
-	Logs() []*types.Log
-	GetTxHash() common.Hash
-	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
-	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
-	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+// Register the state key normalization to libevm's [state.StateDB]. This will
+// normalize all state keys passing through the implementation unless
+// [stateconf.SkipStateKeyTransformation] is provided as an option.
+func init() {
+	state.RegisterExtras(normalizeStateKeysHook{})
 }
 
-type vmStateDB = VmStateDB
+type normalizeStateKeysHook struct{}
+
+// TransformStateKey transforms all keys with [normalizeStateKey].
+func (normalizeStateKeysHook) TransformStateKey(_ common.Address, key common.Hash) common.Hash {
+	normalizeStateKey(&key)
+	return key
+}
 
 type StateDB struct {
-	vmStateDB
+	*state.StateDB
 
 	// Ordered storage slots to be used in predicate verification as set in the tx access list.
 	// Only set in [StateDB.Prepare], and un-modified through execution.
 	predicateStorageSlots map[common.Address][][]byte
 }
 
-// New creates a new [*StateDB] with the given [VmStateDB], effectively wrapping it
-// with additional functionality.
-func New(vm VmStateDB) *StateDB {
+// New creates a new [StateDB] with the given [state.StateDB], wrapping it with
+// additional functionality.
+func New(vm *state.StateDB) *StateDB {
 	return &StateDB{
-		vmStateDB:             vm,
+		StateDB:               vm,
 		predicateStorageSlots: make(map[common.Address][][]byte),
 	}
 }
@@ -44,17 +51,7 @@ func New(vm VmStateDB) *StateDB {
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	rulesExtra := params.GetRulesExtra(rules)
 	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rulesExtra, list)
-	s.vmStateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
-}
-
-// GetLogData returns the underlying topics and data from each log included in the [StateDB].
-// Test helper function.
-func (s *StateDB) GetLogData() (topics [][]common.Hash, data [][]byte) {
-	for _, log := range s.Logs() {
-		topics = append(topics, log.Topics)
-		data = append(data, common.CopyBytes(log.Data))
-	}
-	return topics, data
+	s.StateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
 }
 
 // GetPredicateStorageSlots returns the storage slots associated with the address, index pair.
@@ -75,7 +72,52 @@ func (s *StateDB) GetPredicateStorageSlots(address common.Address, index int) ([
 	return predicates[index], true
 }
 
-// SetPredicateStorageSlots sets the predicate storage slots for the given address
-func (s *StateDB) SetPredicateStorageSlots(address common.Address, predicates [][]byte) {
-	s.predicateStorageSlots[address] = predicates
+// Retrieve the balance from the given address or 0 if object not found
+func (s *StateDB) GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int {
+	normalizeCoinID(&coinID)
+	return s.GetState(addr, coinID, stateconf.SkipStateKeyTransformation()).Big()
+}
+
+// AddBalance adds amount to the account associated with addr.
+func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+	if amount.Sign() == 0 {
+		s.AddBalance(addr, new(uint256.Int)) // used to cause touch
+		return
+	}
+
+	if !state.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
+		state.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	}
+
+	newAmount := new(big.Int).Add(s.GetBalanceMultiCoin(addr, coinID), amount)
+	normalizeCoinID(&coinID)
+	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
+}
+
+// SubBalance subtracts amount from the account associated with addr.
+func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	// Note: It's not needed to set the IsMultiCoin (extras) flag here, as this
+	// call would always be preceded by a call to AddBalanceMultiCoin, which would
+	// set the extra flag. Seems we should remove the redundant code.
+	if !state.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
+		state.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	}
+	newAmount := new(big.Int).Sub(s.GetBalanceMultiCoin(addr, coinID), amount)
+	normalizeCoinID(&coinID)
+	s.SetState(addr, coinID, common.BigToHash(newAmount), stateconf.SkipStateKeyTransformation())
+}
+
+// normalizeStateKey sets the 0th bit of the first byte in `key` to 0.
+// This partitions normal state storage from multicoin storage.
+func normalizeStateKey(key *common.Hash) {
+	key[0] &^= 0x01
+}
+
+// normalizeCoinID sets the 0th bit of the first byte in `coinID` to 1.
+// This partitions multicoin storage from normal state storage.
+func normalizeCoinID(coinID *common.Hash) {
+	coinID[0] |= 0x01
 }

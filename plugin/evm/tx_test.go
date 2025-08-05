@@ -9,12 +9,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
+
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/common"
 
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -81,14 +86,14 @@ func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 
 type atomicTxTest struct {
 	// setup returns the atomic transaction for the test
-	setup func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
+	setup func(t *testing.T, vm *atomicvm.VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx
 	// define a string that should be contained in the error message if the tx fails verification
 	// at some point. If the strings are empty, then the tx should pass verification at the
 	// respective step.
 	semanticVerifyErr, evmStateTransferErr, acceptErr string
 	// checkState is called iff building and verifying a block containing the transaction is successful. Verifies
 	// the state of the VM following the block's acceptance.
-	checkState func(t *testing.T, vm *VM)
+	checkState func(t *testing.T, vm *atomicvm.VM)
 
 	// Whether or not the VM should be considered to still be bootstrapping
 	bootstrapping bool
@@ -104,7 +109,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	})
 	rules := tvm.vm.currentRules()
 
-	tx := test.setup(t, tvm.vm, tvm.atomicMemory)
+	tx := test.setup(t, tvm.atomicVM, tvm.atomicMemory)
 
 	var baseFee *big.Int
 	// If ApricotPhase3 is active, use the initial base fee for the atomic transaction
@@ -113,21 +118,9 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		baseFee = initialBaseFee
 	}
 
-	lastAcceptedBlock := tvm.vm.LastAcceptedBlockInternal().(*Block)
-	backend := &atomic.VerifierBackend{
-		Ctx:          tvm.vm.ctx,
-		Fx:           &tvm.vm.fx,
-		Rules:        rules,
-		Bootstrapped: tvm.vm.bootstrapped.Get(),
-		BlockFetcher: tvm.vm,
-		SecpCache:    tvm.vm.secpCache,
-	}
-	if err := tx.UnsignedAtomicTx.Visit(&atomic.SemanticVerifier{
-		Backend: backend,
-		Tx:      tx,
-		Parent:  lastAcceptedBlock,
-		BaseFee: baseFee,
-	}); len(test.semanticVerifyErr) == 0 && err != nil {
+	lastAcceptedBlock := tvm.vm.LastAcceptedExtendedBlock()
+	backend := atomicvm.NewVerifierBackend(tvm.atomicVM, rules)
+	if err := backend.SemanticVerify(tx, lastAcceptedBlock, baseFee); len(test.semanticVerifyErr) == 0 && err != nil {
 		t.Fatalf("SemanticVerify failed unexpectedly due to: %s", err)
 	} else if len(test.semanticVerifyErr) != 0 {
 		if err == nil {
@@ -141,11 +134,12 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.ethBlock.Root())
+	statedb, err := tvm.vm.blockChain.StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.UnsignedAtomicTx.EVMStateTransfer(tvm.vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
+	wrappedStateDB := extstate.New(statedb)
+	if err := tx.UnsignedAtomicTx.EVMStateTransfer(tvm.vm.ctx, wrappedStateDB); len(test.evmStateTransferErr) == 0 && err != nil {
 		t.Fatalf("EVMStateTransfer failed unexpectedly due to: %s", err)
 	} else if len(test.evmStateTransferErr) != 0 {
 		if err == nil {
@@ -167,10 +161,11 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 		}
 	}
 
-	if err := tvm.vm.mempool.AddLocalTx(tx); err != nil {
+	if err := tvm.atomicVM.AtomicMempool.AddLocalTx(tx); err != nil {
 		t.Fatal(err)
 	}
-	<-tvm.toEngine
+
+	require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
 	blk, err := tvm.vm.BuildBlock(context.Background())
@@ -196,7 +191,7 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	if test.checkState != nil {
-		test.checkState(t, tvm.vm)
+		test.checkState(t, tvm.atomicVM)
 	}
 }
 
