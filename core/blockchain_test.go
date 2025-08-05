@@ -514,6 +514,7 @@ func TestUngracefulAsyncShutdown(t *testing.T) {
 				TriePrefetcherParallelism: 4,
 				Pruning:                   true,
 				CommitInterval:            4096,
+				StateHistory:              32, // Align with subnet-evm configuration
 				SnapshotLimit:             256,
 				SnapshotNoBuild:           true, // Ensure the test errors if snapshot initialization fails
 				AcceptorQueueLimit:        1000, // ensure channel doesn't block
