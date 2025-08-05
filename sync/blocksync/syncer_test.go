@@ -86,98 +86,94 @@ func TestWaitBeforeStart(t *testing.T) {
 	require.ErrorIs(t, err, synccommon.ErrWaitBeforeStart)
 }
 
-func TestBlockSyncer_NormalCase(t *testing.T) {
-	// Test normal case where all blocks are retrieved from network
-	env := newTestEnvironment(t, 10).withDefaultBlockProvider()
-	syncer, err := env.createSyncer(5, 3) // Sync blocks 3, 4, 5 (fromHeight=5, parentsToGet=3)
-	require.NoError(t, err)
+func TestBlockSyncer_ParameterizedTests(t *testing.T) {
+	tests := []struct {
+		name                     string
+		numBlocks                int
+		prePopulateBlocks        []int
+		fromHeight               uint64
+		parentsToGet             uint64
+		expectedBlocks           []int
+		verifyZeroBlocksReceived bool
+	}{
+		{
+			name:           "normal case - all blocks retrieved from network",
+			numBlocks:      10,
+			fromHeight:     5,
+			parentsToGet:   3,
+			expectedBlocks: []int{3, 4, 5},
+		},
+		{
+			name:                     "all blocks already available",
+			numBlocks:                10,
+			prePopulateBlocks:        []int{3, 4, 5},
+			fromHeight:               5,
+			parentsToGet:             3,
+			expectedBlocks:           []int{3, 4, 5},
+			verifyZeroBlocksReceived: true,
+		},
+		{
+			name:              "some blocks already available",
+			numBlocks:         10,
+			prePopulateBlocks: []int{4, 5},
+			fromHeight:        5,
+			parentsToGet:      3,
+			expectedBlocks:    []int{3, 4, 5},
+		},
+		{
+			name:              "most recent block missing",
+			numBlocks:         10,
+			prePopulateBlocks: []int{3, 4},
+			fromHeight:        5,
+			parentsToGet:      3,
+			expectedBlocks:    []int{3, 4, 5},
+		},
+		{
+			name:           "edge case - from height 1",
+			numBlocks:      10,
+			fromHeight:     1,
+			parentsToGet:   1,
+			expectedBlocks: []int{1},
+		},
+		{
+			name:           "single block sync",
+			numBlocks:      10,
+			fromHeight:     7,
+			parentsToGet:   1,
+			expectedBlocks: []int{7},
+		},
+		{
+			name:           "large sync - many blocks",
+			numBlocks:      50,
+			fromHeight:     40,
+			parentsToGet:   35,
+			expectedBlocks: []int{6, 10, 20, 30, 40},
+		},
+	}
 
-	ctx := context.Background()
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnvironment(t, tt.numBlocks).withDefaultBlockProvider()
 
-	// Verify blocks 3, 4, 5 are in database
-	env.verifyBlocksInDB(t, []int{3, 4, 5})
-}
+			if len(tt.prePopulateBlocks) > 0 {
+				env.prePopulateBlocks(tt.prePopulateBlocks...)
+			}
 
-func TestBlockSyncer_AllBlocksAlreadyAvailable(t *testing.T) {
-	// Test case where all blocks are already on disk
-	env := newTestEnvironment(t, 10).withDefaultBlockProvider()
-	// Pre-populate blocks 3, 4, 5 in the database
-	env.prePopulateBlocks(3, 4, 5)
-	syncer, err := env.createSyncer(5, 3) // Sync blocks 3, 4, 5
-	require.NoError(t, err)
+			syncer, err := env.createSyncer(tt.fromHeight, tt.parentsToGet)
+			require.NoError(t, err)
 
-	ctx := context.Background()
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
+			ctx := context.Background()
+			require.NoError(t, syncer.Start(ctx))
+			require.NoError(t, syncer.Wait(ctx))
 
-	// Verify blocks 3, 4, 5 are still in database
-	env.verifyBlocksInDB(t, []int{3, 4, 5})
+			env.verifyBlocksInDB(t, tt.expectedBlocks)
 
-	// Client should not have received any block requests since all blocks were on disk
-	require.Equal(t, int32(0), env.client.BlocksReceived())
-}
-
-func TestBlockSyncer_SomeBlocksAlreadyAvailable(t *testing.T) {
-	// Test case where some blocks are already on disk
-	env := newTestEnvironment(t, 10).withDefaultBlockProvider()
-	// Pre-populate only blocks 4 and 5 in the database
-	env.prePopulateBlocks(4, 5)
-	syncer, err := env.createSyncer(5, 3) // Sync blocks 3, 4, 5
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
-
-	// Verify all blocks 3, 4, 5 are in database
-	env.verifyBlocksInDB(t, []int{3, 4, 5})
-}
-
-func TestBlockSyncer_MostRecentBlockMissing(t *testing.T) {
-	// Test case where only the most recent block is missing
-	env := newTestEnvironment(t, 10).withDefaultBlockProvider()
-	// Pre-populate blocks 3 and 4, but not 5
-	env.prePopulateBlocks(3, 4)
-	syncer, err := env.createSyncer(5, 3) // Sync blocks 3, 4, 5
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
-
-	// Verify all blocks 3, 4, 5 are in database
-	env.verifyBlocksInDB(t, []int{3, 4, 5})
-}
-
-func TestBlockSyncer_EdgeCaseFromHeight1(t *testing.T) {
-	// Test syncing from the first generated block (height 1)
-	env := newTestEnvironment(t, 10).withDefaultBlockProvider()
-	syncer, err := env.createSyncer(1, 1) // Sync only block 1
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
-
-	// Verify block 1 is in database
-	env.verifyBlocksInDB(t, []int{1})
-}
-
-func TestBlockSyncer_SingleBlock(t *testing.T) {
-	// Test syncing a single block in the middle of the chain
-	env := newTestEnvironment(t, 10).withDefaultBlockProvider()
-
-	syncer, err := env.createSyncer(7, 1) // Sync only block 7
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	require.NoError(t, syncer.Start(ctx))
-	require.NoError(t, syncer.Wait(ctx))
-
-	// Verify only block 7 is in database
-	env.verifyBlocksInDB(t, []int{7})
+			if tt.verifyZeroBlocksReceived {
+				// Client should not have received any block requests since all blocks were on disk
+				require.Equal(t, int32(0), env.client.BlocksReceived())
+			}
+		})
+	}
 }
 
 func TestBlockSyncer_ContextCancellation(t *testing.T) {
