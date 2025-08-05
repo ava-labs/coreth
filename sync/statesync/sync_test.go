@@ -71,7 +71,10 @@ func testSync(t *testing.T, test syncTest) {
 
 	require.NoError(t, s.Start(ctx), "failed to start state syncer")
 
-	waitFor(t, context.Background(), s.Wait, test.expectedError, testSyncTimeout)
+	waitFor(t, context.Background(), func(ctx context.Context) error {
+		res := s.Wait(ctx)
+		return res.Err
+	}, test.expectedError, testSyncTimeout)
 
 	// Only assert database consistency if the sync was expected to succeed.
 	if test.expectedError != nil {
@@ -640,8 +643,9 @@ func TestDifferentWaitContext(t *testing.T) {
 	require.NoError(t, s.Start(startCtx), "failed to start state syncer")
 
 	// Wait with different context that will timeout
-	err = s.Wait(waitCtx)
-	require.ErrorIs(t, err, context.DeadlineExceeded, "Wait should return DeadlineExceeded error")
+	res := s.Wait(waitCtx)
+	require.True(t, res.Cancelled, "Wait should return cancelled result when context times out")
+	require.Nil(t, res.Err, "should not return error when cancelled cleanly")
 
 	// Check if more requests were made after Wait returned
 	requestsWhenWaitReturned := atomic.LoadInt64(&requestCount)

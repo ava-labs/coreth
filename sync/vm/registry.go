@@ -90,12 +90,12 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 	}
 
 	// Phase 1: Start all syncers concurrently.
-	startGroup, startCtx := errgroup.WithContext(ctx)
+	startGroup, _ := errgroup.WithContext(ctx)
 	for _, task := range syncers {
 		startGroup.Go(func() error {
 			log.Info("starting syncer", "name", task.name, "summary", summaryHex)
 
-			if err := task.syncer.Start(startCtx); err != nil {
+			if err := task.syncer.Start(ctx); err != nil {
 				log.Error("syncer failed to start", "name", task.name, "summary", summaryHex, "err", err)
 				return fmt.Errorf("failed to start %s: %w", task.name, err)
 			}
@@ -113,14 +113,24 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 	log.Info("all syncers started", "count", len(syncers))
 
 	// Phase 2: Wait for all syncers to complete.
-	waitGroup, waitCtx := errgroup.WithContext(ctx)
+	waitGroup, _ := errgroup.WithContext(ctx)
 	for _, task := range syncers {
 		waitGroup.Go(func() error {
-			if err := task.syncer.Wait(waitCtx); err != nil {
-				log.Error("syncer failed to complete", "name", task.name, "summary", summaryHex, "err", err)
-				return fmt.Errorf("failed to complete %s: %w", task.name, err)
+			res := task.syncer.Wait(ctx)
+
+			// If it was aborted via its own cancellation, treat as success.
+			if res.Cancelled || errors.Is(res.Err, context.Canceled) {
+				log.Info("syncer aborted cleanly", "name", task.name, "summary", summaryHex)
+				return nil
 			}
 
+			// Any real error bubbles up to the errgroup.
+			if res.Err != nil {
+				log.Error("syncer failed to complete", "name", task.name, "summary", summaryHex, "err", res.Err)
+				return fmt.Errorf("failed to complete %s: %w", task.name, res.Err)
+			}
+
+			// On clean completion, we don't return an error.
 			log.Info("syncer completed successfully", "name", task.name, "summary", summaryHex)
 			return nil
 		})
@@ -130,6 +140,14 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 	if err := waitGroup.Wait(); err != nil {
 		return fmt.Errorf("sync execution failed: %w", err)
 	}
+
+	// If our parent ctx was cancelled, return that cancelation now.
+	// This is mostly to handle client.Shutdown() or hitting a timeout.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	log.Info("all syncers completed successfully", "summary", summaryHex)
 
 	return nil
 }

@@ -422,11 +422,11 @@ func TestSyncerWaitScenarios(t *testing.T) {
 				require.NoError(t, err, "could not start syncer")
 			}
 
-			err := syncer.Wait(ctx)
+			res := syncer.Wait(ctx)
 			if tt.expectedErr == nil {
-				require.NoError(t, err, tt.description)
+				require.NoError(t, res.Err, tt.description)
 			} else {
-				require.ErrorIs(t, err, tt.expectedErr, tt.description)
+				require.ErrorIs(t, res.Err, tt.expectedErr, tt.description)
 			}
 		})
 	}
@@ -446,10 +446,10 @@ func TestSyncerContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	// Wait should return an error due to context cancellation
-	err = syncer.Wait(ctx)
-	require.Error(t, err, "should return error when context is cancelled")
-	require.Contains(t, err.Error(), "context canceled", "error should indicate context cancellation")
+	// Wait should return cancelled result due to context cancellation
+	res := syncer.Wait(ctx)
+	require.True(t, res.Cancelled, "should return cancelled result when context is cancelled")
+	require.Nil(t, res.Err, "should not return error when cancelled cleanly")
 }
 
 // TestSyncer_MultipleStart verifies that the atomic syncer prevents multiple Start() calls.
@@ -501,8 +501,8 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 	require.NoError(t, err, "could not start syncer with %s", workerType)
 
 	// Wait for completion.
-	err = syncer.Wait(ctx)
-	require.NoError(t, err, "syncer should complete successfully")
+	res := syncer.Wait(ctx)
+	require.NoError(t, res.Err, "syncer should complete successfully")
 }
 
 // testSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
@@ -539,8 +539,8 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		}
 
 		syncer.Start(ctx)
-		err = syncer.Wait(ctx)
-		require.Error(t, err, "Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
+		res := syncer.Wait(ctx)
+		require.Error(t, res.Err, "Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
 
 		require.Equal(t, checkpoint.expectedNumLeavesSynced, int64(numLeaves), "unexpected number of leaves received at checkpoint %d", i)
 		// Replace the target root and height for the next checkpoint
@@ -567,8 +567,8 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	}
 
 	syncer.Start(ctx)
-	err = syncer.Wait(ctx)
-	require.NoError(t, err, "Expected syncer to finish successfully")
+	res := syncer.Wait(ctx)
+	require.NoError(t, res.Err, "Expected syncer to finish successfully")
 
 	require.Equal(t, finalExpectedNumLeaves, int64(numLeaves), "unexpected number of leaves received to match")
 

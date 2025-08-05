@@ -111,17 +111,21 @@ func (c *codeSyncer) Start(ctx context.Context) error {
 // Wait blocks until the code sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
 // This method must be called after start() has been called.
-func (c *codeSyncer) Wait(ctx context.Context) error {
+// TODO: find a way to use [synccommon.WaitForCompletion] here.
+func (c *codeSyncer) Wait(ctx context.Context) synccommon.WaitResult {
 	if c.cancel == nil {
-		return synccommon.ErrWaitBeforeStart
+		return synccommon.WaitResult{Err: synccommon.ErrWaitBeforeStart, Cancelled: false}
 	}
 
 	select {
 	case err := <-c.errChan:
-		return err
+		return synccommon.WaitResult{Err: err, Cancelled: false}
 	case <-ctx.Done():
 		c.cancel()
-		return ctx.Err()
+		// Wait for the syncer to finish.
+		<-c.done
+		// Signal "clean" cancellation.
+		return synccommon.WaitResult{Err: nil, Cancelled: true}
 	}
 }
 

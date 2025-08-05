@@ -21,6 +21,19 @@ var (
 	ErrSyncerAlreadyStarted = errors.New("syncer already started")
 )
 
+// WaitResult carries both a domain error and a cancellation flag.
+// This is used to implement a cancellation-aware result pattern which has three logical outcomes:
+// 1. Success				-> Err == nil && Cancelled == false.
+// 2. Clean cancellation	-> Err == nil && Cancelled == true.
+// 3. Hard failure			-> Err != nil && Cancelled == false.
+// The Wait phase interprets those as:
+// - case 1 and 2 -> if no per-syncer error, proceed (though if every syncer cleanly cancels and the parent ctx is done, we propagate that).
+// - case 3 	  -> immediate "sync execution failed" with the wrapped error.
+type WaitResult struct {
+	Err       error // real sync failure, or nil if OK
+	Cancelled bool  // true if we aborted via s.cancel()
+}
+
 // Syncer is the common interface for all sync operations.
 // This provides a unified interface for atomic state sync and state trie sync.
 type Syncer interface {
@@ -31,7 +44,7 @@ type Syncer interface {
 	// Wait blocks until the sync operation completes or fails.
 	// Returns the final error (nil if successful).
 	// The sync will respect context cancellation.
-	Wait(ctx context.Context) error
+	Wait(ctx context.Context) WaitResult
 }
 
 // SummaryProvider is an interface for providing state summaries.
@@ -49,4 +62,33 @@ type Extender interface {
 
 	// OnFinishAfterCommit is called after committing the sync results.
 	OnFinishAfterCommit(summaryHeight uint64) error
+}
+
+// WaitForCompletion blocks until either:
+//  1. doneCh yields an error -> Err=that error, Cancelled=false
+//  2. ctx is done            -> call cancelFunc(), drain doneCh, then Err=nil, Cancelled=true
+//
+// If cancelFunc is nil (meaning Start was not called), it returns ErrWaitBeforeStart.
+func WaitForCompletion(
+	ctx context.Context,
+	doneCh <-chan error,
+	cancelFunc context.CancelFunc,
+) WaitResult {
+	// This should only be called after Start, so we can assume cancelFunc is set.
+	if cancelFunc == nil {
+		return WaitResult{Err: ErrWaitBeforeStart}
+	}
+
+	select {
+	case err := <-doneCh:
+		// Background errgroup finished.
+		return WaitResult{Err: err, Cancelled: false}
+	case <-ctx.Done():
+		// Caller cancelled: tell the syncer to shut down.
+		cancelFunc()
+		// Wait for the syncer to finish.
+		<-doneCh
+		// Signal "clean" cancellation.
+		return WaitResult{Err: nil, Cancelled: true}
+	}
 }
