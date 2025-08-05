@@ -86,7 +86,12 @@ func (m *mockSyncer) Wait(ctx context.Context) synccommon.WaitResult {
 		}
 	}
 
-	return m.waitResult
+	// If waitResult is set (for new tests), use it; otherwise use waitError (for existing tests)
+	if m.waitResult != (synccommon.WaitResult{}) {
+		return m.waitResult
+	}
+
+	return synccommon.WaitResult{Err: m.waitError, Cancelled: false}
 }
 
 type mockSummary struct {
@@ -400,13 +405,13 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer2", 200 * time.Millisecond, 200 * time.Millisecond, nil, nil},
 			},
 			contextTimeout: 50 * time.Millisecond,
-			expectedError:  "", // Registry is resilient to context cancellation
+			expectedError:  "context deadline exceeded", // Registry propagates context cancellation
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
-				// With context cancellation, the registry detaches from the cancellation
-				// and allows syncers to complete. All syncers should be started and waited on.
+				// With context cancellation during start phase, syncers may be started but not waited on
+				// due to concurrent execution and early termination.
 				for i, mockSyncer := range mockSyncers {
 					require.True(t, mockSyncer.startCalled, "Syncer %d should have been started", i)
-					require.True(t, mockSyncer.waitCalled, "Syncer %d should have been waited on", i)
+					require.False(t, mockSyncer.waitCalled, "Syncer %d should not have been waited on", i)
 				}
 			},
 		},

@@ -111,7 +111,7 @@ func (c *codeSyncer) Start(ctx context.Context) error {
 // Wait blocks until the code sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
 // This method must be called after start() has been called.
-// TODO: find a way to use [synccommon.WaitForCompletion] here.
+// TODO: find a way to use [synccommon.WaitForCompletion] here, because this syncer uses two channels to signal completion.
 func (c *codeSyncer) Wait(ctx context.Context) synccommon.WaitResult {
 	if c.cancel == nil {
 		return synccommon.WaitResult{Err: synccommon.ErrWaitBeforeStart, Cancelled: false}

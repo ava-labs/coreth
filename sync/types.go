@@ -22,7 +22,7 @@ var (
 )
 
 // WaitResult carries both a domain error and a cancellation flag.
-// This is used to implement a cancellation-aware result pattern which has three logical outcomes:
+// This is used to implement a cancellation-aware result pattern (inspired by Rust's Result type) which has three logical outcomes:
 // 1. Success				-> Err == nil && Cancelled == false.
 // 2. Clean cancellation	-> Err == nil && Cancelled == true.
 // 3. Hard failure			-> Err != nil && Cancelled == false.
