@@ -47,7 +47,6 @@ import (
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
 	ethparams "github.com/ava-labs/libevm/params"
-	"github.com/holiman/uint256"
 )
 
 var (

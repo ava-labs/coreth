@@ -37,8 +37,6 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/coretest"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"

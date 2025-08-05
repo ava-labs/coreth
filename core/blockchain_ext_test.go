@@ -952,7 +952,7 @@ func EmptyAndNonEmptyBlocksTest(t *testing.T, create createFunc) {
 	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 5, 10, func(i int, gen *BlockGen) {
 		if i == 3 {
 			// Generate a transaction to create a unique block
-			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, key1)
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), ethparams.TxGas, nil, nil), types.HomesteadSigner{}, key1)
 			gen.AddTx(tx)
 		}
 	})
@@ -1597,7 +1597,7 @@ func ReexecBlocksTest(t *testing.T, create ReexecTestFunc) {
 	// This call generates a chain of 10 blocks.
 	signer := types.HomesteadSigner{}
 	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), ethparams.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
 	if err != nil {
@@ -1731,7 +1731,7 @@ func ReexecMaxBlocksTest(t *testing.T, create ReexecTestFunc) {
 
 	signer := types.HomesteadSigner{}
 	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, genNumBlocks, 10, func(i int, gen *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), ethparams.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
 	if err != nil {

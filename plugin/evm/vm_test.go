@@ -17,14 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/log"
 	ethparams "github.com/ava-labs/libevm/params"
-	"github.com/ava-labs/libevm/rlp"
-	"github.com/holiman/uint256"
 
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/eth/filters"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"

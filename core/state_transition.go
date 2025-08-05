@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto/kzg4844"
+	"github.com/ava-labs/libevm/log"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
