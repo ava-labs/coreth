@@ -74,15 +74,15 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	}
 	codeSyncer.notifyAccountTrieCompleted()
 
-	err := codeSyncer.Wait(context.Background())
+	res := codeSyncer.Wait(context.Background())
 	if test.err != nil {
-		if err == nil {
+		if res.Err == nil {
 			t.Fatal(t, "expected non-nil error: %s", test.err)
 		}
-		assert.ErrorIs(t, err, test.err)
+		assert.ErrorIs(t, res.Err, test.err)
 		return
-	} else if err != nil {
-		t.Fatal(err)
+	} else if res.Err != nil {
+		t.Fatal(res.Err)
 	}
 
 	// Assert that the client synced the code correctly.

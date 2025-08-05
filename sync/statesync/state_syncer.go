@@ -245,7 +245,8 @@ func (t *stateSync) Start(ctx context.Context) error {
 	})
 	eg.Go(func() error {
 		// Wait for the code syncer to complete.
-		return t.codeSyncer.Wait(egCtx)
+		res := t.codeSyncer.Wait(egCtx)
+		return res.Err
 	})
 	eg.Go(func() error {
 		return t.storageTrieProducer(egCtx)
@@ -262,20 +263,8 @@ func (t *stateSync) Start(ctx context.Context) error {
 // Wait blocks until the sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
 // This method must be called after Start() has been called.
-func (t *stateSync) Wait(ctx context.Context) error {
-	// This should only be called after Start, so we can assume cancelFunc is set.
-	if t.cancelFunc == nil {
-		return synccommon.ErrWaitBeforeStart
-	}
-
-	select {
-	case err := <-t.done:
-		return err
-	case <-ctx.Done():
-		t.cancelFunc() // cancel the sync operations if the context is done
-		<-t.done       // wait for the sync operations to finish
-		return ctx.Err()
-	}
+func (t *stateSync) Wait(ctx context.Context) synccommon.WaitResult {
+	return synccommon.WaitForCompletion(ctx, t.done, t.cancelFunc)
 }
 
 // addTrieInProgress tracks the root as being currently synced.

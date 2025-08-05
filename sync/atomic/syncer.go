@@ -291,18 +291,8 @@ func (s *syncer) onSyncFailure(error) error {
 // Wait blocks until the sync operation completes and returns any error that occurred.
 // It respects context cancellation and returns ctx.Err() if the context is cancelled.
 // This method must be called after Start() has been called.
-func (s *syncer) Wait(ctx context.Context) error {
-	if s.cancel == nil {
-		return synccommon.ErrWaitBeforeStart
-	}
-
-	select {
-	case err := <-s.syncer.Done():
-		return err
-	case <-ctx.Done():
-		s.cancel()
-		return ctx.Err()
-	}
+func (s *syncer) Wait(ctx context.Context) synccommon.WaitResult {
+	return synccommon.WaitForCompletion(ctx, s.syncer.Done(), s.cancel)
 }
 
 type syncerLeafTask struct {
