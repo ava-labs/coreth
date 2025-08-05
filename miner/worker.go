@@ -83,7 +83,7 @@ type environment struct {
 	blobs    int
 	size     uint64
 
-	rules            ethparams.Rules
+	rules            params.Rules
 	predicateContext *precompileconfig.PredicateContext
 	// predicateResults contains the results of checking the predicates for each transaction in the miner.
 	// The results are accumulated as transactions are executed by the miner and set on the BlockContext.
@@ -98,7 +98,7 @@ type environment struct {
 // and gathering the sealing result.
 type worker struct {
 	config      *Config
-	chainConfig *ethparams.ChainConfig
+	chainConfig *params.ChainConfig
 	engine      consensus.Engine
 	eth         Backend
 	chain       *core.BlockChain
@@ -115,7 +115,7 @@ type worker struct {
 	beaconRoot *common.Hash    // TODO: set to empty hash, retained for upstream compatibility and future use
 }
 
-func newWorker(config *Config, chainConfig *ethparams.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, clock *mockable.Clock) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, clock *mockable.Clock) *worker {
 	worker := &worker{
 		config:      config,
 		chainConfig: chainConfig,

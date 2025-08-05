@@ -37,6 +37,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
@@ -196,7 +197,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 type feeBackend interface {
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	CurrentHeader() *types.Header
-	ChainConfig() *ethparams.ChainConfig
+	ChainConfig() *params.ChainConfig
 }
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
