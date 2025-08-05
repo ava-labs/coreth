@@ -29,12 +29,12 @@ import (
 )
 
 const (
-	// ParentsToFetch is the number of the block parents the state syncs to.
+	// BlocksToFetch is the number of the block parents the state syncs to.
 	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
-	ParentsToFetch = 256
+	BlocksToFetch = 256
 
 	atomicStateSyncOperationName = "Atomic State Sync"
-	blockStateSyncOperationName  = "Block State Sync"
+	blockStateSyncOperationName  = "Block Sync"
 	evmStateSyncOperationName    = "EVM State Sync"
 )
 
@@ -168,7 +168,7 @@ func (client *client) stateSync(ctx context.Context) error {
 
 func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegistry) error {
 	// Register block syncer.
-	syncer, err := client.createBlockSyncer(ctx, client.summary.GetBlockHash(), client.summary.Height(), ParentsToFetch)
+	syncer, err := client.createBlockSyncer(ctx, client.summary.GetBlockHash(), client.summary.Height())
 	if err != nil {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
@@ -201,13 +201,13 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 	return nil
 }
 
-func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Hash, fromHeight uint64, parentsToGet int) (synccommon.Syncer, error) {
+func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Hash, fromHeight uint64) (synccommon.Syncer, error) {
 	return blocksync.NewSyncer(&blocksync.Config{
-		ChainDB:      client.ChainDB,
-		Client:       client.Client,
-		FromHash:     fromHash,
-		FromHeight:   fromHeight,
-		ParentsToGet: uint64(parentsToGet),
+		ChainDB:       client.ChainDB,
+		Client:        client.Client,
+		FromHash:      fromHash,
+		FromHeight:    fromHeight,
+		BlocksToFetch: BlocksToFetch,
 	})
 }
 
