@@ -73,20 +73,18 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 
 	err := m.addTx(tx, false, false)
 	// Do not attempt to discard the tx if it was already known
-	if errors.Is(err, ErrAlreadyKnown) {
+	if err == nil || errors.Is(err, ErrAlreadyKnown) {
 		return err
 	}
 
-	if err != nil {
-		// unlike local txs, invalid remote txs are recorded as discarded
-		// so that they won't be requested again
-		txID := tx.ID()
-		m.discardedTxs.Put(tx.ID(), tx)
-		log.Debug("failed to issue remote tx to mempool",
-			"txID", txID,
-			"err", err,
-		)
-	}
+	// unlike local txs, invalid remote txs are recorded as discarded
+	// so that they won't be requested again
+	txID := tx.ID()
+	m.discardedTxs.Put(tx.ID(), tx)
+	log.Debug("failed to issue remote tx to mempool",
+		"txID", txID,
+		"err", err,
+	)
 	return err
 }
 
@@ -142,24 +140,29 @@ func (m *Mempool) checkConflictTx(tx *atomic.Tx) (uint64, ids.ID, []*atomic.Tx, 
 	return highestGasPrice, highestGasPriceConflictTxID, conflictingTxs, nil
 }
 
+// assumes the lock is held
+func (m *Mempool) length() int {
+	return m.pendingTxs.Len() + len(m.currentTxs) + len(m.issuedTxs)
+}
+
 // addTx adds [tx] to the mempool. Assumes [m.lock] is held.
 // If [force], skips conflict checks within the mempool.
 func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
+	// If the tx has already been included in the mempool, there's no need to
+	// add it again.
 	txID := tx.ID()
-	// If [txID] has already been issued or is in the currentTxs map
-	// there's no need to add it.
-	if _, exists := m.issuedTxs[txID]; exists {
-		return fmt.Errorf("%w: tx %s was issued previously", ErrAlreadyKnown, tx.ID())
+	if _, exists := m.pendingTxs.Get(txID); exists {
+		return fmt.Errorf("%w: tx %s is pending", ErrAlreadyKnown, txID)
 	}
 	if _, exists := m.currentTxs[txID]; exists {
-		return fmt.Errorf("%w: tx %s is being built into a block", ErrAlreadyKnown, tx.ID())
+		return fmt.Errorf("%w: tx %s is being built into a block", ErrAlreadyKnown, txID)
 	}
-	if _, exists := m.txHeap.Get(txID); exists {
-		return fmt.Errorf("%w: tx %s is pending", ErrAlreadyKnown, tx.ID())
+	if _, exists := m.issuedTxs[txID]; exists {
+		return fmt.Errorf("%w: tx %s was issued previously", ErrAlreadyKnown, txID)
 	}
 	if !local {
 		if _, exists := m.discardedTxs.Get(txID); exists {
-			return fmt.Errorf("%w: tx %s was discarded", ErrAlreadyKnown, tx.ID())
+			return fmt.Errorf("%w: tx %s was discarded", ErrAlreadyKnown, txID)
 		}
 	}
 	if !force && m.verify != nil {
@@ -169,7 +172,10 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	}
 
 	utxoSet := tx.InputUTXOs()
-	gasPrice, _ := m.atomicTxGasPrice(tx)
+	gasPrice, err := m.atomicTxGasPrice(tx)
+	if err != nil {
+		return err
+	}
 	highestGasPrice, highestGasPriceConflictTxID, conflictingTxs, err := m.checkConflictTx(tx)
 	if err != nil {
 		return err
@@ -196,9 +202,9 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	// If adding this transaction would exceed the mempool's size, check if there is a lower priced
 	// transaction that can be evicted from the mempool
 	if m.length() >= m.maxSize {
-		if m.txHeap.Len() > 0 {
+		if m.pendingTxs.Len() > 0 {
 			// Get the lowest price item from [txHeap]
-			minTx, minGasPrice := m.txHeap.PeekMin()
+			minTx, minGasPrice := m.pendingTxs.PeekMin()
 			// If the [gasPrice] of the lowest item is >= the [gasPrice] of the
 			// submitted item, discard the submitted item (we prefer items
 			// already in the mempool).
@@ -231,9 +237,9 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	// Add the transaction to the [txHeap] so we can evaluate new entries based
 	// on how their [gasPrice] compares and add to [utxoSet] to make sure we can
 	// reject conflicting transactions.
-	m.txHeap.Push(tx, gasPrice)
+	m.pendingTxs.Push(tx, gasPrice)
 	m.metrics.addedTxs.Inc(1)
-	m.metrics.pendingTxs.Update(int64(m.txHeap.Len()))
+	m.metrics.pendingTxs.Update(int64(m.pendingTxs.Len()))
 	for utxoID := range utxoSet {
 		m.utxoSpenders[utxoID] = tx
 	}
@@ -247,7 +253,7 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	if reset {
 		log.Debug("resetting bloom filter", "reason", "reached max filled ratio")
 
-		for _, pendingTx := range m.txHeap.minHeap.items {
+		for _, pendingTx := range m.pendingTxs.minHeap.items {
 			m.bloom.Add(pendingTx.tx)
 		}
 	}
