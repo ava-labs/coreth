@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	synccommon "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -26,8 +25,8 @@ const (
 )
 
 var (
-	errFailedToAddCodeHashesToQueue                   = errors.New("failed to add code hashes to queue")
-	_                               synccommon.Syncer = (*codeSyncer)(nil)
+	errWaitBeforeStart              = errors.New("Wait() called before Start() - call Start() first")
+	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 )
 
 // CodeSyncerConfig defines the configuration of the code syncer
@@ -113,7 +112,7 @@ func (c *codeSyncer) Start(ctx context.Context) error {
 // This method must be called after start() has been called.
 func (c *codeSyncer) Wait(ctx context.Context) error {
 	if c.cancel == nil {
-		return synccommon.ErrWaitBeforeStart
+		return errWaitBeforeStart
 	}
 
 	select {

@@ -198,15 +198,10 @@ func newSyncer(config *Config) (*syncer, error) {
 }
 
 // Start begins syncing the target atomic root with the configured number of worker goroutines.
-func (s *syncer) Start(ctx context.Context) error {
-	if s.cancel != nil {
-		return synccommon.ErrSyncerAlreadyStarted
-	}
-
-	ctx, s.cancel = context.WithCancel(ctx)
+func (s *syncer) Sync(ctx context.Context) error {
 	s.syncer.Start(ctx, s.numWorkers, s.onSyncFailure)
 
-	return nil
+	return <-s.syncer.Done()
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
@@ -286,23 +281,6 @@ func (s *syncer) onFinish() error {
 // the atomic trie.
 func (s *syncer) onSyncFailure(error) error {
 	return nil
-}
-
-// Wait blocks until the sync operation completes and returns any error that occurred.
-// It respects context cancellation and returns ctx.Err() if the context is cancelled.
-// This method must be called after Start() has been called.
-func (s *syncer) Wait(ctx context.Context) error {
-	if s.cancel == nil {
-		return synccommon.ErrWaitBeforeStart
-	}
-
-	select {
-	case err := <-s.syncer.Done():
-		return err
-	case <-ctx.Done():
-		s.cancel()
-		return ctx.Err()
-	}
 }
 
 type syncerLeafTask struct {
