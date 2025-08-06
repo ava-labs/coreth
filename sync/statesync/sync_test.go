@@ -691,24 +691,13 @@ func TestConfigValidation(t *testing.T) {
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
 
-	// Create a simple test trie.
-	root := common.HexToHash("0x1234567890abcdef")
-
 	// Create mock client.
 	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
 	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
 
 	// Create a valid base config.
-	validConfig := Config{
-		Root:                     root,
-		Client:                   mockClient,
-		DB:                       clientDB,
-		BatchSize:                ethdb.IdealBatchSize,
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		RequestSize:              1024,
-	}
+	validConfig := createValidConfig(mockClient, clientDB)
 
 	tests := []struct {
 		name             string
@@ -747,14 +736,12 @@ func TestConfigValidation(t *testing.T) {
 			expectedErr:      errInvalidBatchSize,
 			description:      "should reject zero batch size",
 		},
-
 		{
 			name:             "zero max outstanding code hashes",
 			configModifyFunc: func(c *Config) { c.MaxOutstandingCodeHashes = 0 },
 			expectedErr:      errInvalidMaxOutstandingCodeHashes,
 			description:      "should reject zero max outstanding code hashes",
 		},
-
 		{
 			name:             "zero num code fetching workers",
 			configModifyFunc: func(c *Config) { c.NumCodeFetchingWorkers = 0 },
@@ -804,11 +791,19 @@ func TestConfigValidation(t *testing.T) {
 
 			err := config.Validate()
 
-			if tt.expectedErr != nil {
-				require.ErrorIs(t, err, tt.expectedErr, tt.description)
-			} else {
-				require.NoError(t, err, tt.description)
-			}
+			require.ErrorIs(t, err, tt.expectedErr, tt.description)
 		})
+	}
+}
+
+func createValidConfig(mockClient statesyncclient.Client, clientDB ethdb.Database) Config {
+	return Config{
+		Root:                     common.HexToHash("0x1234567890abcdef"),
+		Client:                   mockClient,
+		DB:                       clientDB,
+		BatchSize:                ethdb.IdealBatchSize,
+		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
+		RequestSize:              1024,
 	}
 }

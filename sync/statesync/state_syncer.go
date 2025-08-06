@@ -138,7 +138,7 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
 		DB:                       config.DB,
 		Client:                   config.Client,
-		MaxOutstandingCodeHashes: uint16(config.MaxOutstandingCodeHashes),
+		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
 

@@ -232,7 +232,7 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 	for _, codeHash := range codeHashes {
 		// Add the code hash to the queue if it's not already on the queue and we do not already have it
 		// in the database.
-		if !c.outstandingCodeHashes.Contains(ids.ID(codeHash)) && !rawdb.HasCode(c.DB, codeHash) {
+		if !c.outstandingCodeHashes.Contains(ids.ID(codeHash)) && !rawdb.HasCode(c.config.DB, codeHash) {
 			selectedCodeHashes = append(selectedCodeHashes, codeHash)
 			c.outstandingCodeHashes.Add(ids.ID(codeHash))
 			customrawdb.AddCodeToFetch(batch, codeHash)
