@@ -41,9 +41,9 @@ type Config struct {
 	Root                     common.Hash
 	Client                   syncclient.Client
 	DB                       ethdb.Database
-	BatchSize                int
-	MaxOutstandingCodeHashes int    // Maximum number of code hashes in the code syncer queue
-	NumCodeFetchingWorkers   int    // Number of code syncing threads
+	BatchSize                uint
+	MaxOutstandingCodeHashes uint   // Maximum number of code hashes in the code syncer queue
+	NumCodeFetchingWorkers   uint16 // Number of code syncing worker goroutines
 	RequestSize              uint16 // Number of leafs to request from a peer at a time
 }
 
@@ -58,13 +58,13 @@ func (c *Config) Validate() error {
 	if c.Root == (common.Hash{}) {
 		return errEmptyRoot
 	}
-	if c.BatchSize <= 0 {
+	if c.BatchSize == 0 {
 		return errInvalidBatchSize
 	}
-	if c.MaxOutstandingCodeHashes <= 0 {
+	if c.MaxOutstandingCodeHashes == 0 {
 		return errInvalidMaxOutstandingCodeHashes
 	}
-	if c.NumCodeFetchingWorkers <= 0 {
+	if c.NumCodeFetchingWorkers == 0 {
 		return errInvalidNumCodeFetchingWorkers
 	}
 	if c.RequestSize == 0 {
@@ -80,7 +80,7 @@ type stateSync struct {
 	root      common.Hash               // root of the EVM state we are syncing to
 	trieDB    *triedb.Database          // trieDB on top of db we are syncing. used to restore any existing tries.
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
-	batchSize int                       // write batches when they reach this size
+	batchSize uint                      // write batches when they reach this size
 	client    syncclient.Client         // used to contact peers over the network
 
 	segments   chan syncclient.LeafSyncTask   // channel of tasks to sync
@@ -138,7 +138,7 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
 		DB:                       config.DB,
 		Client:                   config.Client,
-		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
+		MaxOutstandingCodeHashes: uint16(config.MaxOutstandingCodeHashes),
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
 

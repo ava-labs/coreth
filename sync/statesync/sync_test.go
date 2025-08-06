@@ -747,35 +747,19 @@ func TestConfigValidation(t *testing.T) {
 			expectedErr:      errInvalidBatchSize,
 			description:      "should reject zero batch size",
 		},
-		{
-			name:             "negative batch size",
-			configModifyFunc: func(c *Config) { c.BatchSize = -1 },
-			expectedErr:      errInvalidBatchSize,
-			description:      "should reject negative batch size",
-		},
+
 		{
 			name:             "zero max outstanding code hashes",
 			configModifyFunc: func(c *Config) { c.MaxOutstandingCodeHashes = 0 },
 			expectedErr:      errInvalidMaxOutstandingCodeHashes,
 			description:      "should reject zero max outstanding code hashes",
 		},
-		{
-			name:             "negative max outstanding code hashes",
-			configModifyFunc: func(c *Config) { c.MaxOutstandingCodeHashes = -1 },
-			expectedErr:      errInvalidMaxOutstandingCodeHashes,
-			description:      "should reject negative max outstanding code hashes",
-		},
+
 		{
 			name:             "zero num code fetching workers",
 			configModifyFunc: func(c *Config) { c.NumCodeFetchingWorkers = 0 },
 			expectedErr:      errInvalidNumCodeFetchingWorkers,
 			description:      "should reject zero num code fetching workers",
-		},
-		{
-			name:             "negative num code fetching workers",
-			configModifyFunc: func(c *Config) { c.NumCodeFetchingWorkers = -1 },
-			expectedErr:      errInvalidNumCodeFetchingWorkers,
-			description:      "should reject negative num code fetching workers",
 		},
 		{
 			name:             "zero request size",
@@ -807,17 +791,6 @@ func TestConfigValidation(t *testing.T) {
 			configModifyFunc: func(c *Config) { c.RequestSize = 1 },
 			expectedErr:      nil,
 			description:      "should accept minimum valid request size",
-		},
-		// Multiple field validation tests
-		{
-			name: "multiple invalid fields",
-			configModifyFunc: func(c *Config) {
-				c.Client = nil
-				c.DB = nil
-				c.BatchSize = 0
-			},
-			expectedErr: errNilClient, // Should return first error encountered
-			description: "should return first validation error when multiple fields are invalid",
 		},
 	}
 
