@@ -870,7 +870,8 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 	// the VM returns an error when it attempts to issue the conflict into the mempool
 	// and when it attempts to build a block with the conflict force added to the mempool.
 	for i, tx := range conflictTxs[:2] {
-		require.ErrorIs(t, tvm.atomicVM.AtomicMempool.AddLocalTx(tx), atomicvm.ErrConflictingAtomicInputs)
+		err := tvm.atomicVM.AtomicMempool.AddLocalTx(tx)
+		require.ErrorIs(t, err, atomicvm.ErrConflictingAtomicInputs)
 		// Force issue transaction directly to the mempool
 		require.NoError(t, tvm.atomicVM.AtomicMempool.ForceAddTx(tx))
 		require.Equal(t, commonEng.PendingTxs, tvm.WaitForEvent(context.Background()))
