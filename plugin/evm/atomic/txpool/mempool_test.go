@@ -4,79 +4,27 @@
 package txpool
 
 import (
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/utils/bag"
+	"github.com/ava-labs/avalanchego/utils/bloom"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMempoolAddTx(t *testing.T) {
-	require := require.New(t)
-
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	m, err := NewMempool(
-		NewTxs(ctx, 5_000),
-		prometheus.NewRegistry(),
-		nil,
-	)
-	require.NoError(err)
-
-	txs := make([]*atomic.Tx, 0)
-	for i := 0; i < 3_000; i++ {
-		tx := &atomic.Tx{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
-		}
-
-		txs = append(txs, tx)
-		require.NoError(m.Add(tx))
-	}
-
-	for _, tx := range txs {
-		require.True(m.bloom.Has(tx))
-	}
-}
-
-// Add should return an error if a tx is already known
-func TestMempoolAdd(t *testing.T) {
-	require := require.New(t)
-
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	m, err := NewMempool(
-		NewTxs(ctx, 5_000),
-		prometheus.NewRegistry(),
-		nil,
-	)
-	require.NoError(err)
-
-	tx := &atomic.Tx{
-		UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-			IDV: ids.GenerateTestID(),
-		},
-	}
-
-	require.NoError(m.Add(tx))
-	err = m.Add(tx)
-	require.ErrorIs(err, ErrAlreadyKnown)
-}
-
-func TestAtomicMempoolIterate(t *testing.T) {
+func TestMempoolIterate(t *testing.T) {
 	txs := []*atomic.Tx{
-		{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
-		},
-		{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
-		},
+		atomictest.GenerateTestImportTxWithGas(1, 1),
+		atomictest.GenerateTestImportTxWithGas(1, 1),
 	}
 
 	tests := []struct {
@@ -127,15 +75,14 @@ func TestAtomicMempoolIterate(t *testing.T) {
 				require.NoError(m.Add(add))
 			}
 
-			matches := make([]*atomic.Tx, 0)
+			var matches []*atomic.Tx
 			f := func(tx *atomic.Tx) bool {
-				match := tt.f(tx)
-
-				if match {
-					matches = append(matches, tx)
+				if !tt.f(tx) {
+					return false
 				}
 
-				return match
+				matches = append(matches, tx)
+				return true
 			}
 
 			m.Iterate(f)
@@ -145,60 +92,258 @@ func TestAtomicMempoolIterate(t *testing.T) {
 	}
 }
 
-// a valid tx shouldn't be added to the mempool if this would exceed the
-// mempool's max size
-func TestMempoolMaxSizeHandling(t *testing.T) {
-	require := require.New(t)
+func TestMempoolAdd(t *testing.T) {
+	tx0 := atomictest.GenerateTestImportTxWithGas(1, 1)
+	tx1 := atomictest.GenerateTestImportTxWithGas(1, 1)
+	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2)
 
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	mempool, err := NewMempool(
-		NewTxs(ctx, 1),
-		prometheus.NewRegistry(),
-		nil,
-	)
-	require.NoError(err)
-	// create candidate tx (we will drop before validation)
-	tx := atomictest.GenerateTestImportTx()
+	almostMaxFeeTx := atomictest.GenerateTestImportTxWithGas(1, math.MaxUint64-1)
+	maxFeeTx := atomictest.GenerateTestImportTxWithGas(1, math.MaxUint64)
 
-	require.NoError(mempool.AddRemoteTx(tx))
-	require.True(mempool.Has(tx.ID()))
-	// promote tx to be issued
-	_, ok := mempool.NextTx()
-	require.True(ok)
-	mempool.IssueCurrentTxs()
+	tests := []struct {
+		name         string
+		size         int
+		issuedTxs    []*atomic.Tx
+		discardedTxs []*atomic.Tx
+		currentTxs   []*atomic.Tx
+		pendingTxs   []*atomic.Tx
 
-	// try to add one more tx
-	tx2 := atomictest.GenerateTestImportTx()
-	err = mempool.AddRemoteTx(tx2)
-	require.ErrorIs(err, ErrMempoolFull)
-	require.False(mempool.Has(tx2.ID()))
+		tx      *atomic.Tx
+		local   bool
+		wantErr error
+	}{
+		{
+			name: "lower_fee_not_added",
+			size: 1,
+			pendingTxs: []*atomic.Tx{
+				tx2,
+			},
+			tx:      tx0,
+			wantErr: ErrInsufficientFee,
+		},
+		{
+			name: "same_fee_not_added",
+			size: 1,
+			pendingTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:      tx1,
+			wantErr: ErrInsufficientFee,
+		},
+		{
+			name: "lower_fee_dropped",
+			size: 1,
+			pendingTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx: tx2,
+		},
+		{
+			name: "mempool_full",
+			size: 1,
+			issuedTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:      maxFeeTx,
+			wantErr: ErrMempoolFull,
+		},
+		{
+			name: "duplicate_issued",
+			size: 1,
+			issuedTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:      tx0,
+			wantErr: ErrAlreadyKnown,
+		},
+		{
+			name: "duplicate_current",
+			size: 1,
+			currentTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:      tx0,
+			wantErr: ErrAlreadyKnown,
+		},
+		{
+			name: "duplicate_pending",
+			size: 1,
+			pendingTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:      tx0,
+			wantErr: ErrAlreadyKnown,
+		},
+		{
+			name: "cancelled_txs_in_bloom_filter",
+			size: 2,
+			currentTxs: []*atomic.Tx{
+				maxFeeTx,
+			},
+			pendingTxs: func() []*atomic.Tx {
+				numHashes, numEntries := bloom.OptimalParameters(
+					config.TxGossipBloomMinTargetElements,
+					config.TxGossipBloomTargetFalsePositiveRate,
+				)
+				txsToAdd := bloom.EstimateCount(
+					numHashes,
+					numEntries,
+					config.TxGossipBloomResetFalsePositiveRate,
+				)
+				// Reduce txsToAdd by one to account for the manually added tx.
+				txs := make([]*atomic.Tx, txsToAdd-1)
+				for i := range txs {
+					// Keep increasing the fee to cause prior transactions to be
+					// evicted.
+					fee := uint64(i + 1)
+					txs[i] = atomictest.GenerateTestImportTxWithGas(1, fee)
+				}
+				return txs
+			}(),
+			tx: almostMaxFeeTx,
+		},
+		{
+			name: "discarded_tx_not_verified",
+			size: 1,
+			discardedTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:      tx0,
+			wantErr: ErrAlreadyKnown,
+		},
+		{
+			name: "discarded_tx_verified",
+			size: 1,
+			discardedTxs: []*atomic.Tx{
+				tx0,
+			},
+			tx:    tx0,
+			local: true,
+		},
+	}
+	for _, test := range tests {
+		addRemotes := []func(*Mempool, *atomic.Tx) error{
+			(*Mempool).Add,
+			(*Mempool).AddRemoteTx,
+		}
+		for i, addRemote := range addRemotes {
+			t.Run(fmt.Sprintf("%s_%d", test.name, i), func(t *testing.T) {
+				require := require.New(t)
+
+				ctx := snowtest.Context(t, snowtest.CChainID)
+				mempool, err := NewMempool(
+					NewTxs(ctx, test.size),
+					prometheus.NewRegistry(),
+					nil,
+				)
+				require.NoError(err)
+
+				// Add all transactions that should be in the Issued state.
+				for _, tx := range test.issuedTxs {
+					require.NoError(mempool.AddRemoteTx(tx))
+					require.True(mempool.Has(tx.ID()))
+				}
+				makePendingCurrent(mempool)
+				mempool.IssueCurrentTxs()
+
+				// Add all transactions that should be in the Discarded state.
+				for _, tx := range test.discardedTxs {
+					require.NoError(mempool.AddRemoteTx(tx))
+					require.True(mempool.Has(tx.ID()))
+				}
+				makePendingCurrent(mempool)
+				mempool.DiscardCurrentTxs()
+
+				// Add all transactions that should be in the Current state.
+				for _, tx := range test.currentTxs {
+					require.NoError(mempool.AddRemoteTx(tx))
+					require.True(mempool.Has(tx.ID()))
+				}
+				makePendingCurrent(mempool)
+
+				// Add all transactions that should be in the Pending state.
+				for _, tx := range test.pendingTxs {
+					require.NoError(mempool.AddRemoteTx(tx))
+					require.True(mempool.Has(tx.ID()))
+				}
+
+				// Attempt to add the transaction under test
+				if test.local {
+					err = mempool.AddLocalTx(test.tx)
+				} else {
+					err = addRemote(mempool, test.tx)
+				}
+				require.ErrorIs(err, test.wantErr)
+				if err == nil {
+					require.True(mempool.Has(test.tx.ID()))
+				}
+
+				assertInvariants(t, mempool)
+
+				// This was added as a regression test for inconsistent bloom
+				// filter handling of cancelled transactions after successful
+				// transaction additions.
+				mempool.CancelCurrentTxs()
+				assertInvariants(t, mempool)
+			})
+		}
+	}
 }
 
-// mempool will drop transaction with the lowest fee
-func TestMempoolPriorityDrop(t *testing.T) {
-	require := require.New(t)
+func assertInvariants(t *testing.T, m *Mempool) {
+	assert := assert.New(t)
 
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	mempool, err := NewMempool(
-		NewTxs(ctx, 1),
-		prometheus.NewRegistry(),
-		nil,
-	)
-	require.NoError(err)
+	// Assert that a transaction is only in one state at a time, either pending,
+	// current, issued, or discarded.
+	{
+		var txIDs bag.Bag[ids.ID]
+		for _, tx := range m.pendingTxs.maxHeap.items {
+			txIDs.Add(tx.id)
+		}
+		for txID := range m.currentTxs {
+			txIDs.Add(txID)
+		}
+		for txID := range m.issuedTxs {
+			txIDs.Add(txID)
+		}
+		txID, freq := txIDs.Mode()
+		assert.LessOrEqual(freq, 1, "%q included multiple times", txID)
 
-	tx1 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
-	require.NoError(mempool.AddRemoteTx(tx1))
-	require.True(mempool.Has(tx1.ID()))
+		for _, txID := range txIDs.List() {
+			_, discarded := m.discardedTxs.Get(txID)
+			assert.Falsef(discarded, "%q included multiple times", txID)
+		}
+	}
 
-	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2) // lower fee
-	err = mempool.AddRemoteTx(tx2)
-	require.ErrorIs(err, ErrInsufficientFee)
-	require.True(mempool.Has(tx1.ID()))
-	require.False(mempool.Has(tx2.ID()))
+	// Assert that all the UTXOs currently referenced by a tx in the mempool is
+	// tracked in the utxo spenders map.
+	{
+		var utxoIDs set.Set[ids.ID]
+		for _, tx := range m.pendingTxs.maxHeap.items {
+			utxoIDs.Union(tx.tx.InputUTXOs())
+		}
+		for _, tx := range m.currentTxs {
+			utxoIDs.Union(tx.InputUTXOs())
+		}
+		for _, tx := range m.issuedTxs {
+			utxoIDs.Union(tx.InputUTXOs())
+		}
+		assert.Len(m.utxoSpenders, utxoIDs.Len())
+	}
 
-	tx3 := atomictest.GenerateTestImportTxWithGas(1, 5) // higher fee
-	require.NoError(mempool.AddRemoteTx(tx3))
-	require.False(mempool.Has(tx1.ID()))
-	require.False(mempool.Has(tx2.ID()))
-	require.True(mempool.Has(tx3.ID()))
+	// Assert that all the pending transactions are included in the bloom
+	// filter.
+	for _, pendingTx := range m.pendingTxs.maxHeap.items {
+		assert.Truef(m.bloom.Has(pendingTx.tx), "%q should have been included in the bloom filter", pendingTx.id)
+	}
+}
+
+// makePendingCurrent marks all pending transactions as current.
+func makePendingCurrent(mempool *Mempool) {
+	for {
+		_, ok := mempool.NextTx() // Move all txs to current
+		if !ok {
+			break
+		}
+	}
 }
