@@ -64,34 +64,7 @@ func NewSyncer(config *Config) (*blockSyncer, error) {
 	}, nil
 }
 
-func (s *blockSyncer) Start(ctx context.Context) error {
-	if s.cancel != nil {
-		return synccommon.ErrSyncerAlreadyStarted
-	}
-
-	cancelCtx, cancel := context.WithCancel(ctx)
-	s.cancel = cancel
-	go func() {
-		s.err <- s.sync(cancelCtx)
-	}()
-	return nil
-}
-
-func (s *blockSyncer) Wait(ctx context.Context) error {
-	if s.cancel == nil {
-		return synccommon.ErrWaitBeforeStart
-	}
-
-	select {
-	case err := <-s.err:
-		return err
-	case <-ctx.Done():
-		s.cancel()
-		return <-s.err
-	}
-}
-
-// sync fetches (up to) BlocksToFetch blocks from peers
+// Sync fetches (up to) BlocksToFetch blocks from peers
 // using Client and writes them to disk.
 // the process begins with FromHash and it fetches parents recursively.
 // fetching starts from the first ancestor not found on disk
@@ -100,7 +73,7 @@ func (s *blockSyncer) Wait(ctx context.Context) error {
 // any blocks that are locally available.
 // We could also prevent overrequesting blocks, if the number of blocks needed
 // to be fetched isn't a multiple of blocksPerRequest.
-func (s *blockSyncer) sync(ctx context.Context) error {
+func (s *blockSyncer) Sync(ctx context.Context) error {
 	nextHash := s.config.FromHash
 	nextHeight := s.config.FromHeight
 	blocksToFetch := s.config.BlocksToFetch

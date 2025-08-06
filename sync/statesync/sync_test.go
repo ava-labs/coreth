@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	synccommon "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -68,10 +67,7 @@ func testSync(t *testing.T, test syncTest) {
 		RequestSize:              1024,
 	})
 	require.NoError(t, err, "failed to create state syncer")
-
-	require.NoError(t, s.Start(ctx), "failed to start state syncer")
-
-	waitFor(t, context.Background(), s.Wait, test.expectedError, testSyncTimeout)
+	waitFor(t, ctx, s.Sync, test.expectedError, testSyncTimeout)
 
 	// Only assert database consistency if the sync was expected to succeed.
 	if test.expectedError != nil {
@@ -93,10 +89,11 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 // waitFor waits for a result on the [result] channel to match [expected], or a timeout.
 func waitFor(t *testing.T, ctx context.Context, resultFunc func(context.Context) error, expected error, timeout time.Duration) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// Create a new context with timeout
+	cancelCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	err := resultFunc(ctx)
-	if ctx.Err() != nil {
+	if cancelCtx.Err() != nil {
 		// print a stack trace to assist with debugging
 		var stackBuf bytes.Buffer
 		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
@@ -209,7 +206,7 @@ func TestCancelSync(t *testing.T) {
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
 	// Create trie with 2000 accounts (more than one leaf request)
-	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 2000)
+	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 5000)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	testSync(t, syncTest{
@@ -594,91 +591,4 @@ func fillAccountsWithStorage(t *testing.T, serverDB ethdb.Database, serverTrieDB
 		return account
 	})
 	return newRoot
-}
-
-func TestDifferentWaitContext(t *testing.T) {
-	serverDB := rawdb.NewMemoryDatabase()
-	serverTrieDB := triedb.NewDatabase(serverDB, nil)
-	// Create trie with many accounts to ensure sync takes time
-	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 2000)
-	clientDB := rawdb.NewMemoryDatabase()
-
-	// Track requests to show sync continues after Wait returns
-	var requestCount int64
-
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
-
-	// Intercept to track ongoing requests and add delay
-	mockClient.GetLeafsIntercept = func(req message.LeafsRequest, resp message.LeafsResponse) (message.LeafsResponse, error) {
-		atomic.AddInt64(&requestCount, 1)
-		// Add small delay to ensure sync is ongoing
-		time.Sleep(10 * time.Millisecond)
-		return resp, nil
-	}
-
-	s, err := NewSyncer(&Config{
-		Root:                     root,
-		Client:                   mockClient,
-		DB:                       clientDB,
-		BatchSize:                1000,
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		RequestSize:              1024,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create two different contexts
-	startCtx := context.Background() // Never cancelled
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer waitCancel()
-
-	// Start with one context
-	require.NoError(t, s.Start(startCtx), "failed to start state syncer")
-
-	// Wait with different context that will timeout
-	err = s.Wait(waitCtx)
-	require.ErrorIs(t, err, context.DeadlineExceeded, "Wait should return DeadlineExceeded error")
-
-	// Check if more requests were made after Wait returned
-	requestsWhenWaitReturned := atomic.LoadInt64(&requestCount)
-	time.Sleep(100 * time.Millisecond)
-	requestsAfterWait := atomic.LoadInt64(&requestCount)
-	require.Equal(t, requestsWhenWaitReturned, requestsAfterWait, "Sync should not continue after Wait returned with different context")
-}
-
-// TestSyncer_MultipleStart verifies that the syncer prevents multiple Start() calls.
-func TestStateSyncer_MultipleStart(t *testing.T) {
-	serverDB := rawdb.NewMemoryDatabase()
-	serverTrieDB := triedb.NewDatabase(serverDB, nil)
-	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 100)
-	clientDB := rawdb.NewMemoryDatabase()
-
-	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
-	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
-	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
-
-	s, err := NewSyncer(&Config{
-		Root:                     root,
-		Client:                   mockClient,
-		DB:                       clientDB,
-		BatchSize:                1000,
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		RequestSize:              1024,
-	})
-	require.NoError(t, err, "failed to create state syncer")
-
-	ctx := context.Background()
-
-	// First Start() call should succeed.
-	err = s.Start(ctx)
-	require.NoError(t, err, "first Start() call should succeed")
-
-	// Second Start() call should fail with sentinel error.
-	err = s.Start(ctx)
-	require.ErrorIs(t, err, synccommon.ErrSyncerAlreadyStarted, "should return ErrSyncerAlreadyStarted")
 }
