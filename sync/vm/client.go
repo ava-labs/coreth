@@ -34,7 +34,7 @@ const (
 	BlocksToFetch = 256
 
 	atomicStateSyncOperationName = "Atomic State Sync"
-	blockStateSyncOperationName  = "Block Sync"
+	blockSyncOperationName       = "Block Sync"
 	evmStateSyncOperationName    = "EVM State Sync"
 )
 
@@ -172,7 +172,7 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 	if err != nil {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
-	if err := registry.Register(blockStateSyncOperationName, syncer); err != nil {
+	if err := registry.Register(blockSyncOperationName, syncer); err != nil {
 		return fmt.Errorf("failed to register block syncer: %w", err)
 	}
 

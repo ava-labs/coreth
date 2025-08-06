@@ -80,6 +80,19 @@ func TestWaitBeforeStart(t *testing.T) {
 	require.ErrorIs(t, err, synccommon.ErrWaitBeforeStart)
 }
 
+func TestDuplicateStart(t *testing.T) {
+	env := newTestEnvironment(t, 10)
+
+	syncer, err := env.createSyncer(5, 3)
+	require.NoError(t, err)
+	require.NotNil(t, syncer)
+
+	require.NoError(t, syncer.Start(context.Background()))
+
+	err = syncer.Start(context.Background())
+	require.ErrorIs(t, err, synccommon.ErrSyncerAlreadyStarted)
+}
+
 func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 	tests := []struct {
 		name                     string
@@ -143,15 +156,19 @@ func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 			blocksToFetch:  35,
 			expectedBlocks: []int{6, 10, 20, 30, 40},
 		},
+		{
+			name:           "fetch genesis block",
+			numBlocks:      10,
+			fromHeight:     10,
+			blocksToFetch:  30,
+			expectedBlocks: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newTestEnvironment(t, tt.numBlocks)
-
-			if len(tt.prePopulateBlocks) > 0 {
-				require.NoError(t, env.prePopulateBlocks(tt.prePopulateBlocks))
-			}
+			require.NoError(t, env.prePopulateBlocks(tt.prePopulateBlocks))
 
 			syncer, err := env.createSyncer(tt.fromHeight, tt.blocksToFetch)
 			require.NoError(t, err)
@@ -164,7 +181,7 @@ func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 
 			if tt.verifyZeroBlocksReceived {
 				// Client should not have received any block requests since all blocks were on disk
-				require.Equal(t, int32(0), env.client.BlocksReceived())
+				require.Zero(t, env.client.BlocksReceived())
 			}
 		})
 	}
