@@ -256,6 +256,9 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 		for _, pendingTx := range m.pendingTxs.minHeap.items {
 			m.bloom.Add(pendingTx.tx)
 		}
+		for _, currentTx := range m.currentTxs {
+			m.bloom.Add(currentTx)
+		}
 	}
 
 	// When adding [tx] to the mempool make sure that there is an item in Pending
