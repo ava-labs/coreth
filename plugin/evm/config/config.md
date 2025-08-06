@@ -12,183 +12,37 @@ The C-Chain config is printed out in the log when a node starts. Default values 
 
 Default values are overridden only if specified in the given config file. It is recommended to only provide values which are different from the default, as that makes the config more resilient to future default changes. Otherwise, if defaults change, your node will remain with the old values, which might adversely affect your node operation.
 
+
+## Example Configuration
+
+```json
+{
+  "eth-apis": ["eth", "eth-filter", "net", "web3"],
+  "pruning-enabled": true,
+  "commit-interval": 4096,
+  "trie-clean-cache": 512,
+  "trie-dirty-cache": 512,
+  "snapshot-cache": 256,
+  "rpc-gas-cap": 50000000,
+  "log-level": "info",
+  "metrics-expensive-enabled": true,
+  "continuous-profiler-dir": "./profiles",
+  "state-sync-enabled": false,
+  "accepted-cache-size": 32
+}
+```
+
 ## Configuration Format
 
 Configuration is provided as a JSON object. All fields are optional unless otherwise specified.
 
 ## API Configuration
 
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `rpc-gas-cap` | integer | The maximum gas to be consumed by an RPC Call (used in `eth_estimateGas` and `eth_call`). | `50000000` |
-| `rpc-tx-fee-cap` | integer | Global transaction fee (price \* `gaslimit`) cap (measured in AVAX) for send-transaction variants. | `100` |
-| `api-max-duration` | duration | Maximum API call duration. If API calls exceed this duration, they will time out. | `0` (no maximum) |
-| `api-max-blocks-per-request` | integer | Maximum number of blocks to serve per `getLogs` request. | `0` (no maximum) |
-| `ws-cpu-refill-rate` | duration | The refill rate specifies the maximum amount of CPU time to allot a single connection per second. | `0` (no maximum) |
-| `ws-cpu-max-stored` | duration | Specifies the maximum amount of CPU time that can be stored for a single WS connection. | `0` (no maximum) |
-| `allow-unfinalized-queries` | bool | Allows queries for unfinalized (not yet accepted) blocks/transactions. | `false` |
-| `accepted-cache-size` | integer | Specifies the depth to keep accepted headers and accepted logs in the cache. This is particularly useful to improve the performance of `eth_getLogs` for recent logs. | `32` |
-| `http-body-limit` | integer | Maximum size in bytes for HTTP request bodies. | `0` (no maximum) |
-
-
-## Database
+### Ethereum APIs
 
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
-| `state-scheme` | string | Can be one of `hash` or `firewood`. __WARNING__: `firewood` scheme is untested in production. | `hash` |
-| `trie-clean-cache` | integer | Size of cache used for clean trie nodes (in MBs). Should be a multiple of `64`. | `512` |
-| `trie-dirty-cache` | integer | Size of cache used for dirty trie nodes (in MBs). When the dirty nodes exceed this limit, they are written to disk. | `512` |
-| `trie-dirty-commit-target` | integer | Memory limit to target in the dirty cache before performing a commit (in MBs). | `20` |
-| `trie-prefetcher-parallelism` | integer | Max concurrent disk reads trie pre-fetcher should perform at once. | `16` |
-| `snapshot-cache` | integer | Size of the snapshot disk layer clean cache (in MBs). Should be a multiple of `64`. | `256` |
-| `acceptor-queue-limit` | integer | Specifies the maximum number of blocks to queue during block acceptance before blocking on Accept. | `64` |
-| `commit-interval` | integer | Specifies the commit interval at which to persist the merkle trie to disk. | `4096` |
-| `pruning-enabled` | bool | If `true`, database pruning of obsolete historical data will be enabled. This reduces the amount of data written to disk, but does not delete any state that is written to the disk previously. This flag should be set to `false` for nodes that need access to all data at historical roots. Pruning will be done only for new data. **Note**: If a node is ever run with `pruning-enabled` as `false` (archival mode), setting `pruning-enabled` to `true` will result in a warning and the node will shut down. This is to protect against unintentional misconfigurations of an archival node. To override this and switch to pruning mode, in addition to `pruning-enabled: true`, `allow-missing-tries` should be set to `true` as well. | `false` in v1.4.9, and `true` in subsequent versions |
-| `populate-missing-tries` | _uint64_ | If non-nil, sets the starting point for repopulating missing tries to re-generate archival merkle forest. To restore an archival merkle forest that has been corrupted (missing trie nodes for a section of the blockchain), specify the starting point of the last block on disk, where the full trie was available at that block to re-process blocks from that height onwards and re-generate the archival merkle forest on startup. This flag should be used once to re-generate the archival merkle forest and should be removed from the config after completion. This flag will cause the node to delay starting up while it re-processes old blocks. | - |
-| `populate-missing-tries-parallelism` | integer | Number of concurrent readers to use when re-populating missing tries on startup. | 1024 |
-| `allow-missing-tries` | bool | If `true`, allows a node that was once configured as archival to switch to pruning mode. | `false` |
-| `preimages-enabled` | bool | If `true`, enables preimages. | `false` |
-| `prune-warp-db-enabled` | bool | If `true`, clears the warp database on startup. | `false` |
-| `offline-pruning-enabled` | bool | If `true`, offline pruning will run on startup and block until it completes (approximately one hour on Mainnet). This will reduce the size of the database by deleting old trie nodes. **While performing offline pruning, your node will not be able to process blocks and will be considered offline.** While ongoing, the pruning process consumes a small amount of additional disk space (for deletion markers and the bloom filter). For more information see [here.](https://build.avax.network/docs/nodes/maintain/reduce-disk-usage#disk-space-considerations). Since offline pruning deletes old state data, this should not be run on nodes that need to support archival API requests. This is meant to be run manually, so after running with this flag once, it must be toggled back to false before running the node again. Therefore, you should run with this flag set to true and then set it to false on the subsequent run. | `false` |
-| `offline-pruning-bloom-filter-size` | integer | This flag sets the size of the bloom filter to use in offline pruning (denominated in MB and defaulting to 512 MB). The bloom filter is kept in memory for efficient checks during pruning and is also written to disk to allow pruning to resume without re-generating the bloom filter. The active state is added to the bloom filter before iterating the DB to find trie nodes that can be safely deleted, any trie nodes not in the bloom filter are considered safe for deletion. The size of the bloom filter may impact its false positive rate, which can impact the results of offline pruning. This is an advanced parameter that has been tuned to 512 MB and should not be changed without thoughtful consideration. | 512 MB |
-| `offline-pruning-data-directory` | string | This flag must be set when offline pruning is enabled and sets the directory that offline pruning will use to write its bloom filter to disk. This directory should not be changed in between runs until offline pruning has completed. | - |
-| `transaction-history` | integer | Number of recent blocks for which to maintain transaction lookup indices in the database. If set to 0, transaction lookup indices will be maintained for all blocks. | `0` |
-| `state-history` | integer | The maximum number of blocks from head whose state histories are reserved for pruning blockchains. | `32` |
-| `historical-proof-query-window` | integer | When running in archive mode only, the number of blocks before the last accepted block to be accepted for proof state queries. | `43200` |
-| `skip-tx-indexing` | bool | If set to `true`, the node will not index transactions. TxLookupLimit can be still used to control deleting old transaction indices. | `false` |
-| `inspect-database` | bool | If set to `true`, inspects the database on startup. | `false` |
-
-## Transaction Pool
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `local-txs-enabled` | bool | Enables local transaction handling (prioritizes transactions submitted through this node). | `false` |
-| `allow-unprotected-txs` | bool | If `true`, the APIs will allow transactions that are not replay protected (EIP-155) to be issued through this node. | `false` |
-| `allow-unprotected-tx-hashes` | \[\]TxHash | Specifies an array of transaction hashes that should be allowed to bypass replay protection. This flag is intended for node operators that want to explicitly allow specific transactions to be issued through their API. | an empty list |
-| `price-options-slow-fee-percentage` | integer | Percentage to apply for slow fee estimation. | `95` |
-| `price-options-fast-fee-percentage` | integer | Percentage to apply for fast fee estimation. | `105` |
-| `price-options-max-tip` | integer | Maximum tip in wei for fee estimation. | `20000000000` (20 Gwei) |
-| `push-gossip-percent-stake` | float | Percentage of the total stake to send transactions received over the RPC. | `0.9` |
-| `push-gossip-num-validators` | integer | Number of validators to initially send transactions received over the RPC. | `100` |
-| `push-gossip-num-peers` | integer | Number of peers to initially send transactions received over the RPC. | `0` |
-| `push-regossip-num-validators` | integer | Number of validators to periodically send transactions received over the RPC. | `10` |
-| `push-regossip-num-peers` | integer | Number of peers to periodically send transactions received over the RPC. | `0` |
-| `push-gossip-frequency` | duration | Frequency in nanoseconds to send transactions received over the RPC to peers. | `100000000` (100 milliseconds) |
-| `pull-gossip-frequency` | duration | Frequency in nanoseconds to request transactions from peers. | `1000000000` (1 second) |
-| `regossip-frequency` | duration | Amount of time in seconds that should elapse before we attempt to re-gossip a transaction that was already gossiped once. | `30000000000` (30 seconds) |
-| `tx-pool-price-limit` | integer | Minimum gas price in wei to enforce for acceptance into the pool. | `1` |
-| `tx-pool-price-bump` | integer | Minimum price bump percentage to replace an already existing transaction (nonce). | `10%` |
-| `tx-pool-account-slots` | integer | Number of executable transaction slots guaranteed per account. | `16` |
-| `tx-pool-global-slots` | integer | Maximum number of executable transaction slots for all accounts. | `5120` |
-| `tx-pool-account-queue` | integer | Maximum number of non-executable transaction slots permitted per account. | `64` |
-| `tx-pool-global-queue` | integer | Maximum number of non-executable transaction slots for all accounts. | `1024` |
-| `tx-pool-lifetime` | duration | Maximum duration in nanoseconds a non-executable transaction will be allowed in the poll | `600000000000` (10 minutes) |
-
-## Snapshots
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `snapshot-wait` | bool | Waits for snapshot generation to complete before starting. | `false` |
-| `snapshot-verification-enabled` | bool | Verifies the complete snapshot after it has been generated. | `false` |
-
-## Logging
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `log-level` | string | Defines the log level for the chain. Must be one of `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"crit"`. | `"info"` |
-| `log-json-format` | bool | If `true`, changes logs to JSON format. | `false` |
-
-## Continuous Profiling
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `continuous-profiler-dir` | string | Enables the continuous profiler (captures a CPU/Memory/Lock profile at a specified interval). If a non-empty string is provided, it enables the continuous profiler and specifies the directory to place the profiles in. | `""` | 
-| `continuous-profiler-frequency` | duration | Specifies the frequency to run the continuous profiler in nanoseconds. | `900000000000` (15 minutes) | 
-| `continuous-profiler-max-files` | integer | Specifies the maximum number of profiles to keep before removing the oldest. |`5`| 
-
-## Metrics
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `metrics-expensive-enabled` | bool | Enables expensive metrics. This includes Firewood metrics. | `true` |
-
-## Keystore Settings
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `keystore-directory` | string | The directory that contains private keys. Can be given as a relative path. If empty, uses a temporary directory at `coreth-keystore`. | `""` |
-| `keystore-external-signer` | string | Specifies an external URI for a clef-type signer.| `""` (not enabled) |
-| `keystore-insecure-unlock-allowed` | bool | Allows users to unlock accounts in unsafe HTTP environment | `false` |
-
-## VM Networking
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `max-outbound-active-requests` | integer | Specifies the maximum number of outbound VM2VM requests in flight at once. | `16` |
-
-## State Sync
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `state-sync-enabled` | bool | Set to `true` to start the chain with state sync enabled. The peer will download chain state from peers up to a recent block near tip, then proceed with normal bootstrapping. Please note that if you need historical data, state sync isn't the right option. However, it is sufficient if you are just running a validator. | | perform state sync if starting a new node from scratch. However, if running with an existing database it will default to false and not perform state sync on subsequent runs. | 
-| `state-sync-skip-resume` | bool | If set to `true`, the chain will not resume a previously started state sync operation that did not complete. Normally, the chain should be able to resume state syncing without any issue. | `false` | 
-| `state-sync-min-blocks` | integer | Minimum number of blocks the chain should be ahead of the local node to prefer state syncing over bootstrapping. If the node's database is already close to the chain's tip, bootstrapping is more efficient. | `300000` | 
-| `state-sync-ids` | string | Comma separated list of node IDs (prefixed with `NodeID-`) to fetch state sync data from. An example setting of this field would be `--state-sync-ids="NodeID-7Xhw2mDxuDS44j42TCB6U5579esbSt3Lg,NodeID-MFrZFVCXPv5iCn6M9K6XduxGTYp891xXZ"`. If not specified (or empty), peers are selected at random.| `""`| 
-|  `state-sync-server-trie-cache` | integer | Size of trie cache used for providing state sync data to peers in MBs. Should be a multiple of `64`. | `64` | 
-| `state-sync-commit-interval` | integer | Specifies the commit interval at which to persist EVM and atomic tries during state sync | `16384` | 
-| `state-sync-request-size` | integer | The number of key/values to ask peers for per state sync request | `1024` | 
-
-## Warp Configuration
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `warp-off-chain-messages` | _Array of Hex Strings_ | Encodes off-chain messages (unrelated to any on-chain event ie. block or AddressedCall) that the node should be willing to sign. Note: only supports AddressedCall payloads. | empty array |
-
-## Miscellaneous
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `skip-upgrade-check` | bool | If set to `true`, the chain will skip verifying that all expected network upgrades have taken place before the last accepted block on startup. This allows node operators to recover if their node has accepted blocks after a network upgrade with a version of the code prior to the upgrade. | `false` |
-
-## Gas Configuration
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `gas-target` | integer | The target gas per second that this node will attempt to use when creating blocks | Parent block's target
-
-## Enabling Avalanche Specific APIs
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `admin-api-enabled` | bool | Enables the Admin API |  `false` | 
-| `admin-api-dir` | string | Specifies the directory for the Admin API to use to store CPU/Mem/Lock Profiles | `""` | 
-| `warp-api-enabled`  | bool | Enables the Warp API | `false`
-
-### Enabling EVM APIs
-
-> **Note**: The names used in this configuration flag have been updated in Coreth `v0.8.14`. The previous names containing `public-` and `private-` are deprecated. While the current version continues to accept deprecated values, they may not be supported in future updates and updating to the new values is recommended.
->
-> The mapping of deprecated values and their updated equivalent follows:
->
-> |Deprecated                      |Use instead         |
-> |--------------------------------|--------------------|
-> |public-eth                      |eth                 |
-> |public-eth-filter               |eth-filter          |
-> |private-admin                   |admin               |
-> |private-debug                   |debug               |
-> |public-debug                    |debug               |
-> |internal-public-eth             |internal-eth        |
-> |internal-public-blockchain      |internal-blockchain |
-> |internal-public-transaction-pool|internal-transaction|
-> |internal-public-tx-pool         |internal-tx-pool    |
-> |internal-public-debug           |internal-debug      |
-> |internal-private-debug          |internal-debug      |
-> |internal-public-account         |internal-account    |
-> |internal-private-personal       |internal-personal   |
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `eth-apis` | \[\]string | Specify the exact set of below services to enable on your node. If you populate this field, it will override the defaults so you must include every service you wish to enable. | `["eth","eth-filter","net","web3","internal-eth","internal-blockchain","internal-transaction"]` | 
+| `eth-apis` | array of strings | List of Ethereum services that should be enabled | `["eth", "eth-filter", "net", "web3", "internal-eth", "internal-blockchain", "internal-transaction"]` |
 | `eth` | bool | Adds the `eth_coinbase` and `eth_etherbase` RPC calls to the `eth_*` namespace. | `true` | 
 | `eth-filter` | bool |  Enables the public filter API for the `eth_*` namespace and adds the following RPC calls (see [here](https://eth.wiki/json-rpc/API) for complete documentation): <br/> - `eth_newPendingTransactionFilter` <br/> - `eth_newPendingTransactions` <br/> - `eth_newAcceptedTransactions` <br/> - `eth_newBlockFilter` <br/> - `eth_newHeads` <br/> - `eth_logs` <br/> - `eth_newFilter` <br/> - `eth_getLogs` <br/> - `eth_uninstallFilter` <br/> - `eth_getFilterLogs` <br/> - `eth_getFilterChanges` <br/> |   `true` | 
 | `admin` | bool | Adds the `admin_importChain` and `admin_exportChain` RPC calls to the `admin_*` namespace | `false` | 
@@ -205,3 +59,224 @@ Configuration is provided as a JSON object. All fields are optional unless other
 | `internal-account` | bool | Adds the `eth_accounts` RPC call to the `eth_*` namespace  | `true` |
 | `internal-personal` | bool | Adds the following RPC calls to the `personal_*` namespace. <br/> - `personal_listAccounts` <br/> - `personal_listWallets` <br/> - `personal_openWallet` <br/> - `personal_deriveAccount` <br/> - `personal_newAccount` <br/> - `personal_importRawKey` <br/> - `personal_unlockAccount` <br/> - `personal_lockAccount` <br/> - `personal_sendTransaction` <br/> - `personal_signTransaction` <br/> - `personal_sign` <br/> - `personal_ecRecover` <br/> - `personal_signAndSendTransaction` <br/> - `personal_initializeWallet` <br/> - `personal_unpair` | `false` |
 
+### Enabling Avalanche Specific APIs
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `admin-api-enabled` | bool | Enables the Admin API |  `false` | 
+| `admin-api-dir` | string | Specifies the directory for the Admin API to use to store CPU/Mem/Lock Profiles | `""` | 
+| `warp-api-enabled` | bool | Enable the Warp API for cross-chain messaging | `false` |
+
+### API Limits and Security
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `rpc-gas-cap` | uint64 | Maximum gas limit for RPC calls | `50,000,000` |
+| `rpc-tx-fee-cap` | float64 | Maximum transaction fee cap in AVAX | `100` |
+| `api-max-duration` | duration | Maximum duration for API calls (0 = no limit) | `0` |
+| `api-max-blocks-per-request` | int64 | Maximum number of blocks per getLogs request (0 = no limit) | `0` |
+| `http-body-limit` | uint64 | Maximum size of HTTP request bodies (0 = no limit) | `0` |
+
+### WebSocket Settings
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `ws-cpu-refill-rate` | duration | Rate at which WebSocket CPU usage quota is refilled (0 = no limit) | `0` |
+| `ws-cpu-max-stored` | duration | Maximum stored WebSocket CPU usage quota (0 = no limit) | `0` |
+
+## Cache Configuration
+
+### Trie Caches
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `trie-clean-cache` | int | Size of the trie clean cache in MB | `512` |
+| `trie-dirty-cache` | int | Size of the trie dirty cache in MB | `512` |
+| `trie-dirty-commit-target` | int | Memory limit to target in the dirty cache before performing a commit in MB | `20` |
+| `trie-prefetcher-parallelism` | int | Maximum concurrent disk reads trie prefetcher should perform | `16` |
+
+### Other Caches
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `snapshot-cache` | int | Size of the snapshot disk layer clean cache in MB | `256` |
+| `accepted-cache-size` | int | Depth to keep in the accepted headers and logs cache (blocks) | `32` |
+| `state-sync-server-trie-cache` | int | Trie cache size for state sync server in MB | `64` |
+
+## Ethereum Settings
+
+### Transaction Processing
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `preimages-enabled` | bool | Enable preimage recording | `false` |
+| `allow-unfinalized-queries` | bool | Allow queries for unfinalized blocks | `false` |
+| `allow-unprotected-txs` | bool | Allow unprotected transactions (without EIP-155) | `false` |
+| `allow-unprotected-tx-hashes` | \[\]TxHash | Specifies an array of transaction hashes that should be allowed to bypass replay protection. This flag is intended for node operators that want to explicitly allow specific transactions to be issued through their API. | an empty list |
+| `local-txs-enabled` | bool | Enable treatment of transactions from local accounts as local | `false` |
+
+### Snapshots
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `snapshot-wait` | bool | Wait for snapshot generation on startup | `false` |
+| `snapshot-verification-enabled` | bool | Enable snapshot verification | `false` |
+
+## Pruning and State Management
+
+ > **Note**: If a node is ever run with `pruning-enabled` as `false` (archival mode), setting `pruning-enabled` to `true` will result in a warning and the node will shut down. This is to protect against unintentional misconfigurations of an archival node. To override this and switch to pruning mode, in addition to `pruning-enabled: true`, `allow-missing-tries` should be set to `true` as well. 
+
+### Basic Pruning
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `pruning-enabled` | bool | Enable state pruning to save disk space | `true` |
+| `commit-interval` | uint64 | Interval at which to persist EVM and atomic tries (blocks) | `4096` |
+
+### State Reconstruction
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `allow-missing-tries` | bool | Suppress warnings about incomplete trie index | `false` |
+| `populate-missing-tries` | uint64 | Starting block for re-populating missing tries (null = disabled) | `null` |
+| `populate-missing-tries-parallelism` | int | Concurrent readers for re-populating missing tries | `1024` |
+
+### Offline Pruning
+
+> **Note**: If offline pruning is enabled it will  run on startup and block until it completes (approximately one hour on Mainnet). This will reduce the size of the database by deleting old trie nodes. **While performing offline pruning, your node will not be able to process blocks and will be considered offline.** While ongoing, the pruning process consumes a small amount of additional disk space (for deletion markers and the bloom filter). For more information see [here.](https://build.avax.network/docs/nodes/maintain/reduce-disk-usage#disk-space-considerations). Since offline pruning deletes old state data, this should not be run on nodes that need to support archival API requests. This is meant to be run manually, so after running with this flag once, it must be toggled back to false before running the node again. Therefore, you should run with this flag set to true and then set it to false on the subsequent run.
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `offline-pruning-enabled` | bool | Enable offline pruning | `false` |
+| `offline-pruning-bloom-filter-size` | uint64 | Bloom filter size for offline pruning in MB | `512` |
+| `offline-pruning-data-directory` | string | Directory for offline pruning data | - |
+
+### Historical Data
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `historical-proof-query-window` | uint64 | Number of blocks before last accepted for proof queries (archive mode only, ~24 hours) | `43200` |
+| `state-history` | uint64 | Number of most recent states that are accesible on disk (pruning mode only) | `32` |
+
+## Transaction Pool Configuration
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `tx-pool-price-limit` | uint64 | Minimum gas price for transaction acceptance | `1` |
+| `tx-pool-price-bump` | uint64 | Minimum price bump percentage for transaction replacement | `10%` |
+| `tx-pool-account-slots` | uint64 | Maximum number of executable transaction slots per account | `16`  |
+| `tx-pool-global-slots` | uint64 | Maximum number of executable transaction slots for all accounts | `5120` |
+| `tx-pool-account-queue` | uint64 | Maximum number of non-executable transaction slots per account | `64` |
+| `tx-pool-global-queue` | uint64 | Maximum number of non-executable transaction slots for all accounts | `1024` |
+| `tx-pool-lifetime` | duration | Maximum duration in nanoseconds a non-executable transaction will be allowed in the poll | `600000000000` (10 minutes) |
+| `price-options-slow-fee-percentage` | integer | Percentage to apply for slow fee estimation | `95` |
+| `price-options-fast-fee-percentage` | integer | Percentage to apply for fast fee estimation | `105` |
+| `price-options-max-tip` | integer | Maximum tip in wei for fee estimation | `20000000000` (20 Gwei) |
+
+### Push Gossip Settings
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `push-gossip-percent-stake` | float64 | Percentage of total stake to push gossip to (range: [0, 1]) | `0.9` |
+| `push-gossip-num-validators` | int | Number of validators to push gossip to | `100` |
+| `push-gossip-num-peers` | int | Number of non-validator peers to push gossip to | `0` |
+
+### Regossip Settings
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `push-regossip-num-validators` | int | Number of validators to regossip to | `10` |
+| `push-regossip-num-peers` | int | Number of non-validator peers to regossip to | `0` |
+
+### Timing Configuration
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `push-gossip-frequency` | duration | Frequency of push gossip | `100ms` |
+| `pull-gossip-frequency` | duration | Frequency of pull gossip | `1s` |
+| `regossip-frequency` | duration | Frequency of regossip | `30s` |
+
+## Logging and Monitoring
+
+### Logging
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `log-level` | string | Logging level (trace, debug, info, warn, error, crit) | `"info"` |
+| `log-json-format` | bool | Use JSON format for logs | `false` |
+
+### Profiling
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `continuous-profiler-dir` | string | Directory for continuous profiler output (empty = disabled) | `""` |
+| `continuous-profiler-frequency` | duration | Frequency to run continuous profiler | `15m` |
+| `continuous-profiler-max-files` | int | Maximum number of profiler files to maintain | `5` |
+
+### Metrics
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `metrics-expensive-enabled` | bool | Enable expensive debug-level metrics; this includes Firewood metrics | `true` |
+
+## Security and Access
+
+### Keystore
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `keystore-directory` | string | Directory for keystore files (absolute or relative path); if empty, uses a temporary directory at `coreth-keystore` |  `""` |
+| `keystore-external-signer` | string | Specifies an external URI for a clef-type signer |  `""` |
+| `keystore-insecure-unlock-allowed` | bool | Allow insecure account unlocking | `false` |
+
+## Network and Sync
+
+### Network
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `max-outbound-active-requests` | int64 | Maximum number of outbound active requests for VM2VM network | `16` |
+
+### State Sync
+
+> **Note:** If state-sync is enabled, the peer will download chain state from peers up to a recent block near tip, then proceed with normal bootstrapping. Please note that if you need historical data, state sync isn't the right option. However, it is sufficient if you are just running a validator. 
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `state-sync-enabled` | bool | Enable state sync | `false` |
+| `state-sync-skip-resume` | bool | Force state sync to use highest available summary block | `false` |
+| `state-sync-ids` | string | Comma-separated list of state sync IDs; If not specified (or empty), peers are selected at random.| `""`|
+| `state-sync-commit-interval` | uint64 | Commit interval for state sync (blocks) | `16384` |
+| `state-sync-min-blocks` | uint64 | Minimum blocks ahead required for state sync | `300000` |
+| `state-sync-request-size` | uint16 | Number of key/values to request per state sync request | `1024` |
+
+## Database Configuration
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `inspect-database` | bool | Inspect database on startup | `false` |
+| `state-scheme` | string |  EXPERIMENTAL: specifies the database scheme to store state data; can be one of `hash` or `firewood` | `hash` | 
+
+## Transaction Indexing
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `transaction-history` | uint64 | Maximum number of blocks from head whose transaction indices are reserved (0 = no limit) | `0` |
+| `skip-tx-indexing` | bool | Skip indexing transactions entirely | `false` |
+
+## Warp Configuration
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `warp-off-chain-messages` | array | Off-chain messages the node should be willing to sign | empty array |
+| `prune-warp-db-enabled` | bool | Clear warp database on startup | `false` |
+
+## Miscellaneous
+
+> **Note:**  If `skip-upgrade-check` is set to `true`, the chain will skip verifying that all expected network upgrades have taken place before the last accepted block on startup. This allows node operators to recover if their node has accepted blocks after a network upgrade with a version of the code prior to the upgrade.
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `acceptor-queue-limit` | integer | Specifies the maximum number of blocks to queue during block acceptance before blocking on Accept. | `64` |
+| `gas-target` | integer | The target gas per second that this node will attempt to use when creating blocks | Parent block's target | 
+| `skip-upgrade-check` | bool | Skip checking that upgrades occur before last accepted block ⚠️ **Warning**: Only use when you understand the implications | `false` |
