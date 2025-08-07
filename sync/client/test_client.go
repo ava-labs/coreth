@@ -119,7 +119,9 @@ func (ml *TestClient) GetBlocks(ctx context.Context, blockHash common.Hash, heig
 	if err != nil {
 		return nil, err
 	}
-	if response == nil && ctx.Err() != nil {
+	// Actual client retries until the context is canceled.
+	if response == nil {
+		<-ctx.Done()
 		return nil, ctx.Err()
 	}
 
