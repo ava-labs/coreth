@@ -22,6 +22,12 @@ var (
 	ErrConflict        = errors.New("conflict present")
 	ErrInsufficientFee = errors.New("insufficient fee")
 	ErrMempoolFull     = errors.New("mempool full")
+
+	errsNotToDiscard = []error{
+		nil,
+		ErrAlreadyKnown,
+		ErrMempoolFull,
+	}
 )
 
 // Mempool is a simple mempool for atomic transactions
@@ -72,8 +78,10 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, false, false)
-	if err == nil || errors.Is(err, ErrAlreadyKnown) {
-		return err
+	for _, errNotToDiscard := range errsNotToDiscard {
+		if errors.Is(err, errNotToDiscard) {
+			return err
+		}
 	}
 
 	// Unlike local txs, invalid remote txs are recorded as discarded so that
