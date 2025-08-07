@@ -90,19 +90,23 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 func waitFor(t *testing.T, ctx context.Context, resultFunc func(context.Context) error, expected error, timeout time.Duration) {
 	t.Helper()
 	// Create a new context with timeout
-	cancelCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	err := resultFunc(ctx)
-	if cancelCtx.Err() != nil {
+	err := make(chan error, 1)
+	go func() {
+		err <- resultFunc(ctx) // block on cancellable context
+	}()
+	select {
+	case <-time.After(timeout):
 		// print a stack trace to assist with debugging
 		var stackBuf bytes.Buffer
 		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
 		t.Log(stackBuf.String())
 		// fail the test
 		t.Fatal("unexpected timeout waiting for sync result")
+	case result := <-err:
+		require.ErrorIs(t, result, expected, "result of sync did not match expected error")
 	}
-
-	require.ErrorIs(t, err, expected, "result of sync did not match expected error")
 }
 
 func TestSimpleSyncCases(t *testing.T) {

@@ -215,12 +215,7 @@ func TestConfigValidation(t *testing.T) {
 
 			// Test validation
 			err := config.Validate()
-
-			if tt.expectedErr == nil {
-				require.NoError(t, err, tt.description)
-			} else {
-				require.ErrorIs(t, err, tt.expectedErr, tt.description)
-			}
+			require.ErrorIs(t, err, tt.expectedErr, tt.description)
 		})
 	}
 }
@@ -425,9 +420,13 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 	}
 
 	syncer := createTestSyncer(t, config)
+	workerType := "default workers"
+	if !useDefaultWorkers {
+		workerType = fmt.Sprintf("%d workers", numWorkers)
+	}
 
 	// Wait for completion.
-	require.NoError(t, syncer.Sync(ctx))
+	require.NoError(t, syncer.Sync(ctx), "syncer should complete successfully with %s", workerType)
 }
 
 // testSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly

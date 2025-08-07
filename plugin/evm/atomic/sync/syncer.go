@@ -192,7 +192,7 @@ func newSyncer(config *Config) (*syncer, error) {
 
 	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, &syncclient.LeafSyncerConfig{
 		RequestSize: config.RequestSize,
-		NumWorkers:  config.NumWorkers,
+		NumWorkers:  numWorkers,
 		OnFailure:   syncer.onSyncFailure,
 	})
 	return syncer, nil
