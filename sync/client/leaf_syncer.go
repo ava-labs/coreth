@@ -74,7 +74,6 @@ func (c *CallbackLeafSyncer) workerLoop(ctx context.Context) error {
 				return err
 			}
 		case <-ctx.Done():
-			fmt.Println("context cancelled, stopping worker loop")
 			return ctx.Err()
 		}
 	}
