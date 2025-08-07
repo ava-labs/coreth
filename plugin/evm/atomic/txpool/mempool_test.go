@@ -240,7 +240,7 @@ func TestMempoolPendingLen(t *testing.T) {
 	require.Equal(1, mempool.PendingLen()) // Shouldn't include Current txs
 
 	mempool.IssueCurrentTxs()
-	require.Equal(1, mempool.PendingLen()) // Shouldn't include Current txs
+	require.Equal(1, mempool.PendingLen()) // Shouldn't include Issued txs
 
 	nextTx, ok = mempool.NextTx()
 	require.True(ok)
