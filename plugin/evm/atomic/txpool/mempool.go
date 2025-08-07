@@ -23,7 +23,7 @@ var (
 	ErrInsufficientFee = errors.New("insufficient fee")
 	ErrMempoolFull     = errors.New("mempool full")
 
-	errsNotToDiscard = []error{
+	errsNotToDiscard = [...]error{
 		nil,
 		ErrAlreadyKnown,
 		ErrMempoolFull,
