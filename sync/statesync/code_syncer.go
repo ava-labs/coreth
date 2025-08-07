@@ -25,8 +25,8 @@ const (
 )
 
 var (
-	errWaitBeforeStart              = errors.New("Wait() called before Start() - call Start() first")
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
+	errWaitBeforeStart              = errors.New("Wait() called before Start() - call Start() first")
 )
 
 // CodeSyncerConfig defines the configuration of the code syncer
