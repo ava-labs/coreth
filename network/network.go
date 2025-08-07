@@ -118,8 +118,6 @@ type network struct {
 	// outstanding requests, which means we must guarantee never to register a
 	// request that will never be fulfilled or cancelled.
 	closed utils.Atomic[bool]
-
-	p2pValidators *p2p.Validators
 }
 
 func NewNetwork(
@@ -129,7 +127,15 @@ func NewNetwork(
 	maxActiveAppRequests int64,
 	registerer prometheus.Registerer,
 ) (Network, error) {
-	p2pNetwork, err := p2p.NewNetwork(ctx.Log, appSender, registerer, "p2p")
+	p2pNetwork, err := p2p.NewNetwork(
+		ctx.Log,
+		appSender,
+		ctx.ValidatorState,
+		ctx.SubnetID,
+		maxValidatorSetStaleness,
+		registerer,
+		"p2p",
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize p2p network: %w", err)
 	}
@@ -143,7 +149,6 @@ func NewNetwork(
 		appRequestHandler:          message.NoopRequestHandler{},
 		peers:                      NewPeerTracker(),
 		appStats:                   stats.NewRequestHandlerStats(),
-		p2pValidators:              p2p.NewValidators(p2pNetwork.Peers, ctx.Log, ctx.SubnetID, ctx.ValidatorState, maxValidatorSetStaleness),
 	}, nil
 }
 
@@ -490,7 +495,7 @@ func (n *network) AddHandler(protocol uint64, handler p2p.Handler) error {
 
 // P2PValidators returns the p2p validators
 func (n *network) P2PValidators() *p2p.Validators {
-	return n.p2pValidators
+	return n.sdkNetwork.Validators
 }
 
 // invariant: peer/network must use explicitly even request ids.

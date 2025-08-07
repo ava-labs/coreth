@@ -23,7 +23,7 @@ func NewTxGossipHandler[T gossip.Gossipable](
 	metrics gossip.Metrics,
 	maxMessageSize int,
 	throttlingPeriod time.Duration,
-	throttlingLimit int,
+	requestsPerPeer int,
 	validators p2p.ValidatorSet,
 ) *txGossipHandler {
 	// push gossip messages can be handled from any peer
@@ -38,10 +38,12 @@ func NewTxGossipHandler[T gossip.Gossipable](
 	// pull gossip requests are filtered by validators and are throttled
 	// to prevent spamming
 	validatorHandler := p2p.NewValidatorHandler(
-		p2p.NewThrottlerHandler(
-			handler,
-			p2p.NewSlidingWindowThrottler(throttlingPeriod, throttlingLimit),
+		p2p.NewDynamicThrottlerHandler(
 			log,
+			handler,
+			validators,
+			throttlingPeriod,
+			requestsPerPeer,
 		),
 		validators,
 		log,

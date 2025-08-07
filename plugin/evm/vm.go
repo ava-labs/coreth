@@ -835,7 +835,7 @@ func (vm *VM) initBlockBuilding() error {
 		ethTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.P2PValidators(),
 	)
 

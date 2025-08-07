@@ -303,7 +303,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		atomicTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.InnerVM.P2PValidators(),
 	)
 
