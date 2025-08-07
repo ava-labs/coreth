@@ -141,8 +141,8 @@ func (m *Mempool) checkConflictTx(tx *atomic.Tx) (uint64, ids.ID, []*atomic.Tx, 
 }
 
 // Assumes the lock is held.
-func (t *Txs) length() int {
-	return t.pendingTxs.Len() + len(t.currentTxs) + len(t.issuedTxs)
+func (m *Mempool) length() int {
+	return m.pendingTxs.Len() + len(m.currentTxs) + len(m.issuedTxs)
 }
 
 // addTx attempts to add tx to the mempool.
