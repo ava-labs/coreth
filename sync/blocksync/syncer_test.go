@@ -162,21 +162,13 @@ func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 
 func TestBlockSyncer_ContextCancellation(t *testing.T) {
 	env := newTestEnvironment(t, 10)
-
 	syncer, err := env.createSyncer(5, 3)
 	require.NoError(t, err)
 
+	// Immediately cancel the context to simulate cancellation.
 	ctx, cancel := context.WithCancel(context.Background())
-	start := make(chan struct{})
-	errChan := make(chan error, 1)
-	go func() {
-		<-start
-		errChan <- syncer.Sync(ctx)
-	}()
-	cancel() // Cancel the context to simulate cancellation
-	close(start)
-
-	err = <-errChan
+	cancel()
+	err = syncer.Sync(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
