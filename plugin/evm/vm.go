@@ -781,7 +781,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.P2PValidators()))
+	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID)
 	ethTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -828,16 +828,21 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
-	vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
+	vm.ethTxGossipHandler, err = gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
 		ethTxGossipMarshaller,
 		ethTxPool,
 		ethTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.P2PValidators(),
+		vm.MetricRegistry(),
+		"eth_tx_gossip",
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize eth tx gossip handler: %w", err)
+	}
 
 	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, vm.ethTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add eth tx gossip handler: %w", err)
