@@ -63,9 +63,6 @@ type stateSync struct {
 	triesInProgressSem chan struct{}
 	done               chan error
 	stats              *trieSyncStats
-
-	// context cancellation management
-	cancelFunc context.CancelFunc
 }
 
 func NewSyncer(config *Config) (synccommon.Syncer, error) {
@@ -91,7 +88,11 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 		storageTriesDone: make(chan struct{}),
 		done:             make(chan error, 1),
 	}
-	ss.syncer = syncclient.NewCallbackLeafSyncer(config.Client, ss.segments, config.RequestSize)
+	ss.syncer = syncclient.NewCallbackLeafSyncer(config.Client, ss.segments, &syncclient.LeafSyncerConfig{
+		RequestSize: config.RequestSize,
+		NumWorkers:  defaultNumWorkers,
+		OnFailure:   ss.onSyncFailure,
+	})
 	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
 		DB:                       config.DB,
 		Client:                   config.Client,
@@ -232,9 +233,8 @@ func (t *stateSync) Sync(ctx context.Context) error {
 		return err
 	}
 
-	t.syncer.Start(egCtx, defaultNumWorkers, t.onSyncFailure)
 	eg.Go(func() error {
-		if err := <-t.syncer.Done(); err != nil {
+		if err := t.syncer.Sync(egCtx); err != nil {
 			return err
 		}
 		return t.onSyncComplete()

@@ -394,17 +394,10 @@ func TestSyncerContextCancellation(t *testing.T) {
 	config := createTestConfig(mockClient, atomicBackend, root, testTargetHeight)
 	syncer := createTestSyncer(t, config)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	start := make(chan struct{})
-	errChan := make(chan error, 1)
-	go func() {
-		<-start
-		errChan <- syncer.Sync(ctx)
-	}()
-	cancel() // Cancel the context to simulate cancellation
-	close(start)
-
-	err := <-errChan
+	// Immediately cancel the context to simulate cancellation.
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+	err := syncer.Sync(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -434,8 +427,7 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 	syncer := createTestSyncer(t, config)
 
 	// Wait for completion.
-	err := syncer.Sync(ctx)
-	require.NoError(t, err, "syncer should complete successfully")
+	require.NoError(t, syncer.Sync(ctx))
 }
 
 // testSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
@@ -498,9 +490,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		return leafsResponse, nil
 	}
 
-	err = syncer.Sync(ctx)
-	require.NoError(t, err, "Expected syncer to finish successfully")
-
+	require.NoError(t, syncer.Sync(ctx), "Expected syncer to finish successfully")
 	require.Equal(t, finalExpectedNumLeaves, int64(numLeaves), "unexpected number of leaves received to match")
 
 	// we re-initialise trie DB for asserting the trie to make sure any issues with unflushed writes

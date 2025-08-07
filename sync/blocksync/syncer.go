@@ -49,9 +49,6 @@ func (c *Config) Validate() error {
 
 type blockSyncer struct {
 	config *Config
-
-	err    chan error
-	cancel context.CancelFunc
 }
 
 func NewSyncer(config *Config) (*blockSyncer, error) {
@@ -60,7 +57,6 @@ func NewSyncer(config *Config) (*blockSyncer, error) {
 	}
 	return &blockSyncer{
 		config: config,
-		err:    make(chan error, 1),
 	}, nil
 }
 

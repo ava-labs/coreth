@@ -143,9 +143,6 @@ type syncer struct {
 
 	// numWorkers is the number of worker goroutines to use for syncing
 	numWorkers int
-
-	// cancel is used to cancel the sync operation
-	cancel context.CancelFunc
 }
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
@@ -193,15 +190,17 @@ func newSyncer(config *Config) (*syncer, error) {
 	tasks <- &syncerLeafTask{syncer: syncer}
 	close(tasks)
 
-	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, config.RequestSize)
+	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, &syncclient.LeafSyncerConfig{
+		RequestSize: config.RequestSize,
+		NumWorkers:  config.NumWorkers,
+		OnFailure:   syncer.onSyncFailure,
+	})
 	return syncer, nil
 }
 
 // Start begins syncing the target atomic root with the configured number of worker goroutines.
 func (s *syncer) Sync(ctx context.Context) error {
-	s.syncer.Start(ctx, s.numWorkers, s.onSyncFailure)
-
-	return <-s.syncer.Done()
+	return s.syncer.Sync(ctx)
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
