@@ -60,7 +60,7 @@ const (
 	// - normal bootstrap processing time: ~14 blocks / second
 	// - state sync time: ~6 hrs.
 	defaultStateSyncMinBlocks   = 300_000
-	DefaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
+	defaultStateSyncRequestSize = 1024 // the number of key/values to ask peers for per request
 
 	estimatedBlockAcceptPeriod        = 2 * time.Second
 	defaultHistoricalProofQueryWindow = uint64(24 * time.Hour / estimatedBlockAcceptPeriod)
@@ -312,7 +312,7 @@ func (c *Config) SetDefaults(txPoolConfig TxPoolConfig) {
 	c.StateSyncServerTrieCache = defaultStateSyncServerTrieCache
 	c.StateSyncCommitInterval = defaultSyncableCommitInterval
 	c.StateSyncMinBlocks = defaultStateSyncMinBlocks
-	c.StateSyncRequestSize = DefaultStateSyncRequestSize
+	c.StateSyncRequestSize = defaultStateSyncRequestSize
 	c.AllowUnprotectedTxHashes = defaultAllowUnprotectedTxHashes
 	c.AcceptedCacheSize = defaultAcceptedCacheSize
 	c.HistoricalProofQueryWindow = defaultHistoricalProofQueryWindow

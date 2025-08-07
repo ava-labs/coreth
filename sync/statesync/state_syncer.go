@@ -38,40 +38,10 @@ var (
 )
 
 type Config struct {
-	Root                     common.Hash
-	Client                   syncclient.Client
-	DB                       ethdb.Database
 	BatchSize                uint
 	MaxOutstandingCodeHashes uint   // Maximum number of code hashes in the code syncer queue
 	NumCodeFetchingWorkers   uint16 // Number of code syncing worker goroutines
-	RequestSize              uint16 // Number of leafs to request from a peer at a time
-}
-
-// Validate checks if the configuration is valid and returns an error if not.
-func (c *Config) Validate() error {
-	if c.Client == nil {
-		return errNilClient
-	}
-	if c.DB == nil {
-		return errNilDatabase
-	}
-	if c.Root == (common.Hash{}) {
-		return errEmptyRoot
-	}
-	if c.BatchSize == 0 {
-		return errInvalidBatchSize
-	}
-	if c.MaxOutstandingCodeHashes == 0 {
-		return errInvalidMaxOutstandingCodeHashes
-	}
-	if c.NumCodeFetchingWorkers == 0 {
-		return errInvalidNumCodeFetchingWorkers
-	}
-	if c.RequestSize == 0 {
-		return errInvalidRequestSize
-	}
-
-	return nil
+	RequestSize              uint16 // Number of leafs to request from a peer at a time. NOTE: user facing option validated as the parameter [plugin/evm/config.Config.StateSyncRequestSize]
 }
 
 // stateSync keeps the state of the entire state sync operation.
@@ -106,19 +76,18 @@ type stateSync struct {
 	cancelFunc context.CancelFunc
 }
 
-func NewSyncer(config *Config) (synccommon.Syncer, error) {
-	// Validate the configuration.
-	if err := config.Validate(); err != nil {
-		return nil, err
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, config *Config) (synccommon.Syncer, error) {
+	if config.BatchSize == 0 {
+		config.BatchSize = ethdb.IdealBatchSize
 	}
 
 	ss := &stateSync{
 		batchSize:       config.BatchSize,
-		db:              config.DB,
-		client:          config.Client,
-		root:            config.Root,
-		trieDB:          triedb.NewDatabase(config.DB, nil),
-		snapshot:        snapshot.NewDiskLayer(config.DB),
+		db:              db,
+		client:          client,
+		root:            root,
+		trieDB:          triedb.NewDatabase(db, nil),
+		snapshot:        snapshot.NewDiskLayer(db),
 		stats:           newTrieSyncStats(),
 		triesInProgress: make(map[common.Hash]*trieToSync),
 
@@ -134,15 +103,13 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 		storageTriesDone: make(chan struct{}),
 		done:             make(chan error, 1),
 	}
-	ss.syncer = syncclient.NewCallbackLeafSyncer(config.Client, ss.segments, config.RequestSize)
-	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
-		DB:                       config.DB,
-		Client:                   config.Client,
+	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, config.RequestSize)
+	ss.codeSyncer = newCodeSyncer(client, db, CodeSyncerConfig{
 		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
 
-	ss.trieQueue = NewTrieQueue(config.DB)
+	ss.trieQueue = NewTrieQueue(db)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
 		return nil, err
 	}

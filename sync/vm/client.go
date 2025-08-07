@@ -212,14 +212,8 @@ func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Has
 }
 
 func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
-	return statesync.NewSyncer(&statesync.Config{
-		Client:                   client.Client,
-		Root:                     client.summary.GetBlockRoot(),
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.ChainDB,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.RequestSize,
+	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), &statesync.Config{
+		RequestSize: client.RequestSize,
 	})
 }
 

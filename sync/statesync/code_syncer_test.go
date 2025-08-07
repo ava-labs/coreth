@@ -51,8 +51,8 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	clientDB := rawdb.NewMemoryDatabase()
 
 	codeSyncer := newCodeSyncer(CodeSyncerConfig{
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
+		MaxOutstandingCodeHashes: defaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   defaultNumCodeFetchingWorkers,
 		Client:                   mockClient,
 		DB:                       clientDB,
 	})
