@@ -83,7 +83,15 @@ func TestEthTxGossip(t *testing.T) {
 		SentAppRequest: make(chan []byte, 1),
 	}
 
-	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	network, err := p2p.NewNetwork(
+		logging.NoLog{},
+		peerSender,
+		validatorState,
+		snowCtx.SubnetID,
+		time.Second,
+		prometheus.NewRegistry(),
+		"",
+	)
 	require.NoError(err)
 	client := network.NewClient(p2p.TxGossipHandlerID)
 
@@ -212,7 +220,15 @@ func TestAtomicTxGossip(t *testing.T) {
 	peerSender := &enginetest.SenderStub{
 		SentAppRequest: make(chan []byte, 1),
 	}
-	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	network, err := p2p.NewNetwork(
+		logging.NoLog{},
+		peerSender,
+		validatorState,
+		snowCtx.SubnetID,
+		time.Second,
+		prometheus.NewRegistry(),
+		"",
+	)
 	require.NoError(err)
 	client := network.NewClient(p2p.AtomicTxGossipHandlerID)
 
