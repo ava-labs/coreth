@@ -72,6 +72,8 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, false, false)
+	// If the transaction is already in the mempool, marking it as Discarded,
+	// could unexpectedly cause the transaction to have multiple statuses.
 	if err == nil || errors.Is(err, ErrAlreadyKnown) {
 		return err
 	}
