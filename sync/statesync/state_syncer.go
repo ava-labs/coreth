@@ -95,12 +95,12 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 		OnFailure:   ss.onSyncFailure,
 	})
 	var err error
-	ss.codeSyncer, err = newCodeSyncer(CodeSyncerConfig{
-		DB:                       config.DB,
-		Client:                   config.Client,
-		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
-	})
+	ss.codeSyncer, err = newCodeSyncer(
+		config.DB,
+		config.Client,
+		config.MaxOutstandingCodeHashes,
+		config.NumCodeFetchingWorkers,
+	)
 	if err != nil {
 		return nil, err
 	}

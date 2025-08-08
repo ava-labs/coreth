@@ -57,12 +57,12 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		clientDB = rawdb.NewMemoryDatabase()
 	}
 
-	codeSyncer, err := newCodeSyncer(CodeSyncerConfig{
-		MaxOutstandingCodeHashes: testOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		Client:                   mockClient,
-		DB:                       clientDB,
-	})
+	codeSyncer, err := newCodeSyncer(
+		clientDB,
+		mockClient,
+		testOutstandingCodeHashes,
+		DefaultNumCodeFetchingWorkers,
+	)
 	require.NoError(t, err)
 	if test.setupCodeSyncer != nil {
 		test.setupCodeSyncer(codeSyncer)
