@@ -82,7 +82,6 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, false, false)
-<<<<<<< HEAD
 	if err == nil {
 		return nil
 	}
@@ -90,10 +89,6 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 		if errors.Is(err, errNotToDiscard) {
 			return err
 		}
-=======
-	if err == nil || errors.Is(err, ErrAlreadyKnown) {
-		return err
->>>>>>> refactor-atomic-mempool-5
 	}
 
 	// Unlike local txs, invalid remote txs are recorded as discarded so that
