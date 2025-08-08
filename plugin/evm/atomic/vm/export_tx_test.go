@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
@@ -96,14 +97,16 @@ func createExportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.M
 		t.Fatal(err)
 	}
 
-	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
-	exportTxs := make([]*atomic.Tx, 0, 3)
-	state, err := vm.Ethereum().BlockChain().State()
+	statedb, err := vm.Ethereum().BlockChain().State()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Use the funds to create 3 conflicting export transactions sending the funds to each of the test addresses
+	exportTxs := make([]*atomic.Tx, 0, 3)
+	wrappedStateDB := extstate.New(statedb)
 	for _, addr := range vmtest.TestShortIDAddrs {
-		exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
+		exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), wrappedStateDB, vm.ctx.AVAXAssetID, uint64(5000000), vm.ctx.XChainID, addr, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -423,12 +426,13 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				Ins: test.tx,
 			}
 
-			stateDB, err := vm.Ethereum().BlockChain().State()
+			statedb, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			err = newTx.EVMStateTransfer(vm.ctx, stateDB)
+			wrappedStateDB := extstate.New(statedb)
+			err = newTx.EVMStateTransfer(vm.ctx, wrappedStateDB)
 			if test.shouldErr {
 				if err == nil {
 					t.Fatal("expected EVMStateTransfer to fail")
@@ -439,19 +443,19 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			avaxBalance := stateDB.GetBalance(ethAddr)
+			avaxBalance := wrappedStateDB.GetBalance(ethAddr)
 			if avaxBalance.Cmp(test.avaxBalance) != 0 {
 				t.Fatalf("address balance %s equal %s not %s", addr.String(), avaxBalance, test.avaxBalance)
 			}
 
 			for assetID, expectedBalance := range test.balances {
-				balance := stateDB.GetBalanceMultiCoin(ethAddr, common.Hash(assetID))
+				balance := wrappedStateDB.GetBalanceMultiCoin(ethAddr, common.Hash(assetID))
 				if avaxBalance.Cmp(test.avaxBalance) != 0 {
 					t.Fatalf("%s address balance %s equal %s not %s", assetID, addr.String(), balance, expectedBalance)
 				}
 			}
 
-			if stateDB.GetNonce(ethAddr) != test.expectedNonce {
+			if wrappedStateDB.GetNonce(ethAddr) != test.expectedNonce {
 				t.Fatalf("failed to set nonce to %d", test.expectedNonce)
 			}
 		})
@@ -1037,7 +1041,7 @@ func TestExportTxAccept(t *testing.T) {
 		t.Fatalf("Failed to accept export transaction due to: %s", err)
 	}
 
-	if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: {PutRequests: atomicRequests.PutRequests}}, commitBatch); err != nil {
+	if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: atomicRequests}, commitBatch); err != nil {
 		t.Fatal(err)
 	}
 	indexedValues, _, _, err := xChainSharedMemory.Indexed(vm.ctx.ChainID, [][]byte{addr.Bytes()}, nil, nil, 3)
@@ -1777,12 +1781,13 @@ func TestNewExportTx(t *testing.T) {
 			parent = vm.LastAcceptedExtendedBlock()
 			exportAmount := uint64(5000000)
 
-			state, err := vm.Ethereum().BlockChain().State()
+			statedb, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, key.Address(), vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
+			wrappedStateDB := extstate.New(statedb)
+			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), wrappedStateDB, vm.ctx.AVAXAssetID, exportAmount, vm.ctx.XChainID, key.Address(), vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1811,21 +1816,22 @@ func TestNewExportTx(t *testing.T) {
 				t.Fatalf("Failed to accept export transaction due to: %s", err)
 			}
 
-			if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: {PutRequests: atomicRequests.PutRequests}}, commitBatch); err != nil {
+			if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: atomicRequests}, commitBatch); err != nil {
 				t.Fatal(err)
 			}
 
-			sdb, err := vm.Ethereum().BlockChain().State()
+			statedb, err = vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = exportTx.EVMStateTransfer(vm.ctx, sdb)
+			wrappedStateDB = extstate.New(statedb)
+			err = exportTx.EVMStateTransfer(vm.ctx, wrappedStateDB)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if sdb.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
-				t.Fatalf("address balance %s equal %s not %s", ethAddress.String(), sdb.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
+			if wrappedStateDB.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
+				t.Fatalf("address balance %s equal %s not %s", ethAddress.String(), wrappedStateDB.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
 		})
 	}
@@ -1974,12 +1980,13 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			state, err := vm.Ethereum().BlockChain().State()
+			statedb, err := vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), state, tid, exportAmount, vm.ctx.XChainID, exportId, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
+			wrappedStateDB := extstate.New(statedb)
+			tx, err = atomic.NewExportTx(vm.ctx, vm.currentRules(), wrappedStateDB, tid, exportAmount, vm.ctx.XChainID, exportId, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2000,24 +2007,25 @@ func TestNewExportTxMulticoin(t *testing.T) {
 				t.Fatalf("Failed to accept export transaction due to: %s", err)
 			}
 
-			if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: {PutRequests: atomicRequests.PutRequests}}, commitBatch); err != nil {
+			if err := vm.ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{chainID: atomicRequests}, commitBatch); err != nil {
 				t.Fatal(err)
 			}
 
-			stdb, err := vm.Ethereum().BlockChain().State()
+			statedb, err = vm.Ethereum().BlockChain().State()
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = exportTx.EVMStateTransfer(vm.ctx, stdb)
+			wrappedStateDB = extstate.New(statedb)
+			err = exportTx.EVMStateTransfer(vm.ctx, wrappedStateDB)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if stdb.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
-				t.Fatalf("address balance %s equal %s not %s", ethAddress.String(), stdb.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
+			if wrappedStateDB.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)) != 0 {
+				t.Fatalf("address balance %s equal %s not %s", ethAddress.String(), wrappedStateDB.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
 			}
-			if stdb.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
-				t.Fatalf("address balance multicoin %s equal %s not %s", ethAddress.String(), stdb.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
+			if wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)) != 0 {
+				t.Fatalf("address balance multicoin %s equal %s not %s", ethAddress.String(), wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
 			}
 		})
 	}

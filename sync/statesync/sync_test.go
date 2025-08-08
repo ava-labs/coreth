@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	synccommon "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -28,7 +29,7 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const testSyncTimeout = 30 * time.Second
@@ -57,21 +58,22 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
-	s, err := NewStateSyncer(&StateSyncerConfig{
-		Client:                   mockClient,
+	s, err := NewSyncer(&Config{
 		Root:                     root,
+		Client:                   mockClient,
 		DB:                       clientDB,
 		BatchSize:                1000, // Use a lower batch size in order to get test coverage of batches being written early.
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
 		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
 		RequestSize:              1024,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// begin sync
-	s.Start(ctx)
-	waitFor(t, s.Done(), test.expectedError, testSyncTimeout)
+	require.NoError(t, err, "failed to create state syncer")
+
+	require.NoError(t, s.Start(ctx), "failed to start state syncer")
+
+	waitFor(t, context.Background(), s.Wait, test.expectedError, testSyncTimeout)
+
+	// Only assert database consistency if the sync was expected to succeed.
 	if test.expectedError != nil {
 		return
 	}
@@ -89,27 +91,21 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 }
 
 // waitFor waits for a result on the [result] channel to match [expected], or a timeout.
-func waitFor(t *testing.T, result <-chan error, expected error, timeout time.Duration) {
+func waitFor(t *testing.T, ctx context.Context, resultFunc func(context.Context) error, expected error, timeout time.Duration) {
 	t.Helper()
-	select {
-	case err := <-result:
-		if expected != nil {
-			if err == nil {
-				t.Fatalf("Expected error %s, but got nil", expected)
-			}
-			assert.Contains(t, err.Error(), expected.Error())
-		} else if err != nil {
-			t.Fatal("unexpected error waiting for sync result", err)
-		}
-	case <-time.After(timeout):
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	err := resultFunc(ctx)
+	if ctx.Err() != nil {
 		// print a stack trace to assist with debugging
-		// if the test times out.
 		var stackBuf bytes.Buffer
 		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
 		t.Log(stackBuf.String())
 		// fail the test
 		t.Fatal("unexpected timeout waiting for sync result")
 	}
+
+	require.ErrorIs(t, err, expected, "result of sync did not match expected error")
 }
 
 func TestSimpleSyncCases(t *testing.T) {
@@ -135,9 +131,7 @@ func TestSimpleSyncCases(t *testing.T) {
 					if index%3 == 0 {
 						codeBytes := make([]byte, 256)
 						_, err := rand.Read(codeBytes)
-						if err != nil {
-							t.Fatalf("error reading random code bytes: %v", err)
-						}
+						require.NoError(t, err, "error reading random code bytes")
 
 						codeHash := crypto.Keccak256Hash(codeBytes)
 						rawdb.WriteCode(serverDB, codeHash, codeBytes)
@@ -269,7 +263,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		GetLeafsIntercept: intercept.getLeafsIntercept,
 	})
 
-	assert.EqualValues(t, 2, intercept.numRequests)
+	require.EqualValues(t, 2, intercept.numRequests)
 
 	testSync(t, syncTest{
 		prepareForTest: func(t *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
@@ -427,26 +421,18 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 					if len(it.Key()) != len(rawdb.CodePrefix)+common.HashLength {
 						continue
 					}
-					if err := clientDB.Delete(it.Key()); err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, clientDB.Delete(it.Key()), "failed to delete code hash %x", it.Key()[len(rawdb.CodePrefix):])
 				}
-				if err := it.Error(); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, it.Error(), "error iterating over code hashes")
 			},
 		},
 		"delete intermediate storage nodes": {
 			deleteBetweenSyncs: func(t *testing.T, root common.Hash, clientDB ethdb.Database) {
 				clientTrieDB := triedb.NewDatabase(clientDB, nil)
 				tr, err := trie.New(trie.TrieID(root), clientTrieDB)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err, "failed to create trie for root %s", root)
 				nodeIt, err := tr.NodeIterator(nil)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err, "failed to create node iterator for root %s", root)
 				it := trie.NewIterator(nodeIt)
 				accountsWithStorage := 0
 
@@ -456,9 +442,7 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 				corruptedStorageRoots := make(map[common.Hash]struct{})
 				for it.Next() {
 					var acc types.StateAccount
-					if err := rlp.DecodeBytes(it.Value, &acc); err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, rlp.DecodeBytes(it.Value, &acc), "failed to decode account at key %x", it.Key)
 					if acc.Root == types.EmptyRootHash {
 						continue
 					}
@@ -472,23 +456,17 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 					}
 					corruptedStorageRoots[acc.Root] = struct{}{}
 					tr, err := trie.New(trie.TrieID(acc.Root), clientTrieDB)
-					if err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, err, "failed to create trie for root %s", acc.Root)
 					statesynctest.CorruptTrie(t, clientDB, tr, 2)
 				}
-				if err := it.Err; err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, it.Err, "error iterating over trie nodes")
 			},
 		},
 		"delete intermediate account trie nodes": {
 			deleteBetweenSyncs: func(t *testing.T, root common.Hash, clientDB ethdb.Database) {
 				clientTrieDB := triedb.NewDatabase(clientDB, nil)
 				tr, err := trie.New(trie.TrieID(root), clientTrieDB)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err, "failed to create trie for root %s", root)
 				statesynctest.CorruptTrie(t, clientDB, tr, 5)
 			},
 		},
@@ -547,9 +525,7 @@ func assertDBConsistency(t testing.TB, root common.Hash, clientDB ethdb.Database
 		}
 		numSnapshotAccounts++
 	}
-	if err := accountIt.Error(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, accountIt.Error(), "error iterating over account snapshots")
 	trieAccountLeaves := 0
 
 	statesynctest.AssertTrieConsistency(t, root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
@@ -562,15 +538,15 @@ func assertDBConsistency(t testing.TB, root common.Hash, clientDB ethdb.Database
 		// check snapshot consistency
 		snapshotVal := rawdb.ReadAccountSnapshot(clientDB, accHash)
 		expectedSnapshotVal := types.SlimAccountRLP(acc)
-		assert.Equal(t, expectedSnapshotVal, snapshotVal)
+		require.Equal(t, expectedSnapshotVal, snapshotVal)
 
 		// check code consistency
 		if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
 			codeHash := common.BytesToHash(acc.CodeHash)
 			code := rawdb.ReadCode(clientDB, codeHash)
 			actualHash := crypto.Keccak256Hash(code)
-			assert.NotZero(t, len(code))
-			assert.Equal(t, codeHash, actualHash)
+			require.NotZero(t, len(code))
+			require.Equal(t, codeHash, actualHash)
 		}
 		if acc.Root == types.EmptyRootHash {
 			return nil
@@ -590,25 +566,23 @@ func assertDBConsistency(t testing.TB, root common.Hash, clientDB ethdb.Database
 		statesynctest.AssertTrieConsistency(t, acc.Root, serverTrieDB, clientTrieDB, func(key, val []byte) error {
 			storageTrieLeavesCount++
 			snapshotVal := rawdb.ReadStorageSnapshot(clientDB, accHash, common.BytesToHash(key))
-			assert.Equal(t, val, snapshotVal)
+			require.Equal(t, val, snapshotVal)
 			return nil
 		})
 
-		assert.Equal(t, storageTrieLeavesCount, snapshotStorageKeysCount)
+		require.Equal(t, storageTrieLeavesCount, snapshotStorageKeysCount)
 		return nil
 	})
 
 	// Check that the number of accounts in the snapshot matches the number of leaves in the accounts trie
-	assert.Equal(t, trieAccountLeaves, numSnapshotAccounts)
+	require.Equal(t, trieAccountLeaves, numSnapshotAccounts)
 }
 
 func fillAccountsWithStorage(t *testing.T, serverDB ethdb.Database, serverTrieDB *triedb.Database, root common.Hash, numAccounts int) common.Hash {
 	newRoot, _ := statesynctest.FillAccounts(t, serverTrieDB, root, numAccounts, func(t *testing.T, index int, account types.StateAccount) types.StateAccount {
 		codeBytes := make([]byte, 256)
 		_, err := rand.Read(codeBytes)
-		if err != nil {
-			t.Fatalf("error reading random code bytes: %v", err)
-		}
+		require.NoError(t, err, "error reading random code bytes")
 
 		codeHash := crypto.Keccak256Hash(codeBytes)
 		rawdb.WriteCode(serverDB, codeHash, codeBytes)
@@ -620,4 +594,91 @@ func fillAccountsWithStorage(t *testing.T, serverDB ethdb.Database, serverTrieDB
 		return account
 	})
 	return newRoot
+}
+
+func TestDifferentWaitContext(t *testing.T) {
+	serverDB := rawdb.NewMemoryDatabase()
+	serverTrieDB := triedb.NewDatabase(serverDB, nil)
+	// Create trie with many accounts to ensure sync takes time
+	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 2000)
+	clientDB := rawdb.NewMemoryDatabase()
+
+	// Track requests to show sync continues after Wait returns
+	var requestCount int64
+
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
+
+	// Intercept to track ongoing requests and add delay
+	mockClient.GetLeafsIntercept = func(req message.LeafsRequest, resp message.LeafsResponse) (message.LeafsResponse, error) {
+		atomic.AddInt64(&requestCount, 1)
+		// Add small delay to ensure sync is ongoing
+		time.Sleep(10 * time.Millisecond)
+		return resp, nil
+	}
+
+	s, err := NewSyncer(&Config{
+		Root:                     root,
+		Client:                   mockClient,
+		DB:                       clientDB,
+		BatchSize:                1000,
+		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
+		RequestSize:              1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create two different contexts
+	startCtx := context.Background() // Never cancelled
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer waitCancel()
+
+	// Start with one context
+	require.NoError(t, s.Start(startCtx), "failed to start state syncer")
+
+	// Wait with different context that will timeout
+	err = s.Wait(waitCtx)
+	require.ErrorIs(t, err, context.DeadlineExceeded, "Wait should return DeadlineExceeded error")
+
+	// Check if more requests were made after Wait returned
+	requestsWhenWaitReturned := atomic.LoadInt64(&requestCount)
+	time.Sleep(100 * time.Millisecond)
+	requestsAfterWait := atomic.LoadInt64(&requestCount)
+	require.Equal(t, requestsWhenWaitReturned, requestsAfterWait, "Sync should not continue after Wait returned with different context")
+}
+
+// TestSyncer_MultipleStart verifies that the syncer prevents multiple Start() calls.
+func TestStateSyncer_MultipleStart(t *testing.T) {
+	serverDB := rawdb.NewMemoryDatabase()
+	serverTrieDB := triedb.NewDatabase(serverDB, nil)
+	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 100)
+	clientDB := rawdb.NewMemoryDatabase()
+
+	leafsRequestHandler := handlers.NewLeafsRequestHandler(serverTrieDB, message.StateTrieKeyLength, nil, message.Codec, handlerstats.NewNoopHandlerStats())
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
+
+	s, err := NewSyncer(&Config{
+		Root:                     root,
+		Client:                   mockClient,
+		DB:                       clientDB,
+		BatchSize:                1000,
+		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
+		RequestSize:              1024,
+	})
+	require.NoError(t, err, "failed to create state syncer")
+
+	ctx := context.Background()
+
+	// First Start() call should succeed.
+	err = s.Start(ctx)
+	require.NoError(t, err, "first Start() call should succeed")
+
+	// Second Start() call should fail with sentinel error.
+	err = s.Start(ctx)
+	require.ErrorIs(t, err, synccommon.ErrSyncerAlreadyStarted, "should return ErrSyncerAlreadyStarted")
 }

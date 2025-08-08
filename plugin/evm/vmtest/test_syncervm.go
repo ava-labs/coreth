@@ -30,15 +30,14 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/coretest"
-	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/predicate"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
 	"github.com/ava-labs/libevm/common"
@@ -88,7 +87,7 @@ func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
 		StateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
 		SyncMode:           block.StateSyncSkipped,
 	}
-	testSyncVMSetup := initSyncServerAndClientVMs(t, test, vmsync.ParentsToFetch, testSetup)
+	testSyncVMSetup := initSyncServerAndClientVMs(t, test, vmsync.BlocksToFetch, testSetup)
 
 	testSyncerVM(t, testSyncVMSetup, test, testSetup.ExtraSyncerVMTest)
 }
@@ -100,14 +99,14 @@ func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		SyncMode:           block.StateSyncStatic,
 	}
-	testSyncVMSetup := initSyncServerAndClientVMs(t, test, vmsync.ParentsToFetch, testSetup)
+	testSyncVMSetup := initSyncServerAndClientVMs(t, test, vmsync.BlocksToFetch, testSetup)
 
 	testSyncerVM(t, testSyncVMSetup, test, testSetup.ExtraSyncerVMTest)
 }
 
 func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup) {
 	rand.Seed(1)
-	numToGen := vmsync.ParentsToFetch + uint64(32)
+	numToGen := vmsync.BlocksToFetch + uint64(32)
 	test := SyncTestParams{
 		SyncableInterval:   numToGen,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -145,7 +144,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		},
 		expectedErr: context.Canceled,
 	}
-	testSyncVMSetup := initSyncServerAndClientVMs(t, test, vmsync.ParentsToFetch, testSetup)
+	testSyncVMSetup := initSyncServerAndClientVMs(t, test, vmsync.BlocksToFetch, testSetup)
 
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, testSyncVMSetup, test, testSetup.ExtraSyncerVMTest)
@@ -165,7 +164,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		go testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
 		return nil
 	}
-	metricstest.ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
+	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
 	genesisJSON := []byte(GenesisJSON(ForkToChainConfig[upgradetest.Latest]))
 	if err := syncDisabledVM.Initialize(
@@ -230,7 +229,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		`{"state-sync-enabled":true, "state-sync-min-blocks":%d}`,
 		test.StateSyncMinBlocks,
 	)
-	metricstest.ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
+	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	if err := syncReEnabledVM.Initialize(
 		context.Background(),
 		testSyncVMSetup.syncerVM.SnowCtx,
@@ -295,7 +294,7 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 		},
 		expectedErr: context.Canceled,
 	}
-	testSyncVMSetup = initSyncServerAndClientVMs(t, test, vmsync.ParentsToFetch, testSetup)
+	testSyncVMSetup = initSyncServerAndClientVMs(t, test, vmsync.BlocksToFetch, testSetup)
 	// Perform sync resulting in early termination.
 	testSyncerVM(t, testSyncVMSetup, test, testSetup.ExtraSyncerVMTest)
 }

@@ -28,7 +28,6 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -112,6 +111,14 @@ func TestVMContinuousProfiler(t *testing.T) {
 }
 
 func TestVMUpgrades(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testVMUpgrades(t, scheme)
+		})
+	}
+}
+
+func testVMUpgrades(t *testing.T, scheme string) {
 	genesisTests := []struct {
 		fork             upgradetest.Fork
 		expectedGasPrice *big.Int
@@ -153,11 +160,13 @@ func TestVMUpgrades(t *testing.T) {
 			expectedGasPrice: big.NewInt(0),
 		},
 	}
+
 	for _, test := range genesisTests {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			require := require.New(t)
 			vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-				Fork: &test.fork,
+				Fork:   &test.fork,
+				Scheme: scheme,
 			})
 
 			defer func() {
@@ -182,10 +191,18 @@ func TestVMUpgrades(t *testing.T) {
 }
 
 func TestBuildEthTxBlock(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testBuildEthTxBlock(t, scheme)
+		})
+	}
+}
+
+func testBuildEthTxBlock(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase2
 	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork:       &fork,
-		ConfigJSON: `{"pruning-enabled":true}`,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -306,13 +323,16 @@ func TestBuildEthTxBlock(t *testing.T) {
 	restartedVM := newDefaultTestVM()
 	newCTX := snowtest.Context(t, snowtest.CChainID)
 	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
+	newCTX.ChainDataDir = tvm.Ctx.ChainDataDir
+	conf, err := vmtest.OverrideSchemeConfig(scheme, `{"pruning-enabled":true}`)
+	require.NoError(t, err)
 	if err := restartedVM.Initialize(
 		context.Background(),
 		newCTX,
 		tvm.DB,
 		[]byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork])),
 		[]byte(""),
-		[]byte(`{"pruning-enabled":true}`),
+		[]byte(conf),
 		[]*commonEng.Fx{},
 		nil,
 	); err != nil {
@@ -342,12 +362,20 @@ func TestBuildEthTxBlock(t *testing.T) {
 //	    |
 //	    D
 func TestSetPreferenceRace(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testSetPreferenceRace(t, scheme)
+		})
+	}
+}
+
+func testSetPreferenceRace(t *testing.T, scheme string) {
 	// Create two VMs which will agree on block A and then
 	// build the two distinct preferred chains above
 	fork := upgradetest.NoUpgrades
 	conf := vmtest.TestVMConfig{
-		Fork:       &fork,
-		ConfigJSON: `{"pruning-enabled":true}`,
+		Fork:   &fork,
+		Scheme: scheme,
 	}
 	vm1, _ := setupDefaultTestVM(t, conf)
 	vm2, _ := setupDefaultTestVM(t, conf)
@@ -588,13 +616,23 @@ func TestSetPreferenceRace(t *testing.T) {
 // accept block C, which should be an orphaned block at this point and
 // get rejected.
 func TestReorgProtection(t *testing.T) {
-	fork := upgradetest.NoUpgrades
-	conf := vmtest.TestVMConfig{
-		Fork:       &fork,
-		ConfigJSON: `{"pruning-enabled":true}`,
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testReorgProtection(t, scheme)
+		})
 	}
-	vm1, _ := setupDefaultTestVM(t, conf)
-	vm2, _ := setupDefaultTestVM(t, conf)
+}
+
+func testReorgProtection(t *testing.T, scheme string) {
+	fork := upgradetest.NoUpgrades
+	vm1, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	})
+	vm2, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	})
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -764,12 +802,21 @@ func TestReorgProtection(t *testing.T) {
 //	 / \
 //	B   C
 func TestNonCanonicalAccept(t *testing.T) {
-	fork := upgradetest.NoUpgrades
-	conf := vmtest.TestVMConfig{
-		Fork: &fork,
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testNonCanonicalAccept(t, scheme)
+		})
 	}
-	vm1, _ := setupDefaultTestVM(t, conf)
-	vm2, _ := setupDefaultTestVM(t, conf)
+}
+
+func testNonCanonicalAccept(t *testing.T, scheme string) {
+	fork := upgradetest.NoUpgrades
+	tvmConfig := vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	}
+	vm1, _ := setupDefaultTestVM(t, tvmConfig)
+	vm2, _ := setupDefaultTestVM(t, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -966,13 +1013,21 @@ func TestNonCanonicalAccept(t *testing.T) {
 //	    |
 //	    D
 func TestStickyPreference(t *testing.T) {
-	fork := upgradetest.NoUpgrades
-	conf := vmtest.TestVMConfig{
-		Fork:       &fork,
-		ConfigJSON: `{"pruning-enabled":true}`,
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testStickyPreference(t, scheme)
+		})
 	}
-	vm1, _ := setupDefaultTestVM(t, conf)
-	vm2, _ := setupDefaultTestVM(t, conf)
+}
+
+func testStickyPreference(t *testing.T, scheme string) {
+	fork := upgradetest.NoUpgrades
+	tvmConfig := vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	}
+	vm1, _ := setupDefaultTestVM(t, tvmConfig)
+	vm2, _ := setupDefaultTestVM(t, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1235,13 +1290,21 @@ func TestStickyPreference(t *testing.T) {
 //	    |
 //	    D
 func TestUncleBlock(t *testing.T) {
-	fork := upgradetest.NoUpgrades
-	conf := vmtest.TestVMConfig{
-		Fork:       &fork,
-		ConfigJSON: `{"pruning-enabled":true}`,
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testUncleBlock(t, scheme)
+		})
 	}
-	vm1, _ := setupDefaultTestVM(t, conf)
-	vm2, _ := setupDefaultTestVM(t, conf)
+}
+
+func testUncleBlock(t *testing.T, scheme string) {
+	fork := upgradetest.NoUpgrades
+	tvmConfig := vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	}
+	vm1, _ := setupDefaultTestVM(t, tvmConfig)
+	vm2, _ := setupDefaultTestVM(t, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1432,13 +1495,21 @@ func TestUncleBlock(t *testing.T) {
 //	    |
 //	    D
 func TestAcceptReorg(t *testing.T) {
-	fork := upgradetest.NoUpgrades
-	conf := vmtest.TestVMConfig{
-		Fork:       &fork,
-		ConfigJSON: `{"pruning-enabled":true}`,
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testAcceptReorg(t, scheme)
+		})
 	}
-	vm1, _ := setupDefaultTestVM(t, conf)
-	vm2, _ := setupDefaultTestVM(t, conf)
+}
+
+func testAcceptReorg(t *testing.T, scheme string) {
+	fork := upgradetest.NoUpgrades
+	tvmConfig := vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	}
+	vm1, _ := setupDefaultTestVM(t, tvmConfig)
+	vm2, _ := setupDefaultTestVM(t, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1642,9 +1713,18 @@ func TestAcceptReorg(t *testing.T) {
 }
 
 func TestFutureBlock(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testFutureBlock(t, scheme)
+		})
+	}
+}
+
+func testFutureBlock(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
 	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -1703,9 +1783,18 @@ func TestFutureBlock(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testBuildApricotPhase1Block(t, scheme)
+		})
+	}
+}
+
+func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase1
 	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1819,9 +1908,18 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 }
 
 func TestLastAcceptedBlockNumberAllow(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testLastAcceptedBlockNumberAllow(t, scheme)
+		})
+	}
+}
+
+func testLastAcceptedBlockNumberAllow(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
 	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -1933,7 +2031,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// try again with skip-upgrade-check
 	reinitVM = newDefaultTestVM()
-	metricstest.ResetMetrics(newCTX)
+	vmtest.ResetMetrics(newCTX)
 	config := []byte(`{"skip-upgrade-check": true}`)
 	require.NoError(t, reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, config, []*commonEng.Fx{}, tvm.AppSender))
 	require.NoError(t, reinitVM.Shutdown(context.Background()))

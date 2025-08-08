@@ -21,18 +21,20 @@ import (
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/coreth/network"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
+	"github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/prometheus/client_golang/prometheus"
 
+	avalanchegoprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
-	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
@@ -40,8 +42,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -409,6 +411,30 @@ func (vm *VM) Initialize(
 	vm.ethConfig.StateHistory = vm.config.StateHistory
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	vm.ethConfig.StateScheme = vm.config.StateScheme
+
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+		log.Warn("Firewood state scheme is enabled")
+		log.Warn("This is untested in production, use at your own risk")
+		// Firewood only supports pruning for now.
+		if !vm.config.Pruning {
+			return errors.New("Pruning must be enabled for Firewood")
+		}
+		// Firewood does not support iterators, so the snapshot cannot be constructed
+		if vm.config.SnapshotCache > 0 {
+			return errors.New("Snapshot cache must be disabled for Firewood")
+		}
+		if vm.config.OfflinePruning {
+			return errors.New("Offline pruning is not supported for Firewood")
+		}
+		if vm.config.StateSyncEnabled == nil || *vm.config.StateSyncEnabled {
+			return errors.New("State sync is not yet supported for Firewood")
+		}
+	}
+	if vm.ethConfig.StateScheme == rawdb.PathScheme {
+		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
+		return errors.New("Path state scheme is not supported")
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -504,9 +530,18 @@ func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
 func (vm *VM) initializeMetrics() error {
 	metrics.Enabled = true
 	vm.sdkMetrics = prometheus.NewRegistry()
-	gatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
+	gatherer := avalanchegoprometheus.NewGatherer(metrics.DefaultRegistry)
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
+	}
+
+	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == customrawdb.FirewoodScheme {
+		if err := ffi.StartMetrics(); err != nil {
+			return fmt.Errorf("failed to start firewood metrics collection: %w", err)
+		}
+		if err := vm.ctx.Metrics.Register("firewood", ffi.Gatherer{}); err != nil {
+			return fmt.Errorf("failed to register firewood metrics: %w", err)
+		}
 	}
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
@@ -570,14 +605,18 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
-	evmTrieDB := triedb.NewDatabase(
-		vm.chaindb,
-		&triedb.Config{
-			DBOverride: hashdb.Config{
-				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			}.BackendConstructor,
-		},
-	)
+	// However, Firewood does not support multiple TrieDBs, so we use the same one.
+	evmTrieDB := vm.eth.BlockChain().TrieDB()
+	if vm.ethConfig.StateScheme != customrawdb.FirewoodScheme {
+		evmTrieDB = triedb.NewDatabase(
+			vm.chaindb,
+			&triedb.Config{
+				DBOverride: hashdb.Config{
+					CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
+				}.BackendConstructor,
+			},
+		)
+	}
 	leafHandlers := make(LeafHandlers)
 	leafMetricsNames := make(map[message.NodeType]string)
 	// register default leaf request handler for state trie
@@ -645,7 +684,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		MinBlocks:          vm.config.StateSyncMinBlocks,
 		RequestSize:        vm.config.StateSyncRequestSize,
 		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
-		ChaindDB:           vm.chaindb,
+		ChainDB:            vm.chaindb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
 		Acceptor:           vm,

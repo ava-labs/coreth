@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
@@ -1288,16 +1289,17 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 			checkState: func(t *testing.T, vm *VM) {
 				lastAcceptedBlock := vm.LastAcceptedExtendedBlock()
 
-				sdb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
+				statedb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assetBalance := sdb.GetBalanceMultiCoin(ethAddress, common.Hash(assetID))
+				wrappedStateDB := extstate.New(statedb)
+				assetBalance := wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.Hash(assetID))
 				if assetBalance.Cmp(common.Big1) != 0 {
 					t.Fatalf("Expected asset balance to be %d, found balance: %d", common.Big1, assetBalance)
 				}
-				avaxBalance := sdb.GetBalance(ethAddress)
+				avaxBalance := wrappedStateDB.GetBalance(ethAddress)
 				if avaxBalance.Cmp(common.U2560) != 0 {
 					t.Fatalf("Expected AVAX balance to be 0, found balance: %d", avaxBalance)
 				}
@@ -1346,11 +1348,12 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	}
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
-	sdb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
+	statedb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, sdb); len(test.evmStateTransferErr) == 0 && err != nil {
+	wrappedStateDB := extstate.New(statedb)
+	if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, wrappedStateDB); len(test.evmStateTransferErr) == 0 && err != nil {
 		t.Fatalf("EVMStateTransfer failed unexpectedly due to: %s", err)
 	} else if len(test.evmStateTransferErr) != 0 {
 		if err == nil {

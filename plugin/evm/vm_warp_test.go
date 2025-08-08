@@ -33,7 +33,6 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/eth/tracers"
-	"github.com/ava-labs/coreth/metrics/metricstest"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
@@ -74,10 +73,19 @@ const (
 )
 
 func TestSendWarpMessage(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testSendWarpMessage(t, scheme)
+		})
+	}
+}
+
+func testSendWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
@@ -180,6 +188,14 @@ func TestSendWarpMessage(t *testing.T) {
 }
 
 func TestValidateWarpMessage(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateWarpMessage(t, scheme)
+		})
+	}
+}
+
+func testValidateWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	sourceAddress := common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2")
@@ -202,10 +218,18 @@ func TestValidateWarpMessage(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, true, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, true, exampleWarpPayload)
 }
 
 func TestValidateInvalidWarpMessage(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateInvalidWarpMessage(t, scheme)
+		})
+	}
+}
+
+func testValidateInvalidWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	sourceAddress := common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2")
@@ -225,10 +249,18 @@ func TestValidateInvalidWarpMessage(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, false, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, false, exampleWarpPayload)
 }
 
 func TestValidateWarpBlockHash(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateWarpBlockHash(t, scheme)
+		})
+	}
+}
+
+func testValidateWarpBlockHash(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	blockHash := ids.GenerateTestID()
@@ -246,10 +278,18 @@ func TestValidateWarpBlockHash(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, true, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, true, exampleWarpPayload)
 }
 
 func TestValidateInvalidWarpBlockHash(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testValidateInvalidWarpBlockHash(t, scheme)
+		})
+	}
+}
+
+func testValidateInvalidWarpBlockHash(t *testing.T, scheme string) {
 	require := require.New(t)
 	sourceChainID := ids.GenerateTestID()
 	blockHash := ids.GenerateTestID()
@@ -265,14 +305,15 @@ func TestValidateInvalidWarpBlockHash(t *testing.T) {
 	)
 	require.NoError(err)
 
-	testWarpVMTransaction(t, unsignedMessage, false, exampleWarpPayload)
+	testWarpVMTransaction(t, scheme, unsignedMessage, false, exampleWarpPayload)
 }
 
-func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
+func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
@@ -424,10 +465,19 @@ func testWarpVMTransaction(t *testing.T, unsignedMessage *avalancheWarp.Unsigned
 }
 
 func TestReceiveWarpMessage(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testReceiveWarpMessageWithScheme(t, scheme)
+		})
+	}
+}
+
+func testReceiveWarpMessageWithScheme(t *testing.T, scheme string) {
 	require := require.New(t)
 	fork := upgradetest.Durango
 	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	defer func() {
 		require.NoError(vm.Shutdown(context.Background()))
@@ -744,9 +794,18 @@ func testReceiveWarpMessage(
 }
 
 func TestSignatureRequestsToVM(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testSignatureRequestsToVM(t, scheme)
+		})
+	}
+}
+
+func testSignatureRequestsToVM(t *testing.T, scheme string) {
 	fork := upgradetest.Durango
 	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	defer func() {
 		require.NoError(t, vm.Shutdown(context.Background()))
@@ -882,7 +941,7 @@ func TestClearWarpDB(t *testing.T) {
 	// Restart VM with the same database default should not prune the warp db
 	vm = newDefaultTestVM()
 	// we need to reset context since the previous one has registered metrics.
-	metricstest.ResetMetrics(ctx)
+	vmtest.ResetMetrics(ctx)
 	require.NoError(t, vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte{}, []*commonEng.Fx{}, &enginetest.Sender{}))
 
 	// check messages are still present
@@ -897,7 +956,7 @@ func TestClearWarpDB(t *testing.T) {
 	// restart the VM with pruning enabled
 	vm = newDefaultTestVM()
 	config := `{"prune-warp-db-enabled": true}`
-	metricstest.ResetMetrics(ctx)
+	vmtest.ResetMetrics(ctx)
 	require.NoError(t, vm.Initialize(context.Background(), ctx, db, genesisBytes, []byte{}, []byte(config), []*commonEng.Fx{}, &enginetest.Sender{}))
 
 	it := vm.warpDB.NewIterator()

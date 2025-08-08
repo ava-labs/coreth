@@ -34,10 +34,12 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/eth/tracers"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/log"
@@ -80,7 +82,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			// the internal junks created by tracing will be persisted into the disk.
 			// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 			// please re-enable it for better performance.
-			database = state.NewDatabaseWithConfig(eth.chainDb, triedb.HashDefaults)
+			database = extstate.NewDatabaseWithConfig(eth.chainDb, triedb.HashDefaults)
 			if statedb, err = state.New(block.Root(), database, nil); err == nil {
 				log.Info("Found disk backend for state trie", "root", block.Root(), "number", block.Number())
 				return statedb, noopReleaser, nil
@@ -98,7 +100,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// TODO(rjl493456442), clean cache is disabled to prevent memory leak,
 		// please re-enable it for better performance.
 		tdb = triedb.NewDatabase(eth.chainDb, triedb.HashDefaults)
-		database = state.NewDatabaseWithNodeDB(eth.chainDb, tdb)
+		database = extstate.NewDatabaseWithNodeDB(eth.chainDb, tdb)
 
 		// If we didn't check the live database, do check state over ephemeral database,
 		// otherwise we would rewind past a persisted block (specific corner case is
@@ -188,6 +190,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 	return statedb, func() { tdb.Dereference(block.Root()) }, nil
 }
 
+// This is compatible with both PathDB and FirewoodDB schemes.
 func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), error) {
 	// Check if the requested state is available in the live chain.
 	statedb, err := eth.blockchain.StateAt(block.Root())
@@ -223,7 +226,12 @@ func (eth *Ethereum) pathState(block *types.Block) (*state.StateDB, func(), erro
 //     provided, it would be preferable to start from a fresh state, if we have it
 //     on disk.
 func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (statedb *state.StateDB, release tracers.StateReleaseFunc, err error) {
-	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme {
+	// Check if we're using firewood backend by typecasting
+	// firewoodDB.Scheme() == rawdb.HashScheme, so typecasting is necessary
+	isFirewood := eth.blockchain.CacheConfig().StateScheme == customrawdb.FirewoodScheme
+
+	// Use `hashState` if the state can be recomputed from the live database.
+	if eth.blockchain.TrieDB().Scheme() == rawdb.HashScheme && !isFirewood {
 		return eth.hashState(ctx, block, reexec, base, readOnly, preferDisk)
 	}
 	return eth.pathState(block)

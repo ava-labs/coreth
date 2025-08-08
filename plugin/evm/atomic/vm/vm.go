@@ -11,6 +11,12 @@ import (
 	"net/http"
 	"sync"
 
+	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
@@ -32,13 +38,9 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -49,8 +51,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/utils/rpc"
-
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 )
@@ -145,8 +147,8 @@ func (vm *VM) Initialize(
 		MetricName: "sync_atomic_trie_leaves",
 		Handler:    leafHandler,
 	}
-	vm.mempool = &txpool.Mempool{}
 
+	atomicTxs := txpool.NewTxs(chainCtx, defaultMempoolSize)
 	extensionConfig := &extension.Config{
 		ConsensusCallbacks:         vm.createConsensusCallbacks(),
 		BlockExtender:              blockExtender,
@@ -154,7 +156,7 @@ func (vm *VM) Initialize(
 		SyncExtender:               syncExtender,
 		SyncSummaryProvider:        syncProvider,
 		ExtraSyncLeafHandlerConfig: atomicLeafTypeConfig,
-		ExtraMempool:               vm.mempool,
+		ExtraMempool:               atomicTxs,
 		Clock:                      &vm.clock,
 	}
 	if err := vm.InnerVM.SetExtensionConfig(extensionConfig); err != nil {
@@ -175,11 +177,11 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize inner VM: %w", err)
 	}
 
-	// Now we can initialize the mempool and so
-	err := vm.mempool.Initialize(chainCtx, vm.MetricRegistry(), defaultMempoolSize, vm.verifyTxAtTip)
+	atomicMempool, err := txpool.NewMempool(atomicTxs, vm.InnerVM.MetricRegistry(), vm.verifyTxAtTip)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
+	vm.mempool = atomicMempool
 
 	// initialize bonus blocks on mainnet
 	var (
@@ -408,7 +410,8 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 // Note: VerifyTx may modify [state]. If [state] needs to be properly maintained, the caller is responsible
 // for reverting to the correct snapshot after calling this function. If this function is called with a
 // throwaway state, then this is not necessary.
-func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, state *state.StateDB, rules extras.Rules) error {
+// TODO: unexport this function
+func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, statedb *state.StateDB, rules extras.Rules) error {
 	parent, err := vm.InnerVM.GetExtendedBlock(context.TODO(), ids.ID(parentHash))
 	if err != nil {
 		return fmt.Errorf("failed to get parent block: %w", err)
@@ -417,7 +420,8 @@ func (vm *VM) verifyTx(tx *atomic.Tx, parentHash common.Hash, baseFee *big.Int, 
 	if err := verifierBackend.SemanticVerify(tx, parent, baseFee); err != nil {
 		return err
 	}
-	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state)
+	wrappedStateDB := extstate.New(statedb)
+	return tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, wrappedStateDB)
 }
 
 // verifyTxs verifies that [txs] are valid to be issued into a block with parent block [parentHash]
@@ -642,7 +646,7 @@ func (vm *VM) onFinalizeAndAssemble(
 	return vm.postBatchOnFinalizeAndAssemble(header, parent, state, txs)
 }
 
-func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state *state.StateDB) (*big.Int, *big.Int, error) {
+func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, statedb *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
 		batchContribution *big.Int = big.NewInt(0)
 		batchGasUsed      *big.Int = big.NewInt(0)
@@ -683,8 +687,9 @@ func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, state
 		return nil, nil, nil
 	}
 
+	wrappedStateDB := extstate.New(statedb)
 	for _, tx := range txs {
-		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, state); err != nil {
+		if err := tx.UnsignedAtomicTx.EVMStateTransfer(vm.ctx, wrappedStateDB); err != nil {
 			return nil, nil, err
 		}
 		// If ApricotPhase4 is enabled, calculate the block fee contribution
@@ -800,7 +805,7 @@ func (vm *VM) NewExportTx(
 	baseFee *big.Int, // fee to use post-AP3
 	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
 ) (*atomic.Tx, error) {
-	state, err := vm.InnerVM.Ethereum().BlockChain().State()
+	statedb, err := vm.Ethereum().BlockChain().State()
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +814,7 @@ func (vm *VM) NewExportTx(
 	tx, err := atomic.NewExportTx(
 		vm.ctx,            // Context
 		vm.currentRules(), // VM rules
-		state,
+		extstate.New(statedb),
 		assetID, // AssetID
 		amount,  // Amount
 		chainID, // ID of the chain to send the funds to

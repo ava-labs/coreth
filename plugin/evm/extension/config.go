@@ -24,8 +24,9 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/sync"
+	synccommon "github.com/ava-labs/coreth/sync"
 	"github.com/ava-labs/coreth/sync/handlers"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
@@ -67,7 +68,7 @@ type ExtensibleVM interface {
 	// VersionDB returns the versioned database for the VM
 	VersionDB() *versiondb.Database
 	// SyncerClient returns the syncer client for the VM
-	SyncerClient() sync.Client
+	SyncerClient() vmsync.Client
 }
 
 // InnerVM is the interface that must be implemented by the VM
@@ -141,10 +142,10 @@ type Config struct {
 	// SyncSummaryProvider is the sync summary provider to use
 	// for the VM to be used in syncer.
 	// It's required and should be non-nil
-	SyncSummaryProvider sync.SummaryProvider
+	SyncSummaryProvider synccommon.SummaryProvider
 	// SyncExtender can extend the syncer to handle custom sync logic.
 	// It's optional and can be nil
-	SyncExtender sync.Extender
+	SyncExtender synccommon.Extender
 	// SyncableParser is to parse summary messages from the network.
 	// It's required and should be non-nil
 	SyncableParser message.SyncableParser

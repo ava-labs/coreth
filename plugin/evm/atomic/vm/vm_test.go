@@ -28,6 +28,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
@@ -133,13 +134,22 @@ func addUTXOs(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, utxos map
 }
 
 func TestImportMissingUTXOs(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testImportMissingUTXOs(t, scheme)
+		})
+	}
+}
+
+func testImportMissingUTXOs(t *testing.T, scheme string) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
 	vm1, _ := setupAtomicTestVMWithUtxos(
 		t,
 		vmtest.TestVMConfig{
-			Fork: &fork,
+			Fork:   &fork,
+			Scheme: scheme,
 		},
 		map[ids.ShortID]uint64{
 			vmtest.TestShortIDAddrs[0]: importAmount,
@@ -160,7 +170,8 @@ func TestImportMissingUTXOs(t *testing.T) {
 
 	// make another VM which is missing the UTXO in shared memory
 	vm2, _ := setupAtomicTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	defer func() {
 		require.NoError(t, vm2.Shutdown(context.Background()))
@@ -180,11 +191,20 @@ func TestImportMissingUTXOs(t *testing.T) {
 // Simple test to ensure we can issue an import transaction followed by an export transaction
 // and they will be indexed correctly when accepted.
 func TestIssueAtomicTxs(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testIssueAtomicTxs(t, scheme)
+		})
+	}
+}
+
+func testIssueAtomicTxs(t *testing.T, scheme string) {
 	importAmount := uint64(50000000)
 	vm := newAtomicTestVM()
 	fork := upgradetest.ApricotPhase2
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 	utxos := map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
@@ -238,7 +258,8 @@ func TestIssueAtomicTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), state, vm.ctx.AVAXAssetID, importAmount-(2*ap0.AtomicTxFee), vm.ctx.XChainID, vmtest.TestShortIDAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
+	wrappedState := extstate.New(state)
+	exportTx, err := atomic.NewExportTx(vm.ctx, vm.currentRules(), wrappedState, vm.ctx.AVAXAssetID, importAmount-(2*ap0.AtomicTxFee), vm.ctx.XChainID, vmtest.TestShortIDAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,10 +305,11 @@ func TestIssueAtomicTxs(t *testing.T) {
 	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
 
-func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
+func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string) {
 	importAmount := uint64(10000000)
 	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	}, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 		vmtest.TestShortIDAddrs[1]: importAmount,
@@ -472,9 +494,17 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork) {
 }
 
 func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testReissueAtomicTxHigherGasPrice(t, scheme)
+		})
+	}
+}
+
+func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 	kc := secp256k1fx.NewKeychain(vmtest.TestKeys...)
 
-	for name, issueTxs := range map[string]func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
+	tests := map[string]func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
 		"single UTXO override": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo, err := addUTXO(sharedMemory, vm.ctx, ids.GenerateTestID(), 0, vm.ctx.AVAXAssetID, units.Avax, vmtest.TestShortIDAddrs[0])
 			if err != nil {
@@ -557,8 +587,8 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := vm.mempool.AddLocalTx(reissuanceTx1); !errors.Is(err, txpool.ErrConflictingAtomicTx) {
-				t.Fatalf("Expected to fail with err: %s, but found err: %s", txpool.ErrConflictingAtomicTx, err)
+			if err := vm.mempool.AddLocalTx(reissuanceTx1); !errors.Is(err, txpool.ErrConflict) {
+				t.Fatalf("Expected to fail with err: %s, but found err: %s", txpool.ErrConflict, err)
 			}
 
 			assert.True(t, vm.mempool.Has(importTx1.ID()))
@@ -575,11 +605,14 @@ func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
 
 			return []*atomic.Tx{reissuanceTx2}, []*atomic.Tx{importTx1, importTx2}
 		},
-	} {
+	}
+	for name, issueTxs := range tests {
 		t.Run(name, func(t *testing.T) {
 			fork := upgradetest.ApricotPhase5
 			vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
-				Fork: &fork,
+				Fork:       &fork,
+				Scheme:     scheme,
+				ConfigJSON: `{"pruning-enabled":true}`,
 			})
 			issuedTxs, evictedTxs := issueTxs(t, vm, tvm.AtomicMemory)
 
@@ -605,12 +638,24 @@ func TestConflictingImportTxsAcrossBlocks(t *testing.T) {
 		upgradetest.ApricotPhase5,
 	} {
 		t.Run(fork.String(), func(t *testing.T) {
-			testConflictingImportTxs(t, fork)
+			for _, scheme := range vmtest.Schemes {
+				t.Run(scheme, func(t *testing.T) {
+					testConflictingImportTxs(t, fork, scheme)
+				})
+			}
 		})
 	}
 }
 
 func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testConflictingTransitiveAncestryWithGap(t, scheme)
+		})
+	}
+}
+
+func testConflictingTransitiveAncestryWithGap(t *testing.T, scheme string) {
 	key := utilstest.NewKey(t)
 
 	key0 := vmtest.TestKeys[0]
@@ -622,7 +667,8 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	}, map[ids.ShortID]uint64{
 		addr0: importAmount,
 		addr1: importAmount,
@@ -748,9 +794,18 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testBonusBlocksTxs(t, scheme)
+		})
+	}
+}
+
+func testBonusBlocksTxs(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
 	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -841,6 +896,14 @@ func TestBonusBlocksTxs(t *testing.T) {
 // that does not conflict. Accepts [blkB] and rejects [blkA], then asserts that the virtuous atomic
 // transaction in [blkA] is correctly re-issued into the atomic transaction mempool.
 func TestReissueAtomicTx(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testReissueAtomicTx(t, scheme)
+		})
+	}
+}
+
+func testReissueAtomicTx(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase1
 	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
 		Fork: &fork,
@@ -942,9 +1005,18 @@ func TestReissueAtomicTx(t *testing.T) {
 }
 
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testAtomicTxFailsEVMStateTransferBuildBlock(t, scheme)
+		})
+	}
+}
+
+func testAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase1
 	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -1278,10 +1350,19 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 // Regression test to ensure that a VM that is not able to parse a block that
 // contains no transactions.
 func TestEmptyBlock(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testEmptyBlock(t, scheme)
+		})
+	}
+}
+
+func testEmptyBlock(t *testing.T, scheme string) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	}, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 	})
@@ -1340,9 +1421,18 @@ func TestEmptyBlock(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 5 ruleset in genesis.
 func TestBuildApricotPhase5Block(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testBuildApricotPhase5Block(t, scheme)
+		})
+	}
+}
+
+func testBuildApricotPhase5Block(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase5
 	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -1513,6 +1603,14 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 4 ruleset in genesis.
 func TestBuildApricotPhase4Block(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testBuildApricotPhase4Block(t, scheme)
+		})
+	}
+}
+
+func testBuildApricotPhase4Block(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase4
 	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
 		Fork: &fork,
@@ -1693,9 +1791,18 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 }
 
 func TestBuildInvalidBlockHead(t *testing.T) {
+	for _, scheme := range vmtest.Schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testBuildInvalidBlockHead(t, scheme)
+		})
+	}
+}
+
+func testBuildInvalidBlockHead(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
 	vm, _ := setupAtomicTestVM(t, vmtest.TestVMConfig{
-		Fork: &fork,
+		Fork:   &fork,
+		Scheme: scheme,
 	})
 
 	defer func() {
@@ -1802,7 +1909,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// try to add a conflicting tx
 			err = vm.mempool.AddLocalTx(conflictingTx)
-			assert.ErrorIs(err, txpool.ErrConflictingAtomicTx)
+			assert.ErrorIs(err, txpool.ErrConflict)
 			has = mempool.Has(conflictingTxID)
 			assert.False(has, "conflicting tx in mempool")
 

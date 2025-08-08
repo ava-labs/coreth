@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
@@ -51,10 +52,11 @@ func TestAtomicSyncerVM(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
+					wrappedStateDB := extstate.New(state)
 					exportTx, err := atomic.NewExportTx(
 						atomicVM.ctx,
 						atomicVM.currentRules(),
-						state,
+						wrappedStateDB,
 						atomicVM.ctx.AVAXAssetID,
 						importAmount/2,
 						atomicVM.ctx.XChainID,

@@ -113,7 +113,6 @@ The names used in this configuration flag have been updated in Coreth `v0.8.14`.
 
 The mapping of deprecated values and their updated equivalent follows:
 
-
 |Deprecated                      |Use instead         |
 |--------------------------------|--------------------|
 |public-eth                      |eth                 |
@@ -187,6 +186,11 @@ Adds the following RPC calls to the `debug_*` namespace. Defaults to `false`.
 - `debug_getModifiedAccountsByHash`
 - `debug_getAccessibleState`
 
+The following RPC calls are disabled for any nodes with `state-scheme = firewood`:
+- `debug_storageRangeAt`
+- `debug_getModifiedAccountsByNumber`
+- `debug_getModifiedAccountsByHash`
+
 ### `net`
 
 Adds the following RPC calls to the `net_*` namespace. Defaults to `true`.
@@ -251,6 +255,8 @@ Adds the following RPC calls to the `eth_*` namespace. Defaults to `true`.
 - `eth_call`
 - `eth_estimateGas`
 - `eth_createAccessList`
+
+`eth_getProof` is disabled for any node with `state-scheme = firewood`
 
 ### `internal-transaction`
 
@@ -537,7 +543,7 @@ Maximum duration a non-executable transaction will be allowed in the poll. Defau
 
 _Boolean_
 
-Enables expensive metrics. Defaults to `true`.
+Enables expensive metrics. This includes Firewood metrics. Defaults to `true`.
 
 ## Snapshots
 
@@ -588,6 +594,14 @@ _Boolean_
 If `true`, allow users to unlock accounts in unsafe HTTP environment. Defaults to `false`.
 
 ## Database
+
+### `state-scheme`
+
+_String_
+
+Can be one of `hash` or `firewood`. Defaults to `hash`.
+
+__WARNING__: `firewood` scheme is untested in production.
 
 ### `trie-clean-cache`
 
