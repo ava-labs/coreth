@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	errClientCannotProvideSummary = errors.New("client cannot provide a summary")
+	errClientCannotProvideSummary = errors.New("client must provide a summary")
 	errSyncerCannotBeNil          = errors.New("syncer cannot be nil")
 	errCannotRegisterNewSyncer    = errors.New("cannot register new syncer due to sync already running")
 	errCannotRunSyncerTasksTwice  = errors.New("cannot run syncer tasks again before previous run completes")
@@ -31,13 +31,23 @@ type SyncerTask struct {
 
 // SyncerRegistry manages a collection of syncers for sequential execution.
 type SyncerRegistry struct {
-	syncers sync.Map    // key: string (name), value: SyncerTask
-	started atomic.Bool // becomes true the first time RunSyncerTasks is called
+	// key: string (name), value: SyncerTask.
+	// Serves the purpose of storing the syncers in a map, ded
+	syncers sync.Map
+	// becomes true the first time RunSyncerTasks is called.
+	started atomic.Bool
+	// Stores []SyncerTask after first start for lock-free iteration.
+	// NOTE: This will be needed when we introduce parallelization and UpdateSyncTarget in the [synccommon.Syncer] interface,
+	// because we will need to iterate over the syncers in a lock-free manner.
+	frozen atomic.Value
 }
 
 // NewSyncerRegistry creates a new empty syncer registry.
 func NewSyncerRegistry() *SyncerRegistry {
-	return &SyncerRegistry{}
+	r := &SyncerRegistry{}
+	// Initialize frozen with an empty slice so loads are always safe.
+	r.frozen.Store([]SyncerTask(nil))
+	return r
 }
 
 // Register adds a syncer to the registry.
@@ -79,13 +89,14 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		return errClientCannotProvideSummary
 	}
 
-	// Collect all syncers from the map.
+	// Collect all syncers from the map and freeze them for subsequent lock-free iteration.
 	var syncers []SyncerTask
 	r.syncers.Range(func(key, value any) bool {
 		task := value.(SyncerTask)
 		syncers = append(syncers, task)
 		return true
 	})
+	r.frozen.Store(syncers)
 
 	summaryHex := client.summary.GetBlockHash().Hex()
 
@@ -94,7 +105,8 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		return nil
 	}
 
-	for _, task := range syncers {
+	// Iterate the frozen snapshot.
+	for _, task := range r.frozen.Load().([]SyncerTask) {
 		log.Info("starting syncer", "name", task.name, "summary", client.summary)
 
 		// Start syncer.
