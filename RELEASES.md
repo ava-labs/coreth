@@ -2,6 +2,18 @@
 
 ## Pending Release
 
+- Removed legacy warp message handlers in favor of ACP-118 SDK handlers.
+- Use `state-history` eth config flag to designate the number of recent states queryable.
+- Added maximum number of addresses (1000) to be queried in a single filter.
+- Moves atomic operations from plugin/evm to plugin/evm/atomic and wraps the plugin/evm/VM in `atomicvm` to separate the atomic operations from the EVM execution.
+- Demoted unnecessary error log in `core/txpool/legacypool.go` to warning, displaying unexpected but valid behavior.
+- Removed the `snowman-api-enabled` flag and the corresponding API implementation.
+- Enable expermiental `state-scheme` flag to specify Firewood as a state database.
+- Added prometheus metrics for Firewood if it is enabled and expensive metrics are being used.
+- Disable incompatible APIs for Firewood.
+
+## [v0.15.1](https://github.com/ava-labs/coreth/releases/tag/v0.15.1)
+
 - Major refactor to use [`libevm`](https://github.com/ava-labs/libevm) for EVM execution, database access, types & chain configuration. This improves maintainability and enables keeping up with upstream changes more easily.
 - Add metrics for ACP-176
 - Removed the `"price-options-max-base-fee"` config flag
@@ -30,6 +42,7 @@
 - Refactored trie_prefetcher.go to be structurally similar to [upstream](https://github.com/ethereum/go-ethereum/tree/v1.13.14).
 
 ## [v0.14.0](https://github.com/ava-labs/coreth/releases/tag/v0.14.0)
+
 - Minor version update to correspond to avalanchego v1.12.0 / Etna.
 - Remove unused historical opcodes CALLEX, BALANCEMC
 - Remove unused pre-AP2 handling of genesis contract
@@ -38,6 +51,7 @@
 - Update go version to 1.22
 
 ## [v0.13.8](https://github.com/ava-labs/coreth/releases/tag/v0.13.8)
+
 - Update geth dependency to v1.13.14
 - eupgrade: lowering the base fee to 1 nAVAX
 - eupgrade/cancun: verify no blobs in header
@@ -46,6 +60,7 @@
 - Remove cross-chain handlers
 
 ## [v0.13.7](https://github.com/ava-labs/coreth/releases/tag/v0.13.7)
+
 - Add EUpgrade base definitions
 - Remove Block Status
 - Fix and improve "GetBlockIDAtHeight"
@@ -53,11 +68,13 @@
 - Bump AvalancheGo to v1.11.10-prerelease
 
 ## [v0.13.6](https://github.com/ava-labs/coreth/releases/tag/v0.13.6)
+
 - rpc: truncate call error data logs
 - logging: remove path prefix (up to coreth@version/) from logged file names.
 - cleanup: removes pre-Durango scripts
 
 ## [v0.13.5](https://github.com/ava-labs/coreth/releases/tag/v0.13.5)
+
 - Bump AvalancheGo to v1.11.7
 - Bump golang version requirement to 1.21.12
 - Switches timestamp log back to "timestamp" (as was before v0.13.4)
@@ -66,6 +83,7 @@
 - Fix state sync crash bug
 
 ## [v0.13.4](https://github.com/ava-labs/coreth/releases/tag/v0.13.4)
+
 - Fixes snapshot use when state sync was explicitly enabled
 - Fixes v0.13.3 locking regression in async snapshot generation
 - Update go-ethereum to v1.13.8
@@ -74,6 +92,7 @@
 - "timestamp" in logs is changed to "t"
 
 ## [v0.13.3](https://github.com/ava-labs/coreth/releases/tag/v0.13.3)
+
 - Update go-ethereum to v1.13.2
 - Bump AvalancheGo to v1.11.5
 - Bump golang version requirement to 1.21.9
@@ -82,6 +101,7 @@
 - Testing improvements
 
 ## [v0.13.2](https://github.com/ava-labs/coreth/releases/tag/v0.13.2)
+
 - Integrate stake weighted gossip selection
 - Update go-ethereum to v1.12.2
 - Force precompile modules registration in ethclient
@@ -263,7 +283,7 @@
 
 - Add optional JSON logging
 - Bump minimum go version to v1.18.1
-- Add interface for suppporting stateful precompiles
+- Add interface for supporting stateful precompiles
 - Remove legacy code format from the database
 - Enable expensive metrics by default
 - Fix atomic trie sync bug that could result in storing incorrect metadata

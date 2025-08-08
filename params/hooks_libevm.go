@@ -1,9 +1,10 @@
-// (c) 2024-2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package params
 
 import (
+	"fmt"
 	"maps"
 	"math/big"
 	"slices"
@@ -20,6 +21,7 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 type RulesExtra extras.Rules
@@ -35,6 +37,11 @@ func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, sta
 
 func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
 	return nil
+}
+
+// MinimumGasConsumption is a no-op.
+func (r RulesExtra) MinimumGasConsumption(x uint64) uint64 {
+	return (ethparams.NOOPHooks{}).MinimumGasConsumption(x)
 }
 
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -125,6 +132,10 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 				time:             env.BlockTime(),
 				predicateResults: predicateResults,
 			},
+		}
+
+		if callType := env.IncomingCallType(); callType == vm.DelegateCall || callType == vm.CallCode {
+			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
 		}
 		return contract.Run(accessibleState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
 	}

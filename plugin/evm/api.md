@@ -166,7 +166,7 @@ curl -X POST --data '{
 ```
 
 For more information on dynamic fees see the [C-Chain section of the transaction fee
-documentation](/docs/api-reference/standards/guides/txn-fees#c-chain-fees).
+documentation](/docs/api-reference/guides/txn-fees#c-chain-fees).
 
 ## Admin APIs
 
@@ -474,51 +474,6 @@ curl -X POST --data '{
     "jsonrpc":"2.0",
     "id"     :1,
     "method" :"avax.version",
-    "params" :[]
-}' -H 'content-type:application/json;' 127.0.0.1:9650/ext/bc/C/avax
-```
-
-#### `avax.issueBlock`
-
-Manually issues a new block.
-
-**Signature:**
-
-```sh
-avax.issueBlock() -> {}
-```
-
-**Example Call:**
-
-```sh
-curl -X POST --data '{
-    "jsonrpc":"2.0",
-    "id"     :1,
-    "method" :"avax.issueBlock",
-    "params" :[]
-}' -H 'content-type:application/json;' 127.0.0.1:9650/ext/bc/C/avax
-```
-
-#### `avax.getAcceptedFront`
-
-Returns the last accepted block's hash and height.
-
-**Signature:**
-
-```sh
-avax.getAcceptedFront() -> {
-    hash: string,
-    number: string
-}
-```
-
-**Example Call:**
-
-```sh
-curl -X POST --data '{
-    "jsonrpc":"2.0",
-    "id"     :1,
-    "method" :"avax.getAcceptedFront",
     "params" :[]
 }' -H 'content-type:application/json;' 127.0.0.1:9650/ext/bc/C/avax
 ```

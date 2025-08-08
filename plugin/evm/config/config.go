@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package config
@@ -27,10 +27,9 @@ type Config struct {
 	GasTarget *gas.Gas `json:"gas-target,omitempty"`
 
 	// Coreth APIs
-	SnowmanAPIEnabled bool   `json:"snowman-api-enabled"`
-	AdminAPIEnabled   bool   `json:"admin-api-enabled"`
-	AdminAPIDir       string `json:"admin-api-dir"`
-	WarpAPIEnabled    bool   `json:"warp-api-enabled"`
+	AdminAPIEnabled bool   `json:"admin-api-enabled"`
+	AdminAPIDir     string `json:"admin-api-dir"`
+	WarpAPIEnabled  bool   `json:"warp-api-enabled"`
 
 	// EnabledEthAPIs is a list of Ethereum services that should be enabled
 	// If none is specified, then we use the default list [defaultEnabledAPIs]
@@ -153,6 +152,8 @@ type Config struct {
 	//  * 0:   means no limit
 	//  * N:   means N block limit [HEAD-N+1, HEAD] and delete extra indexes
 	TransactionHistory uint64 `json:"transaction-history"`
+	// The maximum number of blocks from head whose state histories are reserved for pruning blockchains.
+	StateHistory uint64 `json:"state-history"`
 
 	// SkipTxIndexing skips indexing transactions.
 	// This is useful for validators that don't need to index transactions.
@@ -167,6 +168,9 @@ type Config struct {
 
 	// RPC settings
 	HttpBodyLimit uint64 `json:"http-body-limit"`
+
+	// Database Scheme
+	StateScheme string `json:"state-scheme"`
 }
 
 // GetConfig returns a new config object with the default values set and the
@@ -241,6 +245,9 @@ func (c *Config) validate(networkID uint32) error {
 	// If pruning is enabled, the commit interval must be non-zero so the node commits state tries every CommitInterval blocks.
 	if c.Pruning && c.CommitInterval == 0 {
 		return fmt.Errorf("cannot use commit interval of 0 with pruning enabled")
+	}
+	if c.Pruning && c.StateHistory == 0 {
+		return fmt.Errorf("cannot use state history of 0 with pruning enabled")
 	}
 
 	if c.PushGossipPercentStake < 0 || c.PushGossipPercentStake > 1 {

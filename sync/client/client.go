@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesyncclient
@@ -13,6 +13,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 
+	"github.com/ava-labs/coreth/network"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/sync/client/stats"
 
@@ -23,7 +24,6 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/log"
 
-	"github.com/ava-labs/coreth/peer"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -52,7 +52,7 @@ var (
 	errInvalidCodeResponseLen = errors.New("number of code bytes in response does not match requested hashes")
 	errMaxCodeSizeExceeded    = errors.New("max code size exceeded")
 )
-var _ Client = &client{}
+var _ Client = (*client)(nil)
 
 // Client synchronously fetches data from the network to fulfill state sync requests.
 // Repeatedly requests failed requests until the context to the request is expired.
@@ -76,7 +76,7 @@ type Client interface {
 type parseResponseFn func(codec codec.Manager, request message.Request, response []byte) (interface{}, int, error)
 
 type client struct {
-	networkClient    peer.NetworkClient
+	networkClient    network.SyncedNetworkClient
 	codec            codec.Manager
 	stateSyncNodes   []ids.NodeID
 	stateSyncNodeIdx uint32
@@ -85,7 +85,7 @@ type client struct {
 }
 
 type ClientConfig struct {
-	NetworkClient    peer.NetworkClient
+	NetworkClient    network.SyncedNetworkClient
 	Codec            codec.Manager
 	Stats            stats.ClientSyncerStats
 	StateSyncNodeIDs []ids.NodeID
@@ -321,14 +321,14 @@ func (c *client) get(ctx context.Context, request message.Request, parseFn parse
 			start    time.Time = time.Now()
 		)
 		if len(c.stateSyncNodes) == 0 {
-			response, nodeID, err = c.networkClient.SendAppRequestAny(ctx, StateSyncVersion, requestBytes)
+			response, nodeID, err = c.networkClient.SendSyncedAppRequestAny(ctx, StateSyncVersion, requestBytes)
 		} else {
 			// get the next nodeID using the nodeIdx offset. If we're out of nodes, loop back to 0
 			// we do this every attempt to ensure we get a different node each time if possible.
 			nodeIdx := atomic.AddUint32(&c.stateSyncNodeIdx, 1)
 			nodeID = c.stateSyncNodes[nodeIdx%uint32(len(c.stateSyncNodes))]
 
-			response, err = c.networkClient.SendAppRequest(ctx, nodeID, requestBytes)
+			response, err = c.networkClient.SendSyncedAppRequest(ctx, nodeID, requestBytes)
 		}
 		metric.UpdateRequestLatency(time.Since(start))
 

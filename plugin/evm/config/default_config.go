@@ -78,6 +78,7 @@ func GetDefaultConfig() Config {
 		StateSyncMinBlocks: 300_000,
 		// the number of key/values to ask peers for per request
 		StateSyncRequestSize: 1024,
+		StateHistory:         uint64(32),
 		// Estimated block count in 24 hours with 2s block accept period
 		HistoricalProofQueryWindow: uint64(24 * time.Hour / (2 * time.Second)),
 		// Price Option Defaults
