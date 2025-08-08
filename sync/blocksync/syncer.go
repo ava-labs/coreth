@@ -34,30 +34,13 @@ type Config struct {
 	BlocksToFetch uint64 // Includes the `FromHash` block
 }
 
-func (c *Config) Validate() error {
-	if c.ChainDB == nil {
-		return errNilDatabase
-	}
-	if c.Client == nil {
-		return errNilClient
-	}
-	if c.FromHash == (common.Hash{}) {
-		return errInvalidFromHash
-	}
-	return nil
-}
-
 type blockSyncer struct {
-	config *Config
-
+	config Config
 	err    chan error
 	cancel context.CancelFunc
 }
 
-func NewSyncer(config *Config) (*blockSyncer, error) {
-	if err := config.Validate(); err != nil {
-		return nil, err
-	}
+func NewSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*blockSyncer, error) {
 	return &blockSyncer{
 		config: config,
 		err:    make(chan error, 1),

@@ -36,6 +36,18 @@ type Config struct {
 	RequestSize uint16
 }
 
+// DefaultConfig returns a Config with the default values for the state syncer.
+// TODO: as a next feature we should probably introduce functional options for the config, e.g. func WithRequestSize(requestSize uint16) SyncerOption,
+// because this function is not very flexible.
+func DefaultConfig(requestSize uint16) Config {
+	return Config{
+		BatchSize:                ethdb.IdealBatchSize,
+		MaxOutstandingCodeHashes: defaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   defaultNumCodeFetchingWorkers,
+		RequestSize:              requestSize,
+	}
+}
+
 // stateSync keeps the state of the entire state sync operation.
 type stateSync struct {
 	db        ethdb.Database            // database we are syncing
@@ -68,11 +80,7 @@ type stateSync struct {
 	cancelFunc context.CancelFunc
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, config *Config) (synccommon.Syncer, error) {
-	if config.BatchSize == 0 {
-		config.BatchSize = ethdb.IdealBatchSize
-	}
-
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, config Config) (synccommon.Syncer, error) {
 	ss := &stateSync{
 		batchSize:       config.BatchSize,
 		db:              db,
@@ -96,7 +104,7 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		done:             make(chan error, 1),
 	}
 	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, config.RequestSize)
-	ss.codeSyncer = newCodeSyncer(client, db, &CodeSyncerConfig{
+	ss.codeSyncer = newCodeSyncer(client, db, CodeSyncerConfig{
 		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})

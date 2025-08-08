@@ -45,7 +45,7 @@ type codeSyncer struct {
 
 	client statesyncclient.Client
 	db     ethdb.Database
-	config *CodeSyncerConfig
+	config CodeSyncerConfig
 
 	outstandingCodeHashes set.Set[ids.ID]  // Set of code hashes that we need to fetch from the network.
 	codeHashes            chan common.Hash // Channel of incoming code hash requests
@@ -60,7 +60,7 @@ type codeSyncer struct {
 }
 
 // newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
-func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config *CodeSyncerConfig) *codeSyncer {
+func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config CodeSyncerConfig) *codeSyncer {
 	if config.MaxOutstandingCodeHashes == 0 {
 		config.MaxOutstandingCodeHashes = defaultMaxOutstandingCodeHashes
 	}
