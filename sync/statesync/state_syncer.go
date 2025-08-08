@@ -5,7 +5,6 @@ package statesync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -25,23 +24,16 @@ const (
 	defaultNumWorkers      = 8
 )
 
-var (
-	_ synccommon.Syncer = (*stateSync)(nil)
-
-	errNilClient                       = errors.New("Client cannot be nil")
-	errNilDatabase                     = errors.New("DB cannot be nil")
-	errEmptyRoot                       = errors.New("Root cannot be empty")
-	errInvalidBatchSize                = errors.New("BatchSize must be greater than 0")
-	errInvalidMaxOutstandingCodeHashes = errors.New("MaxOutstandingCodeHashes must be greater than 0")
-	errInvalidNumCodeFetchingWorkers   = errors.New("NumCodeFetchingWorkers must be greater than 0")
-	errInvalidRequestSize              = errors.New("RequestSize must be greater than 0")
-)
+var _ synccommon.Syncer = (*stateSync)(nil)
 
 type Config struct {
-	BatchSize                uint
-	MaxOutstandingCodeHashes uint   // Maximum number of code hashes in the code syncer queue
-	NumCodeFetchingWorkers   uint16 // Number of code syncing worker goroutines
-	RequestSize              uint16 // Number of leafs to request from a peer at a time. NOTE: user facing option validated as the parameter [plugin/evm/config.Config.StateSyncRequestSize]
+	BatchSize uint
+	// Maximum number of code hashes in the code syncer queue.
+	MaxOutstandingCodeHashes uint
+	NumCodeFetchingWorkers   uint16
+	// Number of leafs to request from a peer at a time.
+	// NOTE: user facing option validated as the parameter [plugin/evm/config.Config.StateSyncRequestSize].
+	RequestSize uint16
 }
 
 // stateSync keeps the state of the entire state sync operation.
