@@ -106,7 +106,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task LeafSyncTask) er
 			NodeType: task.NodeType(),
 		})
 		if err != nil {
-			return fmt.Errorf("%s: %w", ErrFailedToFetchLeafs, err)
+			return fmt.Errorf("%w: %w", ErrFailedToFetchLeafs, err)
 		}
 
 		// resize [leafsResponse.Keys] and [leafsResponse.Vals] in case
