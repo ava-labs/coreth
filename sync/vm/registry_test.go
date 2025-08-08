@@ -508,11 +508,14 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			},
 			expectedError: "Syncer2 failed: wait failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, err error) {
-				// Both syncers should have been started and waited on
-				require.True(t, mockSyncers[0].startCalled.Load(), "Successful syncer should have been started")
-				require.True(t, mockSyncers[0].waitCalled.Load(), "Successful syncer should have been waited on")
+				// Execution order is not guaranteed due to sync.Map iteration.
+				// We only require that the failing syncer (Syncer2) ran and was waited on.
 				require.True(t, mockSyncers[1].startCalled.Load(), "Failed syncer should have been started")
 				require.True(t, mockSyncers[1].waitCalled.Load(), "Failed syncer should have been waited on")
+				// Syncer1 may or may not have run depending on iteration order; if it did start, it must have been waited on.
+				if mockSyncers[0].startCalled.Load() {
+					require.True(t, mockSyncers[0].waitCalled.Load(), "Successful syncer should have been waited on if started")
+				}
 			},
 		},
 		{
