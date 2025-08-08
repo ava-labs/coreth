@@ -27,14 +27,14 @@ var (
 )
 
 type Config struct {
-	ChainDB       ethdb.Database
-	Client        statesyncclient.Client
 	FromHash      common.Hash // `FromHash` is the most recent
 	FromHeight    uint64
 	BlocksToFetch uint64 // Includes the `FromHash` block
 }
 
 type blockSyncer struct {
+	db     ethdb.Database
+	client statesyncclient.Client
 	config Config
 	err    chan error
 	cancel context.CancelFunc
@@ -42,6 +42,8 @@ type blockSyncer struct {
 
 func NewSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*blockSyncer, error) {
 	return &blockSyncer{
+		client: client,
+		db:     db,
 		config: config,
 		err:    make(chan error, 1),
 	}, nil
@@ -91,7 +93,7 @@ func (s *blockSyncer) sync(ctx context.Context) error {
 	// first, check for blocks already available on disk so we don't
 	// request them from peers.
 	for blocksToFetch > 0 {
-		blk := rawdb.ReadBlock(s.config.ChainDB, nextHash, nextHeight)
+		blk := rawdb.ReadBlock(s.db, nextHash, nextHeight)
 		if blk == nil {
 			// block was not found
 			break
@@ -105,10 +107,10 @@ func (s *blockSyncer) sync(ctx context.Context) error {
 
 	// get any blocks we couldn't find on disk from peers and write
 	// them to disk.
-	batch := s.config.ChainDB.NewBatch()
+	batch := s.db.NewBatch()
 	for fetched := uint64(0); fetched < blocksToFetch && (nextHash != common.Hash{}); {
 		log.Info("fetching blocks from peer", "fetched", fetched, "total", blocksToFetch)
-		blocks, err := s.config.Client.GetBlocks(ctx, nextHash, nextHeight, blocksPerRequest)
+		blocks, err := s.client.GetBlocks(ctx, nextHash, nextHeight, blocksPerRequest)
 		if err != nil {
 			return fmt.Errorf("could not get blocks from peer: err: %w, nextHash: %s, fetched: %d", err, nextHash, fetched)
 		}
