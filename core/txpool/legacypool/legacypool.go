@@ -165,6 +165,8 @@ type Config struct {
 
 // DefaultConfig contains the default configurations for the transaction pool.
 var DefaultConfig = Config{
+	// If we re-enable txpool journaling, we should also add the saved local
+	// transactions to the p2p gossip on startup.
 	Journal:   "",
 	Rejournal: time.Hour,
 
