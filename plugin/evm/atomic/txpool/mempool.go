@@ -23,6 +23,11 @@ var (
 	ErrInsufficientFee = errors.New("insufficient fee")
 	ErrMempoolFull     = errors.New("mempool full")
 
+	// If the transaction is already in the mempool, marking it as Discarded,
+	// could unexpectedly cause the transaction to have multiple statuses.
+	//
+	// If the mempool is full, that is not the transaction's fault, so we should
+	// not prevent adding the transaction to the mempool later.
 	errsNotToDiscard = []error{
 		ErrAlreadyKnown,
 		ErrMempoolFull,
@@ -77,6 +82,7 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, false, false)
+<<<<<<< HEAD
 	if err == nil {
 		return nil
 	}
@@ -84,6 +90,10 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 		if errors.Is(err, errNotToDiscard) {
 			return err
 		}
+=======
+	if err == nil || errors.Is(err, ErrAlreadyKnown) {
+		return err
+>>>>>>> refactor-atomic-mempool-5
 	}
 
 	// Unlike local txs, invalid remote txs are recorded as discarded so that
