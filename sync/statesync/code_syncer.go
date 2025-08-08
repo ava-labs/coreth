@@ -63,21 +63,19 @@ type codeSyncer struct {
 
 // newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
 func newCodeSyncer(db ethdb.Database, client statesyncclient.Client, maxOutstandingCodeHashes, numCodeFetchingWorkers int) (*codeSyncer, error) {
-	syncer := &codeSyncer{
+	dbCodeHashes, err := getCodeToFetchFromDB(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
+	}
+	return &codeSyncer{
 		db:                       db,
 		client:                   client,
+		dbCodeHashes:             dbCodeHashes,
 		maxOutstandingCodeHashes: maxOutstandingCodeHashes,
 		numCodeFetchingWorkers:   numCodeFetchingWorkers,
 		codeHashes:               make(chan common.Hash, maxOutstandingCodeHashes),
 		open:                     make(chan struct{}),
-	}
-
-	var err error
-	syncer.dbCodeHashes, err = addCodeToFetchFromDBToQueue(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
-	}
-	return syncer, nil
+	}, nil
 }
 
 // Start the worker thread and populate the code hashes queue with active work.
@@ -103,8 +101,8 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 }
 
 // Clean out any codeToFetch markers from the database that are no longer needed and
-// add any outstanding markers to the queue.
-func addCodeToFetchFromDBToQueue(db ethdb.Database) ([]common.Hash, error) {
+// return any outstanding markers to the queue.
+func getCodeToFetchFromDB(db ethdb.Database) ([]common.Hash, error) {
 	it := customrawdb.NewCodeToFetchIterator(db)
 	defer it.Release()
 
