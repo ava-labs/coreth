@@ -13,6 +13,7 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 	"golang.org/x/sync/errgroup"
 )
@@ -93,12 +94,16 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 		NumWorkers:  defaultNumWorkers,
 		OnFailure:   ss.onSyncFailure,
 	})
-	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
+	var err error
+	ss.codeSyncer, err = newCodeSyncer(CodeSyncerConfig{
 		DB:                       config.DB,
 		Client:                   config.Client,
 		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	ss.trieQueue = NewTrieQueue(config.DB)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
@@ -106,7 +111,6 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 	}
 
 	// create a trieToSync for the main trie and mark it as in progress.
-	var err error
 	ss.mainTrie, err = NewTrieToSync(ss, ss.root, common.Hash{}, NewMainTrieTask(ss))
 	if err != nil {
 		return nil, err
@@ -228,11 +232,6 @@ func (t *stateSync) Sync(ctx context.Context) error {
 	// Start the code syncer and leaf syncer.
 	eg, egCtx := errgroup.WithContext(ctx)
 
-	// start the code syncer first since the leaf syncer may add code tasks
-	if err := t.codeSyncer.Start(egCtx); err != nil {
-		return err
-	}
-
 	eg.Go(func() error {
 		if err := t.syncer.Sync(egCtx); err != nil {
 			return err
@@ -240,8 +239,7 @@ func (t *stateSync) Sync(ctx context.Context) error {
 		return t.onSyncComplete()
 	})
 	eg.Go(func() error {
-		// Wait for the code syncer to complete.
-		return t.codeSyncer.Wait(egCtx)
+		return t.codeSyncer.Sync(egCtx)
 	})
 	eg.Go(func() error {
 		return t.storageTrieProducer(egCtx)
@@ -277,16 +275,15 @@ func (t *stateSync) removeTrieInProgress(root common.Hash) (int, error) {
 // onSyncFailure is called if the sync fails, this writes all
 // batches of in-progress trie segments to disk to have maximum
 // progress to restore.
-func (t *stateSync) onSyncFailure(error) error {
+func (t *stateSync) onSyncFailure() {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	for _, trie := range t.triesInProgress {
 		for _, segment := range trie.segments {
 			if err := segment.batch.Write(); err != nil {
-				return err
+				log.Error("failed to write segment batch on sync failure", "err", err)
 			}
 		}
 	}
-	return nil
 }

@@ -8,10 +8,8 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"runtime/pprof"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
@@ -30,8 +28,6 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
 )
-
-const testSyncTimeout = 30 * time.Second
 
 var errInterrupted = errors.New("interrupted sync")
 
@@ -67,7 +63,9 @@ func testSync(t *testing.T, test syncTest) {
 		RequestSize:              1024,
 	})
 	require.NoError(t, err, "failed to create state syncer")
-	waitFor(t, ctx, s.Sync, test.expectedError, testSyncTimeout)
+
+	err = s.Sync(ctx)
+	require.ErrorIs(t, err, test.expectedError, "unexpected error during sync")
 
 	// Only assert database consistency if the sync was expected to succeed.
 	if test.expectedError != nil {
@@ -83,29 +81,6 @@ func testSyncResumes(t *testing.T, steps []syncTest, stepCallback func()) {
 	for _, test := range steps {
 		testSync(t, test)
 		stepCallback()
-	}
-}
-
-// waitFor waits for a result on the [result] channel to match [expected], or a timeout.
-func waitFor(t *testing.T, ctx context.Context, resultFunc func(context.Context) error, expected error, timeout time.Duration) {
-	t.Helper()
-	// Create a new context with timeout
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	err := make(chan error, 1)
-	go func() {
-		err <- resultFunc(ctx) // block on cancellable context
-	}()
-	select {
-	case <-time.After(timeout):
-		// print a stack trace to assist with debugging
-		var stackBuf bytes.Buffer
-		pprof.Lookup("goroutine").WriteTo(&stackBuf, 2)
-		t.Log(stackBuf.String())
-		// fail the test
-		t.Fatal("unexpected timeout waiting for sync result")
-	case result := <-err:
-		require.ErrorIs(t, result, expected, "result of sync did not match expected error")
 	}
 }
 

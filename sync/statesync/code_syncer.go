@@ -13,10 +13,12 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	synccommon "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -25,6 +27,8 @@ const (
 )
 
 var (
+	_ synccommon.Syncer = (*codeSyncer)(nil)
+
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 	errWaitBeforeStart              = errors.New("Wait() called before Start() - call Start() first")
 )
@@ -51,77 +55,43 @@ type codeSyncer struct {
 	CodeSyncerConfig
 
 	outstandingCodeHashes set.Set[ids.ID]  // Set of code hashes that we need to fetch from the network.
+	dbCodeHashes          []common.Hash    // Channel of code hashes stored in the database.
 	codeHashes            chan common.Hash // Channel of incoming code hash requests
-
-	// Used to set terminal error or pass nil to [errChan] if successful.
-	errOnce sync.Once
-	errChan chan error
-
-	// Passed in details from the context used to start the codeSyncer
-	cancel context.CancelFunc
-	done   <-chan struct{}
+	dbHashesOutstanding   chan struct{}
+	done                  <-chan struct{}
 }
 
 // newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
-func newCodeSyncer(config CodeSyncerConfig) *codeSyncer {
-	return &codeSyncer{
+func newCodeSyncer(config CodeSyncerConfig) (*codeSyncer, error) {
+	syncer := &codeSyncer{
 		CodeSyncerConfig:      config,
 		codeHashes:            make(chan common.Hash, config.MaxOutstandingCodeHashes),
 		outstandingCodeHashes: set.NewSet[ids.ID](0),
-		errChan:               make(chan error, 1),
+		dbHashesOutstanding:   make(chan struct{}),
 	}
+	return syncer, syncer.addCodeToFetchFromDBToQueue()
 }
 
 // Start the worker thread and populate the code hashes queue with active work.
 // Blocks until all outstanding code requests from a previous sync have been
-// queued for fetching (or ctx is cancelled).
-func (c *codeSyncer) Start(ctx context.Context) error {
-	ctx, c.cancel = context.WithCancel(ctx)
-	c.done = ctx.Done()
-	wg := sync.WaitGroup{}
+// fetched and the code channel has been closed, or the context is cancelled.
+func (c *codeSyncer) Sync(ctx context.Context) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	c.done = egCtx.Done()
 
-	// Start [numCodeFetchingWorkers] threads to fetch code from the network.
+	// Start [NumCodeFetchingWorkers] threads to fetch code from the network.
 	for i := 0; i < c.NumCodeFetchingWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			if err := c.work(ctx); err != nil {
-				c.setError(err)
-			}
-		}()
+		eg.Go(func() error { return c.work(egCtx) })
 	}
 
-	err := c.addCodeToFetchFromDBToQueue()
-	if err != nil {
-		c.setError(err)
+	// Queue the code hashes from the previous sync
+	if err := c.addCode(c.dbCodeHashes); err != nil {
+		return fmt.Errorf("Unable to resume previous sync: %w", err)
 	}
+	c.dbCodeHashes = nil
+	close(c.dbHashesOutstanding)
 
-	// Wait for all the worker threads to complete before signalling success via setError(nil).
-	// Note: if any of the worker threads errored already, setError will be a no-op here.
-	go func() {
-		wg.Wait()
-		c.setError(nil)
-	}()
-
-	return nil
-}
-
-// Wait blocks until the code sync operation completes and returns any error that occurred.
-// It respects context cancellation and returns ctx.Err() if the context is cancelled.
-// This method must be called after start() has been called.
-func (c *codeSyncer) Wait(ctx context.Context) error {
-	if c.cancel == nil {
-		return errWaitBeforeStart
-	}
-
-	select {
-	case err := <-c.errChan:
-		return err
-	case <-ctx.Done():
-		c.cancel()
-		return ctx.Err()
-	}
+	return eg.Wait()
 }
 
 // Clean out any codeToFetch markers from the database that are no longer needed and
@@ -157,7 +127,9 @@ func (c *codeSyncer) addCodeToFetchFromDBToQueue() error {
 			return fmt.Errorf("failed to write batch removing old code markers: %w", err)
 		}
 	}
-	return c.addCode(codeHashes)
+
+	c.dbCodeHashes = codeHashes
+	return nil
 }
 
 // work fulfills any incoming requests from the producer channel by fetching code bytes from the network
@@ -250,6 +222,7 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 // work.
 // Note: this allows the worker threads to exit and return a nil error.
 func (c *codeSyncer) notifyAccountTrieCompleted() {
+	<-c.dbHashesOutstanding
 	close(c.codeHashes)
 }
 
@@ -264,13 +237,4 @@ func (c *codeSyncer) addHashesToQueue(codeHashes []common.Hash) error {
 		}
 	}
 	return nil
-}
-
-// setError sets the error to the first error that occurs and adds it to the error channel.
-// If [err] is nil, setError indicates that codeSyncer has finished code syncing successfully.
-func (c *codeSyncer) setError(err error) {
-	c.errOnce.Do(func() {
-		c.cancel()
-		c.errChan <- err
-	})
 }

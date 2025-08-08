@@ -14,27 +14,20 @@ import (
 
 // mockSyncer implements synccommon.Syncer for testing.
 type mockSyncer struct {
-	name       string
-	syncDelay  time.Duration
-	syncError  error
-	startCount int
-	started    bool // Track if already started
+	name      string
+	syncError error
+	started   bool // Track if already started
 }
 
 func newMockSyncer(name string, syncDelay time.Duration, syncError error) *mockSyncer {
 	return &mockSyncer{
 		name:      name,
-		syncDelay: syncDelay,
 		syncError: syncError,
 	}
 }
 
 func (m *mockSyncer) Sync(ctx context.Context) error {
 	m.started = true
-	m.startCount++
-	if m.syncDelay > 0 {
-		time.Sleep(m.syncDelay)
-	}
 	return m.syncError
 }
 
