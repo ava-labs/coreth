@@ -131,32 +131,54 @@ func TestUnmarshalConfig(t *testing.T) {
 }
 
 func TestGetConfig(t *testing.T) {
-	txFeeCap := float64(11)
-	enabledEthAPIs := []string{"debug"}
-	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q]}`, txFeeCap, enabledEthAPIs[0])
-	config, _, err := GetConfig([]byte(configJSON), constants.TestnetID)
-	require.NoError(t, err)
-	require.Equal(t, config.RPCTxFeeCap, txFeeCap, "Tx Fee Cap should be set")
-	require.Equal(t, config.EthAPIs(), enabledEthAPIs, "EnabledEthAPIs should be set")
-}
+	tests := []struct {
+		name        string
+		configJSON  []byte
+		networkID   uint32
+		expected    func(*testing.T, Config)
+		expectError bool
+	}{
+		{
+			name:       "custom config values",
+			configJSON: []byte(`{"rpc-tx-fee-cap": 11,"eth-apis": ["debug"]}`),
+			networkID:  constants.TestnetID,
+			expected: func(t *testing.T, config Config) {
+				require.Equal(t, float64(11), config.RPCTxFeeCap, "Tx Fee Cap should be set")
+				require.Equal(t, []string{"debug"}, config.EthAPIs(), "EnabledEthAPIs should be set")
+			},
+		},
+		{
+			name:       "partial config with defaults",
+			configJSON: []byte(`{"rpc-tx-fee-cap": 11,"eth-apis": ["debug"], "tx-pool-price-limit": 100}`),
+			networkID:  constants.TestnetID,
+			expected: func(t *testing.T, config Config) {
+				defaultConfig := NewDefaultConfig()
+				require.Equal(t, defaultConfig.PriceOptionMaxTip, config.PriceOptionMaxTip)
+				require.Equal(t, float64(11), config.RPCTxFeeCap)
+				require.Equal(t, []string{"debug"}, config.EthAPIs())
+				require.Equal(t, uint64(100), config.TxPoolPriceLimit)
+			},
+		},
+		{
+			name:       "nil config uses defaults",
+			configJSON: nil,
+			networkID:  constants.TestnetID,
+			expected: func(t *testing.T, config Config) {
+				defaultConfig := NewDefaultConfig()
+				require.Equal(t, defaultConfig, config)
+			},
+		},
+	}
 
-func TestConfigDefaults(t *testing.T) {
-	txFeeCap := float64(11)
-	enabledEthAPIs := []string{"debug"}
-	txPoolPriceLimit := uint64(100)
-	configJSON := fmt.Sprintf(`{"rpc-tx-fee-cap": %g,"eth-apis": [%q], "tx-pool-price-limit": %d }`, txFeeCap, enabledEthAPIs[0], txPoolPriceLimit)
-	config, _, err := GetConfig([]byte(configJSON), constants.TestnetID)
-	require.NoError(t, err)
-	defaultConfig := NewDefaultConfig()
-	require.Equal(t, config.PriceOptionMaxTip, defaultConfig.PriceOptionMaxTip)
-	require.Equal(t, config.RPCTxFeeCap, txFeeCap)
-	require.Equal(t, config.EthAPIs(), enabledEthAPIs)
-	require.Equal(t, config.TxPoolPriceLimit, txPoolPriceLimit)
-}
-
-func TestNilConfigBytes(t *testing.T) {
-	config, _, err := GetConfig(nil, constants.TestnetID)
-	require.NoError(t, err)
-	defaultConfig := NewDefaultConfig()
-	require.Equal(t, config, defaultConfig)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config, _, err := GetConfig(tt.configJSON, tt.networkID)
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			tt.expected(t, config)
+		})
+	}
 }
