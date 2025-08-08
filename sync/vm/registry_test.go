@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +18,7 @@ type mockSyncer struct {
 	started   bool // Track if already started
 }
 
-func newMockSyncer(name string, syncDelay time.Duration, syncError error) *mockSyncer {
+func newMockSyncer(name string, syncError error) *mockSyncer {
 	return &mockSyncer{
 		name:      name,
 		syncError: syncError,
@@ -53,8 +52,8 @@ func TestSyncerRegistry_Register(t *testing.T) {
 				name   string
 				syncer *mockSyncer
 			}{
-				{"Syncer1", newMockSyncer("TestSyncer1", 0, nil)},
-				{"Syncer2", newMockSyncer("TestSyncer2", 0, nil)},
+				{"Syncer1", newMockSyncer("TestSyncer1", nil)},
+				{"Syncer2", newMockSyncer("TestSyncer2", nil)},
 			},
 			expectedError: "",
 			expectedCount: 2,
@@ -65,8 +64,8 @@ func TestSyncerRegistry_Register(t *testing.T) {
 				name   string
 				syncer *mockSyncer
 			}{
-				{"Syncer1", newMockSyncer("Syncer1", 0, nil)},
-				{"Syncer1", newMockSyncer("Syncer1", 0, nil)},
+				{"Syncer1", newMockSyncer("Syncer1", nil)},
+				{"Syncer1", newMockSyncer("Syncer1", nil)},
 			},
 			expectedError: "syncer with name 'Syncer1' is already registered",
 			expectedCount: 1,
@@ -77,9 +76,9 @@ func TestSyncerRegistry_Register(t *testing.T) {
 				name   string
 				syncer *mockSyncer
 			}{
-				{"Syncer1", newMockSyncer("Syncer1", 0, nil)},
-				{"Syncer2", newMockSyncer("Syncer2", 0, nil)},
-				{"Syncer3", newMockSyncer("Syncer3", 0, nil)},
+				{"Syncer1", newMockSyncer("Syncer1", nil)},
+				{"Syncer2", newMockSyncer("Syncer2", nil)},
+				{"Syncer3", newMockSyncer("Syncer3", nil)},
 			},
 			expectedCount: 3,
 		},
@@ -126,7 +125,6 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 		name    string
 		syncers []struct {
 			name      string
-			syncDelay time.Duration
 			syncError error
 		}
 		expectedError string
@@ -136,11 +134,10 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			name: "successful execution",
 			syncers: []struct {
 				name      string
-				syncDelay time.Duration
 				syncError error
 			}{
-				{"Syncer1", 0, nil},
-				{"Syncer2", 0, nil},
+				{"Syncer1", nil},
+				{"Syncer2", nil},
 			},
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
 				for i, mockSyncer := range mockSyncers {
@@ -151,11 +148,10 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			name: "wait error stops execution",
 			syncers: []struct {
 				name      string
-				syncDelay time.Duration
 				syncError error
 			}{
-				{"Syncer1", 0, errors.New("wait failed")},
-				{"Syncer2", 0, nil},
+				{"Syncer1", errors.New("wait failed")},
+				{"Syncer2", nil},
 			},
 			expectedError: "Syncer1 failed",
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
@@ -176,7 +172,6 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			for i, syncerConfig := range tt.syncers {
 				mockSyncer := newMockSyncer(
 					syncerConfig.name,
-					syncerConfig.syncDelay,
 					syncerConfig.syncError,
 				)
 				mockSyncers[i] = mockSyncer
