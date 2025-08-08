@@ -179,7 +179,7 @@ type Config struct {
 // If the unmarshalling fails, an error is returned.
 // If the config is invalid, an error is returned.
 func GetConfig(configBytes []byte, networkID uint32) (Config, string, error) {
-	config := GetDefaultConfig()
+	config := NewDefaultConfig()
 	if len(configBytes) > 0 {
 		if err := json.Unmarshal(configBytes, &config); err != nil {
 			return Config{}, "", fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
@@ -223,7 +223,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 func (c *Config) validate(networkID uint32) error {
 	// Ensure that non-standard commit interval is not allowed for production networks
 	if constants.ProductionNetworkIDs.Contains(networkID) {
-		defaultConfig := GetDefaultConfig()
+		defaultConfig := NewDefaultConfig()
 		if c.CommitInterval != defaultConfig.CommitInterval {
 			return fmt.Errorf("cannot start non-local network with commit interval %d different than %d", c.CommitInterval, defaultConfig.CommitInterval)
 		}
