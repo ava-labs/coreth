@@ -36,10 +36,10 @@ type Config struct {
 	RequestSize uint16
 }
 
-// DefaultConfig returns a Config with the default values for the state syncer.
+// NewDefaultConfig returns a Config with the default values for the state syncer.
 // TODO: as a next feature we should probably introduce functional options for the config, e.g. func WithRequestSize(requestSize uint16) SyncerOption,
 // because this function is not very flexible.
-func DefaultConfig(requestSize uint16) Config {
+func NewDefaultConfig(requestSize uint16) Config {
 	return Config{
 		BatchSize:                ethdb.IdealBatchSize,
 		MaxOutstandingCodeHashes: defaultMaxOutstandingCodeHashes,

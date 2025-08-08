@@ -5,7 +5,6 @@ package blocksync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	synccommon "github.com/ava-labs/coreth/sync"
@@ -18,13 +17,7 @@ import (
 
 const blocksPerRequest = 32
 
-var (
-	_ synccommon.Syncer = (*blockSyncer)(nil)
-
-	errNilClient       = errors.New("Client cannot be nil")
-	errNilDatabase     = errors.New("Database cannot be nil")
-	errInvalidFromHash = errors.New("FromHash cannot be empty")
-)
+var _ synccommon.Syncer = (*blockSyncer)(nil)
 
 type Config struct {
 	FromHash      common.Hash // `FromHash` is the most recent
