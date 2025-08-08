@@ -69,7 +69,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	}
 	go func() {
 		for _, codeHashes := range test.codeRequestHashes {
-			if err := codeSyncer.addCode(codeHashes); err != nil {
+			if err := codeSyncer.AddCode(codeHashes); err != nil {
 				require.ErrorIs(t, err, test.err)
 			}
 		}

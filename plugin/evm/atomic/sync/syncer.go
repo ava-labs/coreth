@@ -193,7 +193,7 @@ func newSyncer(config *Config) (*syncer, error) {
 	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, &syncclient.LeafSyncerConfig{
 		RequestSize: config.RequestSize,
 		NumWorkers:  numWorkers,
-		OnFailure:   syncer.onSyncFailure,
+		OnFailure:   func() {}, // No-op since we flush progress to disk at the regular commit interval.
 	})
 	return syncer, nil
 }
@@ -275,10 +275,6 @@ func (s *syncer) onFinish() error {
 	}
 	return nil
 }
-
-// onSyncFailure is a no-op since we flush progress to disk at the regular commit interval when syncing
-// the atomic trie.
-func (s *syncer) onSyncFailure() {}
 
 type syncerLeafTask struct {
 	syncer *syncer
