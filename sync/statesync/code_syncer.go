@@ -30,7 +30,6 @@ var (
 	_ synccommon.Syncer = (*codeSyncer)(nil)
 
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
-	errWaitBeforeStart              = errors.New("Wait() called before Start() - call Start() first")
 )
 
 // CodeSyncerConfig defines the configuration of the code syncer
@@ -57,7 +56,7 @@ type codeSyncer struct {
 	outstandingCodeHashes set.Set[ids.ID]  // Set of code hashes that we need to fetch from the network.
 	dbCodeHashes          []common.Hash    // Channel of code hashes stored in the database.
 	codeHashes            chan common.Hash // Channel of incoming code hash requests
-	dbHashesOutstanding   chan struct{}
+	open                  chan struct{}    // Signal that the code syncer is open and ready to accept requests.
 	done                  <-chan struct{}
 }
 
@@ -67,7 +66,7 @@ func newCodeSyncer(config CodeSyncerConfig) (*codeSyncer, error) {
 		CodeSyncerConfig:      config,
 		codeHashes:            make(chan common.Hash, config.MaxOutstandingCodeHashes),
 		outstandingCodeHashes: set.NewSet[ids.ID](0),
-		dbHashesOutstanding:   make(chan struct{}),
+		open:                  make(chan struct{}),
 	}
 	return syncer, syncer.addCodeToFetchFromDBToQueue()
 }
@@ -79,7 +78,7 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 	c.done = egCtx.Done()
 
-	// Start [NumCodeFetchingWorkers] threads to fetch code from the network.
+	// Start NumCodeFetchingWorkers threads to fetch code from the network.
 	for i := 0; i < c.NumCodeFetchingWorkers; i++ {
 		eg.Go(func() error { return c.work(egCtx) })
 	}
@@ -89,7 +88,7 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 		return fmt.Errorf("Unable to resume previous sync: %w", err)
 	}
 	c.dbCodeHashes = nil
-	close(c.dbHashesOutstanding)
+	close(c.open)
 
 	return eg.Wait()
 }
@@ -193,8 +192,14 @@ func (c *codeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 	return nil
 }
 
-// addCode checks if [codeHashes] need to be fetched from the network and adds them to the queue if so.
+// AddCode checks if [codeHashes] need to be fetched from the network and adds them to the queue if so.
 // assumes that [codeHashes] are valid non-empty code hashes.
+// This blocks until the code syncer is open and ready to accept requests.
+func (c *codeSyncer) AddCode(codeHashes []common.Hash) error {
+	<-c.open
+	return c.addCode(codeHashes)
+}
+
 func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 	batch := c.DB.NewBatch()
 
@@ -222,7 +227,7 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 // work.
 // Note: this allows the worker threads to exit and return a nil error.
 func (c *codeSyncer) notifyAccountTrieCompleted() {
-	<-c.dbHashesOutstanding
+	<-c.open // The code syncer must queue the previous code from the db first
 	close(c.codeHashes)
 }
 
