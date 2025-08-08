@@ -463,8 +463,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		}
 
 		err = syncer.Sync(ctx)
-		require.Error(t, err, "Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
-		require.ErrorContains(t, err, "failed to fetch leafs")
+		require.ErrorIs(t, err, syncclient.ErrFailedToFetchLeafs)
 
 		require.Equal(t, checkpoint.expectedNumLeavesSynced, int64(numLeaves), "unexpected number of leaves received at checkpoint %d", i)
 		// Replace the target root and height for the next checkpoint

@@ -12,11 +12,10 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/log"
 	"golang.org/x/sync/errgroup"
 )
 
-var errFailedToFetchLeafs = errors.New("failed to fetch leafs")
+var ErrFailedToFetchLeafs = errors.New("failed to fetch leafs")
 
 // LeafSyncTask represents a complete task to be completed by the leaf syncer.
 // Note: each LeafSyncTask is processed on its own goroutine and there will
@@ -35,9 +34,9 @@ type LeafSyncTask interface {
 }
 
 type LeafSyncerConfig struct {
-	RequestSize uint16            // Number of leafs to request from a peer at a time
-	NumWorkers  int               // Number of workers to process leaf sync tasks
-	OnFailure   func(error) error // Callback for handling errors during sync
+	RequestSize uint16 // Number of leafs to request from a peer at a time
+	NumWorkers  int    // Number of workers to process leaf sync tasks
+	OnFailure   func() // Callback for handling errors during sync
 }
 
 type CallbackLeafSyncer struct {
@@ -107,7 +106,7 @@ func (c *CallbackLeafSyncer) syncTask(ctx context.Context, task LeafSyncTask) er
 			NodeType: task.NodeType(),
 		})
 		if err != nil {
-			return fmt.Errorf("%s: %w", errFailedToFetchLeafs, err)
+			return fmt.Errorf("%s: %w", ErrFailedToFetchLeafs, err)
 		}
 
 		// resize [leafsResponse.Keys] and [leafsResponse.Vals] in case
@@ -161,9 +160,7 @@ func (c *CallbackLeafSyncer) Sync(ctx context.Context) error {
 
 	err := eg.Wait()
 	if err != nil {
-		if err := c.config.OnFailure(err); err != nil {
-			log.Error("error handling onFailure callback", "err", err)
-		}
+		c.config.OnFailure()
 	}
 	return err
 }

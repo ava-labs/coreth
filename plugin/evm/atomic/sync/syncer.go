@@ -198,7 +198,7 @@ func newSyncer(config *Config) (*syncer, error) {
 	return syncer, nil
 }
 
-// Start begins syncing the target atomic root with the configured number of worker goroutines.
+// Sync begins syncing the target atomic root with the configured number of worker goroutines.
 func (s *syncer) Sync(ctx context.Context) error {
 	return s.syncer.Sync(ctx)
 }
@@ -278,9 +278,7 @@ func (s *syncer) onFinish() error {
 
 // onSyncFailure is a no-op since we flush progress to disk at the regular commit interval when syncing
 // the atomic trie.
-func (s *syncer) onSyncFailure(error) error {
-	return nil
-}
+func (s *syncer) onSyncFailure() {}
 
 type syncerLeafTask struct {
 	syncer *syncer
