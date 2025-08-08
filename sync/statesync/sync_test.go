@@ -61,7 +61,7 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
-	s, err := NewSyncer(mockClient, clientDB, root, &Config{
+	s, err := NewSyncer(mockClient, clientDB, root, Config{
 		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		RequestSize: testRequestSize,
 	})
@@ -616,7 +616,7 @@ func TestDifferentWaitContext(t *testing.T) {
 		return resp, nil
 	}
 
-	s, err := NewSyncer(mockClient, clientDB, root, &Config{
+	s, err := NewSyncer(mockClient, clientDB, root, Config{
 		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		RequestSize: testRequestSize,
 	})
@@ -654,7 +654,7 @@ func TestStateSyncer_MultipleStart(t *testing.T) {
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
 	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
 
-	s, err := NewSyncer(mockClient, clientDB, root, &Config{
+	s, err := NewSyncer(mockClient, clientDB, root, Config{
 		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		RequestSize: testRequestSize,
 	})
