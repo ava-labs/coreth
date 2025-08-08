@@ -49,10 +49,12 @@ type CodeSyncerConfig struct {
 // codeSyncer syncs code bytes from the network in a seprate thread.
 // Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
 type codeSyncer struct {
-	lock sync.Mutex
+	db                       ethdb.Database
+	client                   statesyncclient.Client
+	maxOutstandingCodeHashes int
+	numCodeFetchingWorkers   int
 
-	CodeSyncerConfig
-
+	lock                  sync.Mutex
 	outstandingCodeHashes set.Set[ids.ID]  // Set of code hashes that we need to fetch from the network.
 	dbCodeHashes          []common.Hash    // Channel of code hashes stored in the database.
 	codeHashes            chan common.Hash // Channel of incoming code hash requests
@@ -61,12 +63,15 @@ type codeSyncer struct {
 }
 
 // newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
-func newCodeSyncer(config CodeSyncerConfig) (*codeSyncer, error) {
+func newCodeSyncer(db ethdb.Database, client statesyncclient.Client, maxOutstandingCodeHashes, numCodeFetchingWorkers int) (*codeSyncer, error) {
 	syncer := &codeSyncer{
-		CodeSyncerConfig:      config,
-		codeHashes:            make(chan common.Hash, config.MaxOutstandingCodeHashes),
-		outstandingCodeHashes: set.NewSet[ids.ID](0),
-		open:                  make(chan struct{}),
+		db:                       db,
+		client:                   client,
+		maxOutstandingCodeHashes: maxOutstandingCodeHashes,
+		numCodeFetchingWorkers:   numCodeFetchingWorkers,
+		codeHashes:               make(chan common.Hash, maxOutstandingCodeHashes),
+		outstandingCodeHashes:    set.NewSet[ids.ID](0),
+		open:                     make(chan struct{}),
 	}
 	return syncer, syncer.addCodeToFetchFromDBToQueue()
 }
@@ -79,7 +84,7 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 	c.done = egCtx.Done()
 
 	// Start NumCodeFetchingWorkers threads to fetch code from the network.
-	for i := 0; i < c.NumCodeFetchingWorkers; i++ {
+	for i := 0; i < c.numCodeFetchingWorkers; i++ {
 		eg.Go(func() error { return c.work(egCtx) })
 	}
 
@@ -96,15 +101,15 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 // Clean out any codeToFetch markers from the database that are no longer needed and
 // add any outstanding markers to the queue.
 func (c *codeSyncer) addCodeToFetchFromDBToQueue() error {
-	it := customrawdb.NewCodeToFetchIterator(c.DB)
+	it := customrawdb.NewCodeToFetchIterator(c.db)
 	defer it.Release()
 
-	batch := c.DB.NewBatch()
+	batch := c.db.NewBatch()
 	codeHashes := make([]common.Hash, 0)
 	for it.Next() {
 		codeHash := common.BytesToHash(it.Key()[len(customrawdb.CodeToFetchPrefix):])
 		// If we already have the codeHash, delete the marker from the database and continue
-		if rawdb.HasCode(c.DB, codeHash) {
+		if rawdb.HasCode(c.db, codeHash) {
 			customrawdb.DeleteCodeToFetch(batch, codeHash)
 			// Write the batch to disk if it has reached the ideal batch size.
 			if batch.ValueSize() > ethdb.IdealBatchSize {
@@ -171,14 +176,14 @@ func (c *codeSyncer) work(ctx context.Context) error {
 // codeHashes should not be empty or contain duplicate hashes.
 // Returns an error if one is encountered, signaling the worker thread to terminate.
 func (c *codeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common.Hash) error {
-	codeByteSlices, err := c.Client.GetCode(ctx, codeHashes)
+	codeByteSlices, err := c.client.GetCode(ctx, codeHashes)
 	if err != nil {
 		return err
 	}
 
 	// Hold the lock while modifying outstandingCodeHashes.
 	c.lock.Lock()
-	batch := c.DB.NewBatch()
+	batch := c.db.NewBatch()
 	for i, codeHash := range codeHashes {
 		customrawdb.DeleteCodeToFetch(batch, codeHash)
 		c.outstandingCodeHashes.Remove(ids.ID(codeHash))
@@ -201,14 +206,14 @@ func (c *codeSyncer) AddCode(codeHashes []common.Hash) error {
 }
 
 func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
-	batch := c.DB.NewBatch()
+	batch := c.db.NewBatch()
 
 	c.lock.Lock()
 	selectedCodeHashes := make([]common.Hash, 0, len(codeHashes))
 	for _, codeHash := range codeHashes {
 		// Add the code hash to the queue if it's not already on the queue and we do not already have it
 		// in the database.
-		if !c.outstandingCodeHashes.Contains(ids.ID(codeHash)) && !rawdb.HasCode(c.DB, codeHash) {
+		if !c.outstandingCodeHashes.Contains(ids.ID(codeHash)) && !rawdb.HasCode(c.db, codeHash) {
 			selectedCodeHashes = append(selectedCodeHashes, codeHash)
 			c.outstandingCodeHashes.Add(ids.ID(codeHash))
 			customrawdb.AddCodeToFetch(batch, codeHash)
