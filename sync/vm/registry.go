@@ -72,7 +72,7 @@ func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
 
 	task := SyncerTask{name, syncer}
 	if _, loaded := r.syncers.LoadOrStore(name, task); loaded {
-		return fmt.Errorf("syncer with name '%s' is already registered", name)
+		return fmt.Errorf("syncer is already registered: %s", name)
 	}
 
 	return nil
