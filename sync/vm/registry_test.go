@@ -143,7 +143,7 @@ func TestSyncerRegistry_Register(t *testing.T) {
 				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
 				{"Syncer1", newMockSyncer("Syncer1", 0, 0, nil, nil)},
 			},
-			expectedError: "syncer with name 'Syncer1' is already registered",
+			expectedError: "syncer is already registered: Syncer1",
 			expectedCount: 1,
 		},
 		{
@@ -154,14 +154,6 @@ func TestSyncerRegistry_Register(t *testing.T) {
 				{"Syncer3", newMockSyncer("Syncer3", 0, 0, nil, nil)},
 			},
 			expectedCount: 3,
-		},
-		{
-			name: "empty name registration",
-			registrations: []registration{
-				{"", newMockSyncer("EmptyName", 0, 0, nil, nil)},
-			},
-			expectedError: errEmptySyncerName.Error(),
-			expectedCount: 0, // Empty name should be rejected.
 		},
 		{
 			name: "nil syncer registration",

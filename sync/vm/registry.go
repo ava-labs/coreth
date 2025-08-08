@@ -20,7 +20,6 @@ var (
 	errSyncerCannotBeNil          = errors.New("syncer cannot be nil")
 	errCannotRegisterNewSyncer    = errors.New("cannot register new syncer due to sync already running")
 	errCannotRunSyncerTasksTwice  = errors.New("cannot run syncer tasks again before previous run completes")
-	errEmptySyncerName            = errors.New("syncer name cannot be empty")
 )
 
 // SyncerTask represents a single syncer with its name for identification.
@@ -56,11 +55,6 @@ func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
 	// If the syncer registry has already been started, return an error.
 	if r.started.Load() {
 		return errCannotRegisterNewSyncer
-	}
-
-	// Validate that the name is not empty.
-	if name == "" {
-		return errEmptySyncerName
 	}
 
 	// Use reflection to check for nil because in Go, a nil concrete type is not equal to a nil interface [synccommon.Syncer].
