@@ -246,7 +246,7 @@ func (t *stateSync) Sync(ctx context.Context) error {
 	})
 
 	// The errgroup wait will take care of returning the first error that occurs, or returning
-	// nil if both finish without an error.
+	// nil if syncing finish without an error.
 	return eg.Wait()
 }
 
@@ -283,6 +283,7 @@ func (t *stateSync) onSyncFailure() {
 		for _, segment := range trie.segments {
 			if err := segment.batch.Write(); err != nil {
 				log.Error("failed to write segment batch on sync failure", "err", err)
+				return
 			}
 		}
 	}

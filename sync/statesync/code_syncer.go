@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -55,10 +54,10 @@ type codeSyncer struct {
 	numCodeFetchingWorkers   int
 
 	lock                  sync.Mutex
-	outstandingCodeHashes set.Set[ids.ID]  // Set of code hashes that we need to fetch from the network.
-	dbCodeHashes          []common.Hash    // Channel of code hashes stored in the database.
-	codeHashes            chan common.Hash // Channel of incoming code hash requests
-	open                  chan struct{}    // Signal that the code syncer is open and ready to accept requests.
+	outstandingCodeHashes set.Set[common.Hash] // Set of code hashes that we need to fetch from the network.
+	dbCodeHashes          []common.Hash        // List of code hashes stored in the database.
+	codeHashes            chan common.Hash     // Channel of incoming code hash requests
+	open                  chan struct{}        // Signal that the code syncer is open and ready to accept requests.
 	done                  <-chan struct{}
 }
 
@@ -70,10 +69,15 @@ func newCodeSyncer(db ethdb.Database, client statesyncclient.Client, maxOutstand
 		maxOutstandingCodeHashes: maxOutstandingCodeHashes,
 		numCodeFetchingWorkers:   numCodeFetchingWorkers,
 		codeHashes:               make(chan common.Hash, maxOutstandingCodeHashes),
-		outstandingCodeHashes:    set.NewSet[ids.ID](0),
 		open:                     make(chan struct{}),
 	}
-	return syncer, syncer.addCodeToFetchFromDBToQueue()
+
+	var err error
+	syncer.dbCodeHashes, err = addCodeToFetchFromDBToQueue(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
+	}
+	return syncer, nil
 }
 
 // Start the worker thread and populate the code hashes queue with active work.
@@ -100,21 +104,21 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 
 // Clean out any codeToFetch markers from the database that are no longer needed and
 // add any outstanding markers to the queue.
-func (c *codeSyncer) addCodeToFetchFromDBToQueue() error {
-	it := customrawdb.NewCodeToFetchIterator(c.db)
+func addCodeToFetchFromDBToQueue(db ethdb.Database) ([]common.Hash, error) {
+	it := customrawdb.NewCodeToFetchIterator(db)
 	defer it.Release()
 
-	batch := c.db.NewBatch()
+	batch := db.NewBatch()
 	codeHashes := make([]common.Hash, 0)
 	for it.Next() {
 		codeHash := common.BytesToHash(it.Key()[len(customrawdb.CodeToFetchPrefix):])
 		// If we already have the codeHash, delete the marker from the database and continue
-		if rawdb.HasCode(c.db, codeHash) {
+		if rawdb.HasCode(db, codeHash) {
 			customrawdb.DeleteCodeToFetch(batch, codeHash)
 			// Write the batch to disk if it has reached the ideal batch size.
 			if batch.ValueSize() > ethdb.IdealBatchSize {
 				if err := batch.Write(); err != nil {
-					return fmt.Errorf("failed to write batch removing old code markers: %w", err)
+					return nil, fmt.Errorf("failed to write batch removing old code markers: %w", err)
 				}
 				batch.Reset()
 			}
@@ -124,16 +128,15 @@ func (c *codeSyncer) addCodeToFetchFromDBToQueue() error {
 		codeHashes = append(codeHashes, codeHash)
 	}
 	if err := it.Error(); err != nil {
-		return fmt.Errorf("failed to iterate code entries to fetch: %w", err)
+		return nil, fmt.Errorf("failed to iterate code entries to fetch: %w", err)
 	}
 	if batch.ValueSize() > 0 {
 		if err := batch.Write(); err != nil {
-			return fmt.Errorf("failed to write batch removing old code markers: %w", err)
+			return nil, fmt.Errorf("failed to write batch removing old code markers: %w", err)
 		}
 	}
 
-	c.dbCodeHashes = codeHashes
-	return nil
+	return codeHashes, nil
 }
 
 // work fulfills any incoming requests from the producer channel by fetching code bytes from the network
@@ -186,7 +189,7 @@ func (c *codeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 	batch := c.db.NewBatch()
 	for i, codeHash := range codeHashes {
 		customrawdb.DeleteCodeToFetch(batch, codeHash)
-		c.outstandingCodeHashes.Remove(ids.ID(codeHash))
+		c.outstandingCodeHashes.Remove(codeHash)
 		rawdb.WriteCode(batch, codeHash, codeByteSlices[i])
 	}
 	c.lock.Unlock() // Release the lock before writing the batch
@@ -213,9 +216,9 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 	for _, codeHash := range codeHashes {
 		// Add the code hash to the queue if it's not already on the queue and we do not already have it
 		// in the database.
-		if !c.outstandingCodeHashes.Contains(ids.ID(codeHash)) && !rawdb.HasCode(c.db, codeHash) {
+		if !c.outstandingCodeHashes.Contains(codeHash) && !rawdb.HasCode(c.db, codeHash) {
 			selectedCodeHashes = append(selectedCodeHashes, codeHash)
-			c.outstandingCodeHashes.Add(ids.ID(codeHash))
+			c.outstandingCodeHashes.Add(codeHash)
 			customrawdb.AddCodeToFetch(batch, codeHash)
 		}
 	}
