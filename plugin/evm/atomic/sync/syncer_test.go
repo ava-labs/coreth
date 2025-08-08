@@ -257,15 +257,15 @@ func TestSyncerContextCancellation(t *testing.T) {
 	config := createTestConfig(testTargetHeight)
 	syncer := createTestSyncer(t, mockClient, clientDB, atomicBackend, root, config)
 
-	// Start the syncer
+	// Start the syncer.
 	err := syncer.Start(ctx)
 	require.NoError(t, err, "could not start syncer")
 
-	// Cancel the context immediately
+	// Cancel the context immediately.
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	// Wait should return an error due to context cancellation
+	// Wait should return an error due to context cancellation.
 	err = syncer.Wait(ctx)
 	require.Error(t, err, "should return error when context is cancelled")
 	require.Contains(t, err.Error(), "context canceled", "error should indicate context cancellation")

@@ -50,11 +50,9 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 
 	clientDB := rawdb.NewMemoryDatabase()
 
-	codeSyncer := newCodeSyncer(CodeSyncerConfig{
+	codeSyncer := newCodeSyncer(mockClient, clientDB, &CodeSyncerConfig{
 		MaxOutstandingCodeHashes: defaultMaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   defaultNumCodeFetchingWorkers,
-		Client:                   mockClient,
-		DB:                       clientDB,
 	})
 	if test.setupCodeSyncer != nil {
 		test.setupCodeSyncer(codeSyncer)
@@ -140,7 +138,7 @@ func TestCodeSyncerAddsInProgressCodeHashes(t *testing.T) {
 	codeHash := crypto.Keccak256Hash(codeBytes)
 	testCodeSyncer(t, codeSyncerTest{
 		setupCodeSyncer: func(c *codeSyncer) {
-			customrawdb.AddCodeToFetch(c.config.DB, codeHash)
+			customrawdb.AddCodeToFetch(c.db, codeHash)
 		},
 		codeRequestHashes: nil,
 		codeByteSlices:    [][]byte{codeBytes},
@@ -161,7 +159,7 @@ func TestCodeSyncerAddsMoreInProgressThanQueueSize(t *testing.T) {
 	testCodeSyncer(t, codeSyncerTest{
 		setupCodeSyncer: func(c *codeSyncer) {
 			for _, codeHash := range codeHashes {
-				customrawdb.AddCodeToFetch(c.config.DB, codeHash)
+				customrawdb.AddCodeToFetch(c.db, codeHash)
 			}
 			c.codeHashes = make(chan common.Hash, numCodeSlices/2)
 		},

@@ -32,7 +32,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testSyncTimeout = 30 * time.Second
+const (
+	testSyncTimeout = 30 * time.Second
+	testRequestSize = 1024
+)
 
 var errInterrupted = errors.New("interrupted sync")
 
@@ -59,7 +62,8 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
 	s, err := NewSyncer(mockClient, clientDB, root, &Config{
-		BatchSize: 1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		RequestSize: testRequestSize,
 	})
 	require.NoError(t, err, "failed to create state syncer")
 
@@ -613,7 +617,8 @@ func TestDifferentWaitContext(t *testing.T) {
 	}
 
 	s, err := NewSyncer(mockClient, clientDB, root, &Config{
-		BatchSize: 1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		RequestSize: testRequestSize,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -650,7 +655,8 @@ func TestStateSyncer_MultipleStart(t *testing.T) {
 	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
 
 	s, err := NewSyncer(mockClient, clientDB, root, &Config{
-		BatchSize: 1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		RequestSize: testRequestSize,
 	})
 	require.NoError(t, err, "failed to create state syncer")
 

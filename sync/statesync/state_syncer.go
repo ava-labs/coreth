@@ -96,7 +96,7 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		done:             make(chan error, 1),
 	}
 	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, config.RequestSize)
-	ss.codeSyncer = newCodeSyncer(client, db, CodeSyncerConfig{
+	ss.codeSyncer = newCodeSyncer(client, db, &CodeSyncerConfig{
 		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
