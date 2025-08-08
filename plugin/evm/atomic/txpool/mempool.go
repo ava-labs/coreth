@@ -24,7 +24,6 @@ var (
 	ErrMempoolFull     = errors.New("mempool full")
 
 	errsNotToDiscard = []error{
-		nil,
 		ErrAlreadyKnown,
 		ErrMempoolFull,
 	}
@@ -78,6 +77,9 @@ func (m *Mempool) AddRemoteTx(tx *atomic.Tx) error {
 	defer m.lock.Unlock()
 
 	err := m.addTx(tx, false, false)
+	if err == nil {
+		return nil
+	}
 	for _, errNotToDiscard := range errsNotToDiscard {
 		if errors.Is(err, errNotToDiscard) {
 			return err
