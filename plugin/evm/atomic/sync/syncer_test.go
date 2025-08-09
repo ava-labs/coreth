@@ -20,7 +20,6 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
@@ -37,7 +36,7 @@ const (
 	testCommitInterval = 1024
 	testTargetHeight   = 100
 	testNumWorkers     = 4
-	testRequestSize    = config.DefaultStateSyncRequestSize
+	testRequestSize    = defaultRequestSize
 )
 
 type atomicSyncTestCheckpoint struct {
@@ -59,7 +58,7 @@ func TestConfigValidation(t *testing.T) {
 		AtomicTrie:   atomicBackend.AtomicTrie(),
 		TargetRoot:   root,
 		TargetHeight: 100,
-		RequestSize:  config.DefaultStateSyncRequestSize,
+		RequestSize:  defaultRequestSize,
 		NumWorkers:   defaultNumWorkers,
 	}
 
@@ -522,7 +521,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			AtomicTrie:   atomicBackend.AtomicTrie(),
 			TargetRoot:   targetRoot,
 			TargetHeight: targetHeight,
-			RequestSize:  config.DefaultStateSyncRequestSize,
+			RequestSize:  defaultRequestSize,
 			NumWorkers:   numWorkers,
 		}
 		syncer, err := newSyncer(&syncerConfig)
@@ -555,7 +554,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		AtomicTrie:   atomicBackend.AtomicTrie(),
 		TargetRoot:   targetRoot,
 		TargetHeight: targetHeight,
-		RequestSize:  config.DefaultStateSyncRequestSize,
+		RequestSize:  defaultRequestSize,
 		NumWorkers:   numWorkers,
 	}
 	syncer, err := newSyncer(&syncerConfig)
