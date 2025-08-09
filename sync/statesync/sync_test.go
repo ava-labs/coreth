@@ -32,7 +32,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testSyncTimeout = 30 * time.Second
+const (
+	testSyncTimeout = 30 * time.Second
+	testRequestSize = 1024
+)
 
 var errInterrupted = errors.New("interrupted sync")
 
@@ -58,14 +61,9 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
-	s, err := NewSyncer(&Config{
-		Root:                     root,
-		Client:                   mockClient,
-		DB:                       clientDB,
-		BatchSize:                1000, // Use a lower batch size in order to get test coverage of batches being written early.
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		RequestSize:              1024,
+	s, err := NewSyncer(mockClient, clientDB, root, Config{
+		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		RequestSize: testRequestSize,
 	})
 	require.NoError(t, err, "failed to create state syncer")
 
@@ -618,14 +616,9 @@ func TestDifferentWaitContext(t *testing.T) {
 		return resp, nil
 	}
 
-	s, err := NewSyncer(&Config{
-		Root:                     root,
-		Client:                   mockClient,
-		DB:                       clientDB,
-		BatchSize:                1000,
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		RequestSize:              1024,
+	s, err := NewSyncer(mockClient, clientDB, root, Config{
+		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		RequestSize: testRequestSize,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -661,14 +654,9 @@ func TestStateSyncer_MultipleStart(t *testing.T) {
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
 	mockClient := statesyncclient.NewTestClient(message.Codec, leafsRequestHandler, codeRequestHandler, nil)
 
-	s, err := NewSyncer(&Config{
-		Root:                     root,
-		Client:                   mockClient,
-		DB:                       clientDB,
-		BatchSize:                1000,
-		MaxOutstandingCodeHashes: DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   DefaultNumCodeFetchingWorkers,
-		RequestSize:              1024,
+	s, err := NewSyncer(mockClient, clientDB, root, Config{
+		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
+		RequestSize: testRequestSize,
 	})
 	require.NoError(t, err, "failed to create state syncer")
 

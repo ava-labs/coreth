@@ -25,50 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfigValidation(t *testing.T) {
-	mockClient := syncclient.NewTestClient(
-		message.Codec,
-		nil,
-		nil,
-		nil,
-	)
-	validHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-
-	tests := []struct {
-		name    string
-		config  *Config
-		wantErr error
-	}{
-		{
-			name:    "valid config",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: mockClient, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: nil,
-		},
-		{
-			name:    "nil database",
-			config:  &Config{ChainDB: nil, Client: mockClient, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errNilDatabase,
-		},
-		{
-			name:    "nil client",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: nil, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errNilClient,
-		},
-		{
-			name:    "empty from hash",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: mockClient, FromHash: common.Hash{}, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errInvalidFromHash,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			require.ErrorIs(t, err, tt.wantErr)
-		})
-	}
-}
-
 func TestWaitBeforeStart(t *testing.T) {
 	env := newTestEnvironment(t, 10)
 
@@ -288,14 +244,12 @@ func (e *testEnvironment) createSyncer(fromHeight uint64, blocksToFetch uint64) 
 	}
 
 	config := &Config{
-		ChainDB:       e.chainDB,
-		Client:        e.client,
 		FromHash:      e.blocks[fromHeight].Hash(),
 		FromHeight:    fromHeight,
 		BlocksToFetch: blocksToFetch,
 	}
 
-	return NewSyncer(config)
+	return NewSyncer(e.client, e.chainDB, *config)
 }
 
 // verifyBlocksInDB checks that the expected blocks are present in the database (by block height)

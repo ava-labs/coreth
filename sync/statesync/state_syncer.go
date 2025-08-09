@@ -27,13 +27,25 @@ const (
 var _ synccommon.Syncer = (*stateSync)(nil)
 
 type Config struct {
-	Root                     common.Hash
-	Client                   syncclient.Client
-	DB                       ethdb.Database
-	BatchSize                int
-	MaxOutstandingCodeHashes int    // Maximum number of code hashes in the code syncer queue
-	NumCodeFetchingWorkers   int    // Number of code syncing threads
-	RequestSize              uint16 // Number of leafs to request from a peer at a time
+	BatchSize uint
+	// Maximum number of code hashes in the code syncer queue.
+	MaxOutstandingCodeHashes uint
+	NumCodeFetchingWorkers   uint16
+	// Number of leafs to request from a peer at a time.
+	// NOTE: user facing option validated as the parameter [plugin/evm/config.Config.StateSyncRequestSize].
+	RequestSize uint16
+}
+
+// NewDefaultConfig returns a Config with the default values for the state syncer.
+// TODO: as a next feature we should probably introduce functional options for the config, e.g. func WithRequestSize(requestSize uint16) SyncerOption,
+// because this function is not very flexible.
+func NewDefaultConfig(requestSize uint16) Config {
+	return Config{
+		BatchSize:                ethdb.IdealBatchSize,
+		MaxOutstandingCodeHashes: defaultMaxOutstandingCodeHashes,
+		NumCodeFetchingWorkers:   defaultNumCodeFetchingWorkers,
+		RequestSize:              requestSize,
+	}
 }
 
 // stateSync keeps the state of the entire state sync operation.
@@ -42,7 +54,7 @@ type stateSync struct {
 	root      common.Hash               // root of the EVM state we are syncing to
 	trieDB    *triedb.Database          // trieDB on top of db we are syncing. used to restore any existing tries.
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
-	batchSize int                       // write batches when they reach this size
+	batchSize uint                      // write batches when they reach this size
 	client    syncclient.Client         // used to contact peers over the network
 
 	segments   chan syncclient.LeafSyncTask   // channel of tasks to sync
@@ -68,14 +80,14 @@ type stateSync struct {
 	cancelFunc context.CancelFunc
 }
 
-func NewSyncer(config *Config) (synccommon.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, config Config) (synccommon.Syncer, error) {
 	ss := &stateSync{
 		batchSize:       config.BatchSize,
-		db:              config.DB,
-		client:          config.Client,
-		root:            config.Root,
-		trieDB:          triedb.NewDatabase(config.DB, nil),
-		snapshot:        snapshot.NewDiskLayer(config.DB),
+		db:              db,
+		client:          client,
+		root:            root,
+		trieDB:          triedb.NewDatabase(db, nil),
+		snapshot:        snapshot.NewDiskLayer(db),
 		stats:           newTrieSyncStats(),
 		triesInProgress: make(map[common.Hash]*trieToSync),
 
@@ -91,15 +103,13 @@ func NewSyncer(config *Config) (synccommon.Syncer, error) {
 		storageTriesDone: make(chan struct{}),
 		done:             make(chan error, 1),
 	}
-	ss.syncer = syncclient.NewCallbackLeafSyncer(config.Client, ss.segments, config.RequestSize)
-	ss.codeSyncer = newCodeSyncer(CodeSyncerConfig{
-		DB:                       config.DB,
-		Client:                   config.Client,
+	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, config.RequestSize)
+	ss.codeSyncer = newCodeSyncer(client, db, CodeSyncerConfig{
 		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
 		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
 	})
 
-	ss.trieQueue = NewTrieQueue(config.DB)
+	ss.trieQueue = NewTrieQueue(db)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
 		return nil, err
 	}
