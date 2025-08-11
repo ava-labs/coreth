@@ -10,9 +10,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 )
 
-const (
-	defaultCommitInterval = 4096
-)
+const defaultCommitInterval = 4096
 
 func NewDefaultConfig() Config {
 	return Config{
