@@ -46,7 +46,6 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -293,16 +292,16 @@ func testIssueAtomicTxs(t *testing.T, scheme string) {
 
 	// Check that both atomic transactions were indexed as expected.
 	indexedImportTx, status, height, err := vm.GetAtomicTx(importTx.ID())
-	assert.NoError(t, err)
-	assert.Equal(t, atomic.Accepted, status)
-	assert.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
-	assert.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
+	require.NoError(t, err)
+	require.Equal(t, atomic.Accepted, status)
+	require.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
+	require.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
 
 	indexedExportTx, status, height, err := vm.GetAtomicTx(exportTx.ID())
-	assert.NoError(t, err)
-	assert.Equal(t, atomic.Accepted, status)
-	assert.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
-	assert.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+	require.NoError(t, err)
+	require.Equal(t, atomic.Accepted, status)
+	require.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
+	require.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
 
 func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string) {
@@ -591,9 +590,9 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 				t.Fatalf("Expected to fail with err: %s, but found err: %s", txpool.ErrConflict, err)
 			}
 
-			assert.True(t, vm.AtomicMempool.Has(importTx1.ID()))
-			assert.True(t, vm.AtomicMempool.Has(importTx2.ID()))
-			assert.False(t, vm.AtomicMempool.Has(reissuanceTx1.ID()))
+			require.True(t, vm.AtomicMempool.Has(importTx1.ID()))
+			require.True(t, vm.AtomicMempool.Has(importTx2.ID()))
+			require.False(t, vm.AtomicMempool.Has(reissuanceTx1.ID()))
 
 			reissuanceTx2, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(4), vmtest.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
 			if err != nil {
@@ -618,12 +617,12 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 
 			for i, tx := range issuedTxs {
 				_, issued := vm.AtomicMempool.GetPendingTx(tx.ID())
-				assert.True(t, issued, "expected issued tx at index %d to be issued", i)
+				require.True(t, issued, "expected issued tx at index %d to be issued", i)
 			}
 
 			for i, tx := range evictedTxs {
 				_, discarded, _ := vm.AtomicMempool.GetTx(tx.ID())
-				assert.True(t, discarded, "expected discarded tx at index %d to be discarded", i)
+				require.True(t, discarded, "expected discarded tx at index %d to be discarded", i)
 			}
 		})
 	}
@@ -893,7 +892,7 @@ func testBonusBlocksTxs(t *testing.T, scheme string) {
 }
 
 // Builds [blkA] with a virtuous import transaction and [blkB] with a separate import transaction
-// that does not conflict. Accepts [blkB] and rejects [blkA], then asserts that the virtuous atomic
+// that does not conflict. Accepts [blkB] and rejects [blkA], then requires that the virtuous atomic
 // transaction in [blkA] is correctly re-issued into the atomic transaction mempool.
 func TestReissueAtomicTx(t *testing.T) {
 	for _, scheme := range vmtest.Schemes {
@@ -1184,7 +1183,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	blockExtension, ok := wrappedBlk.GetBlockExtension().(*blockExtension)
 	require.True(t, ok, "expected block to be a blockExtension")
 	atomicTxs := blockExtension.atomicTxs
-	assert.True(t, len(atomicTxs) == len(vmtest.TestKeys), "Conflict transactions should be out of the batch")
+	require.True(t, len(atomicTxs) == len(vmtest.TestKeys), "Conflict transactions should be out of the batch")
 	atomicTxIDs := set.Set[ids.ID]{}
 	for _, tx := range atomicTxs {
 		atomicTxIDs.Add(tx.ID())
@@ -1195,7 +1194,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	// has been included in the block.
 	for _, conflictSet := range conflictSets {
 		conflictSet.Difference(atomicTxIDs)
-		assert.Equal(t, 1, conflictSet.Len())
+		require.Equal(t, 1, conflictSet.Len())
 	}
 
 	if err := blk.Verify(context.Background()); err != nil {
@@ -1222,12 +1221,12 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(vmtest.TestKeys[0])
 	txID, err := ids.ToID(hashing.ComputeHash256(vmtest.TestShortIDAddrs[0][:]))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	mempoolTxs := 200
 	for i := 0; i < mempoolTxs; i++ {
 		utxo, err := addUTXO(tvm.AtomicMemory, vm.Ctx, txID, uint32(i), vm.Ctx.AVAXAssetID, importAmount, vmtest.TestShortIDAddrs[0])
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		importTx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, kc, []*avax.UTXO{utxo})
 		if err != nil {
@@ -1284,16 +1283,16 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	kc := secp256k1fx.NewKeychain()
 	kc.Add(vmtest.TestKeys[0])
 	txID, err := ids.ToID(hashing.ComputeHash256(vmtest.TestShortIDAddrs[0][:]))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Add enough UTXOs, such that the created import transaction will attempt to consume more gas than allowed
 	// in ApricotPhase5.
 	for i := 0; i < 100; i++ {
 		_, err := addUTXO(tvm1.AtomicMemory, vm1.Ctx, txID, uint32(i), vm1.Ctx.AVAXAssetID, importAmount, vmtest.TestShortIDAddrs[0])
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = addUTXO(tvm2.AtomicMemory, vm2.Ctx, txID, uint32(i), vm2.Ctx.AVAXAssetID, importAmount, vmtest.TestShortIDAddrs[0])
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	// Double the initial base fee used when estimating the cost of this transaction to ensure that when it is
@@ -1873,7 +1872,7 @@ func testBuildInvalidBlockHead(t *testing.T, scheme string) {
 func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 	for _, name := range []string{"import", "export"} {
 		t.Run(name, func(t *testing.T) {
-			assert := assert.New(t)
+			require := require.New(t)
 
 			// we use AP3 here to not trip any block fees
 			fork := upgradetest.ApricotPhase3
@@ -1883,7 +1882,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			})
 			defer func() {
 				err := vm.Shutdown(context.Background())
-				assert.NoError(err)
+				require.NoError(err)
 			}()
 			mempool := vm.AtomicMempool
 
@@ -1902,50 +1901,48 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			conflictingTxID := conflictingTx.ID()
 
 			// add a tx to the mempool
-			err := vm.AtomicMempool.AddLocalTx(tx)
-			assert.NoError(err)
+			require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 			has := mempool.Has(txID)
-			assert.True(has, "valid tx not recorded into mempool")
+			require.True(has, "valid tx not recorded into mempool")
 
 			// try to add a conflicting tx
-			err = vm.AtomicMempool.AddLocalTx(conflictingTx)
-			assert.ErrorIs(err, txpool.ErrConflict)
+			require.ErrorIs(vm.AtomicMempool.AddLocalTx(conflictingTx), txpool.ErrConflict)
 			has = mempool.Has(conflictingTxID)
-			assert.False(has, "conflicting tx in mempool")
+			require.False(has, "conflicting tx in mempool")
 
 			msg, err := vm.WaitForEvent(context.Background())
 			require.NoError(t, err)
 			require.Equal(t, commonEng.PendingTxs, msg)
 
 			has = mempool.Has(txID)
-			assert.True(has, "valid tx not recorded into mempool")
+			require.True(has, "valid tx not recorded into mempool")
 
 			// Show that BuildBlock generates a block containing [txID] and that it is
 			// still present in the mempool.
 			blk, err := vm.BuildBlock(context.Background())
-			assert.NoError(err, "could not build block out of mempool")
+			require.NoError(err, "could not build block out of mempool")
 
 			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-			assert.True(ok, "unknown block type")
+			require.True(ok, "unknown block type")
 
 			blockExtension, ok := wrappedBlock.GetBlockExtension().(*blockExtension)
-			assert.True(ok, "unknown block extension type")
+			require.True(ok, "unknown block extension type")
 
 			atomicTxs := blockExtension.atomicTxs
-			assert.NoError(err)
-			assert.Equal(txID, atomicTxs[0].ID(), "block does not include expected transaction")
+			require.NoError(err)
+			require.Equal(txID, atomicTxs[0].ID(), "block does not include expected transaction")
 
 			has = mempool.Has(txID)
-			assert.True(has, "tx should stay in mempool until block is accepted")
+			require.True(has, "tx should stay in mempool until block is accepted")
 
 			err = blk.Verify(context.Background())
-			assert.NoError(err)
+			require.NoError(err)
 
 			err = blk.Accept(context.Background())
-			assert.NoError(err)
+			require.NoError(err)
 
 			has = mempool.Has(txID)
-			assert.False(has, "tx shouldn't be in mempool after block is accepted")
+			require.False(has, "tx shouldn't be in mempool after block is accepted")
 		})
 	}
 }
