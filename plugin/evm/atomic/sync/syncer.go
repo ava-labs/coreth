@@ -17,7 +17,6 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
@@ -26,9 +25,10 @@ import (
 )
 
 const (
-	minNumWorkers     = 1
-	maxNumWorkers     = 64
-	defaultNumWorkers = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
+	minNumWorkers      = 1
+	maxNumWorkers      = 64
+	defaultNumWorkers  = 8 // TODO: Dynamic worker count discovery will be implemented in a future PR.
+	defaultRequestSize = 1024
 
 	minRequestSize = 1
 	maxRequestSize = 1024 // Matches [maxLeavesLimit] in sync/handlers/leafs_request.go
@@ -103,7 +103,7 @@ func (c *Config) Validate() error {
 
 	// Set default RequestSize if not specified.
 	if c.RequestSize == 0 {
-		c.RequestSize = config.DefaultStateSyncRequestSize
+		c.RequestSize = defaultRequestSize
 	}
 	if c.RequestSize < minRequestSize || c.RequestSize > maxRequestSize {
 		return fmt.Errorf("%w: %d (must be between %d and %d)", errInvalidRequestSize, c.RequestSize, minRequestSize, maxRequestSize)
@@ -143,9 +143,6 @@ type syncer struct {
 
 	// numWorkers is the number of worker goroutines to use for syncing
 	numWorkers int
-
-	// cancel is used to cancel the sync operation
-	cancel context.CancelFunc
 }
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
@@ -193,20 +190,17 @@ func newSyncer(config *Config) (*syncer, error) {
 	tasks <- &syncerLeafTask{syncer: syncer}
 	close(tasks)
 
-	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, config.RequestSize)
+	syncer.syncer = syncclient.NewCallbackLeafSyncer(config.Client, tasks, &syncclient.LeafSyncerConfig{
+		RequestSize: config.RequestSize,
+		NumWorkers:  numWorkers,
+		OnFailure:   func() {}, // No-op since we flush progress to disk at the regular commit interval.
+	})
 	return syncer, nil
 }
 
-// Start begins syncing the target atomic root with the configured number of worker goroutines.
-func (s *syncer) Start(ctx context.Context) error {
-	if s.cancel != nil {
-		return synccommon.ErrSyncerAlreadyStarted
-	}
-
-	ctx, s.cancel = context.WithCancel(ctx)
-	s.syncer.Start(ctx, s.numWorkers, s.onSyncFailure)
-
-	return nil
+// Sync begins syncing the target atomic root with the configured number of worker goroutines.
+func (s *syncer) Sync(ctx context.Context) error {
+	return s.syncer.Sync(ctx)
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.
@@ -280,29 +274,6 @@ func (s *syncer) onFinish() error {
 		return fmt.Errorf("synced root (%s) does not match expected (%s) for atomic trie ", root, s.targetRoot)
 	}
 	return nil
-}
-
-// onSyncFailure is a no-op since we flush progress to disk at the regular commit interval when syncing
-// the atomic trie.
-func (s *syncer) onSyncFailure(error) error {
-	return nil
-}
-
-// Wait blocks until the sync operation completes and returns any error that occurred.
-// It respects context cancellation and returns ctx.Err() if the context is cancelled.
-// This method must be called after Start() has been called.
-func (s *syncer) Wait(ctx context.Context) error {
-	if s.cancel == nil {
-		return synccommon.ErrWaitBeforeStart
-	}
-
-	select {
-	case err := <-s.syncer.Done():
-		return err
-	case <-ctx.Done():
-		s.cancel()
-		return ctx.Err()
-	}
 }
 
 type syncerLeafTask struct {
