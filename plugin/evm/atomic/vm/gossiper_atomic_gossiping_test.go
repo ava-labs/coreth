@@ -62,7 +62,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	marshaller := atomic.TxMarshaller{}
 	txBytes, err := marshaller.MarshalGossip(tx)
 	assert.NoError(err)
-	vm.ctx.Lock.Unlock()
+	vm.Ctx.Lock.Unlock()
 
 	msgBytes, err := buildAtomicPushGossip(txBytes)
 	assert.NoError(err)
@@ -71,20 +71,20 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	assert.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
 	time.Sleep(500 * time.Millisecond)
 
-	vm.ctx.Lock.Lock()
+	vm.Ctx.Lock.Lock()
 
 	assert.False(txRequested, "tx should not have been requested")
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
-	assert.True(vm.mempool.Has(tx.ID()))
+	assert.True(vm.AtomicMempool.Has(tx.ID()))
 
-	vm.ctx.Lock.Unlock()
+	vm.Ctx.Lock.Unlock()
 
 	// show that tx is not re-gossiped
 	assert.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
 
-	vm.ctx.Lock.Lock()
+	vm.Ctx.Lock.Lock()
 
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
@@ -95,19 +95,19 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txBytes, err = marshaller.MarshalGossip(conflictingTx)
 	assert.NoError(err)
 
-	vm.ctx.Lock.Unlock()
+	vm.Ctx.Lock.Unlock()
 
 	msgBytes, err = buildAtomicPushGossip(txBytes)
 	assert.NoError(err)
 	assert.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
 
-	vm.ctx.Lock.Lock()
+	vm.Ctx.Lock.Lock()
 
 	assert.False(txRequested, "tx should not have been requested")
 	txGossipedLock.Lock()
 	assert.Equal(0, txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
-	assert.False(vm.mempool.Has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
+	assert.False(vm.AtomicMempool.Has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
 }
 
 // show that txs already marked as invalid are not re-requested on gossiping
@@ -143,12 +143,12 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	tx, conflictingTx := importTxs[0], importTxs[1]
 	txID := tx.ID()
 
-	vm.mempool.AddRemoteTx(tx)
-	vm.mempool.NextTx()
-	vm.mempool.DiscardCurrentTx(txID)
+	vm.AtomicMempool.AddRemoteTx(tx)
+	vm.AtomicMempool.NextTx()
+	vm.AtomicMempool.DiscardCurrentTx(txID)
 
 	// Check the mempool does not contain the discarded transaction
-	assert.False(vm.mempool.Has(txID))
+	assert.False(vm.AtomicMempool.Has(txID))
 
 	// Gossip the transaction to the VM and ensure that it is not added to the mempool
 	// and is not re-gossipped.
@@ -157,39 +157,39 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	txBytes, err := marshaller.MarshalGossip(tx)
 	assert.NoError(err)
 
-	vm.ctx.Lock.Unlock()
+	vm.Ctx.Lock.Unlock()
 
 	msgBytes, err := buildAtomicPushGossip(txBytes)
 	assert.NoError(err)
 	assert.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
 
-	vm.ctx.Lock.Lock()
+	vm.Ctx.Lock.Lock()
 
 	assert.False(txRequested, "tx shouldn't be requested")
 	txGossipedLock.Lock()
 	assert.Zero(txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 
-	assert.False(vm.mempool.Has(txID))
+	assert.False(vm.AtomicMempool.Has(txID))
 
-	vm.ctx.Lock.Unlock()
+	vm.Ctx.Lock.Unlock()
 
 	// Conflicting tx must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	// This test adds it directly to the mempool + gossiper to simulate that.
-	vm.mempool.AddRemoteTx(conflictingTx)
-	vm.atomicTxPushGossiper.Add(conflictingTx)
+	vm.AtomicMempool.AddRemoteTx(conflictingTx)
+	vm.AtomicTxPushGossiper.Add(conflictingTx)
 	time.Sleep(500 * time.Millisecond)
 
-	vm.ctx.Lock.Lock()
+	vm.Ctx.Lock.Lock()
 
 	assert.False(txRequested, "tx shouldn't be requested")
 	txGossipedLock.Lock()
 	assert.Equal(1, txGossiped, "conflicting tx should have been gossiped")
 	txGossipedLock.Unlock()
 
-	assert.False(vm.mempool.Has(txID))
-	assert.True(vm.mempool.Has(conflictingTx.ID()))
+	assert.False(vm.AtomicMempool.Has(txID))
+	assert.True(vm.AtomicMempool.Has(conflictingTx.ID()))
 }
 
 func buildAtomicPushGossip(txBytes []byte) ([]byte, error) {

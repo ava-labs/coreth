@@ -25,8 +25,8 @@ import (
 var _ atomic.Visitor = (*semanticVerifier)(nil)
 
 var (
-	errAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
-	errConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
+	ErrAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
+	ErrConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
 	errRejectedParent             = errors.New("rejected parent")
 	errPublicKeySignatureMismatch = errors.New("signature doesn't match public key")
 )
@@ -47,14 +47,14 @@ type VerifierBackend struct {
 	SecpCache    *secp256k1.RecoverCache
 }
 
-func newVerifierBackend(vm *VM, rules extras.Rules) *VerifierBackend {
+func NewVerifierBackend(vm *VM, rules extras.Rules) *VerifierBackend {
 	return &VerifierBackend{
-		Ctx:          vm.ctx,
-		Fx:           &vm.fx,
+		Ctx:          vm.Ctx,
+		Fx:           &vm.Fx,
 		Rules:        rules,
 		Bootstrapped: vm.bootstrapped.Get(),
 		BlockFetcher: vm,
-		SecpCache:    vm.secpCache,
+		SecpCache:    vm.SecpCache,
 	}
 }
 
@@ -149,7 +149,7 @@ func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 		utxoAssetID := utxo.AssetID()
 		inAssetID := in.AssetID()
 		if utxoAssetID != inAssetID {
-			return errAssetIDMismatch
+			return ErrAssetIDMismatch
 		}
 
 		if err := backend.Fx.VerifyTransfer(utx, in.In, cred, utxo.Out); err != nil {
@@ -178,7 +178,7 @@ func conflicts(backend *VerifierBackend, inputs set.Set[ids.ID], ancestor extens
 		// return an error.
 		for _, atomicTx := range ancestorExt.AtomicTxs() {
 			if inputs.Overlaps(atomicTx.InputUTXOs()) {
-				return errConflictingAtomicInputs
+				return ErrConflictingAtomicInputs
 			}
 		}
 

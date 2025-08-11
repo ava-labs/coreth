@@ -42,9 +42,9 @@ func TestAtomicSyncerVM(t *testing.T) {
 				switch i {
 				case 0:
 					// spend the UTXOs from shared memory
-					importTx, err := atomicVM.newImportTx(atomicVM.ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
+					importTx, err := atomicVM.newImportTx(atomicVM.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
 					require.NoError(t, err)
-					require.NoError(t, atomicVM.mempool.AddLocalTx(importTx))
+					require.NoError(t, atomicVM.AtomicMempool.AddLocalTx(importTx))
 					includedAtomicTxs = append(includedAtomicTxs, importTx)
 				case 1:
 					// export some of the imported UTXOs to test exportTx is properly synced
@@ -54,18 +54,18 @@ func TestAtomicSyncerVM(t *testing.T) {
 					}
 					wrappedStateDB := extstate.New(state)
 					exportTx, err := atomic.NewExportTx(
-						atomicVM.ctx,
-						atomicVM.currentRules(),
+						atomicVM.Ctx,
+						atomicVM.CurrentRules(),
 						wrappedStateDB,
-						atomicVM.ctx.AVAXAssetID,
+						atomicVM.Ctx.AVAXAssetID,
 						importAmount/2,
-						atomicVM.ctx.XChainID,
+						atomicVM.Ctx.XChainID,
 						vmtest.TestShortIDAddrs[0],
 						vmtest.InitialBaseFee,
 						vmtest.TestKeys[0:1],
 					)
 					require.NoError(t, err)
-					require.NoError(t, atomicVM.mempool.AddLocalTx(exportTx))
+					require.NoError(t, atomicVM.AtomicMempool.AddLocalTx(exportTx))
 					includedAtomicTxs = append(includedAtomicTxs, exportTx)
 				default: // Generate simple transfer transactions.
 					pk := vmtest.TestKeys[0].ToECDSA()
@@ -98,7 +98,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 					}
 				}
 				if isServer {
-					serverAtomicTrie := atomicVM.atomicBackend.AtomicTrie()
+					serverAtomicTrie := atomicVM.AtomicBackend.AtomicTrie()
 					// Calling AcceptTrie with SyncableInterval creates a commit for the atomic trie
 					committed, err := serverAtomicTrie.AcceptTrie(params.SyncableInterval, serverAtomicTrie.LastAcceptedRoot())
 					require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 					syncerVM := syncerVMSetup.VM
 					atomicVM, ok := syncerVM.(*VM)
 					require.True(t, ok)
-					syncerSharedMemories := atomictest.NewSharedMemories(syncerVMSetup.AtomicMemory, atomicVM.ctx.ChainID, atomicVM.ctx.XChainID)
+					syncerSharedMemories := atomictest.NewSharedMemories(syncerVMSetup.AtomicMemory, atomicVM.Ctx.ChainID, atomicVM.Ctx.XChainID)
 
 					for _, tx := range includedAtomicTxs {
 						atomicOps, err := atomictest.ConvertToAtomicOps(tx)

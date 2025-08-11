@@ -127,7 +127,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		require.Empty(response.Gossip)
 		wg.Done()
 	}
-	require.NoError(client.AppRequest(ctx, set.Of(vm.ctx.NodeID), requestBytes, onResponse))
+	require.NoError(client.AppRequest(ctx, set.Of(vm.Ctx.NodeID), requestBytes, onResponse))
 	require.NoError(vm.AppRequest(ctx, requestingNodeID, 1, time.Time{}, <-peerSender.SentAppRequest))
 	require.NoError(network.AppResponse(ctx, snowCtx.NodeID, 1, <-responseSender.SentAppResponse))
 	wg.Wait()
@@ -143,9 +143,9 @@ func TestAtomicTxGossip(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
-	require.NoError(vm.mempool.AddLocalTx(tx))
+	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 
 	// wait so we aren't throttled by the vm
 	time.Sleep(5 * time.Second)
@@ -167,7 +167,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 		wg.Done()
 	}
-	require.NoError(client.AppRequest(ctx, set.Of(vm.ctx.NodeID), requestBytes, onResponse))
+	require.NoError(client.AppRequest(ctx, set.Of(vm.Ctx.NodeID), requestBytes, onResponse))
 	require.NoError(vm.AppRequest(ctx, requestingNodeID, 3, time.Time{}, <-peerSender.SentAppRequest))
 	require.NoError(network.AppResponse(ctx, snowCtx.NodeID, 3, <-responseSender.SentAppResponse))
 	wg.Wait()
@@ -195,7 +195,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := newAtomicTestVM()
-	vm.atomicTxPullGossiper = gossip.NoOpGossiper{}
+	vm.AtomicTxPullGossiper = gossip.NoOpGossiper{}
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -224,10 +224,10 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
-	require.NoError(vm.mempool.AddLocalTx(tx))
-	vm.atomicTxPushGossiper.Add(tx)
+	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
+	vm.AtomicTxPushGossiper.Add(tx)
 
 	gossipedBytes := <-sender.SentAppGossip
 	require.Equal(byte(p2p.AtomicTxGossipHandlerID), gossipedBytes[0])
@@ -262,7 +262,7 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	sender := &enginetest.Sender{}
 	vm := newAtomicTestVM()
-	vm.atomicTxPullGossiper = gossip.NoOpGossiper{}
+	vm.AtomicTxPullGossiper = gossip.NoOpGossiper{}
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -291,9 +291,9 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.ctx, vm.currentRules(), vm.clock.Unix(), vm.ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
-	require.NoError(vm.mempool.AddLocalTx(tx))
+	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 
 	marshaller := atomic.TxMarshaller{}
 	gossipBytes, err := marshaller.MarshalGossip(tx)
@@ -308,5 +308,5 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 	inboundGossipMsg := append(binary.AppendUvarint(nil, p2p.AtomicTxGossipHandlerID), inboundGossipBytes...)
 
 	require.NoError(vm.AppGossip(ctx, ids.EmptyNodeID, inboundGossipMsg))
-	require.True(vm.mempool.Has(tx.ID()))
+	require.True(vm.AtomicMempool.Has(tx.ID()))
 }
