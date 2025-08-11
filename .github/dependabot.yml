@@ -20,7 +20,7 @@ updates:
         versions:
           - ">=7.0.0" # versions from 7.0.0 only support golangci-lint v2.x.x
   - package-ecosystem: "npm"
-    directory: "/"
+    directory: "/contracts"
     schedule:
-      interval: "weekly"  # required by schema, but doesn't matter here
-    open-pull-requests-limit: 0
+      interval: "daily"  # required by schema, but doesn't matter here
+    open-pull-requests-limit: 0 # Disable non-security version updates
