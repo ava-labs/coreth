@@ -13,7 +13,7 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: weekly
+      interval: "weekly"
     ignore:
       - dependency-name: "ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd" # manually updated
       - dependency-name: "golangci/golangci-lint-action"
