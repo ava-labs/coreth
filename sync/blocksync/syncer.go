@@ -87,7 +87,13 @@ func (s *blockSyncer) Wait(ctx context.Context) error {
 		return err
 	case <-ctx.Done():
 		s.cancel()
-		return <-s.err
+		// Preserve the worker error but ensure the returned error reflects
+		// that the wait context was canceled.
+		errWorker := <-s.err
+		if errWorker == nil {
+			return ctx.Err()
+		}
+		return errors.Join(ctx.Err(), errWorker)
 	}
 }
 
