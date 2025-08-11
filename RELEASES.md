@@ -2,6 +2,8 @@
 
 ## Pending Release
 
+## [v0.15.3](https://github.com/ava-labs/coreth/releases/tag/v0.15.3)
+
 - Removed legacy warp message handlers in favor of ACP-118 SDK handlers.
 - Use `state-history` eth config flag to designate the number of recent states queryable.
 - Added maximum number of addresses (1000) to be queried in a single filter.
@@ -12,6 +14,9 @@
 - Added prometheus metrics for Firewood if it is enabled and expensive metrics are being used.
 - Disable incompatible APIs for Firewood.
 - Removed deprecated flags `coreth-admin-api-enabled`, `coreth-admin-api-dir`, `tx-regossip-frequency`, `tx-lookup-limit`. Use `admin-api-enabled`, `admin-api-dir`, `regossip-frequency`, `transaction-history` instead.
+
+## [v0.15.2](https://github.com/ava-labs/coreth/releases/tag/v0.15.2)
+
 
 ## [v0.15.1](https://github.com/ava-labs/coreth/releases/tag/v0.15.1)
 
