@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/require"
 )
 
@@ -199,7 +200,7 @@ func newTestEnvironment(t *testing.T, numBlocks int) *testEnvironment {
 
 	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 0, func(i int, gen *core.BlockGen) {
 		// Generate a transaction to create a unique block
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr), addr, big.NewInt(10), params.TxGas, nil, nil), signer, key)
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr), addr, big.NewInt(10), ethparams.TxGas, nil, nil), signer, key)
 		gen.AddTx(tx)
 	})
 	require.NoError(t, err)
