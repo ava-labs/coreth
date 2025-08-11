@@ -1881,8 +1881,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				Fork: &fork,
 			})
 			defer func() {
-				err := vm.Shutdown(context.Background())
-				require.NoError(err)
+				require.NoError(vm.Shutdown(context.Background()))
 			}()
 			mempool := vm.AtomicMempool
 
@@ -1906,13 +1905,14 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			require.True(has, "valid tx not recorded into mempool")
 
 			// try to add a conflicting tx
-			require.ErrorIs(vm.AtomicMempool.AddLocalTx(conflictingTx), txpool.ErrConflict)
+			err := vm.AtomicMempool.AddLocalTx(conflictingTx)
+			require.ErrorIs(err, txpool.ErrConflict)
 			has = mempool.Has(conflictingTxID)
 			require.False(has, "conflicting tx in mempool")
 
 			msg, err := vm.WaitForEvent(context.Background())
-			require.NoError(t, err)
-			require.Equal(t, commonEng.PendingTxs, msg)
+			require.NoError(err)
+			require.Equal(commonEng.PendingTxs, msg)
 
 			has = mempool.Has(txID)
 			require.True(has, "valid tx not recorded into mempool")
@@ -1929,17 +1929,13 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			require.True(ok, "unknown block extension type")
 
 			atomicTxs := blockExtension.atomicTxs
-			require.NoError(err)
 			require.Equal(txID, atomicTxs[0].ID(), "block does not include expected transaction")
 
 			has = mempool.Has(txID)
 			require.True(has, "tx should stay in mempool until block is accepted")
 
-			err = blk.Verify(context.Background())
-			require.NoError(err)
-
-			err = blk.Accept(context.Background())
-			require.NoError(err)
+			require.NoError(blk.Verify(context.Background()))
+			require.NoError(blk.Accept(context.Background()))
 
 			has = mempool.Has(txID)
 			require.False(has, "tx shouldn't be in mempool after block is accepted")
