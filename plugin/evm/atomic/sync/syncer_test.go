@@ -20,9 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 
-	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/coreth/sync/handlers"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -37,7 +35,7 @@ const (
 	testCommitInterval = 1024
 	testTargetHeight   = 100
 	testNumWorkers     = 4
-	testRequestSize    = config.DefaultStateSyncRequestSize
+	testRequestSize    = defaultRequestSize
 )
 
 type atomicSyncTestCheckpoint struct {
@@ -59,7 +57,7 @@ func TestConfigValidation(t *testing.T) {
 		AtomicTrie:   atomicBackend.AtomicTrie(),
 		TargetRoot:   root,
 		TargetHeight: 100,
-		RequestSize:  config.DefaultStateSyncRequestSize,
+		RequestSize:  defaultRequestSize,
 		NumWorkers:   defaultNumWorkers,
 	}
 
@@ -216,12 +214,7 @@ func TestConfigValidation(t *testing.T) {
 
 			// Test validation
 			err := config.Validate()
-
-			if tt.expectedErr == nil {
-				require.NoError(t, err, tt.description)
-			} else {
-				require.ErrorIs(t, err, tt.expectedErr, tt.description)
-			}
+			require.ErrorIs(t, err, tt.expectedErr, tt.description)
 		})
 	}
 }
@@ -389,82 +382,17 @@ func TestSyncerParallelizationScenarios(t *testing.T) {
 	}
 }
 
-// TestSyncerWaitScenarios is a parameterized test that covers different Wait() scenarios.
-func TestSyncerWaitScenarios(t *testing.T) {
-	tests := []struct {
-		name        string
-		startSyncer bool
-		expectedErr error
-		description string
-	}{
-		{
-			name:        "wait without start",
-			startSyncer: false,
-			expectedErr: synccommon.ErrWaitBeforeStart,
-			description: "should return ErrWaitBeforeStart when called before Start()",
-		},
-		{
-			name:        "wait after start",
-			startSyncer: true,
-			expectedErr: nil,
-			description: "should work correctly after Start() is called",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, testTargetHeight)
-			config := createTestConfig(mockClient, atomicBackend, root, testTargetHeight)
-			syncer := createTestSyncer(t, config)
-
-			if tt.startSyncer {
-				err := syncer.Start(ctx)
-				require.NoError(t, err, "could not start syncer")
-			}
-
-			err := syncer.Wait(ctx)
-			if tt.expectedErr == nil {
-				require.NoError(t, err, tt.description)
-			} else {
-				require.ErrorIs(t, err, tt.expectedErr, tt.description)
-			}
-		})
-	}
-}
-
 // TestSyncerContextCancellation verifies that the syncer properly handles context cancellation.
 func TestSyncerContextCancellation(t *testing.T) {
 	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, testTargetHeight)
 	config := createTestConfig(mockClient, atomicBackend, root, testTargetHeight)
 	syncer := createTestSyncer(t, config)
 
-	// Start the syncer
-	err := syncer.Start(ctx)
-	require.NoError(t, err, "could not start syncer")
-
-	// Cancel the context immediately
+	// Immediately cancel the context to simulate cancellation.
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
-
-	// Wait should return an error due to context cancellation
-	err = syncer.Wait(ctx)
-	require.Error(t, err, "should return error when context is cancelled")
-	require.Contains(t, err.Error(), "context canceled", "error should indicate context cancellation")
-}
-
-// TestSyncer_MultipleStart verifies that the atomic syncer prevents multiple Start() calls.
-func TestSyncer_MultipleStart(t *testing.T) {
-	ctx, mockClient, atomicBackend, root := setupParallelizationTest(t, testTargetHeight)
-	config := createTestConfig(mockClient, atomicBackend, root, testTargetHeight)
-	syncer := createTestSyncer(t, config)
-
-	// First Start() call should succeed
-	err := syncer.Start(ctx)
-	require.NoError(t, err, "first Start() call should succeed")
-
-	// Second Start() call should fail with sentinel error
-	err = syncer.Start(ctx)
-	require.ErrorIs(t, err, synccommon.ErrSyncerAlreadyStarted, "should return ErrSyncerAlreadyStarted")
+	err := syncer.Sync(ctx)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 // setupParallelizationTest creates the common test infrastructure for parallelization tests.
@@ -491,18 +419,13 @@ func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncc
 	}
 
 	syncer := createTestSyncer(t, config)
-
 	workerType := "default workers"
 	if !useDefaultWorkers {
 		workerType = fmt.Sprintf("%d workers", numWorkers)
 	}
 
-	err := syncer.Start(ctx)
-	require.NoError(t, err, "could not start syncer with %s", workerType)
-
 	// Wait for completion.
-	err = syncer.Wait(ctx)
-	require.NoError(t, err, "syncer should complete successfully")
+	require.NoError(t, syncer.Sync(ctx), "syncer should complete successfully with %s", workerType)
 }
 
 // testSyncer creates a leaf handler with [serverTrieDB] and tests to ensure that the atomic syncer can sync correctly
@@ -522,7 +445,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			AtomicTrie:   atomicBackend.AtomicTrie(),
 			TargetRoot:   targetRoot,
 			TargetHeight: targetHeight,
-			RequestSize:  config.DefaultStateSyncRequestSize,
+			RequestSize:  defaultRequestSize,
 			NumWorkers:   numWorkers,
 		}
 		syncer, err := newSyncer(&syncerConfig)
@@ -538,9 +461,8 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			return leafsResponse, nil
 		}
 
-		syncer.Start(ctx)
-		err = syncer.Wait(ctx)
-		require.Error(t, err, "Expected syncer to fail at checkpoint with numLeaves %d", numLeaves)
+		err = syncer.Sync(ctx)
+		require.ErrorIs(t, err, syncclient.ErrFailedToFetchLeafs)
 
 		require.Equal(t, checkpoint.expectedNumLeavesSynced, int64(numLeaves), "unexpected number of leaves received at checkpoint %d", i)
 		// Replace the target root and height for the next checkpoint
@@ -555,7 +477,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		AtomicTrie:   atomicBackend.AtomicTrie(),
 		TargetRoot:   targetRoot,
 		TargetHeight: targetHeight,
-		RequestSize:  config.DefaultStateSyncRequestSize,
+		RequestSize:  defaultRequestSize,
 		NumWorkers:   numWorkers,
 	}
 	syncer, err := newSyncer(&syncerConfig)
@@ -566,10 +488,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		return leafsResponse, nil
 	}
 
-	syncer.Start(ctx)
-	err = syncer.Wait(ctx)
-	require.NoError(t, err, "Expected syncer to finish successfully")
-
+	require.NoError(t, syncer.Sync(ctx), "Expected syncer to finish successfully")
 	require.Equal(t, finalExpectedNumLeaves, int64(numLeaves), "unexpected number of leaves received to match")
 
 	// we re-initialise trie DB for asserting the trie to make sure any issues with unflushed writes
