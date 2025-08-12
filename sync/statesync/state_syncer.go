@@ -49,6 +49,23 @@ func NewDefaultConfig(requestSize uint16) Config {
 	}
 }
 
+// WithUnsetDefaults applies defaults for unset fields. Zero values are treated as
+// "unset" and replaced with sensible defaults.
+func (c Config) WithUnsetDefaults() Config {
+	out := c
+	if out.BatchSize == 0 {
+		out.BatchSize = ethdb.IdealBatchSize
+	}
+	if out.MaxOutstandingCodeHashes == 0 {
+		out.MaxOutstandingCodeHashes = defaultMaxOutstandingCodeHashes
+	}
+	if out.NumCodeFetchingWorkers == 0 {
+		out.NumCodeFetchingWorkers = defaultNumCodeFetchingWorkers
+	}
+
+	return out
+}
+
 // stateSync keeps the state of the entire state sync operation.
 type stateSync struct {
 	db        ethdb.Database            // database we are syncing
@@ -79,8 +96,10 @@ type stateSync struct {
 }
 
 func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, config Config) (synccommon.Syncer, error) {
+	cfg := config.WithUnsetDefaults()
+
 	ss := &stateSync{
-		batchSize:       config.BatchSize,
+		batchSize:       cfg.BatchSize,
 		db:              db,
 		client:          client,
 		root:            root,
@@ -103,15 +122,13 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 	}
 
 	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, &syncclient.LeafSyncerConfig{
-		RequestSize: config.RequestSize,
+		RequestSize: cfg.RequestSize,
 		NumWorkers:  defaultNumWorkers,
 		OnFailure:   ss.onSyncFailure,
 	})
 
 	var err error
-
-	ss.codeSyncer, err = newCodeSyncer(client, db, config)
-
+	ss.codeSyncer, err = newCodeSyncer(client, db, cfg)
 	if err != nil {
 		return nil, err
 	}

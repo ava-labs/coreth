@@ -56,6 +56,20 @@ type Config struct {
 	NumWorkers int
 }
 
+// WithUnsetDefaults returns a copy of the config with defaults applied for any
+// unset (zero) fields.
+func (c Config) WithUnsetDefaults() Config {
+	out := c
+	if out.NumWorkers == 0 {
+		out.NumWorkers = defaultNumWorkers
+	}
+	if out.RequestSize == 0 {
+		out.RequestSize = defaultRequestSize
+	}
+
+	return out
+}
+
 // syncer is used to sync the atomic trie from the network. The CallbackLeafSyncer
 // is responsible for orchestrating the sync while syncer is responsible for maintaining
 // the state of progress and writing the actual atomic trie to the trieDB.
@@ -91,11 +105,8 @@ func newSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie 
 		return nil, errInvalidTargetHeight
 	}
 
-	// Use default workers if not specified.
-	numWorkers := config.NumWorkers
-	if numWorkers == 0 {
-		numWorkers = defaultNumWorkers
-	}
+	// Apply defaults for unset fields.
+	cfg := config.WithUnsetDefaults()
 
 	lastCommittedRoot, lastCommit := atomicTrie.LastCommitted()
 	trie, err := atomicTrie.OpenTrie(lastCommittedRoot)
@@ -108,13 +119,13 @@ func newSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie 
 		atomicTrie:   atomicTrie,
 		trie:         trie,
 		targetRoot:   targetRoot,
-		targetHeight: config.TargetHeight,
+		targetHeight: cfg.TargetHeight,
 		lastHeight:   lastCommit,
-		numWorkers:   numWorkers,
+		numWorkers:   cfg.NumWorkers,
 	}
 
 	// Create tasks channel with capacity for the number of workers.
-	tasks := make(chan syncclient.LeafSyncTask, numWorkers)
+	tasks := make(chan syncclient.LeafSyncTask, cfg.NumWorkers)
 
 	// For atomic trie syncing, we typically want a single task since the trie is sequential.
 	// But we can create multiple tasks if needed for parallel processing of different ranges.
@@ -122,8 +133,8 @@ func newSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie 
 	close(tasks)
 
 	syncer.syncer = syncclient.NewCallbackLeafSyncer(client, tasks, &syncclient.LeafSyncerConfig{
-		RequestSize: config.RequestSize,
-		NumWorkers:  numWorkers,
+		RequestSize: cfg.RequestSize,
+		NumWorkers:  cfg.NumWorkers,
 		OnFailure:   func() {}, // No-op since we flush progress to disk at the regular commit interval.
 	})
 

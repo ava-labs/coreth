@@ -47,6 +47,8 @@ type codeSyncer struct {
 
 // newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
 func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*codeSyncer, error) {
+	cfg := config.WithUnsetDefaults()
+
 	dbCodeHashes, err := getCodeToFetchFromDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
@@ -55,9 +57,9 @@ func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Conf
 	return &codeSyncer{
 		db:           db,
 		client:       client,
-		config:       config,
+		config:       cfg,
 		dbCodeHashes: dbCodeHashes,
-		codeHashes:   make(chan common.Hash, config.MaxOutstandingCodeHashes),
+		codeHashes:   make(chan common.Hash, cfg.MaxOutstandingCodeHashes),
 		open:         make(chan struct{}),
 	}, nil
 }
