@@ -31,20 +31,12 @@ var (
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 )
 
-// CodeSyncerConfig defines the configuration of the code syncer
-type CodeSyncerConfig struct {
-	// Maximum number of outstanding code hashes in the queue before the code syncer should block.
-	MaxOutstandingCodeHashes int
-	// Number of worker goroutines to fetch code from the network.
-	NumCodeFetchingWorkers int
-}
-
 // codeSyncer syncs code bytes from the network in a seprate thread.
 // Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
 type codeSyncer struct {
 	db                    ethdb.Database
 	client                statesyncclient.Client
-	config                CodeSyncerConfig
+	config                Config
 	lock                  sync.Mutex
 	outstandingCodeHashes set.Set[common.Hash] // Set of code hashes that we need to fetch from the network.
 	dbCodeHashes          []common.Hash        // List of code hashes stored in the database.
@@ -54,7 +46,7 @@ type codeSyncer struct {
 }
 
 // newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
-func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config CodeSyncerConfig) (*codeSyncer, error) {
+func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*codeSyncer, error) {
 	dbCodeHashes, err := getCodeToFetchFromDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)

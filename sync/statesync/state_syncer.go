@@ -110,10 +110,7 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 
 	var err error
 
-	ss.codeSyncer, err = newCodeSyncer(client, db, CodeSyncerConfig{
-		MaxOutstandingCodeHashes: config.MaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   config.NumCodeFetchingWorkers,
-	})
+	ss.codeSyncer, err = newCodeSyncer(client, db, config)
 
 	if err != nil {
 		return nil, err
