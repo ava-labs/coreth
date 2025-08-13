@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	ethparams "github.com/ava-labs/libevm/params"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 
 	atomictxpool "github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
@@ -4045,7 +4047,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 			Nonce:      0,
 			GasTipCap:  uint256.NewInt(1),
 			GasFeeCap:  uint256.MustFromBig(fee),
-			Gas:        params.TxGas,
+			Gas:        ethparams.TxGas,
 			To:         testEthAddrs[0],
 			BlobFeeCap: uint256.NewInt(1),
 			BlobHashes: []common.Hash{{1}}, // This blob is expected to cause verification to fail

@@ -15,6 +15,7 @@ import (
 	"github.com/ava-labs/libevm/core/state"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 
@@ -237,7 +238,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			precompileAddr:       NativeAssetCallAddr,
 			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
 			value:                big0,
-			gasInput:             params.AssetCallApricot + params.CallNewAccountGas + 123,
+			gasInput:             params.AssetCallApricot + ethparams.CallNewAccountGas + 123,
 			expectedGasRemaining: 123,
 			expectedErr:          nil,
 			expectedResult:       nil,
@@ -272,7 +273,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			precompileAddr:       NativeAssetCallAddr,
 			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
 			value:                uint256.NewInt(49),
-			gasInput:             params.AssetCallApricot + params.CallNewAccountGas,
+			gasInput:             params.AssetCallApricot + ethparams.CallNewAccountGas,
 			expectedGasRemaining: 0,
 			expectedErr:          nil,
 			expectedResult:       nil,
@@ -399,7 +400,7 @@ func TestStatefulPrecompile(t *testing.T) {
 			precompileAddr:       NativeAssetCallAddr,
 			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
 			value:                uint256.NewInt(50),
-			gasInput:             params.AssetCallApricot + params.CallNewAccountGas - 1,
+			gasInput:             params.AssetCallApricot + ethparams.CallNewAccountGas - 1,
 			expectedGasRemaining: 0,
 			expectedErr:          vm.ErrOutOfGas,
 			expectedResult:       nil,
@@ -433,8 +434,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			precompileAddr:       NativeAssetCallAddr,
 			input:                make([]byte, 24),
 			value:                uint256.NewInt(50),
-			gasInput:             params.AssetCallApricot + params.CallNewAccountGas,
-			expectedGasRemaining: params.CallNewAccountGas,
+			gasInput:             params.AssetCallApricot + ethparams.CallNewAccountGas,
+			expectedGasRemaining: ethparams.CallNewAccountGas,
 			expectedErr:          vm.ErrExecutionReverted,
 			expectedResult:       nil,
 			name:                 "native asset call: invalid input",
@@ -455,8 +456,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			precompileAddr:       GenesisContractAddr,
 			input:                PackNativeAssetCallInput(userAddr2, assetID, big.NewInt(50), nil),
 			value:                big0,
-			gasInput:             params.AssetCallApricot + params.CallNewAccountGas,
-			expectedGasRemaining: params.AssetCallApricot + params.CallNewAccountGas,
+			gasInput:             params.AssetCallApricot + ethparams.CallNewAccountGas,
+			expectedGasRemaining: params.AssetCallApricot + ethparams.CallNewAccountGas,
 			expectedErr:          vm.ErrExecutionReverted,
 			expectedResult:       nil,
 			name:                 "deprecated contract",
