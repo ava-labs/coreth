@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -172,9 +173,7 @@ func checkBlockChainState(
 	)
 
 	acceptedState, err := bc.StateAt(lastAcceptedBlock.Root())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	if err := checkState(acceptedState); err != nil {
 		t.Fatalf("Check state failed for original blockchain due to: %s", err)
 	}

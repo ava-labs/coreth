@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -916,9 +917,7 @@ func TestDeleteThenCreate(t *testing.T) {
 			nonce++
 		}
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err, "failed to generate chain with genesis")
 	// Import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	if err != nil {

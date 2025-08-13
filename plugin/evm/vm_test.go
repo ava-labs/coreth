@@ -239,9 +239,7 @@ func newVM(t *testing.T, config testVMConfig) *testVM {
 
 	for addr, avaxAmount := range config.utxos {
 		txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
-		if err != nil {
-			t.Fatalf("Failed to generate txID from addr: %s", err)
-		}
+		assert.NoError(t, err, "failed to compute txID from address %s", addr)
 		if _, err := addUTXO(atomicMemory, innerVM.ctx, txID, 0, innerVM.ctx.AVAXAssetID, avaxAmount, addr); err != nil {
 			t.Fatalf("Failed to add UTXO to shared memory: %s", err)
 		}
