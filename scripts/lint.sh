@@ -98,12 +98,31 @@ function test_golangci_lint {
 }
 
 function test_extra_golangci_lint {
-  if [[ -f $EXTRA_LINT_FILE ]]; then
-    go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run \
-    --config "$EXTRA_LINT_FILE" \
-    --new-from-rev origin/master \
-    || return 1
+  if [[ ! -f $EXTRA_LINT_FILE ]]; then
+    return 0
   fi
+
+  # Determine base branch
+  BASE_BRANCH="${BASE_REF:-}"
+  if [[ -z "$BASE_BRANCH" ]]; then
+    REF="${MERGE_GROUP_BASE_REF:-}"
+    if [[ -n "$REF" ]]; then
+      BASE_BRANCH="${REF#refs/heads/}"
+    else
+      BASE_BRANCH="${DEFAULT_BRANCH:-master}"
+    fi
+  fi
+  echo "Base branch: $BASE_BRANCH"
+
+  # Fetch the base branch 
+  git fetch --no-tags --prune origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+  BASE_SHA="$(git merge-base HEAD "origin/${BASE_BRANCH}")"
+  echo "Merge-base: $BASE_SHA"
+
+  go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run \
+  --config "$EXTRA_LINT_FILE" \
+  --new-from-rev "$BASE_SHA" \
+  || return 1
 }
 
 # automatically checks license headers
