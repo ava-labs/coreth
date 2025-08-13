@@ -81,13 +81,10 @@ function read_dirs {
   # append exclusions to .extra-golangci.yml in temp file
   EXTRA_LINT_FILE="$(mktemp -d)/.extra-golangci.yml"
   cp .extra-golangci.yml "$EXTRA_LINT_FILE"
-  echo "    paths:" >> "$EXTRA_LINT_FILE"
-  for f in "${exclude_extra_lint[@]}"; do
-    echo "      - \"coreth/$f\"" >> "$EXTRA_LINT_FILE"
-  done
   echo "    paths-except:" >> "$EXTRA_LINT_FILE"
-  for f in "${include_extra_lint[@]}"; do
-    echo "      - \"coreth/$f\"" >> "$EXTRA_LINT_FILE"
+  for f in "${UPSTREAM_FILES[@]}"; do
+    # exclude pre-pended "./"
+    echo "      - \"${f:2}\$\"" >> "$EXTRA_LINT_FILE"
   done
 }
 
