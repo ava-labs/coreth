@@ -26,12 +26,12 @@ func TestEffectiveGasPrice(t *testing.T) {
 		wantErr         error
 	}{
 		{
-			name:    "no gas used",
+			name:    "no_gas_used",
 			tx:      &UnsignedImportTx{},
 			wantErr: ErrNoGasUsed,
 		},
 		{
-			name: "invalid amount burned",
+			name: "invalid_amount_burned",
 			tx: &UnsignedImportTx{
 				ImportedInputs: []*avax.TransferableInput{
 					{
@@ -77,7 +77,7 @@ func TestEffectiveGasPrice(t *testing.T) {
 			),
 		},
 		{
-			name: "valid multiple assets",
+			name: "valid_multiple_assets",
 			tx: &UnsignedImportTx{
 				ImportedInputs: []*avax.TransferableInput{
 					{
@@ -109,7 +109,7 @@ func TestEffectiveGasPrice(t *testing.T) {
 			),
 		},
 		{
-			name: "valid post AP5",
+			name: "valid_post_AP5",
 			tx: &UnsignedImportTx{
 				ImportedInputs: []*avax.TransferableInput{
 					{
@@ -128,6 +128,27 @@ func TestEffectiveGasPrice(t *testing.T) {
 			isApricotPhase5: true,
 			want: *uint256.NewInt(
 				(units.NanoAvax * X2CRateUint64) / (ap5.AtomicTxIntrinsicGas + secp256k1fx.CostPerSignature),
+			),
+		},
+		{
+			name: "gas_price_exceeds_uint64",
+			tx: &UnsignedImportTx{
+				ImportedInputs: []*avax.TransferableInput{
+					{
+						Asset: avax.Asset{
+							ID: avaxAssetID,
+						},
+						In: &secp256k1fx.TransferInput{
+							Amt: units.MegaAvax,
+							Input: secp256k1fx.Input{
+								SigIndices: []uint32{0},
+							},
+						},
+					},
+				},
+			},
+			want: *uint256.MustFromDecimal(
+				"1000000000000000000000", // (units.MegaAvax * X2CRateUint64) / secp256k1fx.CostPerSignature,
 			),
 		},
 	}
