@@ -39,7 +39,13 @@ jobs:
           go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
           go mod tidy
           go clean -modcache
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - name: Run all lint checks
+        env:
+          BASE_REF: ${{ github.base_ref }} 
+          MERGE_GROUP_BASE_REF: ${{ github.event.merge_group.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: ./scripts/run_task.sh lint-all-ci
       - name: Check go.mod and go.sum are up-to-date
         run: ./scripts/run_task.sh check-go-mod-tidy
