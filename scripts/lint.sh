@@ -80,14 +80,14 @@ function read_dirs {
 
   # append exclusions to .extra-golangci.yml in temp file
   EXTRA_LINT_FILE="$(mktemp -d)/.extra-golangci.yml"
-  cp .extra-golangci.yml $EXTRA_LINT_FILE
-  echo "    paths:" >> $EXTRA_LINT_FILE
+  cp .extra-golangci.yml "$EXTRA_LINT_FILE"
+  echo "    paths:" >> "$EXTRA_LINT_FILE"
   for f in "${exclude_extra_lint[@]}"; do
-    echo "      - \"coreth/$f\"" >> $EXTRA_LINT_FILE
+    echo "      - \"coreth/$f\"" >> "$EXTRA_LINT_FILE"
   done
-  echo "    paths-except:" >> $EXTRA_LINT_FILE
+  echo "    paths-except:" >> "$EXTRA_LINT_FILE"
   for f in "${include_extra_lint[@]}"; do
-    echo "      - \"coreth/$f\"" >> $EXTRA_LINT_FILE
+    echo "      - \"coreth/$f\"" >> "$EXTRA_LINT_FILE"
   done
 }
 
@@ -103,7 +103,7 @@ function test_golangci_lint {
 function test_extra_golangci_lint {
   if [[ -f $EXTRA_LINT_FILE ]]; then
     go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run \
-    --config $EXTRA_LINT_FILE \
+    --config "$EXTRA_LINT_FILE" \
     --new-from-rev origin/master \
     || return 1
   fi
