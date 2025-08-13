@@ -21,6 +21,7 @@ grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
 # Read excluded directories into arrays
 DEFAULT_FILES=()
 UPSTREAM_FILES=()
+EXTRA_LINT_FILE=""
 function read_dirs {
   local upstream_folders_file="./scripts/upstream_files.txt"
   # Read the upstream_folders file into an array
@@ -42,12 +43,19 @@ function read_dirs {
   # Combined loop: build both upstream licensed find and exclude args
   local -a upstream_find_args=()
   local -a upstream_exclude_args=()
+  local -a exclude_extra_lint=()
+  local -a include_extra_lint=()
   for line in "${upstream_folders[@]}"; do
+    # Skip empty lines
+    [[ -z "$line" ]] && continue
+
     if [[ "$line" == !* ]]; then
       # Excluding files with !
       upstream_exclude_args+=(! -path "./${line:1}")
+      include_extra_lint+=("${line:1}")
     else
       upstream_find_args+=(-path "./${line}" -o)
+      exclude_extra_lint+=("$line")
     fi
   done
   # Remove the last '-o' from the arrays
@@ -69,15 +77,36 @@ function read_dirs {
 
   # Now find default files (exclude already licensed ones)
   mapfile -t DEFAULT_FILES < <(find . "${find_filters[@]}" "${default_exclude_args[@]}")
+
+  # append exclusions to .extra-golangci.yml in temp file
+  EXTRA_LINT_FILE="$(mktemp -d)/.extra-golangci.yml"
+  cp .extra-golangci.yml $EXTRA_LINT_FILE
+  echo "    paths:" >> $EXTRA_LINT_FILE
+  for f in "${exclude_extra_lint[@]}"; do
+    echo "      - \"coreth/$f\"" >> $EXTRA_LINT_FILE
+  done
+  echo "    paths-except:" >> $EXTRA_LINT_FILE
+  for f in "${include_extra_lint[@]}"; do
+    echo "      - \"coreth/$f\"" >> $EXTRA_LINT_FILE
+  done
 }
 
-# by default, "./scripts/lint.sh" runs all linft tests
+# by default, "./scripts/lint.sh" runs all lint tests
 # to run only "license_header" test
 # TESTS='license_header' ./scripts/lint.sh
-TESTS=${TESTS:-"golangci_lint license_header require_error_is_no_funcs_as_params single_import interface_compliance_nil require_no_error_inline_func import_testing_only_in_tests"}
+TESTS=${TESTS:-"golangci_lint extra_golangci_lint license_header require_error_is_no_funcs_as_params single_import interface_compliance_nil require_no_error_inline_func import_testing_only_in_tests"}
 
 function test_golangci_lint {
   go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63 run --config .golangci.yml
+}
+
+function test_extra_golangci_lint {
+  if [[ -f $EXTRA_LINT_FILE ]]; then
+    go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run \
+    --config $EXTRA_LINT_FILE \
+    --new-from-rev origin/master \
+    || return 1
+  fi
 }
 
 # automatically checks license headers
