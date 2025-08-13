@@ -122,6 +122,7 @@ function test_extra_golangci_lint {
   go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run \
   --config "$EXTRA_LINT_FILE" \
   --new-from-rev "$BASE_SHA" \
+  --whole-files \
   || return 1
 }
 
