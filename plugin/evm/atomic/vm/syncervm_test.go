@@ -35,9 +35,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 				atomicVM, ok := vm.(*VM)
 				require.True(t, ok)
 				b, err := predicate.NewResults().Bytes()
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				gen.AppendExtra(b)
 				switch i {
 				case 0:
@@ -49,9 +47,7 @@ func TestAtomicSyncerVM(t *testing.T) {
 				case 1:
 					// export some of the imported UTXOs to test exportTx is properly synced
 					state, err := vm.Ethereum().BlockChain().State()
-					if err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, err)
 					wrappedStateDB := extstate.New(state)
 					exportTx, err := atomic.NewExportTx(
 						atomicVM.Ctx,
@@ -90,12 +86,9 @@ func TestAtomicSyncerVM(t *testing.T) {
 
 				for addr, avaxAmount := range alloc {
 					txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
-					if err != nil {
-						t.Fatalf("Failed to generate txID from addr: %s", err)
-					}
-					if _, err := addUTXO(vmSetup.AtomicMemory, vmSetup.SnowCtx, txID, 0, vmSetup.SnowCtx.AVAXAssetID, avaxAmount, addr); err != nil {
-						t.Fatalf("Failed to add UTXO to shared memory: %s", err)
-					}
+					require.NoError(t, err, "Failed to generate txID from addr")
+					_, err = addUTXO(vmSetup.AtomicMemory, vmSetup.SnowCtx, txID, 0, vmSetup.SnowCtx.AVAXAssetID, avaxAmount, addr)
+					require.NoError(t, err, "Failed to add UTXO to shared memory")
 				}
 				if isServer {
 					serverAtomicTrie := atomicVM.AtomicBackend.AtomicTrie()

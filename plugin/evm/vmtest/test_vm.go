@@ -50,7 +50,7 @@ func SetupTestVM(t *testing.T, vm commoneng.VM, config TestVMConfig) *TestVMSuit
 	if config.Fork != nil {
 		fork = *config.Fork
 	}
-	ctx, dbManager, genesisBytes, m := SetupGenesis(t, fork)
+	snowtCtx, dbManager, genesisBytes, m := SetupGenesis(t, fork)
 	if len(config.GenesisJSON) != 0 {
 		genesisBytes = []byte(config.GenesisJSON)
 	}
@@ -68,9 +68,11 @@ func SetupTestVM(t *testing.T, vm commoneng.VM, config TestVMConfig) *TestVMSuit
 	configJSON, err := OverrideSchemeConfig(scheme, config.ConfigJSON)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+
 	err = vm.Initialize(
-		context.Background(),
 		ctx,
+		snowtCtx,
 		dbManager,
 		genesisBytes,
 		nil,
@@ -81,8 +83,8 @@ func SetupTestVM(t *testing.T, vm commoneng.VM, config TestVMConfig) *TestVMSuit
 	require.NoError(t, err, "error initializing GenesisVM")
 
 	if !config.IsSyncing {
-		require.NoError(t, vm.SetState(context.Background(), snow.Bootstrapping))
-		require.NoError(t, vm.SetState(context.Background(), snow.NormalOp))
+		require.NoError(t, vm.SetState(ctx, snow.Bootstrapping))
+		require.NoError(t, vm.SetState(ctx, snow.NormalOp))
 	}
 
 	return &TestVMSuite{
@@ -90,7 +92,7 @@ func SetupTestVM(t *testing.T, vm commoneng.VM, config TestVMConfig) *TestVMSuit
 		DB:           dbManager,
 		AtomicMemory: m,
 		AppSender:    appSender,
-		Ctx:          ctx,
+		Ctx:          snowtCtx,
 	}
 }
 

@@ -83,7 +83,8 @@ func TestSendWarpMessage(t *testing.T) {
 func testSendWarpMessage(t *testing.T, scheme string) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -311,7 +312,8 @@ func testValidateInvalidWarpBlockHash(t *testing.T, scheme string) {
 func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalancheWarp.UnsignedMessage, validSignature bool, txPayload []byte) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -475,7 +477,8 @@ func TestReceiveWarpMessage(t *testing.T) {
 func testReceiveWarpMessageWithScheme(t *testing.T, scheme string) {
 	require := require.New(t)
 	fork := upgradetest.Durango
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -803,7 +806,8 @@ func TestSignatureRequestsToVM(t *testing.T) {
 
 func testSignatureRequestsToVM(t *testing.T, scheme string) {
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})

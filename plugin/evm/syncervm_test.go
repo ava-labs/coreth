@@ -24,9 +24,7 @@ func TestEVMSyncerVM(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			genFn := func(i int, vm extension.InnerVM, gen *core.BlockGen) {
 				b, err := predicate.NewResults().Bytes()
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				gen.AppendExtra(b)
 
 				tx := types.NewTransaction(gen.TxNonce(vmtest.TestEthAddrs[0]), vmtest.TestEthAddrs[1], common.Big1, params.TxGas, vmtest.InitialBaseFee, nil)

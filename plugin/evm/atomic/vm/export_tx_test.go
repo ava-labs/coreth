@@ -465,7 +465,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 func TestExportTxSemanticVerify(t *testing.T) {
 	fork := upgradetest.NoUpgrades
 	vm := newAtomicTestVM()
-	_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {

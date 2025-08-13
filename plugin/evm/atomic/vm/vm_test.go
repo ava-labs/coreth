@@ -53,18 +53,6 @@ func newAtomicTestVM() *VM {
 	return WrapVM(&evm.VM{})
 }
 
-func setupAtomicTestVM(t *testing.T, cfg vmtest.TestVMConfig) (*VM, *vmtest.TestVMSuite) {
-	vm := newAtomicTestVM()
-	tvm := vmtest.SetupTestVM(t, vm, cfg)
-	return vm, tvm
-}
-
-func setupAtomicTestVMWithUtxos(t *testing.T, cfg vmtest.TestVMConfig, utxos map[ids.ShortID]uint64) (*VM, *vmtest.TestVMSuite) {
-	vm, tvm := setupAtomicTestVM(t, cfg)
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, utxos))
-	return vm, tvm
-}
-
 func (vm *VM) newImportTx(
 	chainID ids.ID, // chain to import from
 	to common.Address, // Address of recipient
@@ -144,16 +132,14 @@ func testImportMissingUTXOs(t *testing.T, scheme string) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
-	vm1, _ := setupAtomicTestVMWithUtxos(
-		t,
-		vmtest.TestVMConfig{
-			Fork:   &fork,
-			Scheme: scheme,
-		},
-		map[ids.ShortID]uint64{
-			vmtest.TestShortIDAddrs[0]: importAmount,
-		},
-	)
+	vm1 := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm1, vmtest.TestVMConfig{
+		Fork:   &fork,
+		Scheme: scheme,
+	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm1.Ctx, map[ids.ShortID]uint64{
+		vmtest.TestShortIDAddrs[0]: importAmount,
+	}))
 	defer func() {
 		require.NoError(t, vm1.Shutdown(context.Background()))
 	}()
@@ -168,7 +154,8 @@ func testImportMissingUTXOs(t *testing.T, scheme string) {
 	require.NoError(t, err)
 
 	// make another VM which is missing the UTXO in shared memory
-	vm2, _ := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm2 := newAtomicTestVM()
+	tvm = vmtest.SetupTestVM(t, vm2, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -306,14 +293,16 @@ func testIssueAtomicTxs(t *testing.T, scheme string) {
 
 func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string) {
 	importAmount := uint64(10000000)
-	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
-	}, map[ids.ShortID]uint64{
+	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 		vmtest.TestShortIDAddrs[1]: importAmount,
 		vmtest.TestShortIDAddrs[2]: importAmount,
-	})
+	}))
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -608,7 +597,8 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 	for name, issueTxs := range tests {
 		t.Run(name, func(t *testing.T) {
 			fork := upgradetest.ApricotPhase5
-			vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+			vm := newAtomicTestVM()
+			tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 				Fork:       &fork,
 				Scheme:     scheme,
 				ConfigJSON: `{"pruning-enabled":true}`,
@@ -665,13 +655,15 @@ func testConflictingTransitiveAncestryWithGap(t *testing.T, scheme string) {
 
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
-	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
-	}, map[ids.ShortID]uint64{
+	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		addr0: importAmount,
 		addr1: importAmount,
-	})
+	}))
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -802,11 +794,11 @@ func TestBonusBlocksTxs(t *testing.T) {
 
 func testBonusBlocksTxs(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
-	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -904,12 +896,14 @@ func TestReissueAtomicTx(t *testing.T) {
 
 func testReissueAtomicTx(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase1
-	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
-	}, map[ids.ShortID]uint64{
+	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: 10000000,
 		vmtest.TestShortIDAddrs[1]: 10000000,
-	})
+	}))
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1013,10 +1007,15 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 
 func testAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase1
-	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+		vmtest.TestShortIDAddrs[0]: 10000000,
+		vmtest.TestShortIDAddrs[1]: 10000000,
+	}))
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1072,9 +1071,14 @@ func testAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T, scheme string) {
 // same revision ID twice.
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	fork := upgradetest.ApricotPhase1
-	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+		vmtest.TestShortIDAddrs[0]: 10000000,
+		vmtest.TestShortIDAddrs[1]: 10000000,
+	}))
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1132,13 +1136,15 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
-	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
-	}, map[ids.ShortID]uint64{
+	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 		vmtest.TestShortIDAddrs[1]: importAmount,
 		vmtest.TestShortIDAddrs[2]: importAmount,
-	})
+	}))
 	conflictKey := utilstest.NewKey(t)
 
 	defer func() {
@@ -1208,7 +1214,8 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
-	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 
@@ -1264,11 +1271,13 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	// containing a large enough atomic transaction that it will exceed the atomic gas limit in
 	// ApricotPhase5.
 	fork1 := upgradetest.ApricotPhase4
-	vm1, tvm1 := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm1 := newAtomicTestVM()
+	tvm1 := vmtest.SetupTestVM(t, vm1, vmtest.TestVMConfig{
 		Fork: &fork1,
 	})
 	fork2 := upgradetest.ApricotPhase5
-	vm2, tvm2 := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm2 := newAtomicTestVM()
+	tvm2 := vmtest.SetupTestVM(t, vm2, vmtest.TestVMConfig{
 		Fork: &fork2,
 	})
 	defer func() {
@@ -1359,12 +1368,14 @@ func TestEmptyBlock(t *testing.T) {
 func testEmptyBlock(t *testing.T, scheme string) {
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
-	vm, _ := setupAtomicTestVMWithUtxos(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
-	}, map[ids.ShortID]uint64{
-		vmtest.TestShortIDAddrs[0]: importAmount,
 	})
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+		vmtest.TestShortIDAddrs[0]: importAmount,
+	}))
 
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
@@ -1429,7 +1440,8 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 
 func testBuildApricotPhase5Block(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase5
-	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -1611,7 +1623,8 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 
 func testBuildApricotPhase4Block(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase4
-	vm, tvm := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 
@@ -1799,7 +1812,8 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 
 func testBuildInvalidBlockHead(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
-	vm, _ := setupAtomicTestVM(t, vmtest.TestVMConfig{
+	vm := newAtomicTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})

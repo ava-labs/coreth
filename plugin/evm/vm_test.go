@@ -81,18 +81,13 @@ func newDefaultTestVM() *VM {
 	return vm
 }
 
-func setupDefaultTestVM(t *testing.T, cfg vmtest.TestVMConfig) (*VM, *vmtest.TestVMSuite) {
-	vm := newDefaultTestVM()
-	tvm := vmtest.SetupTestVM(t, vm, cfg)
-	return vm, tvm
-}
-
 func TestVMContinuousProfiler(t *testing.T) {
 	profilerDir := t.TempDir()
 	profilerFrequency := 500 * time.Millisecond
 	configJSON := fmt.Sprintf(`{"continuous-profiler-dir": %q,"continuous-profiler-frequency": "500ms"}`, profilerDir)
 	fork := upgradetest.Latest
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:       &fork,
 		ConfigJSON: configJSON,
 	})
@@ -164,7 +159,8 @@ func testVMUpgrades(t *testing.T, scheme string) {
 	for _, test := range genesisTests {
 		t.Run(test.fork.String(), func(t *testing.T) {
 			require := require.New(t)
-			vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+			vm := newDefaultTestVM()
+			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 				Fork:   &test.fork,
 				Scheme: scheme,
 			})
@@ -200,7 +196,8 @@ func TestBuildEthTxBlock(t *testing.T) {
 
 func testBuildEthTxBlock(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase2
-	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -377,8 +374,10 @@ func testSetPreferenceRace(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	}
-	vm1, _ := setupDefaultTestVM(t, conf)
-	vm2, _ := setupDefaultTestVM(t, conf)
+	vm1 := newDefaultTestVM()
+	vm2 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm1, conf)
+	vmtest.SetupTestVM(t, vm2, conf)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -625,11 +624,13 @@ func TestReorgProtection(t *testing.T) {
 
 func testReorgProtection(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
-	vm1, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm1 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm1, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	vm2, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm2 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm2, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -815,8 +816,10 @@ func testNonCanonicalAccept(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	}
-	vm1, _ := setupDefaultTestVM(t, tvmConfig)
-	vm2, _ := setupDefaultTestVM(t, tvmConfig)
+	vm1 := newDefaultTestVM()
+	vm2 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm1, tvmConfig)
+	vmtest.SetupTestVM(t, vm2, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1026,8 +1029,10 @@ func testStickyPreference(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	}
-	vm1, _ := setupDefaultTestVM(t, tvmConfig)
-	vm2, _ := setupDefaultTestVM(t, tvmConfig)
+	vm1 := newDefaultTestVM()
+	vm2 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm1, tvmConfig)
+	vmtest.SetupTestVM(t, vm2, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1303,8 +1308,10 @@ func testUncleBlock(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	}
-	vm1, _ := setupDefaultTestVM(t, tvmConfig)
-	vm2, _ := setupDefaultTestVM(t, tvmConfig)
+	vm1 := newDefaultTestVM()
+	vm2 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm1, tvmConfig)
+	vmtest.SetupTestVM(t, vm2, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1508,8 +1515,10 @@ func testAcceptReorg(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	}
-	vm1, _ := setupDefaultTestVM(t, tvmConfig)
-	vm2, _ := setupDefaultTestVM(t, tvmConfig)
+	vm1 := newDefaultTestVM()
+	vm2 := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm1, tvmConfig)
+	vmtest.SetupTestVM(t, vm2, tvmConfig)
 
 	defer func() {
 		if err := vm1.Shutdown(context.Background()); err != nil {
@@ -1722,7 +1731,8 @@ func TestFutureBlock(t *testing.T) {
 
 func testFutureBlock(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -1792,7 +1802,8 @@ func TestBuildApricotPhase1Block(t *testing.T) {
 
 func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 	fork := upgradetest.ApricotPhase1
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -1917,7 +1928,8 @@ func TestLastAcceptedBlockNumberAllow(t *testing.T) {
 
 func testLastAcceptedBlockNumberAllow(t *testing.T, scheme string) {
 	fork := upgradetest.NoUpgrades
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
@@ -1989,7 +2001,8 @@ func testLastAcceptedBlockNumberAllow(t *testing.T, scheme string) {
 
 func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	fork := upgradetest.Durango
-	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 
@@ -2089,7 +2102,8 @@ func TestParentBeaconRootBlock(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			fork := test.fork
-			vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+			vm := newDefaultTestVM()
+			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 				Fork: &fork,
 			})
 
@@ -2180,7 +2194,8 @@ func TestNoBlobsAllowed(t *testing.T) {
 	require.NoError(err)
 
 	// Create a VM with the genesis (will use header verification)
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		GenesisJSON: genesisJSONCancun,
 	})
 	defer func() { require.NoError(vm.Shutdown(ctx)) }()
@@ -2199,7 +2214,8 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require := require.New(t)
 
 	fork := upgradetest.Fortuna
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
 	defer func() {
@@ -2280,7 +2296,8 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	genesisBytes, err := json.Marshal(genesis)
 	require.NoError(err)
 
-	vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:        &fork,
 		GenesisJSON: string(genesisBytes),
 	})
@@ -2529,7 +2546,8 @@ func TestWaitForEvent(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			fork := upgradetest.Latest
-			vm, _ := setupDefaultTestVM(t, vmtest.TestVMConfig{
+			vm := newDefaultTestVM()
+			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 				Fork: &fork,
 			})
 			testCase.testCase(t, vm)

@@ -57,7 +57,7 @@ type ExtensibleVM interface {
 	ChainConfig() *params.ChainConfig
 	// P2PValidators returns the validators for the network
 	P2PValidators() *p2p.Validators
-	// Blockchain returns the blockchain client
+	// Ethereum returns the Ethereum service
 	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM
 	Config() config.Config

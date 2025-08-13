@@ -84,7 +84,8 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
 	assert.NoError(err)
 
-	vm, tvm := setupDefaultTestVM(t, vmtest.TestVMConfig{
+	vm := newDefaultTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		GenesisJSON: genesisJSON,
 	})
 	defer func() {

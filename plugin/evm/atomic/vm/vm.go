@@ -87,19 +87,19 @@ type VM struct {
 	baseCodec     codec.Registry
 	AtomicMempool *txpool.Mempool
 
-	// [AtomicTxRepository] maintains two indexes on accepted atomic txs.
+	// AtomicTxRepository maintains two indexes on accepted atomic txs.
 	// - txID to accepted atomic tx
 	// - block height to list of atomic txs accepted on block at that height
 	// TODO: unexport these fields
 	AtomicTxRepository *atomicstate.AtomicRepository
-	// [AtomicBackend] abstracts verification and processing of atomic transactions
+	// AtomicBackend abstracts verification and processing of atomic transactions
 	AtomicBackend *atomicstate.AtomicBackend
 
 	atomicTxGossipHandler p2p.Handler
 	AtomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
 	AtomicTxPullGossiper  avalanchegossip.Gossiper
 
-	// [cancel] may be nil until [snow.NormalOp] starts
+	// cancel may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
 	shutdownWg sync.WaitGroup
 
@@ -403,7 +403,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	}
 
 	// We don’t need to revert the state here in case verifyTx errors, because
-	// [preferredState] is thrown away either way.
+	// preferredState is thrown away either way.
 	return vm.verifyTx(tx, parentHeader.Hash(), nextBaseFee, preferredState, *extraRules)
 }
 
