@@ -36,11 +36,14 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/coreth/utils/utilstest"
 )
 
 func TestAtomicTxGossip(t *testing.T) {
 	require := require.New(t)
-	ctx := context.Background()
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
+
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
@@ -130,7 +133,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(client.AppRequest(ctx, set.Of(vm.Ctx.NodeID), requestBytes, onResponse))
 	require.NoError(vm.AppRequest(ctx, requestingNodeID, 1, time.Time{}, <-peerSender.SentAppRequest))
 	require.NoError(network.AppResponse(ctx, snowCtx.NodeID, 1, <-responseSender.SentAppResponse))
-	wg.Wait()
+	utilstest.WaitGroupWithContext(t, ctx, wg)
 
 	// Issue a tx to the VM
 	utxo, err := addUTXO(
@@ -148,7 +151,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 
 	// wait so we aren't throttled by the vm
-	time.Sleep(5 * time.Second)
+	utilstest.SleepWithContext(ctx, 5*time.Second)
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
@@ -170,13 +173,15 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(client.AppRequest(ctx, set.Of(vm.Ctx.NodeID), requestBytes, onResponse))
 	require.NoError(vm.AppRequest(ctx, requestingNodeID, 3, time.Time{}, <-peerSender.SentAppRequest))
 	require.NoError(network.AppResponse(ctx, snowCtx.NodeID, 3, <-responseSender.SentAppResponse))
-	wg.Wait()
+	utilstest.WaitGroupWithContext(t, ctx, wg)
 }
 
 // Tests that a tx is gossiped when it is issued
 func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
-	ctx := context.Background()
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
+
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
@@ -245,7 +250,9 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 // Tests that a tx is gossiped when it is issued
 func TestAtomicTxPushGossipInbound(t *testing.T) {
 	require := require.New(t)
-	ctx := context.Background()
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
+
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()

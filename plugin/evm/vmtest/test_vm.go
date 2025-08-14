@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +69,8 @@ func SetupTestVM(t *testing.T, vm commoneng.VM, config TestVMConfig) *TestVMSuit
 	configJSON, err := OverrideSchemeConfig(scheme, config.ConfigJSON)
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
 
 	err = vm.Initialize(
 		ctx,
