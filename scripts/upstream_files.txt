@@ -2,10 +2,10 @@ accounts/*
 consensus/*
 core/*
 eth/*
+internal/*
 log/*
 miner/*
 node/*
-internal/*
 signer/*
 tests/*
 triedb/*
