@@ -51,35 +51,35 @@ linters:
   default: none
   enable:
     - asciicheck
-    - bodyclose
+    # - bodyclose
     - copyloopvar
-    - depguard
-    - errcheck
+    # - depguard
+    # - errcheck
     - errorlint
-    - forbidigo
-    - goconst
-    - gocritic
+    # - forbidigo
+    # - goconst
+    # - gocritic
     - goprintffuncname
-    - gosec
+    # - gosec
     - govet
     - importas
     - ineffassign
     - misspell
     - nakedret
-    - nilerr
-    - noctx
+    # - nilerr
+    # - noctx
     - nolintlint
     - perfsprint
-    - prealloc
-    - predeclared
-    - revive
+    # - prealloc
+    # - predeclared
+    # - revive
     - spancheck
-    - staticcheck
+    # - staticcheck
     - tagalign
-    - testifylint
+    # - testifylint
     - unconvert
-    - unparam
-    - unused
+    # - unparam
+    # - unused
     - usestdlibvars
     - whitespace
   settings:

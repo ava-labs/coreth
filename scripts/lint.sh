@@ -43,8 +43,6 @@ function read_dirs {
   # Combined loop: build both upstream licensed find and exclude args
   local -a upstream_find_args=()
   local -a upstream_exclude_args=()
-  local -a exclude_extra_lint=()
-  local -a include_extra_lint=()
   for line in "${upstream_folders[@]}"; do
     # Skip empty lines
     [[ -z "$line" ]] && continue
@@ -52,10 +50,8 @@ function read_dirs {
     if [[ "$line" == !* ]]; then
       # Excluding files with !
       upstream_exclude_args+=(! -path "./${line:1}")
-      include_extra_lint+=("${line:1}")
     else
       upstream_find_args+=(-path "./${line}" -o)
-      exclude_extra_lint+=("$line")
     fi
   done
   # Remove the last '-o' from the arrays
@@ -80,6 +76,7 @@ function read_dirs {
 
   # append exclusions to .extra-golangci.yml in temp file
   EXTRA_LINT_FILE="$(mktemp -d)/.extra-golangci.yml"
+  echo "Extra lint file at: $EXTRA_LINT_FILE"
   cp .extra-golangci.yml "$EXTRA_LINT_FILE"
   echo "    paths-except:" >> "$EXTRA_LINT_FILE"
   for f in "${UPSTREAM_FILES[@]}"; do
@@ -102,27 +99,8 @@ function test_extra_golangci_lint {
     return 0
   fi
 
-  # Determine base branch
-  BASE_BRANCH="${BASE_REF:-}"
-  if [[ -z "$BASE_BRANCH" ]]; then
-    REF="${MERGE_GROUP_BASE_REF:-}"
-    if [[ -n "$REF" ]]; then
-      BASE_BRANCH="${REF#refs/heads/}"
-    else
-      BASE_BRANCH="${DEFAULT_BRANCH:-master}"
-    fi
-  fi
-  echo "Base branch: $BASE_BRANCH"
-
-  # Fetch the base branch 
-  git fetch --no-tags --prune origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
-  BASE_SHA="$(git merge-base HEAD "origin/${BASE_BRANCH}")"
-  echo "Merge-base: $BASE_SHA"
-
   go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6 run \
   --config "$EXTRA_LINT_FILE" \
-  --new-from-rev "$BASE_SHA" \
-  --whole-files \
   || return 1
 }
 
