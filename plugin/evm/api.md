@@ -1,6 +1,6 @@
 ---
 title: C-Chain API
-description: "This page is an overview of the C-Chain API associated with AvalancheGo."
+description: This page is an overview of the C-Chain API associated with AvalancheGo.
 ---
 
 <Callout title="Note">
@@ -46,7 +46,7 @@ For example, to interact with the C-Chain's Ethereum APIs via websocket on local
 ws://127.0.0.1:9650/ext/bc/C/ws
 ```
 
-<Callout title="Tip" icon = {<BadgeCheck className="size-5 text-card" fill="green" />} >
+\<Callout title="Tip" icon = {<BadgeCheck className="size-5 text-card" fill="green" />} >
 On localhost, use `ws://`. When using the [Public API](/docs/tooling/rpc-providers) or another
 host that supports encryption, use `wss://`.
 </Callout>

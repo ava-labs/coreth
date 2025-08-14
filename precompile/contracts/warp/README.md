@@ -17,11 +17,11 @@ For more details on Avalanche Warp Messaging, see the AvalancheGo [Warp README](
 The Avalanche Warp Precompile enables this flow to send a message from blockchain A to blockchain B:
 
 1. Call the Warp Precompile `sendWarpMessage` function with the arguments for the `UnsignedMessage`
-2. Warp Precompile emits an event / log containing the `UnsignedMessage` specified by the caller of `sendWarpMessage`
-3. Network accepts the block containing the `UnsignedMessage` in the log, so that validators are willing to sign the message
-4. An off-chain relayer queries the validators for their signatures of the message and aggregates the signatures to create a `SignedMessage`
-5. The off-chain relayer encodes the `SignedMessage` as the [predicate](#predicate-encoding) in the AccessList of a transaction to deliver on blockchain B
-6. The transaction is delivered on blockchain B, the signature is verified prior to executing the block, and the message is accessible via the Warp Precompile's `getVerifiedWarpMessage` during the execution of that transaction
+1. Warp Precompile emits an event / log containing the `UnsignedMessage` specified by the caller of `sendWarpMessage`
+1. Network accepts the block containing the `UnsignedMessage` in the log, so that validators are willing to sign the message
+1. An off-chain relayer queries the validators for their signatures of the message and aggregates the signatures to create a `SignedMessage`
+1. The off-chain relayer encodes the `SignedMessage` as the [predicate](#predicate-encoding) in the AccessList of a transaction to deliver on blockchain B
+1. The transaction is delivered on blockchain B, the signature is verified prior to executing the block, and the message is accessible via the Warp Precompile's `getVerifiedWarpMessage` during the execution of that transaction
 
 ### Warp Precompile
 
@@ -57,7 +57,7 @@ To use this function, the transaction must include the signed Avalanche Warp Mes
 This leads to the following advantages:
 
 1. The EVM execution does not need to verify the Warp Message at runtime (no signature verification or external calls to the P-Chain)
-2. The EVM can deterministically re-execute and re-verify blocks assuming the predicate was verified by the network (e.g., in bootstrapping)
+1. The EVM can deterministically re-execute and re-verify blocks assuming the predicate was verified by the network (e.g., in bootstrapping)
 
 This pre-verification is performed using the ProposerVM Block header during [block verification](../../../plugin/evm/block.go#L355) & [block building](../../../miner/worker.go#L200).
 
@@ -89,9 +89,9 @@ Sending messages from the C-Chain remains unchanged.
 However, when L1 XYZ receives a message from the C-Chain, it changes the semantics to the following:
 
 1. Read the `SourceChainID` of the signed message (C-Chain)
-2. Look up the `SubnetID` that validates C-Chain: Primary Network
-3. Look up the validator set of L1 XYZ (instead of the Primary Network) and the registered BLS Public Keys of L1 XYZ at the P-Chain height specified by the ProposerVM header
-4. Continue Warp Message verification using the validator set of L1 XYZ instead of the Primary Network
+1. Look up the `SubnetID` that validates C-Chain: Primary Network
+1. Look up the validator set of L1 XYZ (instead of the Primary Network) and the registered BLS Public Keys of L1 XYZ at the P-Chain height specified by the ProposerVM header
+1. Continue Warp Message verification using the validator set of L1 XYZ instead of the Primary Network
 
 This means that C-Chain to L1 communication only requires a threshold of stake on the receiving L1 to sign the message instead of a threshold of stake for the entire Primary Network.
 
@@ -118,7 +118,7 @@ As a result, we require that the block itself provides a deterministic hint whic
 To provide that hint, we've explored two designs:
 
 1. Include a predicate in the transaction to ensure any referenced message is valid
-2. Append the results of checking whether a Warp Message is valid/invalid to the block data itself
+1. Append the results of checking whether a Warp Message is valid/invalid to the block data itself
 
 The current implementation uses option (1).
 

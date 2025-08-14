@@ -33,7 +33,7 @@ do
     if [[ ${command_status:-0} == 0 ]]; then
         rm test.out
         exit 0
-    else 
+    else
         unset command_status # Clear the error code for the next run
     fi
 
