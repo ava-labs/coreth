@@ -1,9 +1,18 @@
+accounts/*
+consensus/*
 core/*
 eth/*
+log/*
+miner/*
 node/*
 internal/*
+signer/*
+tests/*
+triedb/*
 
-!internal/ethapi/api_extra_test.go
+!accounts/abi/abi_extra_test.go
+!accounts/abi/bind/bind_extra_test.go
+!consensus/dummy/*
 !core/blockchain_ext.go
 !core/blockchain_log_test.go
 !core/blockchain_ext_test.go
@@ -25,3 +34,7 @@ internal/*
 !internal/ethapi/api.coreth.go
 !internal/ethapi/api.coreth_test.go
 !internal/ethapi/api_extra.go
+!internal/ethapi/api_extra_test.go
+!tests/utils/*
+!tests/warp/*
+!triedb/firewood/*
