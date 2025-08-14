@@ -4,7 +4,6 @@
 package txpool
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
@@ -16,8 +15,6 @@ import (
 )
 
 const discardedTxsCacheSize = 50
-
-var ErrNoGasUsed = errors.New("no gas used")
 
 // Txs stores the transactions inside of the mempool.
 //
@@ -38,8 +35,8 @@ type Txs struct {
 	// maxSize is the maximum number of transactions allowed to be kept in
 	// mempool.
 	maxSize int
-	// pending is a channel of length one, which the mempool ensures has an item
-	// on it as long as there is a pending transaction.
+	// pending is a channel of length one, which the mempool uses to awake the
+	// block builder when a new transaction is added.
 	pending chan struct{}
 
 	lock sync.RWMutex
@@ -84,22 +81,6 @@ func (t *Txs) PendingLen() int {
 	defer t.lock.RUnlock()
 
 	return t.pendingTxs.Len()
-}
-
-// atomicTxGasPrice returns the gasPrice of a transaction in nAVAX/gas.
-func (t *Txs) atomicTxGasPrice(tx *atomic.Tx) (uint64, error) {
-	gasUsed, err := tx.GasUsed(true)
-	if err != nil {
-		return 0, err
-	}
-	if gasUsed == 0 {
-		return 0, ErrNoGasUsed
-	}
-	burned, err := tx.Burned(t.ctx.AVAXAssetID)
-	if err != nil {
-		return 0, err
-	}
-	return burned / gasUsed, nil
 }
 
 // Iterate applies f to all Pending transactions. If f returns false, the
@@ -178,12 +159,6 @@ func (t *Txs) IssueCurrentTxs() {
 	}
 	t.metrics.issuedTxs.Update(int64(len(t.issuedTxs)))
 	t.metrics.currentTxs.Update(0)
-
-	// Since this function is called after the block is built, we should make
-	// sure to signal if we are willing to build another block.
-	if t.pendingTxs.Len() > 0 {
-		t.addPending()
-	}
 }
 
 // CancelCurrentTx attempts to mark the Current transaction as Pending.
@@ -212,12 +187,6 @@ func (t *Txs) CancelCurrentTxs() {
 	for _, tx := range t.currentTxs {
 		t.cancelTx(tx)
 	}
-
-	// Since this function is called after block building has failed, we should
-	// make sure to signal if we are willing to build another block.
-	if t.pendingTxs.Len() > 0 {
-		t.addPending()
-	}
 }
 
 // cancelTx attempts to mark the Current transaction as Pending. If the tx can
@@ -226,7 +195,9 @@ func (t *Txs) CancelCurrentTxs() {
 // Assumes the lock is held.
 func (t *Txs) cancelTx(tx *atomic.Tx) {
 	txID := tx.ID()
-	gasPrice, err := t.atomicTxGasPrice(tx)
+	gasPrice, err := atomic.EffectiveGasPrice(tx, t.ctx.AVAXAssetID, true)
+	// Should never error to calculate the gas price of a transaction already in
+	// the mempool
 	if err != nil {
 		log.Error("failed to calculate atomic tx gas price while canceling current tx",
 			"txID", txID,
@@ -331,17 +302,8 @@ func (t *Txs) RemoveTx(tx *atomic.Tx) {
 	t.removeTx(tx, false)
 }
 
-// addPending makes sure that an item is in the Pending channel.
-func (t *Txs) addPending() {
-	select {
-	case t.pending <- struct{}{}:
-	default:
-	}
-}
-
 // SubscribePendingTxs returns a channel that signals when there is a
-// transaction added to the mempool or when the mempool is interacted with after
-// block building finishes.
+// transaction added to the mempool.
 func (t *Txs) SubscribePendingTxs() <-chan struct{} {
 	return t.pending
 }
