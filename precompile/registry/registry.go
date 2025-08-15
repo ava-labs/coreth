@@ -8,7 +8,6 @@ package registry
 // with the registry.
 import (
 	_ "github.com/ava-labs/coreth/precompile/contracts/warp"
-	_ "github.com/ava-labs/libevm/libevm/precompiles/p256verify"
 	// ADD PRECOMPILES BELOW
 	// _ "github.com/ava-labs/coreth/precompile/contracts/newprecompile"
 )
@@ -18,6 +17,5 @@ import (
 // in /coreth/contracts/contracts/**.
 
 // WarpMessengerAddress  = common.HexToAddress("0x0200000000000000000000000000000000000005")
-// P256VerifyAddress     = common.HexToAddress("0x0000000000000000000000000000000000000100")
 // ADD PRECOMPILES BELOW
 // NewPrecompileAddress  = common.HexToAddress("0x02000000000000000000000000000000000000??")
