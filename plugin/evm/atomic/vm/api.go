@@ -15,8 +15,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-
 	"github.com/ava-labs/libevm/log"
 )
 
@@ -159,9 +159,15 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 	service.vm.Ctx.Lock.Lock()
 	defer service.vm.Ctx.Lock.Unlock()
 
-	if err := service.vm.AtomicMempool.AddLocalTx(tx); err != nil {
+	err = service.vm.AtomicMempool.AddLocalTx(tx)
+	if err != nil && !errors.Is(err, txpool.ErrAlreadyKnown) {
 		return err
 	}
+
+	// If the tx was either already in the mempool or was added to the mempool,
+	// we push it to the network for inclusion. If the tx was previously added
+	// to the mempool through p2p gossip, this will ensure this node also pushes
+	// it to the network.
 	service.vm.AtomicTxPushGossiper.Add(tx)
 	return nil
 }
@@ -184,7 +190,7 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			reply.Status = atomic.Processing
 			return nil
@@ -231,7 +237,7 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			return nil
 		}

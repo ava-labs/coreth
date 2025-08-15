@@ -130,7 +130,7 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 
 	// Check that the directory exists
 	dir := filepath.Dir(trieConfig.FilePath)
-	info, err := os.Stat(dir)
+	_, err := os.Stat(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Info("Database directory not found, creating", "path", dir)
@@ -142,26 +142,8 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 		}
 	}
 
-	// Check if the file exists
-	info, err = os.Stat(trieConfig.FilePath)
-	exists := false
-	switch {
-	case err == nil:
-		if info.IsDir() {
-			return nil, fmt.Errorf("database file path is a directory: %s", trieConfig.FilePath)
-		}
-		// File exists
-		log.Info("Database file found", "path", trieConfig.FilePath)
-		exists = true
-	case os.IsNotExist(err):
-		log.Info("Database file not found, will create", "path", trieConfig.FilePath)
-	default:
-		return nil, fmt.Errorf("unknown error checking database file: %w", err)
-	}
-
 	// Create the Firewood config from the provided config.
 	config := &ffi.Config{
-		Create:               !exists,                               // Use any existing file
 		NodeCacheEntries:     uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		FreeListCacheEntries: trieConfig.FreeListCacheEntries,
 		Revisions:            trieConfig.Revisions,
@@ -521,6 +503,9 @@ type reader struct {
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
 func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, error) {
+	// TODO: remove these locks once Firewood supports concurrent reads and commits.
+	reader.db.proposalLock.RLock()
+	defer reader.db.proposalLock.RUnlock()
 	// This function relies on Firewood's internal locking to ensure concurrent reads are safe.
 	// This is safe even if a proposal is being committed concurrently.
 	start := time.Now()
