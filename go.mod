@@ -173,3 +173,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/ava-labs/libevm => github.com/ava-labs/libevm v0.0.0-20250813203936-9e4c147bf2b7
