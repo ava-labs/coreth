@@ -7,60 +7,16 @@ if ! [[ "$0" =~ scripts/lint.sh ]]; then
   exit 255
 fi
 
-
-# Ensure bash>=4 for mapfile support; on macOS, re-exec with Homebrew bash if available
-if ! declare -F mapfile >/dev/null 2>&1; then
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    if command -v brew >/dev/null 2>&1; then
-      HB_BASH="$(brew --prefix bash 2>/dev/null)/bin/bash"
-      if [[ -x "${HB_BASH}" ]]; then
-        exec "${HB_BASH}" "$0" "$@"
-      fi
-    fi
-    for p in /opt/homebrew/bin/bash /usr/local/bin/bash; do
-      if [[ -x "$p" ]]; then
-        exec "$p" "$0" "$@"
-      fi
-    done
-    echo >&2 "error: bash>=4 required. Install with: brew install bash"
-    exit 255
-  fi
-fi
-
 # The -P option is not supported by the grep version installed by
 # default on macos. Since `-o errexit` is ignored in an if
 # conditional, triggering the problem here ensures script failure when
 # using an unsupported version of grep.
-if ! grep -P 'lint.sh' scripts/lint.sh &>/dev/null; then
-  if [[ "$(uname -s)" == "Darwin" ]]; then
-    # On macOS, try Homebrew gnubin path and re-check
-    if command -v brew >/dev/null 2>&1; then
-      GNUGREP_PATH="$(brew --prefix grep)/libexec/gnubin"
-      if [[ -d "${GNUGREP_PATH}" ]]; then
-        export PATH="${GNUGREP_PATH}:${PATH}"
-      fi
-    fi
-    if ! grep -P 'lint.sh' scripts/lint.sh &>/dev/null; then
-      echo >&2 "error: This script requires a recent version of gnu grep."
-      echo >&2 "       On macOS, install with: brew install grep"
-      echo >&2 "       Ensure GNU grep is in PATH (e.g., \"\$(brew --prefix grep)/libexec/gnubin\")."
-      exit 255
-    fi
-  fi
-fi
-
-# Prefer pre-installed binaries and only fall back to `go run` if missing.
-# This avoids repeated module downloads/compilation in pre-commit/pre-push subshells.
-run_or_go() {
-  local _tool="$1"
-  local _module_at_version="$2"
-  shift 2
-  if command -v "${_tool}" >/dev/null 2>&1; then
-    "${_tool}" "$@"
-  else
-    go run "${_module_at_version}" "$@"
-  fi
-}
+grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
+  echo >&2 "error: This script requires a recent version of gnu grep."
+  echo >&2 "       On macos, gnu grep can be installed with 'brew install grep'."
+  echo >&2 "       It will also be necessary to ensure that gnu grep is available in the path."
+  exit 255
+)
 
 # Read excluded directories into arrays
 DEFAULT_FILES=()
@@ -68,8 +24,7 @@ UPSTREAM_FILES=()
 function read_dirs {
   local upstream_folders_file="./scripts/upstream_files.txt"
   # Read the upstream_folders file into an array
-  local -a upstream_folders=()
-  mapfile -t upstream_folders < "$upstream_folders_file"
+  mapfile -t upstream_folders <"$upstream_folders_file"
 
   # Shared find filters
   local -a find_filters=(
@@ -88,8 +43,6 @@ function read_dirs {
   local -a upstream_find_args=()
   local -a upstream_exclude_args=()
   for line in "${upstream_folders[@]}"; do
-    # Skip empty or whitespace-only lines to avoid matching the entire repo
-    [[ -z "${line//[[:space:]]/}" ]] && continue
     if [[ "$line" == !* ]]; then
       # Excluding files with !
       upstream_exclude_args+=(! -path "./${line:1}")
@@ -124,7 +77,7 @@ function read_dirs {
 TESTS=${TESTS:-"golangci_lint license_header require_error_is_no_funcs_as_params single_import interface_compliance_nil require_no_error_inline_func import_testing_only_in_tests"}
 
 function test_golangci_lint {
-  run_or_go "golangci-lint" "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63" run --config .golangci.yml
+  go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63 run --config .golangci.yml
 }
 
 # automatically checks license headers
@@ -136,7 +89,7 @@ function test_license_header {
   if [[ ${#UPSTREAM_FILES[@]} -gt 0 ]]; then
     echo "Running license tool on upstream files with header for upstream..."
     # shellcheck disable=SC2086
-    run_or_go "go-license" "github.com/palantir/go-license@v1.25.0" \
+    go run github.com/palantir/go-license@v1.25.0 \
       --config=./license_header_for_upstream.yml \
       ${_addlicense_flags} \
       "${UPSTREAM_FILES[@]}" \
@@ -146,7 +99,7 @@ function test_license_header {
   if [[ ${#DEFAULT_FILES[@]} -gt 0 ]]; then
     echo "Running license tool on remaining files with default header..."
     # shellcheck disable=SC2086
-    run_or_go "go-license" "github.com/palantir/go-license@v1.25.0" \
+    go run github.com/palantir/go-license@v1.25.0 \
       --config=./license_header.yml \
       ${_addlicense_flags} \
       "${DEFAULT_FILES[@]}" \
