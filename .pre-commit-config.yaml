@@ -1,0 +1,98 @@
+# Usage:
+#   1) Install the hooks:
+#     pre-commit install && pre-commit install --hook-type pre-push
+#   2) [Optional] Run the hooks on demand before committing:
+#     pre-commit run --all-files
+#   3) [Optional] Run the hooks on demand before pushing changes:
+#     pre-commit run --hook-stage pre-push --all-files
+#
+# NOTE: 2) and 3) are only needed to run the hooks manually.
+# The hooks are automatically run by git when committing or pushing changes.
+#
+# If you want to temporarily disable the hooks without uninstalling them, you can use:
+#   git commit --no-verify
+#   git push --no-verify
+#
+# If you want to uninstall the hooks, you can use:
+#   pre-commit uninstall
+#
+# If you want to re-install the hooks, you can run 1) again.
+
+minimum_pre_commit_version: "3.6.0"
+
+repos:
+  # Fast feedback at commit time: baseline golangci-lint (v1)
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.63.4
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint (baseline)
+        args: ["--config=.golangci.yml"]
+        stages: [pre-commit]
+
+  # Local utility scripts and full repo checks
+  - repo: local
+    hooks:
+      # TODO: Re-enable this once we have a way to run the extra lints in CI.
+      # See https://github.com/ava-labs/coreth/pull/1117
+      # # Stricter extra lints (golangci-lint v2) on staged changes at pre-commit
+      # - id: extra-golangci-lint
+      #   name: golangci-lint (extra via scripts/lint.sh)
+      #   entry: bash -lc 'TESTS="extra_golangci_lint" scripts/lint.sh'
+      #   language: system
+      #   stages: [pre-commit]
+      #   pass_filenames: false
+
+      - id: actionlint
+        name: actionlint
+        entry: scripts/actionlint.sh
+        language: system
+        files: ^\.github/workflows/.*\.(yml|yaml)$
+        stages: [pre-commit]
+        pass_filenames: false
+
+      - id: shellcheck
+        name: shellcheck
+        entry: scripts/shellcheck.sh
+        language: system
+        files: \.sh$
+        stages: [pre-commit]
+        pass_filenames: false
+
+  # General purpose housekeeping hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: trailing-whitespace (filtered)
+        entry: scripts/filter_precommit_files.sh trailing-whitespace-fixer --
+        pass_filenames: true
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+        name: end-of-file-fixer (filtered)
+        entry: scripts/filter_precommit_files.sh end-of-file-fixer --
+        pass_filenames: true
+      - id: check-merge-conflict
+      - id: check-yaml
+        name: check-yaml (filtered)
+        entry: scripts/filter_precommit_files.sh check-yaml --
+        pass_filenames: true
+      - id: check-toml
+        name: check-toml (filtered)
+        entry: scripts/filter_precommit_files.sh check-toml --
+        pass_filenames: true
+      - id: check-json
+        name: check-json (filtered)
+        entry: scripts/filter_precommit_files.sh check-json --
+        pass_filenames: true
+        # Exclude intentionally invalid JSON fixtures used by tests
+        exclude: ^rpc/testdata/invalid-.*\.json$
+
+  # Markdown formatter
+  - repo: https://github.com/hukkin/mdformat
+    rev: 0.7.22
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm==0.4.1
+          - mdformat-frontmatter==2.0.8

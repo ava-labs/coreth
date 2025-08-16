@@ -15,52 +15,55 @@ export VERSION=v0.15.0
 
 1. Create your branch, usually from the tip of the `master` branch:
 
-    ```bash
-    git fetch origin master:master
-    git checkout master
-    git checkout -b "releases/$VERSION_RC"
-    ```
+   ```bash
+   git fetch origin master:master
+   git checkout master
+   git checkout -b "releases/$VERSION_RC"
+   ```
 
 1. Update the [RELEASES.md](../../RELEASES.md) file by renaming the "Pending" section to the new release version `$VERSION` and creating a new "Pending" section at the top.
+
 1. Modify the [plugin/evm/version.go](../../plugin/evm/version.go) `Version` global string variable and set it to the desired `$VERSION`.
+
 1. Because AvalancheGo and coreth depend on each other, and that we create releases of AvalancheGo before coreth, you can use a recent commit hash or recent release candidate of AvalancheGo in your `go.mod` file. Coreth releases should be tightly coordinated with AvalancheGo releases.
+
 1. Commit your changes and push the branch
 
-    ```bash
-    git add .
-    git commit -S -m "chore: release $VERSION_RC"
-    git push -u origin "releases/$VERSION_RC"
-    ```
+   ```bash
+   git add .
+   git commit -S -m "chore: release $VERSION_RC"
+   git push -u origin "releases/$VERSION_RC"
+   ```
 
 1. Create a pull request (PR) from your branch targeting master, for example using [`gh`](https://cli.github.com/):
 
-    ```bash
-    gh pr create --repo github.com/ava-labs/coreth --base master --title "chore: release $VERSION_RC"
-    ```
+   ```bash
+   gh pr create --repo github.com/ava-labs/coreth --base master --title "chore: release $VERSION_RC"
+   ```
 
 1. Wait for the PR checks to pass with
 
-    ```bash
-    gh pr checks --watch
-    ```
+   ```bash
+   gh pr checks --watch
+   ```
 
 1. Squash and merge your release branch into `master`, for example:
 
-    ```bash
-    gh pr merge "releases/$VERSION" --squash --delete-branch --subject "chore: release $VERSION" --body "\n- Update AvalancheGo from v1.12.3 to v1.13.0"
-    ```
+   ```bash
+   gh pr merge "releases/$VERSION" --squash --delete-branch --subject "chore: release $VERSION" --body "\n- Update AvalancheGo from v1.12.3 to v1.13.0"
+   ```
 
 1. Create and push a tag from the `master` branch:
 
-    ```bash
-    git fetch origin master:master
-    git checkout master
-    # Double check the tip of the master branch is the expected commit
-    # of the squashed release branch
-    git log -1
-    git tag -s "$VERSION_RC"
-    git push origin "$VERSION_RC"
-    ```
+   ```bash
+   git fetch origin master:master
+   git checkout master
+   # Double check the tip of the master branch is the expected commit
+   # of the squashed release branch
+   git log -1
+   git tag -s "$VERSION_RC"
+   git push origin "$VERSION_RC"
+   ```
 
 1. Once the release candidate tag is created, create a pull request on the AvalancheGo repository, bumping the coreth dependency to use this release candidate. Once proven stable, an AvalancheGo release should be created, after which you can create a coreth release.
 
@@ -72,43 +75,30 @@ Following the previous example in the [Release candidate section](#release-candi
 
 1. Create and push a tag from the `master` branch:
 
-    ```bash
-    git checkout master
-    git pull origin
-    # Double check the tip of the master branch is the expected commit
-    # of the squashed release branch
-    git log -1
-    git tag -s "$VERSION"
-    git push origin "$VERSION"
-    ```
+   ```bash
+   git checkout master
+   git pull origin
+   # Double check the tip of the master branch is the expected commit
+   # of the squashed release branch
+   git log -1
+   git tag -s "$VERSION"
+   git push origin "$VERSION"
+   ```
 
 1. Create a new release on Github, either using:
-    - the [Github web interface](https://github.com/ava-labs/coreth/releases/new)
-        1. In the "Choose a tag" box, select the tag previously created `$VERSION` (`v0.15.0`)
-        1. Pick the previous tag, for example as `v0.14.0`.
-        1. Set the "Release title" to `$VERSION` (`v0.15.0`)
-        1. Set the description using this format:
 
-            ```markdown
-            This is the Coreth version used in AvalancheGo@v1.13.1
+   - the [Github web interface](https://github.com/ava-labs/coreth/releases/new)
 
-            # Breaking changes
+     1. In the "Choose a tag" box, select the tag previously created `$VERSION` (`v0.15.0`)
 
-            # Features
+     1. Pick the previous tag, for example as `v0.14.0`.
 
-            # Fixes
+     1. Set the "Release title" to `$VERSION` (`v0.15.0`)
 
-            # Documentation
+     1. Set the description using this format:
 
-            ```
-
-        1. Only tick the box "Set as the latest release"
-        1. Click on the "Create release" button
-    - the Github CLI `gh`:
-
-        ```bash
-        PREVIOUS_VERSION=v0.14.0
-        NOTES="This is the Coreth version used in AvalancheGo@v1.13.1
+        ```markdown
+        This is the Coreth version used in AvalancheGo@v1.13.1
 
         # Breaking changes
 
@@ -118,8 +108,28 @@ Following the previous example in the [Release candidate section](#release-candi
 
         # Documentation
 
-        "
-        gh release create "$VERSION" --notes-start-tag "$PREVIOUS_VERSION" --notes-from-tag "$VERSION" --title "$VERSION" --notes "$NOTES" --verify-tag
         ```
+
+     1. Only tick the box "Set as the latest release"
+
+     1. Click on the "Create release" button
+
+   - the Github CLI `gh`:
+
+     ```bash
+     PREVIOUS_VERSION=v0.14.0
+     NOTES="This is the Coreth version used in AvalancheGo@v1.13.1
+
+     # Breaking changes
+
+     # Features
+
+     # Fixes
+
+     # Documentation
+
+     "
+     gh release create "$VERSION" --notes-start-tag "$PREVIOUS_VERSION" --notes-from-tag "$VERSION" --title "$VERSION" --notes "$NOTES" --verify-tag
+     ```
 
 Note this release will likely never be used in AvalancheGo, which should always be using release candidates to accelerate the development process. However it is still useful to have a release to indicate the last stable version of coreth.
