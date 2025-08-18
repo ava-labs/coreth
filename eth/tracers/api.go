@@ -9,7 +9,6 @@
 //
 // Much love to the original authors for their work.
 // **********
-
 // Copyright 2021 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //

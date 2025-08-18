@@ -9,7 +9,6 @@
 //
 // Much love to the original authors for their work.
 // **********
-
 // Copyright 2015 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
