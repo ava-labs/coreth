@@ -155,5 +155,22 @@ func IssueTxsAndBuild(txs []*types.Transaction, vm extension.InnerVM) (snowman.B
 		return nil, fmt.Errorf("failed to build block with transaction: %w", err)
 	}
 
+	if err := block.Verify(context.Background()); err != nil {
+		return nil, fmt.Errorf("block verification failed: %w", err)
+	}
+
+	return block, nil
+}
+
+func IssueTxsAndSetPreference(txs []*types.Transaction, vm extension.InnerVM) (snowman.Block, error) {
+	block, err := IssueTxsAndBuild(txs, vm)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := vm.SetPreference(context.Background(), block.ID()); err != nil {
+		return nil, fmt.Errorf("failed to set preference: %w", err)
+	}
+
 	return block, nil
 }

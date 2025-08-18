@@ -216,17 +216,9 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blk1, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+	blk1, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatalf("Failed to issue txs and build block: %s", err)
-	}
-
-	if err := blk1.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk1.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	if err := blk1.Accept(context.Background()); err != nil {
@@ -247,13 +239,9 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 		}
 		txs[i] = signedTx
 	}
-	blk2, err := vmtest.IssueTxsAndBuild(txs, vm)
+	blk2, err := vmtest.IssueTxsAndSetPreference(txs, vm)
 	if err != nil {
 		t.Fatalf("Failed to issue txs and build block: %s", err)
-	}
-
-	if err := blk2.Verify(context.Background()); err != nil {
-		t.Fatal(err)
 	}
 
 	if err := blk2.Accept(context.Background()); err != nil {
@@ -377,17 +365,9 @@ func testSetPreferenceRace(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm1BlkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm1)
+	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
-	}
-
-	if err := vm1BlkA.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM1: %s", err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkA.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	vm2BlkA, err := vm2.ParseBlock(context.Background(), vm1BlkA.Bytes())
@@ -430,33 +410,17 @@ func testSetPreferenceRace(t *testing.T, scheme string) {
 	}
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
-	vm1BlkB, err := vmtest.IssueTxsAndBuild(txs, vm1)
+	_, err = vmtest.IssueTxsAndSetPreference(txs, vm1)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1BlkB.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkB.ID()); err != nil {
 		t.Fatal(err)
 	}
 
 	// Split the transactions over two blocks, and set VM2's preference to them in sequence
 	// after building each block
 	// Block C
-	vm2BlkC, err := vmtest.IssueTxsAndBuild(txs[0:5], vm2)
+	vm2BlkC, err := vmtest.IssueTxsAndSetPreference(txs[0:5], vm2)
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
-	}
-
-	if err := vm2BlkC.Verify(context.Background()); err != nil {
-		t.Fatalf("BlkC failed verification on VM2: %s", err)
-	}
-
-	if err := vm2.SetPreference(context.Background(), vm2BlkC.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	newHead = <-newTxPoolHeadChan2
@@ -465,17 +429,9 @@ func testSetPreferenceRace(t *testing.T, scheme string) {
 	}
 
 	// Block D
-	vm2BlkD, err := vmtest.IssueTxsAndBuild(txs[5:10], vm2)
+	vm2BlkD, err := vmtest.IssueTxsAndSetPreference(txs[5:10], vm2)
 	if err != nil {
 		t.Fatalf("Failed to build BlkD on VM2: %s", err)
-	}
-
-	if err := vm2BlkD.Verify(context.Background()); err != nil {
-		t.Fatalf("BlkD failed verification on VM2: %s", err)
-	}
-
-	if err := vm2.SetPreference(context.Background(), vm2BlkD.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	// VM1 receives blkC and blkD from VM1
@@ -592,7 +548,7 @@ func testReorgProtection(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm1BlkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm1)
+	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
@@ -645,16 +601,8 @@ func testReorgProtection(t *testing.T, scheme string) {
 	}
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
-	vm1BlkB, err := vmtest.IssueTxsAndBuild(txs, vm1)
+	vm1BlkB, err := vmtest.IssueTxsAndSetPreference(txs, vm1)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1BlkB.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkB.ID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -664,10 +612,6 @@ func testReorgProtection(t *testing.T, scheme string) {
 	vm2BlkC, err := vmtest.IssueTxsAndBuild(txs[0:5], vm2)
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
-	}
-
-	if err := vm2BlkC.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM2: %s", err)
 	}
 
 	vm1BlkC, err := vm1.ParseBlock(context.Background(), vm2BlkC.Bytes())
@@ -750,10 +694,6 @@ func testNonCanonicalAccept(t *testing.T, scheme string) {
 		t.Fatalf("Failed to build block with transaction: %s", err)
 	}
 
-	if err := vm1BlkA.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM1: %s", err)
-	}
-
 	if _, err := vm1.GetBlockIDAtHeight(context.Background(), vm1BlkA.Height()); err != database.ErrNotFound {
 		t.Fatalf("Expected unaccepted block not to be indexed by height, but found %s", err)
 	}
@@ -817,10 +757,6 @@ func testNonCanonicalAccept(t *testing.T, scheme string) {
 	// Add the remote transactions, build the block, and set VM1's preference for block A
 	vm1BlkB, err := vmtest.IssueTxsAndBuild(txs, vm1)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1BlkB.Verify(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -925,17 +861,9 @@ func testStickyPreference(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm1BlkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm1)
+	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
-	}
-
-	if err := vm1BlkA.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM1: %s", err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkA.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	vm2BlkA, err := vm2.ParseBlock(context.Background(), vm1BlkA.Bytes())
@@ -978,16 +906,8 @@ func testStickyPreference(t *testing.T, scheme string) {
 	}
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
-	vm1BlkB, err := vmtest.IssueTxsAndBuild(txs, vm1)
+	vm1BlkB, err := vmtest.IssueTxsAndSetPreference(txs, vm1)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1BlkB.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkB.ID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -999,17 +919,9 @@ func testStickyPreference(t *testing.T, scheme string) {
 		t.Fatalf("expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	}
 
-	vm2BlkC, err := vmtest.IssueTxsAndBuild(txs[0:5], vm2)
+	vm2BlkC, err := vmtest.IssueTxsAndSetPreference(txs[0:5], vm2)
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
-	}
-
-	if err := vm2BlkC.Verify(context.Background()); err != nil {
-		t.Fatalf("BlkC failed verification on VM2: %s", err)
-	}
-
-	if err := vm2.SetPreference(context.Background(), vm2BlkC.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	newHead = <-newTxPoolHeadChan2
@@ -1159,17 +1071,9 @@ func testUncleBlock(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm1BlkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm1)
+	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
-	}
-
-	if err := vm1BlkA.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM1: %s", err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkA.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	vm2BlkA, err := vm2.ParseBlock(context.Background(), vm1BlkA.Bytes())
@@ -1209,30 +1113,14 @@ func testUncleBlock(t *testing.T, scheme string) {
 		txs[i] = signedTx
 	}
 
-	vm1BlkB, err := vmtest.IssueTxsAndBuild(txs, vm1)
+	vm1BlkB, err := vmtest.IssueTxsAndSetPreference(txs, vm1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := vm1BlkB.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkB.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	vm2BlkC, err := vmtest.IssueTxsAndBuild(txs[0:5], vm2)
+	vm2BlkC, err := vmtest.IssueTxsAndSetPreference(txs[0:5], vm2)
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
-	}
-
-	if err := vm2BlkC.Verify(context.Background()); err != nil {
-		t.Fatalf("BlkC failed verification on VM2: %s", err)
-	}
-
-	if err := vm2.SetPreference(context.Background(), vm2BlkC.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	newHead = <-newTxPoolHeadChan2
@@ -1323,17 +1211,9 @@ func testAcceptReorg(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	vm1BlkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm1)
+	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
-	}
-
-	if err := vm1BlkA.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM1: %s", err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkA.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	vm2BlkA, err := vm2.ParseBlock(context.Background(), vm1BlkA.Bytes())
@@ -1377,30 +1257,14 @@ func testAcceptReorg(t *testing.T, scheme string) {
 
 	// Add the remote transactions, build the block, and set VM1's preference
 	// for block B
-	vm1BlkB, err := vmtest.IssueTxsAndBuild(txs, vm1)
+	vm1BlkB, err := vmtest.IssueTxsAndSetPreference(txs, vm1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := vm1BlkB.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm1.SetPreference(context.Background(), vm1BlkB.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	vm2BlkC, err := vmtest.IssueTxsAndBuild(txs[0:5], vm2)
+	vm2BlkC, err := vmtest.IssueTxsAndSetPreference(txs[0:5], vm2)
 	if err != nil {
 		t.Fatalf("Failed to build BlkC on VM2: %s", err)
-	}
-
-	if err := vm2BlkC.Verify(context.Background()); err != nil {
-		t.Fatalf("BlkC failed verification on VM2: %s", err)
-	}
-
-	if err := vm2.SetPreference(context.Background(), vm2BlkC.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	newHead = <-newTxPoolHeadChan2
@@ -1550,16 +1414,8 @@ func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+	blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1591,10 +1447,6 @@ func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 	}
 	blk, err = vmtest.IssueTxsAndBuild(txs, vm)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1649,17 +1501,9 @@ func testLastAcceptedBlockNumberAllow(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+	blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification on VM: %s", err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
 	}
 
 	blkHeight := blk.Height()
@@ -1706,10 +1550,8 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+	blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	require.NoError(t, err)
-	require.NoError(t, blk.Verify(context.Background()))
-	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(t, blk.Accept(context.Background()))
 
 	require.NoError(t, vm.Shutdown(context.Background()))
@@ -1917,7 +1759,6 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	blk2, err := vmtest.IssueTxsAndBuild([]*types.Transaction{txs[0]}, vm)
 	require.NoError(err)
 
-	require.NoError(blk2.Verify(ctx))
 	require.NoError(blk2.Accept(ctx))
 
 	// Attempt to build a block consuming more than the current gas capacity
@@ -1986,7 +1827,6 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	blk2, err := vmtest.IssueTxsAndBuild([]*types.Transaction{maxSizeTxs[0]}, vm)
 	require.NoError(err)
 
-	require.NoError(blk2.Verify(ctx))
 	require.NoError(blk2.Accept(ctx))
 
 	// Add a second transaction trying to consume the max guaranteed gas capacity at a higher gas price
@@ -2150,10 +1990,6 @@ func TestWaitForEvent(t *testing.T) {
 
 				blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 				require.NoError(t, err)
-
-				require.NoError(t, blk.Verify(context.Background()))
-
-				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
 
 				require.NoError(t, blk.Accept(context.Background()))
 

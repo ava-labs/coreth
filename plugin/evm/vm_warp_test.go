@@ -120,8 +120,6 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx0}, vm)
 	require.NoError(err)
 
-	require.NoError(blk.Verify(context.Background()))
-
 	// Verify that the constructed block contains the expected log with an unsigned warp message in the log data
 	ethBlock1 := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	require.Len(ethBlock1.Transactions(), 1)
