@@ -26,15 +26,19 @@ var (
 // header and the timestamp of the new block.
 // Prior to AP4, the returned block gas cost will be nil.
 func BlockGasCost(
-	config *extras.ChainConfig,
+	rules extras.AvalancheRules,
 	parent *types.Header,
 	timestamp uint64,
 ) *big.Int {
-	if !config.IsApricotPhase4(timestamp) {
+	switch {
+	// Granite does not have a block gas cost
+	case rules.IsGranite:
+		return big.NewInt(0)
+	case !rules.IsApricotPhase4:
 		return nil
 	}
 	step := uint64(ap4.BlockGasCostStep)
-	if config.IsApricotPhase5(timestamp) {
+	if rules.IsApricotPhase5 {
 		step = ap5.BlockGasCostStep
 	}
 	// Treat an invalid parent/current time combination as 0 elapsed time.
@@ -91,6 +95,8 @@ func EstimateRequiredTip(
 ) (*big.Int, error) {
 	extra := customtypes.GetHeaderExtra(header)
 	switch {
+	case config.IsGranite(header.Time):
+		return common.Big0, nil
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:

@@ -2027,3 +2027,44 @@ func TestWaitForEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
+	tests := []struct {
+		fork          upgradetest.Fork
+		expectedError error
+	}{
+		{
+			fork:          upgradetest.Fortuna,
+			expectedError: dummy.ErrInsufficientBlockGas,
+		},
+		{
+			fork:          upgradetest.Granite,
+			expectedError: nil,
+		},
+	}
+
+	for _, test := range tests {
+		vm := newDefaultTestVM()
+		_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+			Fork: &test.fork,
+		})
+
+		defer vm.Shutdown(context.Background())
+
+		vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
+		tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		require.NoError(t, err)
+		blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
+		require.NoError(t, err)
+		require.NoError(t, blk.Accept(context.Background()))
+
+		vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
+		// have another tx very quickly after the first one
+		tx = types.NewTransaction(uint64(1), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+		signedTx, err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		require.NoError(t, err)
+		blk, err = vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
+		require.ErrorIs(t, err, test.expectedError)
+	}
+}
