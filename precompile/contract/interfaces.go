@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
 	ethtypes "github.com/ava-labs/libevm/core/types"
@@ -41,7 +42,7 @@ type StateDB interface {
 
 	AddLog(*ethtypes.Log)
 	Logs() []*ethtypes.Log
-	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
+	GetPredicateStorageSlots(address common.Address, index int) (predicate.Predicate, bool)
 
 	TxHash() common.Hash
 

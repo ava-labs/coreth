@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/stretchr/testify/require"
 )
@@ -26,9 +27,10 @@ type PredicateTest struct {
 func (test PredicateTest) Run(t testing.TB) {
 	t.Helper()
 	require := require.New(t)
-	predicate := test.Config.(precompileconfig.Predicater)
+	predicater := test.Config.(precompileconfig.Predicater)
 
-	predicateGas, predicateGasErr := predicate.PredicateGas(test.PredicateBytes)
+	pred := predicate.New(test.PredicateBytes)
+	predicateGas, predicateGasErr := predicater.PredicateGas(pred)
 	require.ErrorIs(predicateGasErr, test.GasErr)
 	if test.GasErr != nil {
 		return
@@ -36,7 +38,7 @@ func (test PredicateTest) Run(t testing.TB) {
 
 	require.Equal(test.Gas, predicateGas)
 
-	predicateRes := predicate.VerifyPredicate(test.PredicateContext, test.PredicateBytes)
+	predicateRes := predicater.VerifyPredicate(test.PredicateContext, pred)
 	require.ErrorIs(predicateRes, test.ExpectedErr)
 }
 

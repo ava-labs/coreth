@@ -31,6 +31,7 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/cmd/simulator/key"
 	"github.com/ava-labs/coreth/cmd/simulator/load"
@@ -39,7 +40,6 @@ import (
 	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/tests/utils"
 	"github.com/ava-labs/coreth/tests/warp/aggregator"
 	warpBackend "github.com/ava-labs/coreth/warp"
@@ -423,19 +423,25 @@ func (w *warpTest) deliverAddressedCallToReceivingSubnet() {
 
 	packedInput, err := warp.PackGetVerifiedWarpMessage(0)
 	require.NoError(err)
-	tx := predicate.NewPredicateTx(
-		w.receivingSubnetChainID,
-		nonce,
-		&warp.Module.Address,
-		5_000_000,
-		big.NewInt(225*params.GWei),
-		big.NewInt(params.GWei),
-		common.Big0,
-		packedInput,
-		types.AccessList{},
-		warp.ContractAddress,
-		w.addressedCallSignedMessage.Bytes(),
-	)
+	// Build access list predicate for warp precompile
+	pred := predicate.New(w.addressedCallSignedMessage.Bytes())
+	accessList := types.AccessList{
+		{
+			Address:     warp.ContractAddress,
+			StorageKeys: pred,
+		},
+	}
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:    w.receivingSubnetChainID,
+		Nonce:      nonce,
+		To:         &warp.Module.Address,
+		Gas:        5_000_000,
+		GasFeeCap:  big.NewInt(225 * params.GWei),
+		GasTipCap:  big.NewInt(params.GWei),
+		Value:      common.Big0,
+		Data:       packedInput,
+		AccessList: accessList,
+	})
 	signedTx, err := types.SignTx(tx, w.receivingSubnetSigner, w.receivingSubnetFundedKey)
 	require.NoError(err)
 	txBytes, err := signedTx.MarshalBinary()
@@ -473,19 +479,24 @@ func (w *warpTest) deliverBlockHashPayload() {
 
 	packedInput, err := warp.PackGetVerifiedWarpBlockHash(0)
 	require.NoError(err)
-	tx := predicate.NewPredicateTx(
-		w.receivingSubnetChainID,
-		nonce,
-		&warp.Module.Address,
-		5_000_000,
-		big.NewInt(225*params.GWei),
-		big.NewInt(params.GWei),
-		common.Big0,
-		packedInput,
-		types.AccessList{},
-		warp.ContractAddress,
-		w.blockPayloadSignedMessage.Bytes(),
-	)
+	pred := predicate.New(w.blockPayloadSignedMessage.Bytes())
+	accessList := types.AccessList{
+		{
+			Address:     warp.ContractAddress,
+			StorageKeys: pred,
+		},
+	}
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:    w.receivingSubnetChainID,
+		Nonce:      nonce,
+		To:         &warp.Module.Address,
+		Gas:        5_000_000,
+		GasFeeCap:  big.NewInt(225 * params.GWei),
+		GasTipCap:  big.NewInt(params.GWei),
+		Value:      common.Big0,
+		Data:       packedInput,
+		AccessList: accessList,
+	})
 	signedTx, err := types.SignTx(tx, w.receivingSubnetSigner, w.receivingSubnetFundedKey)
 	require.NoError(err)
 	txBytes, err := signedTx.MarshalBinary()
@@ -608,19 +619,19 @@ func (w *warpTest) warpLoad() {
 		if err != nil {
 			return nil, err
 		}
-		tx := predicate.NewPredicateTx(
-			w.receivingSubnetChainID,
-			nonce,
-			&warp.Module.Address,
-			5_000_000,
-			big.NewInt(225*params.GWei),
-			big.NewInt(params.GWei),
-			common.Big0,
-			packedInput,
-			types.AccessList{},
-			warp.ContractAddress,
-			signedWarpMessageBytes,
-		)
+		pred := predicate.New(signedWarpMessageBytes)
+		accessList := types.AccessList{{Address: warp.ContractAddress, StorageKeys: pred}}
+		tx := types.NewTx(&types.DynamicFeeTx{
+			ChainID:    w.receivingSubnetChainID,
+			Nonce:      nonce,
+			To:         &warp.Module.Address,
+			Gas:        5_000_000,
+			GasFeeCap:  big.NewInt(225 * params.GWei),
+			GasTipCap:  big.NewInt(params.GWei),
+			Value:      common.Big0,
+			Data:       packedInput,
+			AccessList: accessList,
+		})
 		return types.SignTx(tx, w.receivingSubnetSigner, key)
 	}, w.receivingSubnetClients[0], chainBPrivateKeys, txsPerWorker, true)
 	require.NoError(err)

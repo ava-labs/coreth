@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
@@ -21,7 +22,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/predicate"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -442,13 +442,13 @@ func (b *wrappedBlock) verifyPredicates(predicateContext *precompileconfig.Predi
 		return nil
 	}
 
-	predicateResults := predicate.NewResults()
+	predicateResults := predicate.BlockResults{}
 	for _, tx := range b.ethBlock.Transactions() {
 		results, err := core.CheckPredicates(rules, predicateContext, tx)
 		if err != nil {
 			return err
 		}
-		predicateResults.SetTxResults(tx.Hash(), results)
+		predicateResults.Set(tx.Hash(), results)
 	}
 	// TODO: document required gas constraints to ensure marshalling predicate results does not error
 	predicateResultsBytes, err := predicateResults.Bytes()

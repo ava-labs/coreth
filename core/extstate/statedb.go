@@ -6,9 +6,9 @@ package extstate
 import (
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
@@ -36,7 +36,7 @@ type StateDB struct {
 
 	// Ordered storage slots to be used in predicate verification as set in the tx access list.
 	// Only set in [StateDB.Prepare], and un-modified through execution.
-	predicateStorageSlots map[common.Address][][]byte
+	predicateStorageSlots map[common.Address][]predicate.Predicate
 }
 
 // New creates a new [StateDB] with the given [state.StateDB], wrapping it with
@@ -44,13 +44,13 @@ type StateDB struct {
 func New(vm *state.StateDB) *StateDB {
 	return &StateDB{
 		StateDB:               vm,
-		predicateStorageSlots: make(map[common.Address][][]byte),
+		predicateStorageSlots: make(map[common.Address][]predicate.Predicate),
 	}
 }
 
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	rulesExtra := params.GetRulesExtra(rules)
-	s.predicateStorageSlots = predicate.PreparePredicateStorageSlots(rulesExtra, list)
+	s.predicateStorageSlots = predicate.FromAccessList(rulesExtra, list)
 	s.StateDB.Prepare(rules, sender, coinbase, dst, precompiles, list)
 }
 
@@ -64,7 +64,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 // GetPredicateStorageSlots(AddrA, 0) -> Predicate1
 // GetPredicateStorageSlots(AddrB, 0) -> Predicate2
 // GetPredicateStorageSlots(AddrA, 1) -> Predicate3
-func (s *StateDB) GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool) {
+func (s *StateDB) GetPredicateStorageSlots(address common.Address, index int) (predicate.Predicate, bool) {
 	predicates, exists := s.predicateStorageSlots[address]
 	if !exists || index >= len(predicates) {
 		return nil, false

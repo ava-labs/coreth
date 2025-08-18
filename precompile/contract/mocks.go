@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	snow "github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	precompileconfig "github.com/ava-labs/coreth/precompile/precompileconfig"
 	common "github.com/ava-labs/libevm/common"
 	types "github.com/ava-labs/libevm/core/types"
@@ -152,10 +153,10 @@ func (mr *MockStateDBMockRecorder) GetNonce(arg0 any) *gomock.Call {
 }
 
 // GetPredicateStorageSlots mocks base method.
-func (m *MockStateDB) GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool) {
+func (m *MockStateDB) GetPredicateStorageSlots(address common.Address, index int) (predicate.Predicate, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPredicateStorageSlots", address, index)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(predicate.Predicate)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }

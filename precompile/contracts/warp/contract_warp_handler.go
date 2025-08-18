@@ -10,7 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/predicate"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/vm"
@@ -60,7 +60,7 @@ func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, s
 	}
 	warpIndex := int(warpIndexInput) // This conversion is safe even if int is 32 bits because we checked above.
 	state := accessibleState.GetStateDB()
-	predicateBytes, exists := state.GetPredicateStorageSlots(ContractAddress, warpIndex)
+	pred, exists := state.GetPredicateStorageSlots(ContractAddress, warpIndex)
 	predicateResults := accessibleState.GetBlockContext().GetPredicateResults(state.TxHash(), ContractAddress)
 	valid := exists && !set.BitsFromBytes(predicateResults).Contains(warpIndex)
 	if !valid {
@@ -69,16 +69,17 @@ func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, s
 
 	// Note: we charge for the size of the message during both predicate verification and each time the message is read during
 	// EVM execution because each execution incurs an additional read cost.
-	msgBytesGas, overflow := math.SafeMul(GasCostPerWarpMessageBytes, uint64(len(predicateBytes)))
+	// Compute underlying bytes length as len(pred)*32 (padded size).
+	paddedLen := uint64(len(pred)) * uint64(common.HashLength)
+	msgBytesGas, overflow := math.SafeMul(GasCostPerWarpMessageBytes, paddedLen)
 	if overflow {
 		return nil, 0, vm.ErrOutOfGas
 	}
 	if remainingGas, err = contract.DeductGas(remainingGas, msgBytesGas); err != nil {
 		return nil, 0, err
 	}
-	// Note: since the predicate is verified in advance of execution, the precompile should not
-	// hit an error during execution.
-	unpackedPredicateBytes, err := predicate.UnpackPredicate(predicateBytes)
+	// Inline decode using AvalancheGo predicate API
+	unpackedPredicateBytes, err := pred.Bytes()
 	if err != nil {
 		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidPredicateBytes, err)
 	}
