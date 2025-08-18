@@ -1064,6 +1064,7 @@ func (vm *VM) Version(context.Context) (string, error) {
 // CreateHandlers makes new http handlers that can handle API calls
 func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
+	handler.SetBatchLimits(node.DefaultConfig.BatchRequestLimit, node.DefaultConfig.BatchResponseMaxSize)
 	if vm.config.HttpBodyLimit > 0 {
 		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
 	}
