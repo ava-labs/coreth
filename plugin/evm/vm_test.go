@@ -2596,7 +2596,7 @@ func TestCreateHandlers(t *testing.T) {
 	require.True(t, ok)
 
 	// registers at test_echo
-	err = server.RegisterName("test", new(testService))
+	require.NoError(t, server.RegisterName("test", new(testService)))
 	var (
 		batch        []rpc.BatchElem
 		client       = rpc.DialInProc(server)
