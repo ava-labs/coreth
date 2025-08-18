@@ -47,6 +47,7 @@ formatters:
   exclusions:
     generated: lax
 
+# Avalanche linters should be added incrementally
 linters:
   default: none
   enable:
