@@ -6,19 +6,23 @@ package vmtest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/api/metrics"
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	commoneng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -128,4 +132,28 @@ func OverrideSchemeConfig(scheme string, configJSON string) (string, error) {
 	// Marshal back to JSON
 	result, err := json.Marshal(configMap)
 	return string(result), err
+}
+
+func IssueTxsAndBuild(txs []*types.Transaction, vm extension.InnerVM) (snowman.Block, error) {
+	errs := vm.Ethereum().TxPool().AddRemotesSync(txs)
+	for i, err := range errs {
+		if err != nil {
+			return nil, fmt.Errorf("failed to add tx at index %d: %w", i, err)
+		}
+	}
+
+	msg, err := vm.WaitForEvent(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to wait for event: %w", err)
+	}
+	if msg != commonEng.PendingTxs {
+		return nil, fmt.Errorf("expected pending txs, got %v", msg)
+	}
+
+	block, err := vm.BuildBlock(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to build block with transaction: %w", err)
+	}
+
+	return block, nil
 }

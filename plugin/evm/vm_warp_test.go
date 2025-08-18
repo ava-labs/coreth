@@ -117,14 +117,7 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 	signedTx0, err := types.SignTx(tx0, types.LatestSignerForChainID(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 	require.NoError(err)
 
-	errs := vm.txPool.AddRemotesSync([]*types.Transaction{signedTx0})
-	require.NoError(errs[0])
-
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(err)
-	require.Equal(commonEng.PendingTxs, msg)
-
-	blk, err := vm.BuildBlock(context.Background())
+	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx0}, vm)
 	require.NoError(err)
 
 	require.NoError(blk.Verify(context.Background()))
