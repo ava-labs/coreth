@@ -18,11 +18,6 @@ grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
   exit 255
 )
 
-# Trim leading/trailing whitespace from a single line.
-trim_ws() {
-  sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
-}
-
 # Read excluded directories into arrays
 DEFAULT_FILES=()
 UPSTREAM_FILES=()
@@ -48,15 +43,6 @@ function read_dirs {
   local -a upstream_find_args=()
   local -a upstream_exclude_args=()
   for line in "${upstream_folders[@]}"; do
-    # Normalize and skip invalid entries to avoid matching the entire repo:
-    # - strip CR (handles CRLF files)
-    # - trim leading/trailing whitespace
-    # - skip blank lines and comment lines
-    line=${line%$'\r'}
-    line=$(printf '%s' "$line" | trim_ws)
-    [[ -z "$line" ]] && continue
-    [[ "${line:0:1}" == "#" ]] && continue
-
     if [[ "$line" == !* ]]; then
       # Excluding files with !
       upstream_exclude_args+=(! -path "./${line:1}")
@@ -65,9 +51,7 @@ function read_dirs {
     fi
   done
   # Remove the last '-o' from the arrays
-  if ((${#upstream_find_args[@]} > 0)); then
-    unset 'upstream_find_args[${#upstream_find_args[@]}-1]'
-  fi
+  unset 'upstream_find_args[${#upstream_find_args[@]}-1]'
 
   # Find upstream files
   mapfile -t UPSTREAM_FILES < <(
