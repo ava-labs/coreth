@@ -1,4 +1,5 @@
-// (c) 2023, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -7,6 +8,8 @@
 // original code from which it is derived.
 //
 // Much love to the original authors for their work.
+// **********
+
 package main
 
 import (
@@ -17,6 +20,7 @@ import (
 )
 
 func TestNameFilter(t *testing.T) {
+	t.Parallel()
 	_, err := newNameFilter("Foo")
 	require.Error(t, err)
 	_, err = newNameFilter("too/many:colons:Foo")

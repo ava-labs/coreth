@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -32,13 +33,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/crypto"
 )
 
-var MaxHash = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-
 func TestMakeTopics(t *testing.T) {
+	t.Parallel()
 	type args struct {
 		query [][]interface{}
 	}
@@ -85,7 +85,7 @@ func TestMakeTopics(t *testing.T) {
 				{big.NewInt(math.MinInt64)},
 			}},
 			[][]common.Hash{
-				{MaxHash},
+				{common.MaxHash},
 				{common.HexToHash("ffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000")},
 			},
 			false,
@@ -149,6 +149,7 @@ func TestMakeTopics(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := MakeTopics(tt.args.query...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("makeTopics() error = %v, wantErr %v", err, tt.wantErr)
@@ -378,10 +379,12 @@ func setupTopicsTests() []topicTest {
 }
 
 func TestParseTopics(t *testing.T) {
+	t.Parallel()
 	tests := setupTopicsTests()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			createObj := tt.args.createObj()
 			if err := ParseTopics(createObj, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopics() error = %v, wantErr %v", err, tt.wantErr)
@@ -395,10 +398,12 @@ func TestParseTopics(t *testing.T) {
 }
 
 func TestParseTopicsIntoMap(t *testing.T) {
+	t.Parallel()
 	tests := setupTopicsTests()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			outMap := make(map[string]interface{})
 			if err := ParseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopicsIntoMap() error = %v, wantErr %v", err, tt.wantErr)

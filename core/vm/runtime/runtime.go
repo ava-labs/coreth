@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -30,13 +31,16 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/holiman/uint256"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -54,7 +58,9 @@ type Config struct {
 	Debug       bool
 	EVMConfig   vm.Config
 	BaseFee     *big.Int
+	BlobBaseFee *big.Int
 	BlobHashes  []common.Hash
+	BlobFeeCap  *big.Int
 	Random      *common.Hash
 
 	State     *state.StateDB
@@ -64,24 +70,32 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
-		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:                     big.NewInt(1),
-			HomesteadBlock:              new(big.Int),
-			DAOForkBlock:                new(big.Int),
-			DAOForkSupport:              false,
-			EIP150Block:                 new(big.Int),
-			EIP155Block:                 new(big.Int),
-			EIP158Block:                 new(big.Int),
-			ByzantiumBlock:              new(big.Int),
-			ConstantinopleBlock:         new(big.Int),
-			PetersburgBlock:             new(big.Int),
-			IstanbulBlock:               new(big.Int),
-			MuirGlacierBlock:            new(big.Int),
-			ApricotPhase1BlockTimestamp: new(uint64),
-			ApricotPhase2BlockTimestamp: new(uint64),
-			ApricotPhase3BlockTimestamp: new(uint64),
-			ApricotPhase4BlockTimestamp: new(uint64),
-		}
+		cfg.ChainConfig = params.WithExtra(
+			&params.ChainConfig{
+				ChainID:             big.NewInt(1),
+				HomesteadBlock:      new(big.Int),
+				DAOForkBlock:        new(big.Int),
+				DAOForkSupport:      false,
+				EIP150Block:         new(big.Int),
+				EIP155Block:         new(big.Int),
+				EIP158Block:         new(big.Int),
+				ByzantiumBlock:      new(big.Int),
+				ConstantinopleBlock: new(big.Int),
+				PetersburgBlock:     new(big.Int),
+				IstanbulBlock:       new(big.Int),
+				MuirGlacierBlock:    new(big.Int),
+				LondonBlock:         new(big.Int),
+				BerlinBlock:         new(big.Int),
+			},
+			&extras.ChainConfig{
+				NetworkUpgrades: extras.NetworkUpgrades{
+					ApricotPhase1BlockTimestamp: new(uint64),
+					ApricotPhase2BlockTimestamp: new(uint64),
+					ApricotPhase3BlockTimestamp: new(uint64),
+					ApricotPhase4BlockTimestamp: new(uint64),
+				},
+			},
+		)
 	}
 
 	if cfg.Difficulty == nil {
@@ -105,7 +119,10 @@ func setDefaults(cfg *Config) {
 		}
 	}
 	if cfg.BaseFee == nil {
-		cfg.BaseFee = big.NewInt(params.ApricotPhase3InitialBaseFee)
+		cfg.BaseFee = big.NewInt(ap3.InitialBaseFee)
+	}
+	if cfg.BlobBaseFee == nil {
+		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
 }
 
@@ -127,7 +144,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		address = common.BytesToAddress([]byte("contract"))
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
-		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Time)
+		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, params.IsMergeTODO, vmenv.Context.Time)
 	)
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin/ApricotPhase2)
@@ -143,7 +160,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		common.BytesToAddress([]byte("contract")),
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return ret, cfg.State, err
 }
@@ -161,7 +178,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	var (
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
-		rules  = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Time)
+		rules  = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, params.IsMergeTODO, vmenv.Context.Time)
 	)
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin/ApricotPhase2)
@@ -173,7 +190,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		sender,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return code, address, leftOverGas, err
 }
@@ -188,9 +205,9 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 
 	var (
 		vmenv   = NewEnv(cfg)
-		sender  = cfg.State.GetOrNewStateObject(cfg.Origin)
+		sender  = vm.AccountRef(cfg.Origin)
 		statedb = cfg.State
-		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, vmenv.Context.Time)
+		rules   = cfg.ChainConfig.Rules(vmenv.Context.BlockNumber, params.IsMergeTODO, vmenv.Context.Time)
 	)
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin/ApricotPhase2)
@@ -203,7 +220,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		address,
 		input,
 		cfg.GasLimit,
-		cfg.Value,
+		uint256.MustFromBig(cfg.Value),
 	)
 	return ret, leftOverGas, err
 }

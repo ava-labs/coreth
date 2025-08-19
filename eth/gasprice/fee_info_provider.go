@@ -1,4 +1,5 @@
-// (c) 2019-2022, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -31,8 +32,9 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/libevm/core/types"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -92,10 +94,17 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (
 		timestamp: header.Time,
 		baseFee:   header.BaseFee,
 	}
+
+	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
+	if used := customtypes.GetHeaderExtra(header).ExtDataGasUsed; used != nil {
+		totalGasUsed.Add(totalGasUsed, used)
+	}
+	minGasUsed := new(big.Int).SetUint64(f.minGasUsed)
+
 	// Don't bias the estimate with blocks containing a limited number of transactions paying to
 	// expedite block production.
 	var err error
-	if f.minGasUsed <= header.GasUsed {
+	if minGasUsed.Cmp(totalGasUsed) <= 0 {
 		// Compute minimum required tip to be included in previous block
 		//
 		// NOTE: Using this approach, we will never recommend that the caller

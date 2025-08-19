@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -90,7 +91,7 @@ func (arguments Arguments) isTuple() bool {
 func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	if len(data) == 0 {
 		if len(arguments.NonIndexed()) != 0 {
-			return nil, errors.New("abi: attempting to unmarshall an empty string while arguments are expected")
+			return nil, errors.New("abi: attempting to unmarshal an empty string while arguments are expected")
 		}
 		return make([]interface{}, 0), nil
 	}
@@ -105,7 +106,7 @@ func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) 
 	}
 	if len(data) == 0 {
 		if len(arguments.NonIndexed()) != 0 {
-			return errors.New("abi: attempting to unmarshall an empty string while arguments are expected")
+			return errors.New("abi: attempting to unmarshal an empty string while arguments are expected")
 		}
 		return nil // Nothing to unmarshal, return
 	}

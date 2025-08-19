@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -39,18 +40,18 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 const (
@@ -90,7 +91,7 @@ type Backend interface {
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	BadBlocks() ([]*types.Block, []*core.BadBlockReason)
-	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -192,6 +193,7 @@ type TraceCallConfig struct {
 	TraceConfig
 	StateOverrides *ethapi.StateOverride
 	BlockOverrides *ethapi.BlockOverrides
+	TxIndex        *hexutil.Uint
 }
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
@@ -873,12 +875,12 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
-	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	found, _, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if err != nil {
-		return nil, err
+		return nil, ethapi.NewTxIndexingError()
 	}
 	// Only mined txes are supported
-	if tx == nil {
+	if !found {
 		return nil, errTxNotFound
 	}
 	// It shouldn't happen in practice.
@@ -911,11 +913,17 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 // TraceCall lets you trace a given eth_call. It collects the structured logs
 // created during the execution of EVM if the given transaction was added on
 // top of the provided block and returns them as a JSON object.
+// If no transaction index is specified, the trace will be conducted on the state
+// after executing the specified block. However, if a transaction index is provided,
+// the trace will be conducted on the state after executing the specified transaction
+// within the specified block.
 func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (interface{}, error) {
 	// Try to retrieve the specified block
 	var (
-		err   error
-		block *types.Block
+		err     error
+		block   *types.Block
+		statedb *state.StateDB
+		release StateReleaseFunc
 	)
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		block, err = api.blockByHash(ctx, hash)
@@ -940,20 +948,27 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+
+	if config != nil && config.TxIndex != nil {
+		_, _, statedb, release, err = api.backend.StateAtTransaction(ctx, block, int(*config.TxIndex), reexec)
+	} else {
+		statedb, release, err = api.backend.StateAtBlock(ctx, block, reexec, nil, true, false)
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+
 	// Apply the customization rules if required.
 	if config != nil {
 		originalTime := block.Time()
 		config.BlockOverrides.Apply(&vmctx)
 		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
 		// Should be applied before the state overrides.
-		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, &vmctx, statedb)
+		blockContext := core.NewBlockContext(block.Number(), block.Time())
+		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, blockContext, statedb)
 		if err != nil {
 			return nil, err
 		}
@@ -963,7 +978,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		}
 	}
 	// Execute the trace
-	msg, err := args.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
+	msg, err := args.ToMessage(api.backend.RPCGasCap(), vmctx.BaseFee)
 	if err != nil {
 		return nil, err
 	}
@@ -1044,53 +1059,70 @@ func APIs(backend Backend) []rpc.API {
 // along with a boolean that indicates whether the copy is canonical (equivalent to the original).
 func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) (*params.ChainConfig, bool) {
 	copy := new(params.ChainConfig)
-	*copy = *original
+	*copy = params.Copy(original)
 	canon := true
 
 	// Apply network upgrades (after Berlin) to the copy.
 	// Note in coreth, ApricotPhase2 is the "equivalent" to Berlin.
-	if timestamp := override.ApricotPhase2BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase2BlockTimestamp = timestamp
+	overrideExtra := params.GetExtra(override)
+	if timestamp := overrideExtra.ApricotPhase2BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase2BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase3BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase3BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase3BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase3BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase4BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase4BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase4BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase4BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase5BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase5BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase5BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase5BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePre6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePre6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhasePre6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhasePre6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePost6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePost6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhasePost6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhasePost6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.BanffBlockTimestamp; timestamp != nil {
-		copy.BanffBlockTimestamp = timestamp
+	if timestamp := overrideExtra.BanffBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).BanffBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.CortinaBlockTimestamp; timestamp != nil {
-		copy.CortinaBlockTimestamp = timestamp
+	if timestamp := overrideExtra.CortinaBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).CortinaBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.DurangoBlockTimestamp; timestamp != nil {
-		copy.DurangoBlockTimestamp = timestamp
+	if timestamp := overrideExtra.DurangoBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).DurangoBlockTimestamp = timestamp
+		canon = false
+	}
+	if timestamp := overrideExtra.EtnaTimestamp; timestamp != nil {
+		params.GetExtra(copy).EtnaTimestamp = timestamp
+		canon = false
+	}
+	if timestamp := overrideExtra.FortunaTimestamp; timestamp != nil {
+		params.GetExtra(copy).FortunaTimestamp = timestamp
+		canon = false
+	}
+	if timestamp := overrideExtra.GraniteTimestamp; timestamp != nil {
+		params.GetExtra(copy).GraniteTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {
 		copy.CancunTime = timestamp
+		canon = false
+	}
+	if timestamp := override.VerkleTime; timestamp != nil {
+		copy.VerkleTime = timestamp
 		canon = false
 	}
 

@@ -1,4 +1,5 @@
-// (c) 2024, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -34,16 +35,19 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/holiman/uint256"
 )
 
 func TestTransactionPriceNonceSortLegacy(t *testing.T) {
+	t.Parallel()
 	testTransactionPriceNonceSort(t, nil)
 }
 
 func TestTransactionPriceNonceSort1559(t *testing.T) {
+	t.Parallel()
 	testTransactionPriceNonceSort(t, big.NewInt(0))
 	testTransactionPriceNonceSort(t, big.NewInt(5))
 	testTransactionPriceNonceSort(t, big.NewInt(50))
@@ -100,8 +104,10 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 				Hash:      tx.Hash(),
 				Tx:        tx,
 				Time:      tx.Time(),
-				GasFeeCap: tx.GasFeeCap(),
-				GasTipCap: tx.GasTipCap(),
+				GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+				GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
+				Gas:       tx.Gas(),
+				BlobGas:   tx.BlobGas(),
 			})
 		}
 		expectedCount += count
@@ -110,7 +116,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 	txset := newTransactionsByPriceAndNonce(signer, groups, baseFee)
 
 	txs := types.Transactions{}
-	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
+	for tx, _ := txset.Peek(); tx != nil; tx, _ = txset.Peek() {
 		txs = append(txs, tx.Tx)
 		txset.Shift()
 	}
@@ -146,6 +152,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 // Tests that if multiple transactions have the same price, the ones seen earlier
 // are prioritized to avoid network spam attacks aiming for a specific ordering.
 func TestTransactionTimeSort(t *testing.T) {
+	t.Parallel()
 	// Generate a batch of accounts to start with
 	keys := make([]*ecdsa.PrivateKey, 5)
 	for i := 0; i < len(keys); i++ {
@@ -165,15 +172,17 @@ func TestTransactionTimeSort(t *testing.T) {
 			Hash:      tx.Hash(),
 			Tx:        tx,
 			Time:      tx.Time(),
-			GasFeeCap: tx.GasFeeCap(),
-			GasTipCap: tx.GasTipCap(),
+			GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+			GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
+			Gas:       tx.Gas(),
+			BlobGas:   tx.BlobGas(),
 		})
 	}
 	// Sort the transactions and cross check the nonce ordering
 	txset := newTransactionsByPriceAndNonce(signer, groups, nil)
 
 	txs := types.Transactions{}
-	for tx := txset.Peek(); tx != nil; tx = txset.Peek() {
+	for tx, _ := txset.Peek(); tx != nil; tx, _ = txset.Peek() {
 		txs = append(txs, tx.Tx)
 		txset.Shift()
 	}

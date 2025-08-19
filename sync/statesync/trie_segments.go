@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesync
@@ -11,19 +11,22 @@ import (
 	"sync"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/coreth/core/rawdb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/trie"
+
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
+
+	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
 var (
-	_ syncclient.LeafSyncTask = &trieSegment{}
-	_ fmt.Stringer            = &trieSegment{}
+	_ syncclient.LeafSyncTask = (*trieSegment)(nil)
+	_ fmt.Stringer            = (*trieSegment)(nil)
 )
 
 // trieToSync keeps the state of a single trie syncing
@@ -64,15 +67,15 @@ type trieToSync struct {
 // NewTrieToSync initializes a trieToSync and restores any previously started segments.
 func NewTrieToSync(sync *stateSync, root common.Hash, account common.Hash, syncTask syncTask) (*trieToSync, error) {
 	batch := sync.db.NewBatch() // TODO: migrate state sync to use database schemes.
-	writeFn := func(owner common.Hash, path []byte, hash common.Hash, blob []byte) {
-		rawdb.WriteTrieNode(batch, owner, path, hash, blob, rawdb.HashScheme)
+	writeFn := func(path []byte, hash common.Hash, blob []byte) {
+		rawdb.WriteTrieNode(batch, account, path, hash, blob, rawdb.HashScheme)
 	}
 	trieToSync := &trieToSync{
 		sync:         sync,
 		root:         root,
 		account:      account,
 		batch:        batch,
-		stackTrie:    trie.NewStackTrie(writeFn),
+		stackTrie:    trie.NewStackTrie(&trie.StackTrieOptions{Writer: writeFn}),
 		isMainTrie:   (root == sync.root),
 		task:         syncTask,
 		segmentsDone: make(map[int]struct{}),
@@ -86,7 +89,7 @@ func (t *trieToSync) loadSegments() error {
 	// Get an iterator for segments for t.root and see if we find anything.
 	// This lets us check if this trie was previously segmented, in which
 	// case we need to restore the same segments on resume.
-	it := rawdb.NewSyncSegmentsIterator(t.sync.db, t.root)
+	it := customrawdb.NewSyncSegmentsIterator(t.sync.db, t.root)
 	defer it.Release()
 
 	// Track the previously added segment as we loop over persisted values.
@@ -99,7 +102,7 @@ func (t *trieToSync) loadSegments() error {
 		// key immediately prior to the segment we found on disk.
 		// This is because we do not persist the beginning of
 		// the first segment.
-		_, segmentStart := rawdb.UnpackSyncSegmentKey(it.Key())
+		_, segmentStart := customrawdb.UnpackSyncSegmentKey(it.Key())
 		segmentStartPos := binary.BigEndian.Uint16(segmentStart[:wrappers.ShortLen])
 		t.addSegment(prevSegmentStart, addPadding(segmentStartPos-1, 0xff))
 
@@ -200,7 +203,7 @@ func (t *trieToSync) segmentFinished(ctx context.Context, idx int) error {
 			if err := t.stackTrie.Update(it.Key(), value); err != nil {
 				return err
 			}
-			if t.batch.ValueSize() > t.sync.batchSize {
+			if t.batch.ValueSize() > int(t.sync.batchSize) {
 				if err := t.batch.Write(); err != nil {
 					return err
 				}
@@ -219,10 +222,7 @@ func (t *trieToSync) segmentFinished(ctx context.Context, idx int) error {
 
 	// when the trie is finished, this hashes any remaining nodes in the stack
 	// trie and creates the root
-	actualRoot, err := t.stackTrie.Commit()
-	if err != nil {
-		return err
-	}
+	actualRoot := t.stackTrie.Commit()
 	if actualRoot != t.root {
 		return fmt.Errorf("unexpected root, expected=%s, actual=%s, account=%s", t.root, actualRoot, t.account)
 	}
@@ -235,7 +235,7 @@ func (t *trieToSync) segmentFinished(ctx context.Context, idx int) error {
 	}
 
 	// remove all segments for this root from persistent storage
-	if err := rawdb.ClearSyncSegments(t.sync.db, t.root); err != nil {
+	if err := customrawdb.ClearSyncSegments(t.sync.db, t.root); err != nil {
 		return err
 	}
 	return t.task.OnFinish()
@@ -304,7 +304,7 @@ func (t *trieToSync) createSegments(numSegments int) error {
 
 		// create the segments
 		segment := t.addSegment(startBytes, endBytes)
-		if err := rawdb.WriteSyncSegment(t.sync.db, t.root, segment.start); err != nil {
+		if err := customrawdb.WriteSyncSegment(t.sync.db, t.root, common.BytesToHash(segment.start)); err != nil {
 			return err
 		}
 	}
@@ -365,7 +365,7 @@ func (t *trieSegment) OnLeafs(keys, vals [][]byte) error {
 		return err
 	}
 	// cap the segment's batch
-	if t.batch.ValueSize() > t.trie.sync.batchSize {
+	if t.batch.ValueSize() > int(t.trie.sync.batchSize) {
 		if err := t.batch.Write(); err != nil {
 			return err
 		}

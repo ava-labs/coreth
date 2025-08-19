@@ -24,6 +24,7 @@ awscpu
 .idea/
 
 *logs/
+!*customlogs/
 
 .vscode*
 
@@ -47,3 +48,8 @@ build/
 
 # Used for e2e testing
 avalanchego
+
+.direnv
+
+cmd/simulator/.simulator/*
+cmd/simulator/simulator

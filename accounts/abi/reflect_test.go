@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -180,8 +181,10 @@ var reflectTests = []reflectTest{
 }
 
 func TestReflectNameToStruct(t *testing.T) {
+	t.Parallel()
 	for _, test := range reflectTests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			m, err := mapArgNamesToStructFields(test.args, reflect.ValueOf(test.struc))
 			if len(test.err) > 0 {
 				if err == nil || err.Error() != test.err {
@@ -202,6 +205,7 @@ func TestReflectNameToStruct(t *testing.T) {
 }
 
 func TestConvertType(t *testing.T) {
+	t.Parallel()
 	// Test Basic Struct
 	type T struct {
 		X *big.Int

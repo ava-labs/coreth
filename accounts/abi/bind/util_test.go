@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -34,11 +35,12 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/accounts/abi/bind/backends"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/coreth/ethclient/simulated"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -63,38 +65,37 @@ var waitDeployedTests = map[string]struct {
 }
 
 func TestWaitDeployed(t *testing.T) {
+	t.Parallel()
 	for name, test := range waitDeployedTests {
-		backend := backends.NewSimulatedBackend(
-			core.GenesisAlloc{
+		backend := simulated.NewBackend(
+			types.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(1000))},
 			},
-			10000000,
 		)
 		defer backend.Close()
 
 		// Create the transaction
-		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+		head, _ := backend.Client().HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
 
 		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
-		signer := types.NewLondonSigner(big.NewInt(1337))
-		tx, _ = types.SignTx(tx, signer, testKey)
+		tx, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(1337)), testKey)
+		require.NoError(t, err, "types.SignTx")
 
 		// Wait for it to get mined in the background.
 		var (
-			err     error
 			address common.Address
 			mined   = make(chan struct{})
 			ctx     = context.Background()
 		)
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend, tx)
+			address, err = bind.WaitDeployed(ctx, backend.Client(), tx)
 			close(mined)
 		}()
 
 		// Send and mine the transaction.
-		if err := backend.SendTransaction(ctx, tx); err != nil {
-			t.Errorf("Failed to send transaction: %s", err)
+		if err := backend.Client().SendTransaction(ctx, tx); err != nil {
+			t.Fatalf("Failed to send transaction: %s", err)
 		}
 		backend.Commit(true)
 
@@ -113,41 +114,46 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
-	backend := backends.NewSimulatedBackend(
-		core.GenesisAlloc{
+	backend := simulated.NewBackend(
+		types.GenesisAlloc{
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(1000000000000000000)},
 		},
-		10000000,
 	)
 	defer backend.Close()
 
-	head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	head, _ := backend.Client().HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	// Create a transaction to an account.
 	code := "6060604052600a8060106000396000f360606040526008565b00"
 	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+	tx, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(1337)), testKey)
+	require.NoError(t, err, "types.SignTx")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	backend.SendTransaction(ctx, tx)
+	if err := backend.Client().SendTransaction(ctx, tx); err != nil {
+		t.Fatalf("Failed to send transaction: %s", err)
+	}
 	backend.Commit(true)
-	notContentCreation := errors.New("tx is not contract creation")
-	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContentCreation.Error() {
-		t.Errorf("error missmatch: want %q, got %q, ", notContentCreation, err)
+	notContractCreation := errors.New("tx is not contract creation")
+	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != notContractCreation.Error() {
+		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
 	}
 
 	// Create a transaction that is not mined.
 	tx = types.NewContractCreation(1, big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+	tx, err = types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(1337)), testKey)
+	require.NoError(t, err, "types.SignTx")
 
 	go func() {
 		contextCanceled := errors.New("context canceled")
-		if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != contextCanceled.Error() {
-			t.Errorf("error missmatch: want %q, got %q, ", contextCanceled, err)
+		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != contextCanceled.Error() {
+			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
 		}
 	}()
 
-	backend.SendTransaction(ctx, tx)
+	if err := backend.Client().SendTransaction(ctx, tx); err != nil {
+		t.Fatalf("Failed to send transaction: %s", err)
+	}
 	cancel()
 }

@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -33,7 +34,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
 
 const testSectionSize = 4096
@@ -95,7 +96,7 @@ func TestMatcherRandom(t *testing.T) {
 }
 
 // Tests that the matcher can properly find matches if the starting block is
-// shifter from a multiple of 8. This is needed to cover an optimisation with
+// shifted from a multiple of 8. This is needed to cover an optimisation with
 // bitset matching https://github.com/ethereum/go-ethereum/issues/15309.
 func TestMatcherShifted(t *testing.T) {
 	t.Parallel()
@@ -116,7 +117,7 @@ func TestWildcardMatcher(t *testing.T) {
 	testMatcherBothModes(t, nil, 0, 10000, 0)
 }
 
-// makeRandomIndexes generates a random filter system, composed on multiple filter
+// makeRandomIndexes generates a random filter system, composed of multiple filter
 // criteria, each having one bloom list component for the address and arbitrarily
 // many topic bloom list components.
 func makeRandomIndexes(lengths []int, max int) [][]bloomIndexes {

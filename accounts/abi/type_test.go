@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -31,8 +32,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // typeWithoutStringer is a alias for the Type type which simply doesn't implement
@@ -41,6 +42,7 @@ type typeWithoutStringer Type
 
 // Tests that all allowed types get recognized by the type parser.
 func TestTypeRegexp(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		blob       string
 		components []ArgumentMarshaling
@@ -127,6 +129,7 @@ func TestTypeRegexp(t *testing.T) {
 }
 
 func TestTypeCheck(t *testing.T) {
+	t.Parallel()
 	for i, test := range []struct {
 		typ        string
 		components []ArgumentMarshaling
@@ -318,6 +321,7 @@ func TestTypeCheck(t *testing.T) {
 }
 
 func TestInternalType(t *testing.T) {
+	t.Parallel()
 	components := []ArgumentMarshaling{{Name: "a", Type: "int64"}}
 	internalType := "struct a.b[]"
 	kind := Type{
@@ -342,6 +346,7 @@ func TestInternalType(t *testing.T) {
 }
 
 func TestGetTypeSize(t *testing.T) {
+	t.Parallel()
 	var testCases = []struct {
 		typ        string
 		components []ArgumentMarshaling
@@ -378,6 +383,7 @@ func TestGetTypeSize(t *testing.T) {
 }
 
 func TestNewFixedBytesOver32(t *testing.T) {
+	t.Parallel()
 	_, err := NewType("bytes4096", "", nil)
 	if err == nil {
 		t.Errorf("fixed bytes with size over 32 is not spec'd")

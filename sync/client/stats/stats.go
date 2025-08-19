@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package stats
@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/coreth/metrics"
+	"github.com/ava-labs/libevm/metrics"
+
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 var (
-	_ ClientSyncerStats = &clientSyncerStats{}
-	_ ClientSyncerStats = &noopStats{}
+	_ ClientSyncerStats = (*clientSyncerStats)(nil)
+	_ ClientSyncerStats = (*noopStats)(nil)
 )
 
 type ClientSyncerStats interface {
@@ -41,12 +42,12 @@ type messageMetric struct {
 
 func NewMessageMetric(name string) MessageMetric {
 	return &messageMetric{
-		requested:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_requested", name), nil),
-		succeeded:       metrics.GetOrRegisterCounter(fmt.Sprintf("%s_succeeded", name), nil),
-		failed:          metrics.GetOrRegisterCounter(fmt.Sprintf("%s_failed", name), nil),
-		invalidResponse: metrics.GetOrRegisterCounter(fmt.Sprintf("%s_invalid_response", name), nil),
-		received:        metrics.GetOrRegisterCounter(fmt.Sprintf("%s_received", name), nil),
-		requestLatency:  metrics.GetOrRegisterTimer(fmt.Sprintf("%s_request_latency", name), nil),
+		requested:       metrics.GetOrRegisterCounter(name+"_requested", nil),
+		succeeded:       metrics.GetOrRegisterCounter(name+"_succeeded", nil),
+		failed:          metrics.GetOrRegisterCounter(name+"_failed", nil),
+		invalidResponse: metrics.GetOrRegisterCounter(name+"_invalid_response", nil),
+		received:        metrics.GetOrRegisterCounter(name+"_received", nil),
+		requestLatency:  metrics.GetOrRegisterTimer(name+"_request_latency", nil),
 	}
 }
 
@@ -75,19 +76,21 @@ func (m *messageMetric) UpdateRequestLatency(duration time.Duration) {
 }
 
 type clientSyncerStats struct {
-	atomicTrieLeavesMetric,
-	stateTrieLeavesMetric,
+	leafMetrics map[message.NodeType]MessageMetric
 	codeRequestMetric,
 	blockRequestMetric MessageMetric
 }
 
 // NewClientSyncerStats returns stats for the client syncer
-func NewClientSyncerStats() ClientSyncerStats {
+func NewClientSyncerStats(leafMetricNames map[message.NodeType]string) *clientSyncerStats {
+	leafMetrics := make(map[message.NodeType]MessageMetric, len(leafMetricNames))
+	for nodeType, name := range leafMetricNames {
+		leafMetrics[nodeType] = NewMessageMetric(name)
+	}
 	return &clientSyncerStats{
-		atomicTrieLeavesMetric: NewMessageMetric("sync_atomic_trie_leaves"),
-		stateTrieLeavesMetric:  NewMessageMetric("sync_state_trie_leaves"),
-		codeRequestMetric:      NewMessageMetric("sync_code"),
-		blockRequestMetric:     NewMessageMetric("sync_blocks"),
+		leafMetrics:        leafMetrics,
+		codeRequestMetric:  NewMessageMetric("sync_code"),
+		blockRequestMetric: NewMessageMetric("sync_blocks"),
 	}
 }
 
@@ -99,14 +102,11 @@ func (c *clientSyncerStats) GetMetric(msgIntf message.Request) (MessageMetric, e
 	case message.CodeRequest:
 		return c.codeRequestMetric, nil
 	case message.LeafsRequest:
-		switch msg.NodeType {
-		case message.StateTrieNode:
-			return c.stateTrieLeavesMetric, nil
-		case message.AtomicTrieNode:
-			return c.atomicTrieLeavesMetric, nil
-		default:
+		metric, ok := c.leafMetrics[msg.NodeType]
+		if !ok {
 			return nil, fmt.Errorf("invalid leafs request for node type: %T", msg.NodeType)
 		}
+		return metric, nil
 	default:
 		return nil, fmt.Errorf("attempted to get metric for invalid request with type %T", msg)
 	}
@@ -132,13 +132,4 @@ func NewNoOpStats() ClientSyncerStats {
 
 func (n noopStats) GetMetric(_ message.Request) (MessageMetric, error) {
 	return n.noop, nil
-}
-
-// NewStats returns syncer stats if enabled or a no-op version if disabled.
-func NewStats(enabled bool) ClientSyncerStats {
-	if enabled {
-		return NewClientSyncerStats()
-	} else {
-		return NewNoOpStats()
-	}
 }

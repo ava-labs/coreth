@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -45,6 +46,7 @@ const methoddata = `
 ]`
 
 func TestMethodString(t *testing.T) {
+	t.Parallel()
 	var table = []struct {
 		method      string
 		expectation string
@@ -109,6 +111,7 @@ func TestMethodString(t *testing.T) {
 }
 
 func TestMethodSig(t *testing.T) {
+	t.Parallel()
 	var cases = []struct {
 		method string
 		expect string

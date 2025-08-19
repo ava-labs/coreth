@@ -1,4 +1,4 @@
-// (c) 2019-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -9,129 +9,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
-	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/vms/components/verify"
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/txpool/legacypool"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/core/txpool/legacypool"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/utils"
 )
-
-func TestGossipAtomicTxMarshaller(t *testing.T) {
-	require := require.New(t)
-
-	want := &GossipAtomicTx{
-		Tx: &Tx{
-			UnsignedAtomicTx: &UnsignedImportTx{},
-			Creds:            []verify.Verifiable{},
-		},
-	}
-	marshaller := GossipAtomicTxMarshaller{}
-
-	key0 := testKeys[0]
-	require.NoError(want.Tx.Sign(Codec, [][]*secp256k1.PrivateKey{{key0}}))
-
-	bytes, err := marshaller.MarshalGossip(want)
-	require.NoError(err)
-
-	got, err := marshaller.UnmarshalGossip(bytes)
-	require.NoError(err)
-	require.Equal(want.GossipID(), got.GossipID())
-}
-
-func TestAtomicMempoolIterate(t *testing.T) {
-	txs := []*GossipAtomicTx{
-		{
-			Tx: &Tx{
-				UnsignedAtomicTx: &TestUnsignedTx{
-					IDV: ids.GenerateTestID(),
-				},
-			},
-		},
-		{
-			Tx: &Tx{
-				UnsignedAtomicTx: &TestUnsignedTx{
-					IDV: ids.GenerateTestID(),
-				},
-			},
-		},
-	}
-
-	tests := []struct {
-		name           string
-		add            []*GossipAtomicTx
-		f              func(tx *GossipAtomicTx) bool
-		possibleValues []*GossipAtomicTx
-		expectedLen    int
-	}{
-		{
-			name: "func matches nothing",
-			add:  txs,
-			f: func(*GossipAtomicTx) bool {
-				return false
-			},
-			possibleValues: nil,
-		},
-		{
-			name: "func matches all",
-			add:  txs,
-			f: func(*GossipAtomicTx) bool {
-				return true
-			},
-			possibleValues: txs,
-			expectedLen:    2,
-		},
-		{
-			name: "func matches subset",
-			add:  txs,
-			f: func(tx *GossipAtomicTx) bool {
-				return tx.Tx == txs[0].Tx
-			},
-			possibleValues: txs,
-			expectedLen:    1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require := require.New(t)
-			m, err := NewMempool(&snow.Context{}, prometheus.NewRegistry(), 10, nil)
-			require.NoError(err)
-
-			for _, add := range tt.add {
-				require.NoError(m.Add(add))
-			}
-
-			matches := make([]*GossipAtomicTx, 0)
-			f := func(tx *GossipAtomicTx) bool {
-				match := tt.f(tx)
-
-				if match {
-					matches = append(matches, tx)
-				}
-
-				return match
-			}
-
-			m.Iterate(f)
-
-			require.Len(matches, tt.expectedLen)
-			require.Subset(tt.possibleValues, matches)
-		})
-	}
-}
 
 func TestGossipEthTxMarshaller(t *testing.T) {
 	require := require.New(t)
@@ -175,7 +69,7 @@ func TestGossipSubscribe(t *testing.T) {
 	}, 10*time.Second, 500*time.Millisecond, "expected gossipTxPool to be subscribed")
 
 	// create eth txs
-	ethTxs := getValidEthTxs(key, 10, big.NewInt(226*params.GWei))
+	ethTxs := getValidEthTxs(key, 10, big.NewInt(226*utils.GWei))
 
 	// Notify mempool about txs
 	errs := txPool.AddRemotesSync(ethTxs)
@@ -189,7 +83,7 @@ func TestGossipSubscribe(t *testing.T) {
 			defer gossipTxPool.lock.RUnlock()
 
 			for i, tx := range ethTxs {
-				require.Truef(gossipTxPool.bloom.Has(&GossipEthTx{Tx: tx}), "expected tx[%d] to be in bloom filter", i)
+				assert.Truef(c, gossipTxPool.bloom.Has(&GossipEthTx{Tx: tx}), "expected tx[%d] to be in bloom filter", i)
 			}
 		},
 		30*time.Second,
@@ -204,14 +98,14 @@ func setupPoolWithConfig(t *testing.T, config *params.ChainConfig, fundedAddress
 
 	gspec := &core.Genesis{
 		Config: config,
-		Alloc:  core.GenesisAlloc{fundedAddress: core.GenesisAccount{Balance: big.NewInt(1000000000000000000)}},
+		Alloc:  types.GenesisAlloc{fundedAddress: {Balance: big.NewInt(1000000000000000000)}},
 	}
 	chain, err := core.NewBlockChain(diskdb, core.DefaultCacheConfig, gspec, engine, vm.Config{}, common.Hash{}, false)
 	require.NoError(t, err)
 	testTxPoolConfig := legacypool.DefaultConfig
 	legacyPool := legacypool.New(testTxPoolConfig, chain)
 
-	txPool, err := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), chain, []txpool.SubPool{legacyPool})
+	txPool, err := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{legacyPool})
 	require.NoError(t, err)
 
 	return txPool

@@ -1,13 +1,13 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package predicate
 
 import (
+	"errors"
 	"fmt"
 
-	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
 
 // EndByte is used as a delimiter for the bytes packed into a precompile predicate.
@@ -18,10 +18,10 @@ import (
 var EndByte = byte(0xff)
 
 var (
-	ErrInvalidAllZeroBytes = fmt.Errorf("predicate specified invalid all zero bytes")
-	ErrInvalidPadding      = fmt.Errorf("predicate specified invalid padding")
-	ErrInvalidEndDelimiter = fmt.Errorf("invalid end delimiter")
-	ErrorInvalidExtraData  = fmt.Errorf("header extra data too short for predicate verification")
+	ErrInvalidAllZeroBytes = errors.New("predicate specified invalid all zero bytes")
+	ErrInvalidPadding      = errors.New("predicate specified invalid padding")
+	ErrInvalidEndDelimiter = errors.New("invalid end delimiter")
+	ErrorInvalidExtraData  = errors.New("header extra data too short for predicate verification")
 )
 
 // PackPredicate packs [predicate] by delimiting the actual message with [PredicateEndByte]
@@ -31,7 +31,7 @@ func PackPredicate(predicateBytes []byte) []byte {
 	return common.RightPadBytes(predicateBytes, (len(predicateBytes)+31)/32*32)
 }
 
-// UnpackPredicate unpacks a predicate by stripping right padded zeroes, checking for the delimter,
+// UnpackPredicate unpacks a predicate by stripping right padded zeroes, checking for the delimiter,
 // ensuring there is not excess padding, and returning the original message.
 // Returns an error if it finds an incorrect encoding.
 func UnpackPredicate(paddedPredicate []byte) ([]byte, error) {
@@ -49,16 +49,4 @@ func UnpackPredicate(paddedPredicate []byte) ([]byte, error) {
 	}
 
 	return trimmedPredicateBytes[:len(trimmedPredicateBytes)-1], nil
-}
-
-// GetPredicateResultBytes returns the predicate result bytes from the extra data and
-// true iff the predicate results bytes have non-zero length.
-func GetPredicateResultBytes(extraData []byte) ([]byte, bool) {
-	// Prior to Durango, the VM enforces the extra data is smaller than or equal to this size.
-	// After Durango, the VM pre-verifies the extra data past the dynamic fee rollup window is
-	// valid.
-	if len(extraData) <= params.DynamicFeeExtraDataSize {
-		return nil, false
-	}
-	return extraData[params.DynamicFeeExtraDataSize:], true
 }

@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -27,39 +28,72 @@
 package tests
 
 import (
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
+	"os"
+	"path/filepath"
+
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/trie/triedb/hashdb"
-	"github.com/ava-labs/coreth/trie/triedb/pathdb"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/triedb/firewood"
+	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/coreth/triedb/pathdb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/triedb"
+	"github.com/holiman/uint256"
 )
 
-func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter bool, scheme string) (*trie.Database, *snapshot.Tree, *state.StateDB) {
-	tconf := &trie.Config{Preimages: true}
-	if scheme == rawdb.HashScheme {
-		tconf.HashDB = hashdb.Defaults
-	} else {
-		tconf.PathDB = pathdb.Defaults
+// StateTestState groups all the state database objects together for use in tests.
+type StateTestState struct {
+	StateDB   *state.StateDB
+	TrieDB    *triedb.Database
+	Snapshots *snapshot.Tree
+	TempDir   string
+}
+
+// MakePreState creates a state containing the given allocation.
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
+	// Set database path
+	tempdir, err := os.MkdirTemp("", "coreth-state-test-*")
+	if err != nil {
+		panic("failed to create temporary directory: " + err.Error())
 	}
-	triedb := trie.NewDatabase(db, tconf)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
+
+	tconf := &triedb.Config{Preimages: true}
+	switch scheme {
+	case rawdb.HashScheme:
+		tconf.DBOverride = hashdb.Defaults.BackendConstructor
+	case rawdb.PathScheme:
+		tconf.DBOverride = pathdb.Defaults.BackendConstructor
+	case customrawdb.FirewoodScheme:
+		cfg := firewood.Defaults
+		cfg.FilePath = filepath.Join(tempdir, "firewood")
+		tconf.DBOverride = cfg.BackendConstructor
+	default:
+		panic("unknown trie database scheme" + scheme)
+	}
+
+	triedb := triedb.NewDatabase(db, tconf)
+	sdb := extstate.NewDatabaseWithNodeDB(db, triedb)
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance)
+		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance))
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
+	root, err := statedb.Commit(0, false)
+	if err != nil {
+		panic("failed to commit state: " + err.Error())
+	}
 
+	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
 	if snapshotter {
 		snapconfig := snapshot.Config{
@@ -71,5 +105,26 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc, snapshotter boo
 		snaps, _ = snapshot.New(snapconfig, db, triedb, common.Hash{}, root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
-	return triedb, snaps, statedb
+	return StateTestState{statedb, triedb, snaps, tempdir}
+}
+
+// Close should be called when the state is no longer needed, ie. after running the test.
+func (st *StateTestState) Close() {
+	if st.TrieDB != nil {
+		st.TrieDB.Close()
+		st.TrieDB = nil
+	}
+	if st.Snapshots != nil {
+		// Need to call Disable here to quit the snapshot generator goroutine.
+		st.Snapshots.AbortGeneration()
+		st.Snapshots.Release()
+		st.Snapshots = nil
+	}
+
+	if st.TempDir != "" {
+		if err := os.RemoveAll(st.TempDir); err != nil {
+			panic("failed to remove temporary directory: " + err.Error())
+		}
+		st.TempDir = ""
+	}
 }

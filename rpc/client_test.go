@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -42,8 +43,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/libevm/log"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -262,6 +263,7 @@ func TestClientBatchRequestLimit(t *testing.T) {
 	defer server.Stop()
 	server.SetBatchLimits(2, 100000)
 	client := DialInProc(server)
+	defer client.Close()
 
 	batch := []BatchElem{
 		{Method: "foo"},
@@ -352,6 +354,7 @@ func testClientCancel(transport string, t *testing.T) {
 	default:
 		panic("unknown transport: " + transport)
 	}
+	defer client.Close()
 
 	// The actual test starts here.
 	var (
@@ -602,10 +605,11 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 
 	srv.RegisterName("nftest", new(notificationTestService))
 	client, _ := Dial(wsURL)
+	defer client.Close()
 
 	for i := 0; i < 5; i++ {
 		ch := make(chan int, 100)
-		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", maxClientSubscriptionBuffer-1, 1)
+		sub, err := client.Subscribe(context.Background(), "nftest", ch, "someSubscription", 100, 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -720,7 +724,6 @@ func TestClientHTTP(t *testing.T) {
 	)
 	defer client.Close()
 	for i := range results {
-		i := i
 		go func() {
 			errc <- client.Call(&results[i], "test_echo", wantResult.String, wantResult.Int, wantResult.Args)
 		}()

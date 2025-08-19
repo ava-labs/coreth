@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -27,16 +28,19 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ava-labs/coreth/metrics"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
 	"golang.org/x/time/rate"
 )
 
@@ -353,7 +357,7 @@ func (h *handler) addRequestOp(op *requestOp) {
 	}
 }
 
-// removeRequestOps stops waiting for the given request IDs.
+// removeRequestOp stops waiting for the given request IDs.
 func (h *handler) removeRequestOp(op *requestOp) {
 	for _, id := range op.ids {
 		delete(h.respWait, string(id))
@@ -476,7 +480,7 @@ func (h *handler) startCallProc(fn func(*callProc)) {
 	}
 }
 
-// handleResponse processes method call responses.
+// handleResponses processes method call responses.
 func (h *handler) handleResponses(batch []*jsonrpcMessage, handleCall func(*jsonrpcMessage)) {
 	var resolvedops []*requestOp
 	handleResp := func(msg *jsonrpcMessage) {
@@ -566,16 +570,16 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
-		var ctx []interface{}
-		ctx = append(ctx, "reqid", idForLog{msg.ID}, "execTime", time.Since(execStart), "procTime", time.Since(procStart), "totalTime", time.Since(callStart))
+		var logctx []any
+		logctx = append(logctx, "reqid", idForLog{msg.ID}, "execTime", time.Since(execStart), "procTime", time.Since(procStart), "totalTime", time.Since(callStart))
 		if resp.Error != nil {
-			ctx = append(ctx, "err", resp.Error.Message)
+			logctx = append(logctx, "err", resp.Error.Message)
 			if resp.Error.Data != nil {
-				ctx = append(ctx, "errdata", resp.Error.Data)
+				logctx = append(logctx, "errdata", formatErrorData(resp.Error.Data))
 			}
-			h.log.Info("Served "+msg.Method, ctx...)
+			h.log.Info("Served "+msg.Method, logctx...)
 		} else {
-			h.log.Debug("Served "+msg.Method, ctx...)
+			h.log.Debug("Served "+msg.Method, logctx...)
 		}
 		return resp
 
@@ -690,4 +694,34 @@ func (id idForLog) String() string {
 		return s
 	}
 	return string(id.RawMessage)
+}
+
+var errTruncatedOutput = errors.New("truncated output")
+
+type limitedBuffer struct {
+	output []byte
+	limit  int
+}
+
+func (buf *limitedBuffer) Write(data []byte) (int, error) {
+	avail := max(buf.limit, len(buf.output))
+	if len(data) < avail {
+		buf.output = append(buf.output, data...)
+		return len(data), nil
+	}
+	buf.output = append(buf.output, data[:avail]...)
+	return avail, errTruncatedOutput
+}
+
+func formatErrorData(v any) string {
+	buf := limitedBuffer{limit: 1024}
+	err := json.NewEncoder(&buf).Encode(v)
+	switch {
+	case err == nil:
+		return string(bytes.TrimRight(buf.output, "\n"))
+	case errors.Is(err, errTruncatedOutput):
+		return fmt.Sprintf("%s... (truncated)", buf.output)
+	default:
+		return fmt.Sprintf("bad error data (err=%v)", err)
+	}
 }

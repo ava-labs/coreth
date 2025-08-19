@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -98,6 +99,10 @@ func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
 
 func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *echoArgs) echoResult {
 	return echoResult{str, i, args}
+}
+
+func (s *testService) Repeat(msg string, i int) string {
+	return strings.Repeat(msg, i)
 }
 
 func (s *testService) PeerInfo(ctx context.Context) PeerInfo {

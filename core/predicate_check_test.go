@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package core
@@ -9,12 +9,13 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/set"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 type predicateCheckTest struct {
@@ -293,13 +294,13 @@ func TestCheckPredicate(t *testing.T) {
 			expectedErr: ErrIntrinsicGas,
 		},
 	} {
-		test := test
 		t.Run(name, func(t *testing.T) {
 			require := require.New(t)
 			// Create the rules from TestChainConfig and update the predicates based on the test params
-			rules := params.TestChainConfig.Rules(common.Big0, 0)
+			rules := params.TestChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
 			if test.createPredicates != nil {
 				for address, predicater := range test.createPredicates(t) {
+					rules := params.GetRulesExtra(rules)
 					rules.Predicaters[address] = predicater
 				}
 			}
@@ -423,7 +424,7 @@ func TestCheckPredicatesOutput(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 			// Create the rules from TestChainConfig and update the predicates based on the test params
-			rules := params.TestChainConfig.Rules(common.Big0, 0)
+			rules := params.TestChainConfig.Rules(common.Big0, params.IsMergeTODO, 0)
 			predicater := precompileconfig.NewMockPredicater(gomock.NewController(t))
 			predicater.EXPECT().PredicateGas(gomock.Any()).Return(uint64(0), nil).Times(len(test.testTuple))
 
@@ -445,8 +446,9 @@ func TestCheckPredicatesOutput(t *testing.T) {
 				})
 			}
 
-			rules.Predicaters[addr1] = predicater
-			rules.Predicaters[addr2] = predicater
+			rulesExtra := params.GetRulesExtra(rules)
+			rulesExtra.Predicaters[addr1] = predicater
+			rulesExtra.Predicaters[addr2] = predicater
 
 			// Specify only the access list, since this test should not depend on any other values
 			tx := types.NewTx(&types.DynamicFeeTx{

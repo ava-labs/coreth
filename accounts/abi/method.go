@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -30,7 +31,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/crypto"
 )
 
 // FunctionType represents different types of functions a contract might have.
@@ -127,15 +128,6 @@ func NewMethod(name string, rawName string, funType FunctionType, mutability str
 		sig = fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
 		id = crypto.Keccak256([]byte(sig))[:4]
 	}
-	// Extract meaningful state mutability of solidity method.
-	// If it's default value, never print it.
-	state := mutability
-	if state == "nonpayable" {
-		state = ""
-	}
-	if state != "" {
-		state = state + " "
-	}
 	identity := fmt.Sprintf("function %v", rawName)
 	switch funType {
 	case Fallback:
@@ -145,7 +137,14 @@ func NewMethod(name string, rawName string, funType FunctionType, mutability str
 	case Constructor:
 		identity = "constructor"
 	}
-	str := fmt.Sprintf("%v(%v) %sreturns(%v)", identity, strings.Join(inputNames, ", "), state, strings.Join(outputNames, ", "))
+	var str string
+	// Extract meaningful state mutability of solidity method.
+	// If it's empty string or default value "nonpayable", never print it.
+	if mutability == "" || mutability == "nonpayable" {
+		str = fmt.Sprintf("%v(%v) returns(%v)", identity, strings.Join(inputNames, ", "), strings.Join(outputNames, ", "))
+	} else {
+		str = fmt.Sprintf("%v(%v) %s returns(%v)", identity, strings.Join(inputNames, ", "), mutability, strings.Join(outputNames, ", "))
+	}
 
 	return Method{
 		Name:            name,

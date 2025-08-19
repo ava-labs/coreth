@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -36,8 +37,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common/bitutil"
+	"github.com/ava-labs/libevm/crypto"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong
@@ -68,7 +69,7 @@ type partialMatches struct {
 // bit with the given number of fetch elements, or a response for such a request.
 // It can also have the actual results set to be used as a delivery data struct.
 //
-// The contest and error fields are used by the light client to terminate matching
+// The context and error fields are used by the light client to terminate matching
 // early if an error is encountered on some path of the pipeline.
 type Retrieval struct {
 	Bit      uint
@@ -399,7 +400,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 		shutdown   = session.quit            // Shutdown request channel, will gracefully wait for pending requests
 	)
 
-	// assign is a helper method fo try to assign a pending bit an actively
+	// assign is a helper method to try to assign a pending bit an actively
 	// listening servicer, or schedule it up for later when one arrives.
 	assign := func(bit uint) {
 		select {

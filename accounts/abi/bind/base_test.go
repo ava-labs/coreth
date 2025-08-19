@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -37,13 +38,13 @@ import (
 
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/coreth/nativeasset"
+	ethereum "github.com/ava-labs/libevm"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,7 +66,7 @@ func (mt *mockTransactor) AcceptedCodeAt(ctx context.Context, account common.Add
 	return []byte{1}, nil
 }
 
-func (mt *mockTransactor) AcceptedNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+func (mt *mockTransactor) NonceAt(ctx context.Context, account common.Address, blockNum *big.Int) (uint64, error) {
 	return 0, nil
 }
 
@@ -79,7 +80,7 @@ func (mt *mockTransactor) SuggestGasTipCap(ctx context.Context) (*big.Int, error
 	return mt.gasTipCap, nil
 }
 
-func (mt *mockTransactor) EstimateGas(ctx context.Context, call interfaces.CallMsg) (gas uint64, err error) {
+func (mt *mockTransactor) EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error) {
 	return 0, nil
 }
 
@@ -101,7 +102,7 @@ func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, block
 	return mc.codeAtBytes, mc.codeAtErr
 }
 
-func (mc *mockCaller) CallContract(ctx context.Context, call interfaces.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
 	return mc.callContractBytes, mc.callContractErr
 }
@@ -121,12 +122,33 @@ func (mc *mockAcceptedCaller) AcceptedCodeAt(ctx context.Context, contract commo
 	return mc.acceptedCodeAtBytes, mc.acceptedCodeAtErr
 }
 
-func (mc *mockAcceptedCaller) AcceptedCallContract(ctx context.Context, call interfaces.CallMsg) ([]byte, error) {
+func (mc *mockAcceptedCaller) AcceptedCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
 	mc.acceptedCallContractCalled = true
 	return mc.acceptedCallContractBytes, mc.acceptedCallContractErr
 }
 
+type mockBlockHashCaller struct {
+	*mockCaller
+	codeAtHashBytes          []byte
+	codeAtHashErr            error
+	codeAtHashCalled         bool
+	callContractAtHashCalled bool
+	callContractAtHashBytes  []byte
+	callContractAtHashErr    error
+}
+
+func (mc *mockBlockHashCaller) CodeAtHash(ctx context.Context, contract common.Address, hash common.Hash) ([]byte, error) {
+	mc.codeAtHashCalled = true
+	return mc.codeAtHashBytes, mc.codeAtHashErr
+}
+
+func (mc *mockBlockHashCaller) CallContractAtHash(ctx context.Context, call ethereum.CallMsg, hash common.Hash) ([]byte, error) {
+	mc.callContractAtHashCalled = true
+	return mc.callContractAtHashBytes, mc.callContractAtHashErr
+}
+
 func TestPassingBlockNumber(t *testing.T) {
+	t.Parallel()
 	mc := &mockAcceptedCaller{
 		mockCaller: &mockCaller{
 			codeAtBytes: []byte{1, 2, 3},
@@ -178,6 +200,7 @@ func TestPassingBlockNumber(t *testing.T) {
 const hexData = "0x000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158"
 
 func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
+	t.Parallel()
 	hash := crypto.Keccak256Hash([]byte("testName"))
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(string,address,uint256,bytes)")),
@@ -199,6 +222,7 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 }
 
 func TestUnpackAnonymousLogIntoMap(t *testing.T) {
+	t.Parallel()
 	mockLog := newMockLog(nil, common.HexToHash("0x0"))
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":false,"name":"amount","type":"uint256"}],"name":"received","type":"event"}]`
@@ -216,6 +240,7 @@ func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 }
 
 func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
+	t.Parallel()
 	sliceBytes, err := rlp.EncodeToBytes([]string{"name1", "name2", "name3", "name4"})
 	if err != nil {
 		t.Fatal(err)
@@ -241,6 +266,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 }
 
 func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
+	t.Parallel()
 	arrBytes, err := rlp.EncodeToBytes([2]common.Address{common.HexToAddress("0x0"), common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2")})
 	if err != nil {
 		t.Fatal(err)
@@ -266,6 +292,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 }
 
 func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
+	t.Parallel()
 	mockAddress := common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2")
 	addrBytes := mockAddress.Bytes()
 	hash := crypto.Keccak256Hash([]byte("mockFunction(address,uint)"))
@@ -292,6 +319,7 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 }
 
 func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
+	t.Parallel()
 	bytes := []byte{1, 2, 3, 4, 5}
 	hash := crypto.Keccak256Hash(bytes)
 	topics := []common.Hash{
@@ -377,8 +405,8 @@ func TestTransactNativeAssetCall(t *testing.T) {
 	nativeCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
 	assert.Nil(err)
 	// verify transformations
-	assert.Equal(vm.NativeAssetCallAddr, *nativeCallTx.To())
-	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := vm.UnpackNativeAssetCallInput(nativeCallTx.Data())
+	assert.Equal(nativeasset.NativeAssetCallAddr, *nativeCallTx.To())
+	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := nativeasset.UnpackNativeAssetCallInput(nativeCallTx.Data())
 	assert.Nil(err)
 	assert.NotEmpty(unpackedData)
 	assert.Equal(unpackedData, normalCallTx.Data())
@@ -388,6 +416,7 @@ func TestTransactNativeAssetCall(t *testing.T) {
 }
 
 func TestTransactGasFee(t *testing.T) {
+	t.Parallel()
 	assert := assert.New(t)
 
 	// GasTipCap and GasFeeCap
@@ -463,6 +492,7 @@ func newMockLog(topics []common.Hash, txHash common.Hash) types.Log {
 }
 
 func TestCall(t *testing.T) {
+	t.Parallel()
 	var method, methodWithArg = "something", "somethingArrrrg"
 	tests := []struct {
 		name, method string
@@ -487,6 +517,15 @@ func TestCall(t *testing.T) {
 		},
 		method: method,
 	}, {
+		name: "ok hash",
+		mc: &mockBlockHashCaller{
+			codeAtHashBytes: []byte{0},
+		},
+		opts: &bind.CallOpts{
+			BlockHash: common.Hash{0xaa},
+		},
+		method: method,
+	}, {
 		name:    "pack error, no method",
 		mc:      new(mockCaller),
 		method:  "else",
@@ -499,6 +538,14 @@ func TestCall(t *testing.T) {
 		},
 		method:       method,
 		wantErrExact: bind.ErrNoAcceptedState,
+	}, {
+		name: "interface error, blockHash but not a BlockHashContractCaller",
+		mc:   new(mockCaller),
+		opts: &bind.CallOpts{
+			BlockHash: common.Hash{0xaa},
+		},
+		method:       method,
+		wantErrExact: bind.ErrNoBlockHashState,
 	}, {
 		name: "accepted call canceled",
 		mc: &mockAcceptedCaller{
@@ -544,6 +591,34 @@ func TestCall(t *testing.T) {
 	}, {
 		name:         "no code at",
 		mc:           new(mockCaller),
+		method:       method,
+		wantErrExact: bind.ErrNoCode,
+	}, {
+		name: "call contract at hash error",
+		mc: &mockBlockHashCaller{
+			callContractAtHashErr: context.DeadlineExceeded,
+		},
+		opts: &bind.CallOpts{
+			BlockHash: common.Hash{0xaa},
+		},
+		method:       method,
+		wantErrExact: context.DeadlineExceeded,
+	}, {
+		name: "code at error",
+		mc: &mockBlockHashCaller{
+			codeAtHashErr: errors.New(""),
+		},
+		opts: &bind.CallOpts{
+			BlockHash: common.Hash{0xaa},
+		},
+		method:  method,
+		wantErr: true,
+	}, {
+		name: "no code at hash",
+		mc:   new(mockBlockHashCaller),
+		opts: &bind.CallOpts{
+			BlockHash: common.Hash{0xaa},
+		},
 		method:       method,
 		wantErrExact: bind.ErrNoCode,
 	}, {
@@ -593,6 +668,7 @@ func TestCall(t *testing.T) {
 
 // TestCrashers contains some strings which previously caused the abi codec to crash.
 func TestCrashers(t *testing.T) {
+	t.Parallel()
 	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"_1"}]}]}]`))
 	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"&"}]}]}]`))
 	abi.JSON(strings.NewReader(`[{"inputs":[{"type":"tuple[]","components":[{"type":"bool","name":"----"}]}]}]`))

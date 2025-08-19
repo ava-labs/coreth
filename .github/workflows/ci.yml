@@ -4,21 +4,88 @@ on:
     branches:
       - master
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
     inputs:
       avalanchegoRepo:
-        description: 'avalanchego github repository'
+        description: "avalanchego github repository"
         required: true
-        default: 'ava-labs/avalanchego'
+        default: "ava-labs/avalanchego"
       avalanchegoBranch:
-        description: 'avalanchego branch'
+        description: "avalanchego branch"
         required: true
-        default: 'master'
+        default: "master"
 
 jobs:
-  lint:
+  lint_test:
     name: Lint
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.avalanchegoRepo }}
+          ref: ${{ github.event.inputs.avalanchegoBranch }}
+          path: avalanchego
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - name: change avalanchego dep
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
+          go mod tidy
+          go clean -modcache
+      - name: Run all lint checks
+        run: ./scripts/run_task.sh lint-all-ci
+      - name: Check go.mod and go.sum are up-to-date
+        run: ./scripts/run_task.sh check-go-mod-tidy
+      - name: Ensure consistent avalanchego version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/run_task.sh check-avalanchego-version
+
+  unit_test:
+    name: Golang Unit Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-22.04, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.avalanchegoRepo }}
+          ref: ${{ github.event.inputs.avalanchegoBranch }}
+          path: avalanchego
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - name: change avalanchego dep
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
+          go mod tidy
+      - run: go mod download
+      - name: Check generated codec files are up to date
+        run: ./scripts/run_task.sh check-generate-codec
+      - name: Check generated mocks are up to date
+        run: ./scripts/run_task.sh check-generate-mocks
+      - run: ./scripts/run_task.sh build
+      - run: ./scripts/run_task.sh build-test
+        env:
+          TIMEOUT: ${{ env.TIMEOUT }}
+      - run: ./scripts/run_task.sh coverage
+
+  avalanchego_e2e:
+    name: AvalancheGo E2E Tests
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
@@ -31,92 +98,52 @@ jobs:
           token: ${{ secrets.AVALANCHE_PAT }}
       - uses: actions/setup-go@v5
         with:
-          go-version: '~1.21.9'
-          check-latest: true
-      - name: change avalanchego dep
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-          go mod tidy
-          go clean -modcache # avoid conflicts with the golangci-lint-action cache
-      - run: ./scripts/lint_allowed_geth_imports.sh
-        shell: bash
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+          go-version-file: "go.mod"
+      - name: Build AvalancheGo and update Coreth dependency
+        run: ./scripts/run_task.sh build-avalanchego-with-coreth
+      - name: Run e2e tests
+        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@24a051a57738e6f90d37cc6b3c221170ff2ac892
         with:
-          version: v1.56
-          working-directory: .
-          args: --timeout 3m
-          skip-pkg-cache: true
-      - name: Run shellcheck
-        shell: bash
-        run: scripts/shellcheck.sh
-  test:
-    name: Golang Unit Tests v${{ matrix.go }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, ubuntu-20.04, ubuntu-latest, windows-latest]
+          run: ./scripts/run_task.sh test-e2e
+          run_env: AVALANCHEGO_CLONE_PATH=avalanchego
+          prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
+          prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
+          loki_username: ${{ secrets.LOKI_ID || '' }}
+          loki_password: ${{ secrets.LOKI_PASSWORD || '' }}
+
+  e2e_warp:
+    name: e2e warp tests
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v5
-      with:
-        go-version: '~1.21.9'
-        check-latest: true
-    - name: change avalanchego dep
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      run: |
-        go mod edit -replace github.com/ava-labs/avalanchego=./avalanchego
-        go mod tidy
-    - name: Set timeout on Windows # Windows UT run slower and need a longer timeout
-      shell: bash
-      if: matrix.os == 'windows-latest'
-      run: echo "TIMEOUT=1200s" >> $GITHUB_ENV
-    - run: go mod download
-      shell: bash
-    - run: ./scripts/build.sh evm
-      shell: bash
-    - run: ./scripts/build_test.sh
-      shell: bash
-      env:
-        TIMEOUT: ${{ env.TIMEOUT }}
-    - run: ./scripts/coverage.sh
-      shell: bash
-  avalanchego_e2e:
-    name: AvalancheGo E2E Tests v${{ matrix.go }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-20.04 ]
-    steps:
-    - uses: actions/checkout@v4
-    - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.inputs.avalanchegoRepo }}
-        ref: ${{ github.event.inputs.avalanchegoBranch }}
-        path: avalanchego
-        token: ${{ secrets.AVALANCHE_PAT }}
-    - uses: actions/setup-go@v5
-      with:
-        go-version: '~1.21.9'
-        check-latest: true
-    - name: Run e2e tests
-      run: E2E_SERIAL=1 ./scripts/tests.e2e.sh
-      shell: bash
-    - name: Upload tmpnet network dir
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: tmpnet-data
-        path: ~/.tmpnet/networks/1000
+      - name: Git checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - name: check out ${{ github.event.inputs.avalanchegoRepo }} ${{ github.event.inputs.avalanchegoBranch }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.avalanchegoRepo }}
+          ref: ${{ github.event.inputs.avalanchegoBranch }}
+          path: avalanchego
+      - name: Move AvalancheGo
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: mv avalanchego /tmp/e2e/warp/avalanchego
+      - name: Build AvalancheGo and update Coreth dependency
+        run: ./scripts/run_task.sh build-avalanchego-with-coreth
+        env:
+          AVALANCHEGO_CLONE_PATH: /tmp/e2e/warp/avalanchego
+      - name: Run Warp E2E Tests
+        uses: ava-labs/avalanchego/.github/actions/run-monitored-tmpnet-cmd@24a051a57738e6f90d37cc6b3c221170ff2ac892
+        with:
+          run: ./scripts/run_task.sh test-e2e-warp-ci
+          run_env: AVALANCHEGO_BUILD_PATH=/tmp/e2e/warp/avalanchego/build
+          artifact_prefix: warp
+          prometheus_username: ${{ secrets.PROMETHEUS_ID || '' }}
+          prometheus_password: ${{ secrets.PROMETHEUS_PASSWORD || '' }}
+          loki_username: ${{ secrets.LOKI_ID || '' }}
+          loki_password: ${{ secrets.LOKI_PASSWORD || '' }}

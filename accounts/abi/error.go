@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -28,12 +29,11 @@ package abi
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/crypto"
 )
 
 type Error struct {
@@ -94,10 +94,10 @@ func (e Error) String() string {
 
 func (e *Error) Unpack(data []byte) (interface{}, error) {
 	if len(data) < 4 {
-		return "", errors.New("invalid data for unpacking")
+		return "", fmt.Errorf("insufficient data for unpacking: have %d, want at least 4", len(data))
 	}
 	if !bytes.Equal(data[:4], e.ID[:4]) {
-		return "", errors.New("invalid data for unpacking")
+		return "", fmt.Errorf("invalid identifier, have %#x want %#x", data[:4], e.ID[:4])
 	}
 	return e.Inputs.Unpack(data[4:])
 }

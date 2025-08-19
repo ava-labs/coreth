@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesync
@@ -8,10 +8,12 @@ import (
 	"sync"
 	"time"
 
-	utils_math "github.com/ava-labs/avalanchego/utils/math"
-	"github.com/ava-labs/coreth/metrics"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/avalanchego/utils/timer"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
+
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 const (
@@ -26,7 +28,7 @@ type trieSyncStats struct {
 	lock sync.Mutex
 
 	lastUpdated time.Time
-	leafsRate   utils_math.Averager
+	leafsRate   safemath.Averager
 
 	triesRemaining   int
 	triesSynced      int
@@ -78,7 +80,7 @@ func (t *trieSyncStats) incLeafs(segment *trieSegment, count uint64, remaining u
 	}
 }
 
-// estimateSegmentsInProgressTime retrns the ETA for all trie segments
+// estimateSegmentsInProgressTime returns the ETA for all trie segments
 // in progress to finish (uses the one with most remaining leafs to estimate).
 func (t *trieSyncStats) estimateSegmentsInProgressTime() time.Duration {
 	if len(t.remainingLeafs) == 0 {
@@ -114,10 +116,10 @@ func (t *trieSyncStats) trieDone(root common.Hash) {
 // updateETA calculates and logs and ETA based on the number of leafs
 // currently in progress and the number of tries remaining.
 // assumes lock is held.
-func (t *trieSyncStats) updateETA(sinceUpdate time.Duration, now time.Time) {
+func (t *trieSyncStats) updateETA(sinceUpdate time.Duration, now time.Time) time.Duration {
 	leafsRate := float64(t.leafsSinceUpdate) / sinceUpdate.Seconds()
 	if t.leafsRate == nil {
-		t.leafsRate = utils_math.NewAverager(leafsRate, leafRateHalfLife, now)
+		t.leafsRate = safemath.NewAverager(leafsRate, leafRateHalfLife, now)
 	} else {
 		t.leafsRate.Observe(leafsRate, now)
 	}
@@ -128,15 +130,17 @@ func (t *trieSyncStats) updateETA(sinceUpdate time.Duration, now time.Time) {
 		// provide a separate ETA for the account trie syncing step since we
 		// don't know the total number of storage tries yet.
 		log.Info("state sync: syncing account trie", "ETA", roundETA(leafsTime))
-		return
+		return leafsTime
 	}
 
-	triesTime := now.Sub(t.triesStartTime) * time.Duration(t.triesRemaining) / time.Duration(t.triesSynced)
+	triesTime := timer.EstimateETA(t.triesStartTime, uint64(t.triesSynced), uint64(t.triesSynced+t.triesRemaining))
+	eta := max(leafsTime, triesTime)
 	log.Info(
 		"state sync: syncing storage tries",
 		"triesRemaining", t.triesRemaining,
-		"ETA", roundETA(leafsTime+triesTime), // TODO: should we use max instead of sum?
+		"ETA", roundETA(eta),
 	)
+	return eta
 }
 
 func (t *trieSyncStats) setTriesRemaining(triesRemaining int) {

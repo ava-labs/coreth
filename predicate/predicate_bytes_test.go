@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package predicate
@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/coreth/params"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,19 +47,4 @@ func TestUnpackInvalidPredicate(t *testing.T) {
 			require.Error(err, "Predicate length %d, Padding length %d (0x%x)", len(validPredicate), len(padding), invalidPredicate)
 		}
 	}
-}
-
-func TestPredicateResultsBytes(t *testing.T) {
-	require := require.New(t)
-	dataTooShort := utils.RandomBytes(params.DynamicFeeExtraDataSize - 1)
-	_, ok := GetPredicateResultBytes(dataTooShort)
-	require.False(ok)
-
-	preDurangoData := utils.RandomBytes(params.DynamicFeeExtraDataSize)
-	_, ok = GetPredicateResultBytes(preDurangoData)
-	require.False(ok)
-	postDurangoData := utils.RandomBytes(params.DynamicFeeExtraDataSize + 2)
-	resultBytes, ok := GetPredicateResultBytes(postDurangoData)
-	require.True(ok)
-	require.Equal(resultBytes, postDurangoData[params.DynamicFeeExtraDataSize:])
 }

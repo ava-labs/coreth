@@ -1,9 +1,9 @@
 # Coreth and the C-Chain
 
-[Avalanche](https://docs.avax.network/intro) is a network composed of multiple blockchains.
+[Avalanche](https://www.avax.network/) is a network composed of multiple blockchains.
 Each blockchain is an instance of a Virtual Machine (VM), much like an object in an object-oriented language is an instance of a class.
 That is, the VM defines the behavior of the blockchain.
-Coreth (from core Ethereum) is the [Virtual Machine (VM)](https://docs.avax.network/learn/avalanche/virtual-machines) that defines the Contract Chain (C-Chain).
+Coreth (from core Ethereum) is the [Virtual Machine (VM)](https://docs.avax.network/learn/virtual-machines) that defines the Contract Chain (C-Chain).
 This chain implements the Ethereum Virtual Machine and supports Solidity smart contracts as well as most other Ethereum client functionality.
 
 ## Building
@@ -24,6 +24,23 @@ Now that AvalancheGo depends on the local version of Coreth, we can build with t
 
 Note: the C-Chain originally ran in a separate process from the main AvalancheGo process and communicated with it over a local gRPC connection. When this was the case, AvalancheGo's build script would download Coreth, compile it, and place the binary into the `avalanchego/build/plugins` directory.
 
+### Optional Dev Shell
+
+Some activities, such as collecting metrics and logs from the nodes targeted by an e2e
+test run, require binary dependencies. One way of making these dependencies available is
+to use a nix shell which will give access to the dependencies expected by the test
+tooling:
+
+ - Install [nix](https://nixos.org/). The [determinate systems
+   installer](https://github.com/DeterminateSystems/nix-installer?tab=readme-ov-file#install-nix)
+   is recommended.
+ - Use `./scripts/dev_shell.sh` to start a nix shell
+ - Execute the dependency-requiring command (e.g. `./scripts/tests.e2e.sh --start-collectors`)
+
+This repo also defines a `.envrc` file to configure [devenv](https://direnv.net/). With
+`devenv` and `nix` installed, a shell at the root of the repo will automatically start a nix
+dev shell.
+
 ## API
 
 The C-Chain supports the following API namespaces:
@@ -39,7 +56,7 @@ Full documentation for the C-Chain's API can be found [here.](https://docs.avax.
 
 ## Compatibility
 
-The C-Chain is compatible with almost all Ethereum tooling, including [Core,](https://docs.avax.network/build/dapp/launch-dapp#through-core) [Metamask,](https://docs.avax.network/build/dapp/launch-dapp#through-metamask) [Remix](https://docs.avax.network/build/tutorials/smart-contracts/deploy-a-smart-contract-on-avalanche-using-remix-and-metamask) and [Truffle.](https://docs.avax.network/build/tutorials/smart-contracts/using-truffle-with-the-avalanche-c-chain)
+The C-Chain is compatible with almost all Ethereum tooling, including [Core,](https://docs.avax.network/build/dapp/launch-dapp#through-core) [Metamask,](https://docs.avax.network/build/dapp/launch-dapp#through-metamask) [Remix](https://docs.avax.network/dapps/smart-contract-dev/deploy-with-remix-ide) and [Truffle.](https://docs.avax.network/build/tutorials/smart-contracts/using-truffle-with-the-avalanche-c-chain)
 
 ## Differences Between Avalanche C-Chain and Ethereum
 
@@ -74,3 +91,7 @@ To support these changes, there have been a number of changes to the C-Chain blo
 * `BaseFee`: Added by EIP-1559 to represent the base fee of the block (present in Ethereum as of EIP-1559)
 * `ExtDataGasUsed`: amount of gas consumed by the atomic transactions in the block
 * `BlockGasCost`: surcharge for producing a block faster than the target rate
+
+## Releasing
+
+See [docs/releasing/README.md](docs/releasing/README.md) for the release process.

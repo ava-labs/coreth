@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -144,7 +145,7 @@ func setSlice(dst, src reflect.Value) error {
 		dst.Set(slice)
 		return nil
 	}
-	return errors.New("Cannot set slice, destination not settable")
+	return errors.New("cannot set slice, destination not settable")
 }
 
 func setArray(dst, src reflect.Value) error {
@@ -165,7 +166,7 @@ func setArray(dst, src reflect.Value) error {
 		dst.Set(array)
 		return nil
 	}
-	return errors.New("Cannot set array, destination not settable")
+	return errors.New("cannot set array, destination not settable")
 }
 
 func setStruct(dst, src reflect.Value) error {
@@ -173,7 +174,7 @@ func setStruct(dst, src reflect.Value) error {
 		srcField := src.Field(i)
 		dstField := dst.Field(i)
 		if !dstField.IsValid() || !srcField.IsValid() {
-			return fmt.Errorf("Could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
+			return fmt.Errorf("could not find src field: %v value: %v in destination", srcField.Type().Name(), srcField)
 		}
 		if err := set(dstField, srcField); err != nil {
 			return err
