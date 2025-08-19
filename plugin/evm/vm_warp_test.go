@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -42,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 

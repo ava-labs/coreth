@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/platformvm/api"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
@@ -27,7 +28,6 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/cmd/simulator/key"
 	"github.com/ava-labs/coreth/cmd/simulator/load"

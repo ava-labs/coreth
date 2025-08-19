@@ -17,12 +17,12 @@ import (
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
 
+	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 
-	"github.com/ava-labs/coreth/nativeasset"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	ethparams "github.com/ava-labs/libevm/params"
 )
