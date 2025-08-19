@@ -8,23 +8,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/utils/lock"
+	"github.com/ava-labs/libevm/log"
 	"github.com/holiman/uint256"
 	"go.uber.org/zap"
 
-	"github.com/ava-labs/avalanchego/snow"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/utils/lock"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/libevm/log"
+
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
 
-const (
-	// Minimum amount of time to wait after building a block before attempting to build a block
-	// a second time without changing the contents of the mempool.
-	minBlockBuildingRetryDelay = 500 * time.Millisecond
-)
+// Minimum amount of time to wait after building a block before attempting to build a block
+// a second time without changing the contents of the mempool.
+const MinBlockBuildingRetryDelay = 500 * time.Millisecond
 
 type blockBuilder struct {
 	ctx *snow.Context
@@ -122,13 +121,13 @@ func (b *blockBuilder) waitForEvent(ctx context.Context) (commonEng.Message, err
 		return 0, err
 	}
 	timeSinceLastBuildTime := time.Since(lastBuildTime)
-	if b.lastBuildTime.IsZero() || timeSinceLastBuildTime >= minBlockBuildingRetryDelay {
+	if b.lastBuildTime.IsZero() || timeSinceLastBuildTime >= MinBlockBuildingRetryDelay {
 		b.ctx.Log.Debug("Last time we built a block was long enough ago, no need to wait",
 			zap.Duration("timeSinceLastBuildTime", timeSinceLastBuildTime),
 		)
 		return commonEng.PendingTxs, nil
 	}
-	timeUntilNextBuild := minBlockBuildingRetryDelay - timeSinceLastBuildTime
+	timeUntilNextBuild := MinBlockBuildingRetryDelay - timeSinceLastBuildTime
 	b.ctx.Log.Debug("Last time we built a block was too recent, waiting",
 		zap.Duration("timeUntilNextBuild", timeUntilNextBuild),
 	)

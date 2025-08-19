@@ -9,11 +9,12 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/utils/bloom"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
 	"github.com/ava-labs/coreth/plugin/evm/config"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMempoolAddTx(t *testing.T) {
@@ -71,7 +72,7 @@ func TestMempoolAddNoGas(t *testing.T) {
 
 	tx := atomictest.GenerateTestImportTxWithGas(0, 1)
 	err = m.Add(tx)
-	require.ErrorIs(err, ErrNoGasUsed)
+	require.ErrorIs(err, atomic.ErrNoGasUsed)
 }
 
 // Add should return an error if a tx doesn't consume any gas
