@@ -79,7 +79,7 @@ linters:
     - tagalign
     # - testifylint
     - unconvert
-    # - unparam
+    - unparam
     - unused
     - usestdlibvars
     - whitespace

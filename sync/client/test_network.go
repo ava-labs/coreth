@@ -26,26 +26,26 @@ type testNetwork struct {
 	nodesRequested []ids.NodeID
 }
 
-func (t *testNetwork) SendSyncedAppRequestAny(ctx context.Context, minVersion *version.Application, request []byte) ([]byte, ids.NodeID, error) {
+func (t *testNetwork) SendSyncedAppRequestAny(ctx context.Context, minVersion *version.Application, _ []byte) ([]byte, ids.NodeID, error) {
 	if len(t.response) == 0 {
 		return nil, ids.EmptyNodeID, errors.New("no tested response to return in testNetwork")
 	}
 
-	response, err := t.processTest(request)
+	response, err := t.processTest()
 	return response, ids.EmptyNodeID, err
 }
 
-func (t *testNetwork) SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeID, request []byte) ([]byte, error) {
+func (t *testNetwork) SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeID, _ []byte) ([]byte, error) {
 	if len(t.response) == 0 {
 		return nil, errors.New("no tested response to return in testNetwork")
 	}
 
 	t.nodesRequested = append(t.nodesRequested, nodeID)
 
-	return t.processTest(request)
+	return t.processTest()
 }
 
-func (t *testNetwork) processTest(request []byte) ([]byte, error) {
+func (t *testNetwork) processTest() ([]byte, error) {
 	t.numCalls++
 
 	if t.callback != nil {

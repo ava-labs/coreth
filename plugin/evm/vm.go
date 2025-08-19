@@ -315,9 +315,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Initialize the database
-	if err := vm.initializeDBs(db); err != nil {
-		return fmt.Errorf("failed to initialize databases: %w", err)
-	}
+	vm.initializeDBs(db)
 	if vm.config.InspectDatabase {
 		if err := vm.inspectDatabases(); err != nil {
 			return err
@@ -625,7 +623,6 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
-		vm.warpBackend,
 		vm.networkCodec,
 		leafHandlers,
 		syncStats,

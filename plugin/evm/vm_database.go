@@ -19,7 +19,7 @@ import (
 
 // initializeDBs initializes the databases used by the VM.
 // coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
+func (vm *VM) initializeDBs(db avalanchedatabase.Database) {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
 	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
@@ -30,7 +30,6 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
 	vm.warpDB = prefixdb.New(warpPrefix, db)
-	return nil
 }
 
 func (vm *VM) inspectDatabases() error {
