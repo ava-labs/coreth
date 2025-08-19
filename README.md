@@ -95,3 +95,39 @@ To support these changes, there have been a number of changes to the C-Chain blo
 ## Releasing
 
 See [docs/releasing/README.md](docs/releasing/README.md) for the release process.
+
+## Local pre-commit hooks
+
+We use [pre-commit](https://pre-commit.com/) to provide fast local feedback and consistent formatting/linting in CI.
+
+1. Install the `pre-commit` tool locally. For instructions check [here](https://pre-commit.com/).
+
+1. Install hooks locally (done only once):
+
+```bash
+pre-commit install
+```
+
+1. Just use `git commit` and `git push` as normal and the hooks will automatically run.
+
+Additional notes:
+
+- Run manually on the whole repo:
+
+```bash
+pre-commit run --all-files
+```
+
+- Temporarily bypass hooks:
+
+```bash
+git commit --no-verify
+git push --no-verify
+```
+
+- For macOS developers:
+
+  - Some local scripts require GNU grep with PCRE support. Install via Homebrew:
+    `brew install grep`. If needed, add `$(brew --prefix grep)/libexec/gnubin` to your PATH.
+  - Our lint runner (`scripts/lint.sh`) will attempt to auto-detect and use Homebrew’s GNU grep
+    and Bash 4+ where available.
