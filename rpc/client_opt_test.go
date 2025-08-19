@@ -9,6 +9,7 @@
 //
 // Much love to the original authors for their work.
 // **********
+
 package rpc_test
 
 import (

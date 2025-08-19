@@ -84,6 +84,11 @@ should_skip_path() {
   # Args: <path> <dirs_regex>
   local p="$1"
   local re="${2-}"
+  # Normalize to repo-relative for regex matching against top-level dirs
+  local rel="$p"
+  case "$p" in
+    "${REPO_ROOT}/"*) rel="${p#"${REPO_ROOT}/"}" ;;
+  esac
   # Skip directories
   [[ -d "$p" ]] && return 0
   # Skip obvious binaries by extension
@@ -93,7 +98,7 @@ should_skip_path() {
   # Skip non-text
   is_text_file "$p" || return 0
   # Skip upstream directories if regex provided
-  if [[ -n "$re" ]] && [[ "$p" =~ $re ]]; then
+  if [[ -n "$re" ]] && [[ "$rel" =~ $re ]]; then
     return 0
   fi
   return 1
