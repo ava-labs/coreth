@@ -385,20 +385,24 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 	require.NoError(err)
 	exampleWarpAddress := crypto.CreateAddress(vmtest.TestEthAddrs[0], 0)
 
-	// Access list predicate
-	accessList := types.AccessList{{Address: warpcontract.ContractAddress, StorageKeys: predicate.New(signedMessage.Bytes())}}
-	txUnsigned := types.NewTx(&types.DynamicFeeTx{
-		ChainID:    vm.chainConfig.ChainID,
-		Nonce:      1,
-		To:         &exampleWarpAddress,
-		Gas:        1_000_000,
-		GasFeeCap:  big.NewInt(225 * utils.GWei),
-		GasTipCap:  big.NewInt(utils.GWei),
-		Value:      common.Big0,
-		Data:       txPayload,
-		AccessList: accessList,
-	})
-	tx, err := types.SignTx(txUnsigned, types.LatestSignerForChainID(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+	tx, err := types.SignTx(
+		types.NewTx(&types.DynamicFeeTx{
+			ChainID:   vm.chainConfig.ChainID,
+			Nonce:     1,
+			To:        &exampleWarpAddress,
+			Gas:       1_000_000,
+			GasFeeCap: big.NewInt(225 * utils.GWei),
+			GasTipCap: big.NewInt(utils.GWei),
+			Value:     common.Big0,
+			Data:      txPayload,
+			AccessList: types.AccessList{{ // Access list predicate
+				Address:     warpcontract.ContractAddress,
+				StorageKeys: predicate.New(signedMessage.Bytes()),
+			}},
+		}),
+		types.LatestSignerForChainID(vm.chainConfig.ChainID),
+		vmtest.TestKeys[0].ToECDSA(),
+	)
 	require.NoError(err)
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{createTx, tx})
 	for i, err := range errs {
