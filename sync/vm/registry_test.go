@@ -204,11 +204,21 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 	)
 
 	// Helper to create a barrier syncer that waits for release.
+	//
+	// Barrier Pattern Explanation:
+	// 1. All barrier syncers start concurrently via errgroup.
+	// 2. Each syncer immediately signals "I started" (wg.Done()).
+	// 3. Each syncer then blocks waiting for the release signal.
+	// 4. Test waits for ALL syncers to signal they started (wg.Wait()).
+	// 5. Test then releases all syncers simultaneously (close(releaseCh)).
+	//
+	// This proves true concurrency: if syncers ran sequentially, the test
+	// would hang because no syncer could complete to allow the next to start.
 	createBarrierSyncer := func(wg *sync.WaitGroup, releaseCh <-chan struct{}) funcSyncer {
 		return funcSyncer{fn: func(ctx context.Context) error {
-			wg.Done()
+			wg.Done() // Signal: "I have started"
 			select {
-			case <-releaseCh:
+			case <-releaseCh: // Wait for: "you may now complete"
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()
