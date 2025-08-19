@@ -9,64 +9,22 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers"
+
+	syncclient "github.com/ava-labs/coreth/sync/client"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 )
-
-func TestConfigValidation(t *testing.T) {
-	mockClient := syncclient.NewTestClient(
-		message.Codec,
-		nil,
-		nil,
-		nil,
-	)
-	validHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-
-	tests := []struct {
-		name    string
-		config  *Config
-		wantErr error
-	}{
-		{
-			name:    "valid config",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: mockClient, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: nil,
-		},
-		{
-			name:    "nil database",
-			config:  &Config{ChainDB: nil, Client: mockClient, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errNilDatabase,
-		},
-		{
-			name:    "nil client",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: nil, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errNilClient,
-		},
-		{
-			name:    "empty from hash",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: mockClient, FromHash: common.Hash{}, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errInvalidFromHash,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			require.ErrorIs(t, err, tt.wantErr)
-		})
-	}
-}
 
 func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 	tests := []struct {
@@ -256,15 +214,11 @@ func (e *testEnvironment) createSyncer(fromHeight uint64, blocksToFetch uint64) 
 		return nil, fmt.Errorf("fromHeight %d exceeds available blocks %d", fromHeight, len(e.blocks))
 	}
 
-	config := &Config{
-		ChainDB:       e.chainDB,
-		Client:        e.client,
+	return NewSyncer(e.client, e.chainDB, Config{
 		FromHash:      e.blocks[fromHeight].Hash(),
 		FromHeight:    fromHeight,
 		BlocksToFetch: blocksToFetch,
-	}
-
-	return NewSyncer(config)
+	})
 }
 
 // verifyBlocksInDB checks that the expected blocks are present in the database (by block height)

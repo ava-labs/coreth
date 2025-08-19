@@ -14,10 +14,11 @@ import (
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
+	"github.com/ava-labs/libevm/log"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-	"github.com/ava-labs/libevm/log"
 )
 
 const (
@@ -190,7 +191,7 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			reply.Status = atomic.Processing
 			return nil
@@ -237,7 +238,7 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			return nil
 		}

@@ -6,11 +6,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
-
 	"github.com/ava-labs/avalanchego/database/versiondb"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+
 	synccommon "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
@@ -36,11 +36,7 @@ func (a *Extender) CreateSyncer(ctx context.Context, client syncclient.LeafClien
 		return nil, fmt.Errorf("expected *Summary, got %T", summary)
 	}
 
-	return newSyncer(&Config{
-		Client:       client,
-		Database:     verDB,
-		AtomicTrie:   a.trie,
-		TargetRoot:   atomicSummary.AtomicRoot,
+	return newSyncer(client, verDB, a.trie, atomicSummary.AtomicRoot, &Config{
 		TargetHeight: atomicSummary.BlockNumber,
 		RequestSize:  a.requestSize,
 		NumWorkers:   defaultNumWorkers,

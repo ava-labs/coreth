@@ -8,24 +8,25 @@ import (
 	"fmt"
 	"sync"
 
-	synccommon "github.com/ava-labs/coreth/sync"
-	"github.com/ava-labs/coreth/sync/blocksync"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/statesync"
-
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
-	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
+
+	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/blocksync"
+	"github.com/ava-labs/coreth/sync/statesync"
+
+	synccommon "github.com/ava-labs/coreth/sync"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
 const (
@@ -202,9 +203,7 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 }
 
 func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Hash, fromHeight uint64) (synccommon.Syncer, error) {
-	return blocksync.NewSyncer(&blocksync.Config{
-		ChainDB:       client.ChainDB,
-		Client:        client.Client,
+	return blocksync.NewSyncer(client.Client, client.ChainDB, blocksync.Config{
 		FromHash:      fromHash,
 		FromHeight:    fromHeight,
 		BlocksToFetch: BlocksToFetch,
@@ -212,15 +211,7 @@ func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Has
 }
 
 func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
-	return statesync.NewSyncer(&statesync.Config{
-		Client:                   client.Client,
-		Root:                     client.summary.GetBlockRoot(),
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.ChainDB,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.RequestSize,
-	})
+	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), statesync.NewDefaultConfig(client.RequestSize))
 }
 
 func (client *client) createAtomicSyncer(ctx context.Context) (synccommon.Syncer, error) {
