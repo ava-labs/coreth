@@ -33,15 +33,13 @@ repos:
   # Local utility scripts and full repo checks
   - repo: local
     hooks:
-      # TODO: Re-enable this once we have a way to run the extra lints in CI.
-      # See https://github.com/ava-labs/coreth/pull/1117
-      # # Stricter extra lints (golangci-lint v2) on staged changes at pre-commit
-      # - id: extra-golangci-lint
-      #   name: golangci-lint (extra via scripts/lint.sh)
-      #   entry: bash -lc 'TESTS="extra_golangci_lint" scripts/lint.sh'
-      #   language: system
-      #   stages: [pre-commit]
-      #   pass_filenames: false
+      # Stricter extra lints (golangci-lint v2) on staged changes at pre-commit
+      - id: extra-golangci-lint
+        name: golangci-lint (extra via scripts/lint.sh)
+        entry: bash -lc 'TESTS="avalanche_golangci_lint" scripts/lint.sh'
+        language: system
+        stages: [pre-commit]
+        pass_filenames: false
 
       - id: actionlint
         name: actionlint
