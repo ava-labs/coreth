@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
-	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -25,6 +24,7 @@ import (
 
 	syncclient "github.com/ava-labs/coreth/sync/client"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 func TestBlockSyncer_ParameterizedTests(t *testing.T) {

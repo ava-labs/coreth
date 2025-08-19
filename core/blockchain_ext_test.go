@@ -14,7 +14,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
-	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
@@ -22,6 +21,8 @@ import (
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
+
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 var (

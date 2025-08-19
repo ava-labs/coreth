@@ -27,8 +27,8 @@ import (
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
 
 	clientstats "github.com/ava-labs/coreth/sync/client/stats"
-  ethparams "github.com/ava-labs/libevm/params"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 func TestGetCode(t *testing.T) {

@@ -11,7 +11,6 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/vm"
-	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 
@@ -23,6 +22,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 
 	ethtypes "github.com/ava-labs/libevm/core/types"
+	ethparams "github.com/ava-labs/libevm/params"
 
 	. "github.com/ava-labs/coreth/nativeasset"
 )
