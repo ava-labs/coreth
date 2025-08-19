@@ -26,7 +26,6 @@ import (
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/precompile/precompiletest"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -201,7 +200,7 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 
 func createValidPredicateTest(snowCtx *snow.Context, numKeys uint64, predicateBytes []byte) precompiletest.PredicateTest {
 	pred := predicate.New(predicateBytes)
-	paddedLen := uint64(len(pred)) * uint64(common.HashLength)
+	paddedLen := uint64(len(pred))
 	return precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
 		PredicateContext: &precompileconfig.PredicateContext{
@@ -211,7 +210,7 @@ func createValidPredicateTest(snowCtx *snow.Context, numKeys uint64, predicateBy
 			},
 		},
 		PredicateBytes: predicateBytes,
-		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageBytes + numKeys*GasCostPerWarpSigner,
+		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageChunk + numKeys*GasCostPerWarpSigner,
 		GasErr:         nil,
 		ExpectedErr:    nil,
 	}
@@ -261,7 +260,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 
 	bytes := warpMsg.Bytes()
 	pred := predicate.New(bytes)
-	paddedLen := uint64(len(pred)) * uint64(common.HashLength)
+	paddedLen := uint64(len(pred))
 
 	snowCtx := snowtest.Context(t, ids.GenerateTestID())
 	snowCtx.SubnetID = ids.GenerateTestID()
@@ -290,7 +289,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			},
 		},
 		PredicateBytes: bytes,
-		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageBytes + uint64(numKeys)*GasCostPerWarpSigner,
+		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
 		GasErr:         nil,
 		ExpectedErr:    nil,
 	}
@@ -310,7 +309,7 @@ func TestInvalidPredicatePacking(t *testing.T) {
 	})
 	predicateBytes := createPredicate(numKeys)
 	predicateBytes = append(predicateBytes, byte(0x01)) // Invalidate the predicate byte packing
-	paddedLen := uint64(len(predicate.New(predicateBytes))) * uint64(common.HashLength)
+	paddedLen := uint64(len(predicate.New(predicateBytes)))
 
 	test := precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
@@ -321,7 +320,7 @@ func TestInvalidPredicatePacking(t *testing.T) {
 			},
 		},
 		PredicateBytes: predicateBytes,
-		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageBytes + uint64(numKeys)*GasCostPerWarpSigner,
+		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
 		GasErr:         errInvalidWarpMsg,
 	}
 
@@ -342,7 +341,7 @@ func TestInvalidWarpMessage(t *testing.T) {
 	warpMsgBytes := warpMsg.Bytes()
 	warpMsgBytes = append(warpMsgBytes, byte(0x01)) // Invalidate warp message packing
 	pred := predicate.New(warpMsgBytes)
-	paddedLen := uint64(len(pred)) * uint64(common.HashLength)
+	paddedLen := uint64(len(pred))
 
 	test := precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
@@ -353,7 +352,7 @@ func TestInvalidWarpMessage(t *testing.T) {
 			},
 		},
 		PredicateBytes: warpMsgBytes,
-		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageBytes + uint64(numKeys)*GasCostPerWarpSigner,
+		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
 		GasErr:         errInvalidWarpMsg,
 	}
 
@@ -387,7 +386,7 @@ func TestInvalidAddressedPayload(t *testing.T) {
 	require.NoError(t, err)
 	warpMsgBytes := warpMsg.Bytes()
 	pred := predicate.New(warpMsgBytes)
-	paddedLen := uint64(len(pred)) * uint64(common.HashLength)
+	paddedLen := uint64(len(pred))
 
 	test := precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
@@ -398,7 +397,7 @@ func TestInvalidAddressedPayload(t *testing.T) {
 			},
 		},
 		PredicateBytes: warpMsgBytes,
-		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageBytes + uint64(numKeys)*GasCostPerWarpSigner,
+		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
 		GasErr:         errInvalidWarpMsgPayload,
 	}
 
@@ -435,7 +434,7 @@ func TestInvalidBitSet(t *testing.T) {
 	})
 	bytes := msg.Bytes()
 	pred := predicate.New(bytes)
-	paddedLen := uint64(len(pred)) * uint64(common.HashLength)
+	paddedLen := uint64(len(pred))
 	test := precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
 		PredicateContext: &precompileconfig.PredicateContext{
@@ -445,7 +444,7 @@ func TestInvalidBitSet(t *testing.T) {
 			},
 		},
 		PredicateBytes: bytes,
-		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageBytes + uint64(numKeys)*GasCostPerWarpSigner,
+		Gas:            GasCostPerSignatureVerification + paddedLen*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
 		GasErr:         errCannotGetNumSigners,
 	}
 
@@ -490,7 +489,7 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 				},
 			},
 			PredicateBytes: predicateBytes,
-			Gas:            GasCostPerSignatureVerification + uint64(len(predicate.New(predicateBytes)))*uint64(common.HashLength)*GasCostPerWarpMessageBytes + uint64(numSigners)*GasCostPerWarpSigner,
+			Gas:            GasCostPerSignatureVerification + uint64(len(predicate.New(predicateBytes)))*GasCostPerWarpMessageChunk + uint64(numSigners)*GasCostPerWarpSigner,
 			GasErr:         nil,
 			ExpectedErr:    expectedErr,
 		}
@@ -531,10 +530,10 @@ func TestWarpMultiplePredicates(t *testing.T) {
 			)
 			if valid {
 				predBytes = validPredicateBytes
-				expectedGas = GasCostPerSignatureVerification + uint64(len(predicate.New(validPredicateBytes)))*uint64(common.HashLength)*GasCostPerWarpMessageBytes + uint64(numSigners)*GasCostPerWarpSigner
+				expectedGas = GasCostPerSignatureVerification + uint64(len(predicate.New(validPredicateBytes)))*GasCostPerWarpMessageChunk + uint64(numSigners)*GasCostPerWarpSigner
 				expectedErr = nil
 			} else {
-				expectedGas = GasCostPerSignatureVerification + uint64(len(predicate.New(invalidPredicateBytes)))*uint64(common.HashLength)*GasCostPerWarpMessageBytes + uint64(1)*GasCostPerWarpSigner
+				expectedGas = GasCostPerSignatureVerification + uint64(len(predicate.New(invalidPredicateBytes)))*GasCostPerWarpMessageChunk + uint64(1)*GasCostPerWarpSigner
 				predBytes = invalidPredicateBytes
 				expectedErr = errFailedVerification
 			}
@@ -592,7 +591,7 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 				},
 			},
 			PredicateBytes: predicateBytes,
-			Gas:            GasCostPerSignatureVerification + uint64(len(predicate.New(predicateBytes)))*uint64(common.HashLength)*GasCostPerWarpMessageBytes + uint64(numSigners)*GasCostPerWarpSigner,
+			Gas:            GasCostPerSignatureVerification + uint64(len(predicate.New(predicateBytes)))*GasCostPerWarpMessageChunk + uint64(numSigners)*GasCostPerWarpSigner,
 			GasErr:         nil,
 			ExpectedErr:    expectedErr,
 		}
