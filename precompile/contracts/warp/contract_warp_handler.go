@@ -8,11 +8,11 @@ import (
 
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/precompile/contract"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/vm"
+
+	"github.com/ava-labs/coreth/precompile/contract"
 )
 
 var (
@@ -52,7 +52,7 @@ func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, s
 
 	warpIndexInput, err := UnpackGetVerifiedWarpMessageInput(input)
 	if err != nil {
-		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidIndexInput, err)
+		return nil, remainingGas, fmt.Errorf("%w: %w", errInvalidIndexInput, err)
 	}
 	if warpIndexInput > math.MaxInt32 {
 		return nil, remainingGas, fmt.Errorf("%w: larger than MaxInt32", errInvalidIndexInput)
@@ -79,11 +79,11 @@ func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, s
 	// hit an error during execution.
 	unpackedPredicateBytes, err := pred.Bytes()
 	if err != nil {
-		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidPredicateBytes, err)
+		return nil, remainingGas, fmt.Errorf("%w: %w", errInvalidPredicateBytes, err)
 	}
 	warpMessage, err := warp.ParseMessage(unpackedPredicateBytes)
 	if err != nil {
-		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidWarpMsg, err)
+		return nil, remainingGas, fmt.Errorf("%w: %w", errInvalidWarpMsg, err)
 	}
 	res, err := handler.handleMessage(warpMessage)
 	if err != nil {
@@ -101,7 +101,7 @@ func (addressedPayloadHandler) packFailed() []byte {
 func (addressedPayloadHandler) handleMessage(warpMessage *warp.Message) ([]byte, error) {
 	addressedPayload, err := payload.ParseAddressedCall(warpMessage.UnsignedMessage.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", errInvalidAddressedPayload, err)
+		return nil, fmt.Errorf("%w: %w", errInvalidAddressedPayload, err)
 	}
 	return PackGetVerifiedWarpMessageOutput(GetVerifiedWarpMessageOutput{
 		Message: WarpMessage{
@@ -122,7 +122,7 @@ func (blockHashHandler) packFailed() []byte {
 func (blockHashHandler) handleMessage(warpMessage *warp.Message) ([]byte, error) {
 	blockHashPayload, err := payload.ParseHash(warpMessage.UnsignedMessage.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", errInvalidBlockHashPayload, err)
+		return nil, fmt.Errorf("%w: %w", errInvalidBlockHashPayload, err)
 	}
 	return PackGetVerifiedWarpBlockHashOutput(GetVerifiedWarpBlockHashOutput{
 		WarpBlockHash: WarpBlockHash{
