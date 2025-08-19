@@ -132,6 +132,7 @@ Configuration is provided as a JSON object. All fields are optional unless other
 |--------|------|-------------|---------|
 | `pruning-enabled` | bool | Enable state pruning to save disk space | `true` |
 | `commit-interval` | uint64 | Interval at which to persist EVM and atomic tries (blocks) | `4096` |
+| `accepted-queue-limit` | int | Maximum blocks to queue before blocking during acceptance | `64` |
 
 ### State Reconstruction
 
