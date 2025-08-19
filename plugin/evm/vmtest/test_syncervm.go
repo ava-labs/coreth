@@ -536,7 +536,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	toAddress := TestEthAddrs[1] // arbitrary choice
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
 		br := predicate.BlockResults{}
-		b, err := (&br).Bytes()
+		b, err := br.Bytes()
 		if err != nil {
 			t.Fatal(err)
 		}
