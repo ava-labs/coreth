@@ -612,7 +612,6 @@ func (w *warpTest) warpLoad() {
 		if err != nil {
 			return nil, err
 		}
-
 		tx := types.NewTx(&types.DynamicFeeTx{
 			ChainID:   w.receivingSubnetChainID,
 			Nonce:     nonce,
