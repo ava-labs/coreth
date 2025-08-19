@@ -203,9 +203,6 @@ type VM struct {
 	// [versiondb] is the VM's current versioned database
 	versiondb *versiondb.Database
 
-	// [db] is the VM's current database
-	db database.Database
-
 	// metadataDB is used to store one off keys.
 	metadataDB database.Database
 

@@ -17,9 +17,7 @@ var _ network.SyncedNetworkClient = (*testNetwork)(nil)
 
 type testNetwork struct {
 	// captured request data
-	numCalls         uint
-	requestedVersion *version.Application
-	request          []byte
+	numCalls uint
 
 	// response testing for RequestAny and Request calls
 	response       [][]byte
@@ -32,8 +30,6 @@ func (t *testNetwork) SendSyncedAppRequestAny(ctx context.Context, minVersion *v
 	if len(t.response) == 0 {
 		return nil, ids.EmptyNodeID, errors.New("no tested response to return in testNetwork")
 	}
-
-	t.requestedVersion = minVersion
 
 	response, err := t.processTest(request)
 	return response, ids.EmptyNodeID, err
@@ -50,7 +46,6 @@ func (t *testNetwork) SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeI
 }
 
 func (t *testNetwork) processTest(request []byte) ([]byte, error) {
-	t.request = request
 	t.numCalls++
 
 	if t.callback != nil {

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/proto/pb/sdk"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
@@ -39,15 +38,7 @@ type NetworkClient interface {
 // NetworkSignatureGetter fetches warp signatures on behalf of the
 // aggregator using VM App-Specific Messaging
 type NetworkSignatureGetter struct {
-	client       NetworkClient
-	networkCodec codec.Manager
-}
-
-func NewSignatureGetter(client NetworkClient, networkCodec codec.Manager) *NetworkSignatureGetter {
-	return &NetworkSignatureGetter{
-		client:       client,
-		networkCodec: networkCodec,
-	}
+	client NetworkClient
 }
 
 // GetSignature attempts to fetch a BLS Signature of [unsignedWarpMessage] from [nodeID] until it succeeds or receives an invalid response
