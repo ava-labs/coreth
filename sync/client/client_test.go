@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
-	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/assert"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
 
 	clientstats "github.com/ava-labs/coreth/sync/client/stats"
+  ethparams "github.com/ava-labs/libevm/params"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 )
 
