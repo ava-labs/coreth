@@ -104,9 +104,9 @@ We use [pre-commit](https://pre-commit.com/) to provide fast local feedback and 
 
 1. Install hooks locally (done only once):
 
-```bash
-pre-commit install
-```
+   ```bash
+   pre-commit install
+   ```
 
 1. Just use `git commit` and `git push` as normal and the hooks will automatically run.
 
@@ -114,16 +114,16 @@ Additional notes:
 
 - Run manually on the whole repo:
 
-```bash
-pre-commit run --all-files
-```
+  ```bash
+  pre-commit run --all-files
+  ```
 
 - Temporarily bypass hooks:
 
-```bash
-git commit --no-verify
-git push --no-verify
-```
+  ```bash
+  git commit --no-verify
+  git push --no-verify
+  ```
 
 - For macOS developers:
 

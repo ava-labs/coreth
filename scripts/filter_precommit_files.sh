@@ -89,6 +89,10 @@ should_skip_path() {
   case "$p" in
     "${REPO_ROOT}/"*) rel="${p#"${REPO_ROOT}/"}" ;;
   esac
+  # Strip leading './' if present
+  case "$rel" in
+    ./*) rel="${rel#./}" ;;
+  esac
   # Skip directories
   [[ -d "$p" ]] && return 0
   # Skip obvious binaries by extension
