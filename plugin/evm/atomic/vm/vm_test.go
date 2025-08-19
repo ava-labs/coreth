@@ -14,10 +14,8 @@ import (
 	"testing"
 	"time"
 
-	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
@@ -26,6 +24,11 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/extstate"
@@ -41,12 +44,8 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/rlp"
-	"github.com/ava-labs/libevm/trie"
-
-	"github.com/stretchr/testify/require"
+	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
 
 func newAtomicTestVM() *VM {
@@ -111,10 +110,10 @@ func addUTXOs(sharedMemory *avalancheatomic.Memory, ctx *snow.Context, utxos map
 	for addr, avaxAmount := range utxos {
 		txID, err := ids.ToID(hashing.ComputeHash256(addr.Bytes()))
 		if err != nil {
-			return fmt.Errorf("Failed to generate txID from addr: %s", err)
+			return fmt.Errorf("Failed to generate txID from addr: %w", err)
 		}
 		if _, err := addUTXO(sharedMemory, ctx, txID, 0, ctx.AVAXAssetID, avaxAmount, addr); err != nil {
-			return fmt.Errorf("Failed to add UTXO to shared memory: %s", err)
+			return fmt.Errorf("Failed to add UTXO to shared memory: %w", err)
 		}
 	}
 	return nil
@@ -717,28 +716,9 @@ func testConflictingTransitiveAncestryWithGap(t *testing.T, scheme string) {
 	}
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
-	errs := vm.Ethereum().TxPool().AddRemotesSync([]*types.Transaction{signedTx})
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("Failed to add transaction to VM1 at index %d: %s", i, err)
-		}
-	}
-
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-
-	blk1, err := vm.BuildBlock(context.Background())
+	_, err = vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
-		t.Fatalf("Failed to build blk1: %s", err)
-	}
-
-	if err := blk1.Verify(context.Background()); err != nil {
-		t.Fatalf("blk1 failed verification due to %s", err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk1.ID()); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to issue txs and build blk1: %s", err)
 	}
 
 	importTx1, err := vm.newImportTx(vm.Ctx.XChainID, key.Address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key1})
@@ -1741,23 +1721,8 @@ func testBuildApricotPhase4Block(t *testing.T, scheme string) {
 		}
 		txs[i] = signedTx
 	}
-	errs := vm.Ethereum().TxPool().AddRemotesSync(txs)
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("Failed to add tx at index %d: %s", i, err)
-		}
-	}
-
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-
-	blk, err = vm.BuildBlock(context.Background())
+	blk, err = vmtest.IssueTxsAndBuild(txs, vm)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
