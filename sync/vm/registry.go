@@ -9,6 +9,7 @@ import (
 
 	synccommon "github.com/ava-labs/coreth/sync"
 	"github.com/ava-labs/libevm/log"
+	"golang.org/x/sync/errgroup"
 )
 
 // SyncerTask represents a single syncer with its name for identification.
@@ -49,15 +50,26 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		return nil
 	}
 
-	for _, task := range r.syncers {
-		log.Info("starting syncer", "name", task.name, "summary", client.summary)
+	g, ctx := errgroup.WithContext(ctx)
 
-		if err := task.syncer.Sync(ctx); err != nil {
-			log.Error("failed to complete", "name", task.name, "summary", client.summary, "err", err)
-			return fmt.Errorf("%s failed: %w", task.name, err)
-		}
-		log.Info("completed successfully", "name", task.name, "summary", client.summary)
+	for _, task := range r.syncers {
+		g.Go(func() error {
+			log.Info("starting syncer", "name", task.name, "summary", client.summary)
+			if err := task.syncer.Sync(ctx); err != nil {
+				log.Error("failed to complete", "name", task.name, "summary", client.summary, "err", err)
+				return fmt.Errorf("%s failed: %w", task.name, err)
+			}
+			log.Info("completed successfully", "name", task.name, "summary", client.summary)
+
+			return nil
+		})
 	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	log.Info("all syncers completed successfully", "count", len(r.syncers), "summary", client.summary)
 
 	return nil
 }
