@@ -2600,7 +2600,7 @@ func TestCreateHandlers(t *testing.T) {
 	var (
 		batch        []rpc.BatchElem
 		client       = rpc.DialInProc(server)
-		maxResponses = node.DefaultConfig.BatchRequestLimit
+		maxResponses = node.DefaultConfig.BatchRequestLimit // Should be default
 	)
 	defer client.Close()
 
