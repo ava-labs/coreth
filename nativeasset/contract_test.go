@@ -7,13 +7,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/extstate"
-	. "github.com/ava-labs/coreth/nativeasset"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
-	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
@@ -22,6 +18,13 @@ import (
 	// Force import core to register the VM hooks.
 	// This allows testing the precompiles by exercising the EVM.
 	_ "github.com/ava-labs/coreth/core"
+
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/params"
+
+	ethtypes "github.com/ava-labs/libevm/core/types"
+
+	. "github.com/ava-labs/coreth/nativeasset"
 )
 
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.

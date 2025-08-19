@@ -9,14 +9,16 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/sync/handlers/stats/statstest"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
-	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers/stats/statstest"
+
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 func TestCodeRequestHandler(t *testing.T) {
