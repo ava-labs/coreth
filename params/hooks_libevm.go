@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params/extras"
@@ -204,6 +205,6 @@ func (p *precompileBlockContext) Timestamp() uint64 {
 	return p.time
 }
 
-func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
-	return p.predicateResults.Get(txHash, precompileAddress).Bytes()
+func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) set.Bits {
+	return p.predicateResults.Get(txHash, precompileAddress)
 }

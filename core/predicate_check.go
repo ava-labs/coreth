@@ -11,7 +11,6 @@ import (
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 )
@@ -31,7 +30,7 @@ func CheckPredicates(rules params.Rules, predicateContext *precompileconfig.Pred
 	}
 
 	rulesExtra := params.GetRulesExtra(rules)
-	predicateResults := make(map[common.Address]set.Bits)
+	predicateResults := make(predicate.PrecompileResults)
 	// Short circuit early if there are no precompile predicates to verify
 	if !rulesExtra.PredicatersExist() {
 		return predicateResults, nil
