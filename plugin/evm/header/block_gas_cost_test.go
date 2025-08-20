@@ -58,6 +58,14 @@ func TestBlockGasCost(t *testing.T) {
 			timestamp:  9,
 			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
 		},
+		{
+			name:       "granite",
+			upgrades:   extras.TestGraniteChainConfig.NetworkUpgrades,
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   big.NewInt(0),
+		},
 	}
 
 	for _, test := range tests {
@@ -75,7 +83,7 @@ func TestBlockGasCost(t *testing.T) {
 			)
 
 			assert.Equal(t, test.expected, BlockGasCost(
-				config,
+				config.GetAvalancheRules(test.timestamp),
 				parent,
 				test.timestamp,
 			))
