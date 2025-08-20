@@ -13,7 +13,7 @@ import (
 
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 
-	ids "github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/ids"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
