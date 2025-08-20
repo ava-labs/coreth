@@ -18,7 +18,6 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
 	sae "github.com/ava-labs/strevm"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const atomicMempoolSize = 4096 // number of transactions
@@ -57,12 +56,7 @@ func (vm *vm) Initialize(
 		return err
 	}
 
-	// TODO: Fix metrics
-	mempoolTxs, err := txpool.NewTxs(
-		chainContext,
-		prometheus.NewRegistry(),
-		atomicMempoolSize,
-	)
+	mempoolTxs := txpool.NewTxs(chainContext, atomicMempoolSize)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
