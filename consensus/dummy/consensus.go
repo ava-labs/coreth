@@ -30,10 +30,11 @@ var (
 
 	ErrInsufficientBlockGas = errors.New("insufficient gas to cover the block cost")
 
-	errInvalidBlockTime       = errors.New("timestamp less than parent's")
-	errUnclesUnsupported      = errors.New("uncles unsupported")
-	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
-	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockTime           = errors.New("timestamp less than parent's")
+	errUnclesUnsupported          = errors.New("uncles unsupported")
+	errExtDataGasUsedNil          = errors.New("extDataGasUsed is nil")
+	errExtDataGasUsedTooLarge     = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockGasCostGranite = errors.New("invalid block gas cost in Granite")
 )
 
 type Mode struct {
@@ -314,7 +315,7 @@ func (eng *DummyEngine) verifyBlockFee(
 	// In Granite we don't need to verify the block fee
 	if rules.IsGranite {
 		if requiredBlockGasCost.Sign() != 0 {
-			return fmt.Errorf("block gas cost must be 0 in Granite")
+			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, requiredBlockGasCost)
 		}
 		// skip block fee verification in Granite
 		return nil

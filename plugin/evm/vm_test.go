@@ -2030,16 +2030,18 @@ func TestWaitForEvent(t *testing.T) {
 
 func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 	tests := []struct {
-		fork          upgradetest.Fork
-		expectedError error
+		fork                 upgradetest.Fork
+		expectedError        error
+		expectedBlockGasCost *big.Int
 	}{
 		{
 			fork:          upgradetest.Fortuna,
 			expectedError: dummy.ErrInsufficientBlockGas,
 		},
 		{
-			fork:          upgradetest.Granite,
-			expectedError: nil,
+			fork:                 upgradetest.Granite,
+			expectedError:        nil,
+			expectedBlockGasCost: big.NewInt(0),
 		},
 	}
 
@@ -2066,5 +2068,48 @@ func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 		require.NoError(t, err)
 		blk, err = vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 		require.ErrorIs(t, err, test.expectedError)
+		if test.expectedError == nil && test.expectedBlockGasCost != nil {
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			headerExtra := customtypes.GetHeaderExtra(ethBlk.Header())
+			require.Equal(t, test.expectedBlockGasCost, headerExtra.BlockGasCost)
+		}
 	}
+}
+
+func TestGraniteInvalidBlockGasCost(t *testing.T) {
+	fork := upgradetest.Granite
+	vm := newDefaultTestVM()
+	_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		Fork: &fork, // Granite
+	})
+
+	defer vm.Shutdown(context.Background())
+
+	vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
+
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+	require.NoError(t, err)
+	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+	require.NoError(t, err)
+	require.NoError(t, blk.Accept(context.Background()))
+
+	ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+	require.Equal(t, big.NewInt(0), customtypes.GetHeaderExtra(ethBlk.Header()).BlockGasCost)
+	modifiedHeader := types.CopyHeader(ethBlk.Header())
+	modifiedExtra := customtypes.GetHeaderExtra(modifiedHeader)
+	modifiedExtra.BlockGasCost = big.NewInt(1)
+	modifiedBlock := customtypes.NewBlockWithExtData(
+		modifiedHeader,
+		nil,
+		nil,
+		nil,
+		new(trie.Trie),
+		customtypes.BlockExtData(ethBlk),
+		false,
+	)
+	modifiedBlk, err := wrapBlock(modifiedBlock, vm)
+	require.NoError(t, err)
+
+	require.ErrorIs(t, modifiedBlk.Verify(context.Background()), errInvalidBlockGasCostGranite)
 }

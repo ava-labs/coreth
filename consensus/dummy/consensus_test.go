@@ -211,7 +211,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: nil,
-			expectedErrMsg:         "block gas cost must be 0 in Granite",
+			expectedErrMsg:         errInvalidBlockGasCostGranite.Error(),
 			overrideBlockGasCost:   big.NewInt(1),
 			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Granite),
 		},
