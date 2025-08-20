@@ -17,8 +17,3 @@ type SignatureGetter interface {
 	// GetSignature attempts to fetch a BLS Signature from [nodeID] for [unsignedWarpMessage]
 	GetSignature(ctx context.Context, nodeID ids.NodeID, unsignedWarpMessage *avalancheWarp.UnsignedMessage) (*bls.Signature, error)
 }
-
-// TODO: this is unused, but generates a mock, which will fail lint
-type NetworkClient interface {
-	SendSyncedAppRequest(ctx context.Context, nodeID ids.NodeID, message []byte) ([]byte, error)
-}
