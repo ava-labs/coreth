@@ -275,7 +275,6 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 			if tt.numBarrierSyncers > 0 {
 				allStartedWG.Add(tt.numBarrierSyncers)
 				releaseCh = make(chan struct{})
-				t.Cleanup(func() { releaseOnce.Do(func() { close(releaseCh) }) })
 
 				for i := 0; i < tt.numBarrierSyncers; i++ {
 					name := fmt.Sprintf("BarrierSyncer-%d", i)
@@ -297,16 +296,6 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 					require.NoError(t, registry.Register(name, syncer))
 				}
 
-				// Cleanup triggers.
-				t.Cleanup(func() {
-					for _, trigger := range triggers {
-						select {
-						case <-trigger:
-						default:
-							close(trigger)
-						}
-					}
-				})
 			}
 
 			// Setup cancel-aware syncers if needed.
