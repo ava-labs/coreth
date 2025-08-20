@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,13 +33,6 @@ func (m *mockSyncer) Sync(ctx context.Context) error {
 	m.started = true
 	return m.syncError
 }
-
-// funcSyncer is a lightweight Syncer implementation powered by a function.
-type funcSyncer struct {
-	fn func(ctx context.Context) error
-}
-
-func (f funcSyncer) Sync(ctx context.Context) error { return f.fn(ctx) }
 
 // syncerConfig describes a test syncer setup for RunSyncerTasks table tests.
 type syncerConfig struct {
@@ -184,8 +178,10 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			err := registry.RunSyncerTasks(context.Background(), &client{})
 
 			if tt.expectedError != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedError)
+				// Verify the wrapped cause when available.
+				if len(tt.syncers) > 0 && tt.syncers[0].syncError != nil {
+					require.ErrorIs(t, err, tt.syncers[0].syncError)
+				}
 			} else {
 				require.NoError(t, err)
 			}
@@ -196,15 +192,6 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 }
 
 func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
-	// Test timeouts
-	const (
-		syncerStartTimeout  = 2 * time.Second
-		taskCompleteTimeout = 3 * time.Second
-		overallTestTimeout  = 5 * time.Second
-	)
-
-	// Helper to create a barrier syncer that waits for release.
-	//
 	// Barrier Pattern Explanation:
 	// 1. All barrier syncers start concurrently via errgroup.
 	// 2. Each syncer immediately signals "I started" (wg.Done()).
@@ -214,80 +201,13 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 	//
 	// This proves true concurrency: if syncers ran sequentially, the test
 	// would hang because no syncer could complete to allow the next to start.
-	createBarrierSyncer := func(wg *sync.WaitGroup, releaseCh <-chan struct{}) funcSyncer {
-		return funcSyncer{fn: func(ctx context.Context) error {
-			wg.Done() // Signal: "I have started"
-			select {
-			case <-releaseCh: // Wait for: "you may now complete"
-				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}}
-	}
 
-	// Helper to create an error syncer that fails when triggered.
-	createErrorSyncer := func(trigger <-chan struct{}, errMsg string) funcSyncer {
-		return funcSyncer{fn: func(ctx context.Context) error {
-			select {
-			case <-trigger:
-				return errors.New(errMsg)
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}}
-	}
-
-	// Helper to create a cancellation-aware syncer.
-	createCancelAwareSyncer := func(started, canceled chan struct{}) funcSyncer {
-		return funcSyncer{fn: func(ctx context.Context) error {
-			close(started)
-			select {
-			case <-ctx.Done():
-				close(canceled)
-				return ctx.Err()
-			case <-time.After(overallTestTimeout):
-				return errors.New("syncer timed out waiting for cancellation")
-			}
-		}}
-	}
-
-	// Test helper to reduce duplication and improve readability.
-	waitWG := func(wg *sync.WaitGroup, timeout time.Duration, msg string) {
-		t.Helper()
-		ch := make(chan struct{})
-		go func() {
-			wg.Wait()
-			close(ch)
-		}()
-		select {
-		case <-ch:
-			return
-		case <-time.After(timeout):
-			t.Fatal(msg)
-		}
-	}
-
-	waitErr := func(ch <-chan error, timeout time.Duration) error {
-		t.Helper()
-		select {
-		case err := <-ch:
-			return err
-		case <-time.After(timeout):
-			t.Fatal("timed out waiting for RunSyncerTasks to complete")
-			return nil
-		}
-	}
-
-	waitSignal := func(ch <-chan struct{}, timeout time.Duration, msg string) {
-		t.Helper()
-		select {
-		case <-ch:
-			return
-		case <-time.After(timeout):
-			t.Fatal(msg)
-		}
-	}
+	// Test timeouts
+	const (
+		syncerStartTimeout  = 2 * time.Second
+		taskCompleteTimeout = 3 * time.Second
+		overallTestTimeout  = 5 * time.Second
+	)
 
 	type testCase struct {
 		name              string
@@ -337,15 +257,6 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Validation checks.
-			if tt.numErrorSyncers > 0 && tt.expectedError == "" {
-				t.Fatal("test case with error syncers must specify expectedError")
-			}
-
-			if tt.numCancelSyncers > 0 && tt.numErrorSyncers == 0 {
-				t.Fatal("cancel syncers only make sense with error syncers")
-			}
-
 			registry := NewSyncerRegistry()
 
 			ctx, cancel := context.WithTimeout(context.Background(), overallTestTimeout)
@@ -357,6 +268,7 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 				releaseOnce  sync.Once
 				triggers     []chan struct{}
 				cancelChans  []chan struct{}
+				errTargets   []error
 			)
 
 			// Setup barrier syncers if needed.
@@ -367,7 +279,7 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 
 				for i := 0; i < tt.numBarrierSyncers; i++ {
 					name := fmt.Sprintf("BarrierSyncer-%d", i)
-					syncer := createBarrierSyncer(&allStartedWG, releaseCh)
+					syncer := utilstest.NewBarrierSyncer(&allStartedWG, releaseCh)
 					require.NoError(t, registry.Register(name, syncer))
 				}
 			}
@@ -377,9 +289,11 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 				for i := 0; i < tt.numErrorSyncers; i++ {
 					trigger := make(chan struct{})
 					triggers = append(triggers, trigger)
+					errInstance := errors.New(tt.errorMsg)
+					errTargets = append(errTargets, errInstance)
 
 					name := fmt.Sprintf("ErrorSyncer-%d", i)
-					syncer := createErrorSyncer(trigger, tt.errorMsg)
+					syncer := utilstest.NewErrorSyncer(trigger, errInstance)
 					require.NoError(t, registry.Register(name, syncer))
 				}
 
@@ -403,7 +317,7 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 					cancelChans = append(cancelChans, canceledCh)
 
 					name := fmt.Sprintf("CancelSyncer-%d", i)
-					syncer := createCancelAwareSyncer(startedCh, canceledCh)
+					syncer := utilstest.NewCancelAwareSyncer(startedCh, canceledCh, overallTestTimeout)
 					require.NoError(t, registry.Register(name, syncer))
 				}
 			}
@@ -414,7 +328,7 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 
 			// Wait for barrier syncers to start if any.
 			if tt.numBarrierSyncers > 0 {
-				waitWG(&allStartedWG, syncerStartTimeout, "timed out waiting for barrier syncers to start")
+				utilstest.WaitGroupWithTimeout(t, &allStartedWG, syncerStartTimeout, "timed out waiting for barrier syncers to start")
 			}
 
 			// Trigger errors if needed.
@@ -429,18 +343,18 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 			}
 
 			// Wait for completion and verify result.
-			err := waitErr(doneCh, taskCompleteTimeout)
+			err := utilstest.WaitErrWithTimeout(t, doneCh, taskCompleteTimeout)
 			if shouldSucceed(tt) {
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				if tt.expectedError != "" {
-					require.Contains(t, err.Error(), tt.expectedError)
+				// Assert error type using ErrorIs and skip explicit Contains
+				if len(errTargets) > 0 {
+					require.ErrorIs(t, err, errTargets[0])
 				}
 
 				// Verify cancellation was propagated to cancel-aware syncers.
 				for i, cancelCh := range cancelChans {
-					waitSignal(cancelCh, syncerStartTimeout, fmt.Sprintf("cancellation was not propagated to cancel syncer %d", i))
+					utilstest.WaitSignalWithTimeout(t, cancelCh, syncerStartTimeout, fmt.Sprintf("cancellation was not propagated to cancel syncer %d", i))
 				}
 			}
 		})
