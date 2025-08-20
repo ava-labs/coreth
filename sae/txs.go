@@ -68,25 +68,17 @@ func atomicTxOp(
 	avaxAssetID ids.ID,
 	baseFee *big.Int,
 ) (hook.Op, error) {
-	// Note: we do not need to check if we are in at least ApricotPhase4 here
-	// because we assume that this function will only be called when the block
-	// is in at least ApricotPhase5.
+	// We do not need to check if we are in ApricotPhase5 here because we assume
+	// that this function will only be called when the block is in at least
+	// ApricotPhase5.
 	gasUsed, err := tx.GasUsed(true)
 	if err != nil {
 		return hook.Op{}, err
 	}
-	burned, err := tx.Burned(avaxAssetID)
+	gasPrice, err := atomic.EffectiveGasPrice(tx.UnsignedAtomicTx, avaxAssetID, true)
 	if err != nil {
 		return hook.Op{}, err
 	}
-
-	var bigGasUsed uint256.Int
-	bigGasUsed.SetUint64(gasUsed)
-
-	var gasPrice uint256.Int // gasPrice = burned * x2cRate / gasUsed
-	gasPrice.SetUint64(burned)
-	gasPrice.Mul(&gasPrice, atomic.X2CRate)
-	gasPrice.Div(&gasPrice, &bigGasUsed)
 
 	op := hook.Op{
 		Gas:      gas.Gas(gasUsed),
