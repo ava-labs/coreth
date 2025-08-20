@@ -127,7 +127,7 @@ Note this release will likely never be used in AvalancheGo, which should always 
 ### Post-release
 After you have successfully released a new coreth version, you need to bump all of the versions again in preperation for the next release. Note that the release here is not final, and will be reassessed, and possibly changer prior to release. Some releases require a major version update, but this will usually be `$VERSION` + `0.0.1`. For example:
 ```bash
-export P_VERSION=v0.7.4
+export P_VERSION=v1.15.1
 ```
 1. Create a branch, from the tip of the `master` branch after the release PR has been merged:
     ```bash
@@ -135,19 +135,19 @@ export P_VERSION=v0.7.4
     git checkout master
     git checkout -b "prep-$P_VERSION-release"
     ```
-2. Bump the version number to the next pending release version, `$P_VERSION`
+1. Bump the version number to the next pending release version, `$P_VERSION`
   - Update the [RELEASES.md](../../RELEASES.md) file with `$P_VERSION`, creating a space for maintainers to place their changes as they make them. 
   - Modify the [plugin/evm/version.go](../../plugin/evm/version.go) `Version` global string variable and set it to `$P_VERSION`.
-3. Create a pull request (PR) from your branch targeting master, for example using [`gh`](https://cli.github.com/):
+1. Create a pull request (PR) from your branch targeting master, for example using [`gh`](https://cli.github.com/):
     ```bash
     gh pr create --repo github.com/ava-labs/coreth --base master --title "chore: prep next release $P_VERSION"
     ```
-4. Wait for the PR checks to pass with
+1. Wait for the PR checks to pass with
     ```bash
     gh pr checks --watch
     ```
-5. Squash and merge your branch into `master`, for example:
+1. Squash and merge your branch into `master`, for example:
     ```bash
     gh pr merge "prep-$P_VERSION-release" --squash --subject "chore: prep next release $P_VERSION"
     ```
-6. Pat yourself on the back for a job well done.
+1. Pat yourself on the back for a job well done.
