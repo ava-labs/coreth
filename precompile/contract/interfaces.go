@@ -34,10 +34,9 @@ type StateDB interface {
 
 	GetBalance(common.Address) *uint256.Int
 	AddBalance(common.Address, *uint256.Int)
-
-	GetBalanceMultiCoin(addr common.Address, coinID common.Hash) *big.Int
-	AddBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int)
-	SubBalanceMultiCoin(addr common.Address, coinID common.Hash, amount *big.Int)
+	GetBalanceMultiCoin(common.Address, common.Hash) *big.Int
+	AddBalanceMultiCoin(common.Address, common.Hash, *big.Int)
+	SubBalanceMultiCoin(common.Address, common.Hash, *big.Int)
 
 	CreateAccount(common.Address)
 	Exist(common.Address) bool
