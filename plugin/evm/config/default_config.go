@@ -6,7 +6,6 @@ package config
 import (
 	"time"
 
-	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 )
@@ -93,8 +92,8 @@ func NewDefaultConfig() Config {
 		TxPoolGlobalQueue:  1024,
 		TxPoolLifetime:     timeToDuration(10 * time.Minute),
 		// RPC settings
-		BatchRequestLimit:    uint64(node.DefaultConfig.BatchRequestLimit),
-		BatchResponseMaxSize: uint64(node.DefaultConfig.BatchResponseMaxSize),
+		BatchRequestLimit:    1000,
+		BatchResponseMaxSize: 25 * 1000 * 1000, // 25MB
 	}
 }
 
