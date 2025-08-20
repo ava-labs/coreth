@@ -67,8 +67,8 @@ func (a *AtomicVM) Connected(ctx context.Context, nodeID ids.NodeID, nodeVersion
 	return a.Get().Connected(ctx, nodeID, nodeVersion)
 }
 
-func (a *AtomicVM) CreateHTTP2Handler(ctx context.Context) (http.Handler, error) {
-	return a.Get().CreateHTTP2Handler(ctx)
+func (a *AtomicVM) NewHTTPHandler(ctx context.Context) (http.Handler, error) {
+	return a.Get().NewHTTPHandler(ctx)
 }
 
 func (a *AtomicVM) CreateHandlers(ctx context.Context) (map[string]http.Handler, error) {

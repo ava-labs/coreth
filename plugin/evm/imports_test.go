@@ -18,7 +18,7 @@ func getDependencies(packageName string) (map[string]struct{}, error) {
 	cfg := &packages.Config{Mode: packages.NeedImports | packages.NeedName}
 	pkgs, err := packages.Load(cfg, packageName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load package: %v", err)
+		return nil, fmt.Errorf("failed to load package: %w", err)
 	}
 
 	if len(pkgs) == 0 || pkgs[0].Errors != nil {
@@ -56,6 +56,7 @@ func TestMustNotImport(t *testing.T) {
 		// Importing these packages configures libevm globally and it is not
 		// possible to do so for both coreth and subnet-evm, where the client may
 		// wish to connect to multiple chains.
+
 		"plugin/evm/atomic": {"core", "plugin/evm/customtypes", "core/extstate", "params"},
 		"plugin/evm/client": {"core", "plugin/evm/customtypes", "core/extstate", "params"},
 		"plugin/evm/config": {"core", "plugin/evm/customtypes", "core/extstate", "params"},
