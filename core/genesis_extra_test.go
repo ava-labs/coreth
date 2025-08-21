@@ -108,8 +108,8 @@ func TestGenesisToBlockDecoding(t *testing.T) {
 			genesis := &Genesis{
 				Config: chainConfig,
 			}
-			genesis.Commit(db, tdb)
-			block := genesis.ToBlock()
+			block, err := genesis.Commit(db, tdb)
+			require.NoError(t, err)
 
 			readHeader := rawdb.ReadHeader(db, block.Hash(), 0)
 			require.EqualValues(t, block.Header(), readHeader)
