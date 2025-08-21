@@ -21,7 +21,7 @@ import (
 func TestEVMSyncerVM(t *testing.T) {
 	for _, test := range vmtest.SyncerVMTests {
 		t.Run(test.Name, func(t *testing.T) {
-			genFn := func(i int, vm extension.InnerVM, gen *core.BlockGen) {
+			genFn := func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
 				b, err := predicate.NewResults().Bytes()
 				require.NoError(t, err)
 				gen.AppendExtra(b)
