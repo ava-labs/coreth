@@ -291,9 +291,17 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 		}
 		headerExtra := customtypes.GetHeaderExtra(head)
 
-		if confExtra.IsApricotPhase4(g.Timestamp) {
+		// When Etna/Cancun is active, `BlockGasCost` and `ExtDataGasUsed` are decoded to 0 if it's nil.
+		// This is because these fields come before than other optional Cancun fields in RLP order.
+		// This only occurs with a serialized and written genesis block, and then reading it back.
+		// While this does not affect anything (because we don't use `ToBlock` to retrieve the genesis block),
+		// it's still confusing and breaking few tests. So we set it here to 0 to make it consistent.
+		if confExtra.IsEtna(g.Timestamp) {
 			if headerExtra.ExtDataGasUsed == nil {
 				headerExtra.ExtDataGasUsed = new(big.Int)
+			}
+			if headerExtra.BlockGasCost == nil {
+				headerExtra.BlockGasCost = new(big.Int)
 			}
 		}
 		if conf.IsCancun(num, g.Timestamp) {
@@ -309,15 +317,6 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			}
 			if head.BlobGasUsed == nil {
 				head.BlobGasUsed = new(uint64)
-			}
-
-			// When Cancun is active, the block gas cost is decoded to 0 if it's nil.
-			// This is because BlockGasCost comes before than other optional Cancun fields in RLP order.
-			// This only occurs with a serialized and written genesis block, and then reading it back.
-			// While this does not affect anything, because we don't use `ToBlock` to retrieve the genesis block,
-			// it's still confusing and breaking few tests. So we set it here to 0 to make it consistent.
-			if headerExtra.BlockGasCost == nil {
-				headerExtra.BlockGasCost = big.NewInt(0)
 			}
 		}
 	}
