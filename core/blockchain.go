@@ -600,15 +600,15 @@ func (bc *BlockChain) startAcceptor() {
 		start := time.Now()
 		acceptorQueueGauge.Dec(1)
 
+		// Update acceptor tip and transaction lookup index
+		if err := bc.writeBlockAcceptedIndices(next); err != nil {
+			log.Crit("failed to write accepted block effects", "err", err)
+		}
+
 		if err := bc.flattenSnapshot(func() error {
 			return bc.stateManager.AcceptTrie(next)
 		}, next.Hash()); err != nil {
 			log.Crit("unable to flatten snapshot from acceptor", "blockHash", next.Hash(), "err", err)
-		}
-
-		// Update last processed and transaction lookup index
-		if err := bc.writeBlockAcceptedIndices(next); err != nil {
-			log.Crit("failed to write accepted block effects", "err", err)
 		}
 
 		// Ensure [hc.acceptedNumberCache] and [acceptedLogsCache] have latest content
