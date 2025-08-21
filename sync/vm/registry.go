@@ -7,9 +7,10 @@ import (
 	"context"
 	"fmt"
 
-	synccommon "github.com/ava-labs/coreth/sync"
 	"github.com/ava-labs/libevm/log"
 	"golang.org/x/sync/errgroup"
+
+	synccommon "github.com/ava-labs/coreth/sync"
 )
 
 // SyncerTask represents a single syncer with its name for identification.

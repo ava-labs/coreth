@@ -11,8 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/utils/utilstest"
 )
 
 // mockSyncer implements synccommon.Syncer for testing.
@@ -206,7 +207,6 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 		numErrorSyncers   int
 		numCancelSyncers  int
 		errorMsg          string
-		expectedError     string
 	}
 
 	// Helper to determine if test should succeed.
@@ -229,14 +229,12 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 			numErrorSyncers:   1,
 			numCancelSyncers:  1,
 			errorMsg:          "test error",
-			expectedError:     "ErrorSyncer-0 failed",
 		},
 		{
 			name:             "multiple error syncers - first one wins",
 			numErrorSyncers:  3,
 			numCancelSyncers: 2,
 			errorMsg:         "boom",
-			expectedError:    "ErrorSyncer-0 failed",
 		},
 		{
 			name:              "no syncers registered",
