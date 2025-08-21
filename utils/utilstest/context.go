@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func NewTestContext(t *testing.T) (context.Context, context.CancelFunc) {
@@ -28,7 +30,7 @@ func WaitGroupWithContext(t *testing.T, ctx context.Context, wg *sync.WaitGroup)
 	select {
 	case <-ctx.Done():
 		// include context error for easier debugging
-		t.Fatalf("timeout waiting for response: %v", ctx.Err())
+		require.FailNow(t, "timeout waiting for response", "error", ctx.Err())
 	case <-done:
 	}
 }
@@ -45,7 +47,7 @@ func WaitGroupWithTimeout(t *testing.T, wg *sync.WaitGroup, timeout time.Duratio
 	case <-ch:
 		return
 	case <-time.After(timeout):
-		t.Fatal(msg)
+		require.FailNow(t, msg)
 	}
 }
 
@@ -56,7 +58,7 @@ func WaitErrWithTimeout(t *testing.T, ch <-chan error, timeout time.Duration) er
 	case err := <-ch:
 		return err
 	case <-time.After(timeout):
-		t.Fatal("timed out waiting for RunSyncerTasks to complete")
+		require.FailNow(t, "timed out waiting for RunSyncerTasks to complete")
 		return nil
 	}
 }
@@ -68,7 +70,7 @@ func WaitSignalWithTimeout(t *testing.T, ch <-chan struct{}, timeout time.Durati
 	case <-ch:
 		return
 	case <-time.After(timeout):
-		t.Fatal(msg)
+		require.FailNow(t, msg)
 	}
 }
 
