@@ -192,15 +192,15 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 }
 
 func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
-	// Barrier Pattern Explanation:
-	// 1. All barrier syncers start concurrently via errgroup.
-	// 2. Each syncer immediately signals "I started" (wg.Done()).
-	// 3. Each syncer then blocks waiting for the release signal.
-	// 4. Test waits for ALL syncers to signal they started (wg.Wait()).
-	// 5. Test then releases all syncers simultaneously (close(releaseCh)).
+	// Barrier pattern:
+	// 1. All barrier syncers begin Sync concurrently (via errgroup).
+	// 2. Each syncer signals readiness using allStartedWG.Done().
+	// 3. Each syncer blocks until `releaseCh` is closed.
+	// 4. The test waits on allStartedWG.Wait() to ensure all have started.
+	// 5. The test then closes `releaseCh` to release them simultaneously.
 	//
-	// This proves true concurrency: if syncers ran sequentially, the test
-	// would hang because no syncer could complete to allow the next to start.
+	// This demonstrates true concurrency: if syncers ran sequentially, the test
+	// would hang because no syncer could complete to allow the next to begin.
 
 	// Test timeouts
 	const (
@@ -315,7 +315,7 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 			doneCh := make(chan error, 1)
 			go func() { doneCh <- registry.RunSyncerTasks(ctx, &client{}) }()
 
-			// Wait for barrier syncers to start if any.
+			// Wait for barrier syncers to signal started via allStartedWG.
 			if tt.numBarrierSyncers > 0 {
 				utilstest.WaitGroupWithTimeout(t, &allStartedWG, syncerStartTimeout, "timed out waiting for barrier syncers to start")
 			}
