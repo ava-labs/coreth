@@ -295,7 +295,7 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 		context.Background(),
 		newCTX,
 		tvm.DB,
-		[]byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork])),
+		[]byte(vmtest.GenesisJSON(params.ForkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(conf),
 		[]*commonEng.Fx{},
@@ -1565,7 +1565,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
-	genesis := []byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork]))
+	genesis := []byte(vmtest.GenesisJSON(params.ForkToChainConfig[fork]))
 	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, []byte{}, []*commonEng.Fx{}, tvm.AppSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
@@ -1788,7 +1788,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 
 	fork := upgradetest.Fortuna
 	amount := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(4000))
-	genesis := vmtest.NewTestGenesis(vmtest.ForkToChainConfig[fork])
+	genesis := vmtest.NewTestGenesis(params.ForkToChainConfig[fork])
 	for _, addr := range vmtest.TestEthAddrs {
 		genesis.Alloc[addr] = types.Account{Balance: amount}
 	}

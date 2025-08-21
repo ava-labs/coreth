@@ -30,6 +30,7 @@ package params
 import (
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
 	ethparams "github.com/ava-labs/libevm/params"
@@ -372,6 +373,24 @@ var (
 		},
 		extras.TestGraniteChainConfig,
 	)
+
+	ForkToChainConfig = map[upgradetest.Fork]*ChainConfig{
+		upgradetest.NoUpgrades:        TestLaunchConfig,
+		upgradetest.ApricotPhase1:     TestApricotPhase1Config,
+		upgradetest.ApricotPhase2:     TestApricotPhase2Config,
+		upgradetest.ApricotPhase3:     TestApricotPhase3Config,
+		upgradetest.ApricotPhase4:     TestApricotPhase4Config,
+		upgradetest.ApricotPhase5:     TestApricotPhase5Config,
+		upgradetest.ApricotPhasePre6:  TestApricotPhasePre6Config,
+		upgradetest.ApricotPhase6:     TestApricotPhase6Config,
+		upgradetest.ApricotPhasePost6: TestApricotPhasePost6Config,
+		upgradetest.Banff:             TestBanffChainConfig,
+		upgradetest.Cortina:           TestCortinaChainConfig,
+		upgradetest.Durango:           TestDurangoChainConfig,
+		upgradetest.Etna:              TestEtnaChainConfig,
+		upgradetest.Fortuna:           TestFortunaChainConfig,
+		upgradetest.Granite:           TestGraniteChainConfig,
+	}
 
 	TestRules = TestChainConfig.Rules(new(big.Int), IsMergeTODO, 0)
 )

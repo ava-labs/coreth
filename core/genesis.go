@@ -276,6 +276,9 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
+	if g.ExtraData == nil {
+		head.Extra = []byte{}
+	}
 	if conf := g.Config; conf != nil {
 		num := new(big.Int).SetUint64(g.Number)
 		confExtra := params.GetExtra(conf)
@@ -284,6 +287,13 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BaseFee = g.BaseFee
 			} else {
 				head.BaseFee = big.NewInt(ap3.InitialBaseFee)
+			}
+		}
+		headerExtra := customtypes.GetHeaderExtra(head)
+
+		if confExtra.IsApricotPhase4(g.Timestamp) {
+			if headerExtra.ExtDataGasUsed == nil {
+				headerExtra.ExtDataGasUsed = new(big.Int)
 			}
 		}
 		if conf.IsCancun(num, g.Timestamp) {
@@ -301,7 +311,6 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BlobGasUsed = new(uint64)
 			}
 
-			headerExtra := customtypes.GetHeaderExtra(head)
 			// When Cancun is active, the block gas cost is decoded to 0 if it's nil.
 			// This is because BlockGasCost comes before than other optional Cancun fields in RLP order.
 			// This only occurs with a serialized and written genesis block, and then reading it back.

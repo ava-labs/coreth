@@ -99,3 +99,20 @@ func TestGenesisEthUpgrades(t *testing.T) {
 	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
 }
+
+func TestGenesisToBlockDecoding(t *testing.T) {
+	for fork, chainConfig := range params.ForkToChainConfig {
+		t.Run(fork.String(), func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
+			tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+			genesis := &Genesis{
+				Config: chainConfig,
+			}
+			genesis.Commit(db, tdb)
+			block := genesis.ToBlock()
+
+			readHeader := rawdb.ReadHeader(db, block.Hash(), 0)
+			require.EqualValues(t, block.Header(), readHeader)
+		})
+	}
+}
