@@ -202,13 +202,6 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 	// This demonstrates true concurrency: if syncers ran sequentially, the test
 	// would hang because no syncer could complete to allow the next to begin.
 
-	// Test timeouts
-	const (
-		syncerStartTimeout  = 2 * time.Second
-		taskCompleteTimeout = 3 * time.Second
-		overallTestTimeout  = 5 * time.Second
-	)
-
 	type testCase struct {
 		name              string
 		numBarrierSyncers int
@@ -259,8 +252,21 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 
 			registry := NewSyncerRegistry()
 
-			ctx, cancel := context.WithTimeout(context.Background(), overallTestTimeout)
+			// Timeouts are derived per-subtest from its deadline to provide granular,
+			// phase-specific failure messages while respecting `go test -timeout`.
+			ctx, cancel := utilstest.NewTestContext(t)
 			t.Cleanup(cancel)
+
+			// Derive phase budgets from the subtest's deadline (or fallback).
+			baseTimeout := 5 * time.Second
+			if d, ok := t.Deadline(); ok {
+				baseTimeout = time.Until(d)
+				if baseTimeout < time.Second {
+					baseTimeout = time.Second
+				}
+			}
+			syncerStartTimeout := baseTimeout / 2
+			taskCompleteTimeout := baseTimeout * 3 / 4
 
 			var (
 				allStartedWG sync.WaitGroup
@@ -306,7 +312,7 @@ func TestSyncerRegistry_RunSyncerTasks_Concurrency(t *testing.T) {
 					cancelChans = append(cancelChans, canceledCh)
 
 					name := fmt.Sprintf("CancelSyncer-%d", i)
-					syncer := utilstest.NewCancelAwareSyncer(startedCh, canceledCh, overallTestTimeout)
+					syncer := utilstest.NewCancelAwareSyncer(startedCh, canceledCh, baseTimeout)
 					require.NoError(t, registry.Register(name, syncer))
 				}
 			}
