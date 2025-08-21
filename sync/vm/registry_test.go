@@ -18,20 +18,35 @@ import (
 
 // mockSyncer implements synccommon.Syncer for testing.
 type mockSyncer struct {
+	name      string
 	syncError error
 	started   bool // Track if already started
 }
 
-func newMockSyncer(syncError error) *mockSyncer {
-	return &mockSyncer{
-		syncError: syncError,
-	}
+func newMockSyncer(syncError error) *mockSyncer { // legacy helper
+	return &mockSyncer{syncError: syncError}
+}
+
+func newNamedMockSyncer(name string, syncError error) *mockSyncer {
+	return &mockSyncer{name: name, syncError: syncError}
 }
 
 func (m *mockSyncer) Sync(ctx context.Context) error {
 	m.started = true
-	return m.syncError
+	if m.syncError == nil {
+		return nil
+	}
+	return &namedSyncerErr{name: m.name, err: m.syncError}
 }
+
+// namedSyncerErr wraps an error with a syncer name to aid assertions.
+type namedSyncerErr struct {
+	name string
+	err  error
+}
+
+func (e *namedSyncerErr) Error() string { return e.err.Error() }
+func (e *namedSyncerErr) Unwrap() error { return e.err }
 
 // syncerConfig describes a test syncer setup for RunSyncerTasks table tests.
 type syncerConfig struct {
@@ -169,7 +184,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 
 			// Register syncers.
 			for i, syncerConfig := range tt.syncers {
-				mockSyncer := newMockSyncer(syncerConfig.syncError)
+				mockSyncer := newNamedMockSyncer(syncerConfig.name, syncerConfig.syncError)
 				mockSyncers[i] = mockSyncer
 				require.NoError(t, registry.Register(syncerConfig.name, mockSyncer))
 			}
@@ -177,10 +192,18 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			err := registry.RunSyncerTasks(context.Background(), &client{})
 
 			if tt.expectedError != "" {
-				// Verify the wrapped cause when available.
-				if len(tt.syncers) > 0 && tt.syncers[0].syncError != nil {
-					require.ErrorIs(t, err, tt.syncers[0].syncError)
+				// Verify we can extract the named syncer error.
+				var ne *namedSyncerErr
+				require.ErrorAs(t, err, &ne, "expected namedSyncerErr in error chain")
+				// And the underlying cause matches one of the configured syncer errors.
+				matched := false
+				for _, ms := range mockSyncers {
+					if ms.syncError != nil && errors.Is(err, ms.syncError) {
+						matched = true
+						break
+					}
 				}
+				require.True(t, matched, "returned error did not match any syncer error")
 			} else {
 				require.NoError(t, err)
 			}
