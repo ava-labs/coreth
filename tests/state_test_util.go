@@ -28,12 +28,18 @@
 package tests
 
 import (
-	"github.com/ava-labs/coreth/core/state"
+	"os"
+	"path/filepath"
+
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/triedb"
@@ -45,18 +51,33 @@ type StateTestState struct {
 	StateDB   *state.StateDB
 	TrieDB    *triedb.Database
 	Snapshots *snapshot.Tree
+	TempDir   string
 }
 
 // MakePreState creates a state containing the given allocation.
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
-	tconf := &triedb.Config{Preimages: true}
-	if scheme == rawdb.HashScheme {
-		tconf.DBOverride = hashdb.Defaults.BackendConstructor
-	} else {
-		tconf.DBOverride = pathdb.Defaults.BackendConstructor
+	// Set database path
+	tempdir, err := os.MkdirTemp("", "coreth-state-test-*")
+	if err != nil {
+		panic("failed to create temporary directory: " + err.Error())
 	}
+
+	tconf := &triedb.Config{Preimages: true}
+	switch scheme {
+	case rawdb.HashScheme:
+		tconf.DBOverride = hashdb.Defaults.BackendConstructor
+	case rawdb.PathScheme:
+		tconf.DBOverride = pathdb.Defaults.BackendConstructor
+	case customrawdb.FirewoodScheme:
+		cfg := firewood.Defaults
+		cfg.FilePath = filepath.Join(tempdir, "firewood")
+		tconf.DBOverride = cfg.BackendConstructor
+	default:
+		panic("unknown trie database scheme" + scheme)
+	}
+
 	triedb := triedb.NewDatabase(db, tconf)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
+	sdb := extstate.NewDatabaseWithNodeDB(db, triedb)
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
@@ -67,7 +88,10 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false)
+	root, err := statedb.Commit(0, false)
+	if err != nil {
+		panic("failed to commit state: " + err.Error())
+	}
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
@@ -81,7 +105,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		snaps, _ = snapshot.New(snapconfig, db, triedb, common.Hash{}, root)
 	}
 	statedb, _ = state.New(root, sdb, snaps)
-	return StateTestState{statedb, triedb, snaps}
+	return StateTestState{statedb, triedb, snaps, tempdir}
 }
 
 // Close should be called when the state is no longer needed, ie. after running the test.
@@ -95,5 +119,12 @@ func (st *StateTestState) Close() {
 		st.Snapshots.AbortGeneration()
 		st.Snapshots.Release()
 		st.Snapshots = nil
+	}
+
+	if st.TempDir != "" {
+		if err := os.RemoveAll(st.TempDir); err != nil {
+			panic("failed to remove temporary directory: " + err.Error())
+		}
+		st.TempDir = ""
 	}
 }

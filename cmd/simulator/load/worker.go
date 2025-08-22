@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/coreth/ethclient"
-	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
+
+	"github.com/ava-labs/coreth/ethclient"
 )
 
 type ethereumTxWorker struct {
@@ -21,7 +21,6 @@ type ethereumTxWorker struct {
 	acceptedNonce uint64
 	address       common.Address
 
-	sub      ethereum.Subscription
 	newHeads chan *types.Header
 }
 
@@ -35,13 +34,6 @@ func NewSingleAddressTxWorker(ctx context.Context, client *ethclient.Client, add
 		newHeads: newHeads,
 	}
 
-	sub, err := client.SubscribeNewHead(ctx, newHeads)
-	if err != nil {
-		log.Debug("failed to subscribe new heads, falling back to polling", "err", err)
-	} else {
-		tw.sub = sub
-	}
-
 	return tw
 }
 
@@ -52,13 +44,6 @@ func NewTxReceiptWorker(ctx context.Context, client *ethclient.Client) *ethereum
 	tw := &ethereumTxWorker{
 		client:   client,
 		newHeads: newHeads,
-	}
-
-	sub, err := client.SubscribeNewHead(ctx, newHeads)
-	if err != nil {
-		log.Debug("failed to subscribe new heads, falling back to polling", "err", err)
-	} else {
-		tw.sub = sub
 	}
 
 	return tw

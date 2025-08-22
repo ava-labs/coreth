@@ -6,30 +6,30 @@ package evm
 import (
 	"time"
 
-	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
-	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/log"
+
+	"github.com/ava-labs/coreth/plugin/evm/database"
+
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 )
 
 // initializeDBs initializes the databases used by the VM.
 // coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
+func (vm *VM) initializeDBs(db avalanchedatabase.Database) {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
 	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
 	vm.versiondb = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.versiondb)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.versiondb)
-	vm.db = db
 	// Note warpDB is not part of versiondb because it is not necessary
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
 	vm.warpDB = prefixdb.New(warpPrefix, db)
-	return nil
 }
 
 func (vm *VM) inspectDatabases() error {

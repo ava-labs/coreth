@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -42,7 +43,7 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/core/state"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/internal/version"
 	"github.com/ava-labs/coreth/params"
@@ -50,11 +51,13 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
@@ -62,11 +65,12 @@ import (
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
-	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
 
 	// Force libevm metrics of the same name to be registered first.
 	_ "github.com/ava-labs/libevm/core"
+
+	ffi "github.com/ava-labs/firewood-go-ethhash/ffi"
 )
 
 // ====== If resolving merge conflicts ======
@@ -96,6 +100,7 @@ var (
 	triedbCommitTimer = getOrOverrideAsRegisteredCounter("chain/triedb/commits", nil)
 
 	blockInsertTimer            = metrics.GetOrRegisterCounter("chain/block/inserts", nil)
+	blockSignatureRecoveryTimer = metrics.GetOrRegisterCounter("chain/block/signature/recovery", nil)
 	blockInsertCount            = metrics.GetOrRegisterCounter("chain/block/inserts/count", nil)
 	blockContentValidationTimer = metrics.GetOrRegisterCounter("chain/block/validations/content", nil)
 	blockStateInitTimer         = metrics.GetOrRegisterCounter("chain/block/inits/state", nil)
@@ -170,6 +175,8 @@ const (
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "hashdb/memcache/clean/fastcache"
+
+	firewoodFileName = "firewood_state"
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -195,8 +202,9 @@ type CacheConfig struct {
 	StateHistory                    uint64  // Number of blocks from head whose state histories are reserved.
 	StateScheme                     string  // Scheme used to store ethereum states and merkle tree nodes on top
 
-	SnapshotNoBuild bool // Whether the background generation is allowed
-	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
+	ChainDataDir    string // Directory to store chain data in (used by Firewood)
+	SnapshotNoBuild bool   // Whether the background generation is allowed
+	SnapshotWait    bool   // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
 
 // triedbConfig derives the configures for trie database.
@@ -216,6 +224,19 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
+	if c.StateScheme == customrawdb.FirewoodScheme {
+		// ChainDataDir may not be set during some tests, where this path won't be called.
+		if c.ChainDataDir == "" {
+			log.Crit("Chain data directory must be specified for Firewood")
+		}
+		config.DBOverride = firewood.Config{
+			FilePath:             filepath.Join(c.ChainDataDir, firewoodFileName),
+			CleanCacheSize:       c.TrieCleanLimit * 1024 * 1024,
+			FreeListCacheEntries: firewood.Defaults.FreeListCacheEntries,
+			Revisions:            uint(c.StateHistory), // must be at least 2
+			ReadCacheStrategy:    ffi.CacheAllReads,
+		}.BackendConstructor
+	}
 	return config
 }
 
@@ -231,6 +252,7 @@ var DefaultCacheConfig = &CacheConfig{
 	AcceptorQueueLimit:        64, // Provides 2 minutes of buffer (2s block target) for a commit delay
 	SnapshotLimit:             256,
 	AcceptedCacheSize:         32,
+	StateHistory:              32, // Default state history size
 	StateScheme:               rawdb.HashScheme,
 }
 
@@ -239,6 +261,10 @@ var DefaultCacheConfig = &CacheConfig{
 func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
+	// TODO: remove this once if Firewood supports snapshots
+	if config.StateScheme == customrawdb.FirewoodScheme {
+		config.SnapshotLimit = 0 // no snapshot allowed for firewood
+	}
 	return &config
 }
 
@@ -402,7 +428,7 @@ func NewBlockChain(
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.stateCache = extstate.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.processor = NewStateProcessor(chainConfig, bc, engine)
 
@@ -1286,6 +1312,7 @@ func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {
 func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	start := time.Now()
 	bc.senderCacher.Recover(types.MakeSigner(bc.chainConfig, block.Number(), block.Time()), block.Transactions())
+	blockSignatureRecoveryTimer.Inc(time.Since(start).Milliseconds())
 
 	substart := time.Now()
 	err := bc.engine.VerifyHeader(bc, block.Header())
@@ -1340,7 +1367,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
 
 	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain", state.WithConcurrentWorkers(bc.cacheConfig.TriePrefetcherParallelism))
+	statedb.StartPrefetcher("chain", extstate.WithConcurrentWorkers(bc.cacheConfig.TriePrefetcherParallelism))
 	defer statedb.StopPrefetcher()
 
 	// Process block using the parent state as reference point
@@ -1699,7 +1726,7 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 	}
 
 	// Enable prefetching to pull in trie node paths while processing transactions
-	statedb.StartPrefetcher("chain", state.WithConcurrentWorkers(bc.cacheConfig.TriePrefetcherParallelism))
+	statedb.StartPrefetcher("chain", extstate.WithConcurrentWorkers(bc.cacheConfig.TriePrefetcherParallelism))
 	defer statedb.StopPrefetcher()
 
 	// Process previously stored block
@@ -1721,10 +1748,16 @@ func (bc *BlockChain) reprocessBlock(parent *types.Block, current *types.Block) 
 func (bc *BlockChain) commitWithSnap(
 	current *types.Block, parentRoot common.Hash, statedb *state.StateDB,
 ) (common.Hash, error) {
-	// blockHashes must be passed through [state.StateDB]'s Commit since snapshots
-	// are based on the block hash.
+	// We pass through block hashes to the Update calls to ensure that we can uniquely
+	// identify states despite identical state roots.
 	snapshotOpt := snapshot.WithBlockHashes(current.Hash(), current.ParentHash())
-	root, err := statedb.Commit(current.NumberU64(), bc.chainConfig.IsEIP158(current.Number()), stateconf.WithSnapshotUpdateOpts(snapshotOpt))
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(current.ParentHash(), current.Hash())
+	root, err := statedb.Commit(
+		current.NumberU64(),
+		bc.chainConfig.IsEIP158(current.Number()),
+		stateconf.WithSnapshotUpdateOpts(snapshotOpt),
+		stateconf.WithTrieDBUpdateOpts(triedbOpt),
+	)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1734,6 +1767,14 @@ func (bc *BlockChain) commitWithSnap(
 	if bc.snaps != nil && root == parentRoot {
 		if err := bc.snaps.Update(root, parentRoot, nil, nil, nil, snapshotOpt); err != nil {
 			return common.Hash{}, err
+		}
+	}
+
+	// Because Firewood relies on tracking block hashes in a tree, we need to notify the
+	// database that this block is empty.
+	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme && root == parentRoot {
+		if err := bc.triedb.Update(root, parentRoot, current.NumberU64(), nil, nil, triedbOpt); err != nil {
+			return common.Hash{}, fmt.Errorf("failed to update trie for block %s: %w", current.Hash(), err)
 		}
 	}
 	return root, nil
@@ -1803,8 +1844,15 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 	}
 
-	for i := 0; i < int(reexec); i++ {
+	// Find a historic available state root
+	var hasState bool
+	for i := 0; i <= int(reexec); i++ {
 		// TODO: handle canceled context
+
+		if bc.HasState(current.Root()) {
+			hasState = true
+			break
+		}
 
 		if current.NumberU64() == 0 {
 			return errors.New("genesis state is missing")
@@ -1814,18 +1862,9 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			return fmt.Errorf("missing block %s:%d", current.ParentHash().Hex(), current.NumberU64()-1)
 		}
 		current = parent
-		_, err = bc.stateCache.OpenTrie(current.Root())
-		if err == nil {
-			break
-		}
 	}
-	if err != nil {
-		switch err.(type) {
-		case *trie.MissingNodeError:
-			return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
-		default:
-			return err
-		}
+	if !hasState {
+		return fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
 	}
 
 	// State was available at historical point, regenerate
@@ -1838,6 +1877,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	)
 	// Note: we add 1 since in each iteration, we attempt to re-execute the next block.
 	log.Info("Re-executing blocks to generate state for last accepted block", "from", current.NumberU64()+1, "to", origin)
+	var roots []common.Hash
 	for current.NumberU64() < origin {
 		// TODO: handle canceled context
 
@@ -1873,6 +1913,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		if err != nil {
 			return err
 		}
+		roots = append(roots, root)
 
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
@@ -1896,6 +1937,17 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 
 	_, nodes, imgs := triedb.Size()
 	log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
+
+	// Firewood requires processing each root individually.
+	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
+		for _, root := range roots {
+			if err := triedb.Commit(root, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	if previousRoot != (common.Hash{}) {
 		return triedb.Commit(previousRoot, true)
 	}
@@ -2111,7 +2163,7 @@ func (bc *BlockChain) ResetToStateSyncedBlock(block *types.Block) error {
 	bc.hc.SetCurrentHeader(block.Header())
 
 	lastAcceptedHash := block.Hash()
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.stateCache = extstate.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 
 	if err := bc.loadLastState(lastAcceptedHash); err != nil {
 		return err

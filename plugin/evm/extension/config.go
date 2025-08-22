@@ -12,29 +12,30 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/utils/timer/mockable"
-
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/sync"
 	"github.com/ava-labs/coreth/sync/handlers"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
+	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	synccommon "github.com/ava-labs/coreth/sync"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 )
 
 var (
 	errNilConfig              = errors.New("nil extension config")
 	errNilSyncSummaryProvider = errors.New("nil sync summary provider")
 	errNilSyncableParser      = errors.New("nil syncable parser")
+	errNilClock               = errors.New("nil clock")
 )
 
 type ExtensibleVM interface {
@@ -45,7 +46,9 @@ type ExtensibleVM interface {
 	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
-	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
+	// SetLastAcceptedBlock sets the last accepted block
+	SetLastAcceptedBlock(lastAcceptedBlock snowman.Block) error
+	// GetExtendedBlock returns the ExtendedBlock for the given ID or an error if the block is not found
 	GetExtendedBlock(context.Context, ids.ID) (ExtendedBlock, error)
 	// LastAcceptedExtendedBlock returns the last accepted VM block
 	LastAcceptedExtendedBlock() ExtendedBlock
@@ -53,8 +56,8 @@ type ExtensibleVM interface {
 	ChainConfig() *params.ChainConfig
 	// P2PValidators returns the validators for the network
 	P2PValidators() *p2p.Validators
-	// Blockchain returns the blockchain client
-	Blockchain() *core.BlockChain
+	// Ethereum returns the Ethereum service
+	Ethereum() *eth.Ethereum
 	// Config returns the configuration for the VM
 	Config() config.Config
 	// MetricRegistry returns the metric registry for the VM
@@ -63,6 +66,8 @@ type ExtensibleVM interface {
 	ReadLastAccepted() (common.Hash, uint64, error)
 	// VersionDB returns the versioned database for the VM
 	VersionDB() *versiondb.Database
+	// SyncerClient returns the syncer client for the VM
+	SyncerClient() vmsync.Client
 }
 
 // InnerVM is the interface that must be implemented by the VM
@@ -136,10 +141,10 @@ type Config struct {
 	// SyncSummaryProvider is the sync summary provider to use
 	// for the VM to be used in syncer.
 	// It's required and should be non-nil
-	SyncSummaryProvider sync.SummaryProvider
+	SyncSummaryProvider synccommon.SummaryProvider
 	// SyncExtender can extend the syncer to handle custom sync logic.
 	// It's optional and can be nil
-	SyncExtender sync.Extender
+	SyncExtender synccommon.Extender
 	// SyncableParser is to parse summary messages from the network.
 	// It's required and should be non-nil
 	SyncableParser message.SyncableParser
@@ -166,6 +171,9 @@ func (c *Config) Validate() error {
 	}
 	if c.SyncableParser == nil {
 		return errNilSyncableParser
+	}
+	if c.Clock == nil {
+		return errNilClock
 	}
 	return nil
 }

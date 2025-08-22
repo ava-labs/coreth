@@ -9,15 +9,15 @@ import (
 
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/precompile/contract"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 
 	_ "embed"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/common/math"
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/precompile/contract"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
 
 	GasCostPerWarpSigner            uint64 = 500
-	GasCostPerWarpMessageBytes      uint64 = 100
+	GasCostPerWarpMessageChunk      uint64 = 3_200
 	GasCostPerSignatureVerification uint64 = 200_000
 )
 
@@ -248,7 +248,7 @@ func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Add
 	// unpack the arguments
 	payloadData, err := UnpackSendWarpMessageInput(input)
 	if err != nil {
-		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidSendInput, err)
+		return nil, remainingGas, fmt.Errorf("%w: %w", errInvalidSendInput, err)
 	}
 
 	var (

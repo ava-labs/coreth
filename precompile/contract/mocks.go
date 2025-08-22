@@ -14,10 +14,13 @@ import (
 	reflect "reflect"
 
 	snow "github.com/ava-labs/avalanchego/snow"
+	set "github.com/ava-labs/avalanchego/utils/set"
+	predicate "github.com/ava-labs/avalanchego/vms/evm/predicate"
 	precompileconfig "github.com/ava-labs/coreth/precompile/precompileconfig"
 	common "github.com/ava-labs/libevm/common"
 	types "github.com/ava-labs/libevm/core/types"
 	vm "github.com/ava-labs/libevm/core/vm"
+	stateconf "github.com/ava-labs/libevm/libevm/stateconf"
 	uint256 "github.com/holiman/uint256"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -150,47 +153,38 @@ func (mr *MockStateDBMockRecorder) GetNonce(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockStateDB)(nil).GetNonce), arg0)
 }
 
-// GetPredicateStorageSlots mocks base method.
-func (m *MockStateDB) GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool) {
+// GetPredicate mocks base method.
+func (m *MockStateDB) GetPredicate(address common.Address, index int) (predicate.Predicate, bool) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPredicateStorageSlots", address, index)
-	ret0, _ := ret[0].([]byte)
+	ret := m.ctrl.Call(m, "GetPredicate", address, index)
+	ret0, _ := ret[0].(predicate.Predicate)
 	ret1, _ := ret[1].(bool)
 	return ret0, ret1
 }
 
-// GetPredicateStorageSlots indicates an expected call of GetPredicateStorageSlots.
-func (mr *MockStateDBMockRecorder) GetPredicateStorageSlots(address, index any) *gomock.Call {
+// GetPredicate indicates an expected call of GetPredicate.
+func (mr *MockStateDBMockRecorder) GetPredicate(address, index any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPredicateStorageSlots", reflect.TypeOf((*MockStateDB)(nil).GetPredicateStorageSlots), address, index)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPredicate", reflect.TypeOf((*MockStateDB)(nil).GetPredicate), address, index)
 }
 
 // GetState mocks base method.
-func (m *MockStateDB) GetState(arg0 common.Address, arg1 common.Hash) common.Hash {
+func (m *MockStateDB) GetState(arg0 common.Address, arg1 common.Hash, arg2 ...stateconf.StateDBStateOption) common.Hash {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetState", arg0, arg1)
+	varargs := []any{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetState", varargs...)
 	ret0, _ := ret[0].(common.Hash)
 	return ret0
 }
 
 // GetState indicates an expected call of GetState.
-func (mr *MockStateDBMockRecorder) GetState(arg0, arg1 any) *gomock.Call {
+func (mr *MockStateDBMockRecorder) GetState(arg0, arg1 any, arg2 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockStateDB)(nil).GetState), arg0, arg1)
-}
-
-// GetTxHash mocks base method.
-func (m *MockStateDB) GetTxHash() common.Hash {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTxHash")
-	ret0, _ := ret[0].(common.Hash)
-	return ret0
-}
-
-// GetTxHash indicates an expected call of GetTxHash.
-func (mr *MockStateDBMockRecorder) GetTxHash() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxHash", reflect.TypeOf((*MockStateDB)(nil).GetTxHash))
+	varargs := append([]any{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockStateDB)(nil).GetState), varargs...)
 }
 
 // Logs mocks base method.
@@ -231,28 +225,21 @@ func (mr *MockStateDBMockRecorder) SetNonce(arg0, arg1 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNonce", reflect.TypeOf((*MockStateDB)(nil).SetNonce), arg0, arg1)
 }
 
-// SetPredicateStorageSlots mocks base method.
-func (m *MockStateDB) SetPredicateStorageSlots(address common.Address, predicates [][]byte) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetPredicateStorageSlots", address, predicates)
-}
-
-// SetPredicateStorageSlots indicates an expected call of SetPredicateStorageSlots.
-func (mr *MockStateDBMockRecorder) SetPredicateStorageSlots(address, predicates any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPredicateStorageSlots", reflect.TypeOf((*MockStateDB)(nil).SetPredicateStorageSlots), address, predicates)
-}
-
 // SetState mocks base method.
-func (m *MockStateDB) SetState(arg0 common.Address, arg1, arg2 common.Hash) {
+func (m *MockStateDB) SetState(arg0 common.Address, arg1, arg2 common.Hash, arg3 ...stateconf.StateDBStateOption) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetState", arg0, arg1, arg2)
+	varargs := []any{arg0, arg1, arg2}
+	for _, a := range arg3 {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "SetState", varargs...)
 }
 
 // SetState indicates an expected call of SetState.
-func (mr *MockStateDBMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockStateDBMockRecorder) SetState(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockStateDB)(nil).SetState), arg0, arg1, arg2)
+	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockStateDB)(nil).SetState), varargs...)
 }
 
 // Snapshot mocks base method.
@@ -279,6 +266,20 @@ func (m *MockStateDB) SubBalanceMultiCoin(arg0 common.Address, arg1 common.Hash,
 func (mr *MockStateDBMockRecorder) SubBalanceMultiCoin(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubBalanceMultiCoin", reflect.TypeOf((*MockStateDB)(nil).SubBalanceMultiCoin), arg0, arg1, arg2)
+}
+
+// TxHash mocks base method.
+func (m *MockStateDB) TxHash() common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxHash")
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// TxHash indicates an expected call of TxHash.
+func (mr *MockStateDBMockRecorder) TxHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxHash", reflect.TypeOf((*MockStateDB)(nil).TxHash))
 }
 
 // MockAccessibleState is a mock of AccessibleState interface.
@@ -400,10 +401,10 @@ func (m *MockBlockContext) EXPECT() *MockBlockContextMockRecorder {
 }
 
 // GetPredicateResults mocks base method.
-func (m *MockBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
+func (m *MockBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) set.Bits {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPredicateResults", txHash, precompileAddress)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(set.Bits)
 	return ret0
 }
 

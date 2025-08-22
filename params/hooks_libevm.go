@@ -4,22 +4,26 @@
 package params
 
 import (
+	"fmt"
 	"maps"
 	"math/big"
 	"slices"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/nativeasset"
-	"github.com/ava-labs/coreth/params/extras"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/precompile/modules"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
+
+	"github.com/ava-labs/coreth/nativeasset"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/precompile/contract"
+	"github.com/ava-labs/coreth/precompile/modules"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -116,10 +120,10 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen
 		}
-		var predicateResults *predicate.Results
+		var predicateResults predicate.BlockResults
 		rules := GetRulesExtra(env.Rules()).AvalancheRules
 		if predicateResultsBytes := customheader.PredicateBytesFromExtra(rules, header.Extra); len(predicateResultsBytes) > 0 {
-			predicateResults, err = predicate.ParseResults(predicateResultsBytes)
+			predicateResults, err = predicate.ParseBlockResults(predicateResultsBytes)
 			if err != nil {
 				panic(err) // Should never happen, as results are already validated in block validation
 			}
@@ -131,6 +135,10 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 				time:             env.BlockTime(),
 				predicateResults: predicateResults,
 			},
+		}
+
+		if callType := env.IncomingCallType(); callType == vm.DelegateCall || callType == vm.CallCode {
+			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
 		}
 		return contract.Run(accessibleState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
 	}
@@ -188,7 +196,7 @@ func (a accessibleState) GetPrecompileEnv() vm.PrecompileEnvironment {
 type precompileBlockContext struct {
 	number           *big.Int
 	time             uint64
-	predicateResults *predicate.Results
+	predicateResults predicate.BlockResults
 }
 
 func (p *precompileBlockContext) Number() *big.Int {
@@ -199,9 +207,6 @@ func (p *precompileBlockContext) Timestamp() uint64 {
 	return p.time
 }
 
-func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
-	if p.predicateResults == nil {
-		return nil
-	}
-	return p.predicateResults.GetPredicateResults(txHash, precompileAddress)
+func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) set.Bits {
+	return p.predicateResults.Get(txHash, precompileAddress)
 }

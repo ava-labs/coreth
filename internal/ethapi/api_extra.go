@@ -8,12 +8,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/rlp"
+
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/rpc"
 )
 
 // GetChainConfig returns the chain config.
@@ -101,12 +102,9 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 //
 // Otherwise, it returns a non-nil error containing block number information.
 func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
-	queryWindow := uint64(core.TipBufferSize)
-	if s.b.IsArchive() {
-		queryWindow = s.b.HistoricalProofQueryWindow()
-		if queryWindow == 0 {
-			return nil
-		}
+	queryWindow := s.b.HistoricalProofQueryWindow()
+	if s.b.IsArchive() && queryWindow == 0 {
+		return nil
 	}
 
 	lastAcceptedNumber := s.b.LastAcceptedBlock().NumberU64()
@@ -117,7 +115,7 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 	} else if blockHash, ok := blockNumOrHash.Hash(); ok {
 		block, err := s.b.BlockByHash(context.Background(), blockHash)
 		if err != nil {
-			return fmt.Errorf("failed to get block from hash: %s", err)
+			return fmt.Errorf("failed to get block from hash: %w", err)
 		} else if block == nil {
 			return fmt.Errorf("block from hash %s doesn't exist", blockHash)
 		}

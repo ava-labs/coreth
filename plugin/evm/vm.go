@@ -17,73 +17,36 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/cache/metercacher"
-	"github.com/ava-labs/avalanchego/network/p2p"
-	"github.com/ava-labs/avalanchego/network/p2p/acp118"
-	"github.com/ava-labs/coreth/network"
-	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/plugin/evm/gossip"
-	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
-	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/eth/ethconfig"
-	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
-	"github.com/ava-labs/coreth/miner"
-	"github.com/ava-labs/coreth/node"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/params/extras"
-	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
-	"github.com/ava-labs/coreth/plugin/evm/config"
-	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/triedb/hashdb"
-
-	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/metrics"
-	ethparams "github.com/ava-labs/libevm/params"
-	"github.com/ava-labs/libevm/triedb"
-
-	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/rpc"
-	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/client/stats"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
-	utilsrpc "github.com/ava-labs/coreth/utils/rpc"
-	"github.com/ava-labs/coreth/warp"
-
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/rlp"
-
 	"github.com/ava-labs/avalanchego/cache/lru"
+	"github.com/ava-labs/avalanchego/cache/metercacher"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
-	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	avalancheUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/firewood-go-ethhash/ffi"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/triedb"
+	"github.com/prometheus/client_golang/prometheus"
 
+	// Force-load precompiles to trigger registration
+	_ "github.com/ava-labs/coreth/precompile/registry"
 	// Force-load tracer engine to trigger registration
 	//
 	// We must import this package (not referenced elsewhere) so that the native "callTracer"
@@ -92,8 +55,42 @@ import (
 	_ "github.com/ava-labs/libevm/eth/tracers/js"
 	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
-	// Force-load precompiles to trigger registration
-	_ "github.com/ava-labs/coreth/precompile/registry"
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/miner"
+	"github.com/ava-labs/coreth/network"
+	"github.com/ava-labs/coreth/node"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/gossip"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/sync/handlers"
+	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/coreth/warp"
+
+	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	avalancheUtils "github.com/ava-labs/avalanchego/utils"
+	avalanchegoprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
+	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
+	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
+	utilsrpc "github.com/ava-labs/coreth/utils/rpc"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 var (
@@ -147,6 +144,7 @@ var (
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
 	errInitializingLogger            = errors.New("failed to initialize logger")
+	errShuttingDownVM                = errors.New("shutting down VM")
 )
 
 var originalStderr *os.File
@@ -179,8 +177,7 @@ func init() {
 
 // VM implements the snowman.ChainVM interface
 type VM struct {
-	atomicVM *atomicvm.VM
-	ctx      *snow.Context
+	ctx *snow.Context
 	// [cancel] may be nil until [snow.NormalOp] starts
 	cancel context.CancelFunc
 	// *chain.State helps to implement the VM interface by wrapping blocks
@@ -206,9 +203,6 @@ type VM struct {
 	// [versiondb] is the VM's current versioned database
 	versiondb *versiondb.Database
 
-	// [db] is the VM's current database
-	db database.Database
-
 	// metadataDB is used to store one off keys.
 	metadataDB database.Database
 
@@ -223,9 +217,10 @@ type VM struct {
 	// set to a prefixDB with the prefix [warpPrefix]
 	warpDB database.Database
 
-	toEngine chan<- commonEng.Message
-
-	builder *blockBuilder
+	// builderLock is used to synchronize access to the block builder,
+	// as it is uninitialized at first and is only initialized when onNormalOperationsStarted is called.
+	builderLock sync.Mutex
+	builder     *blockBuilder
 
 	clock *mockable.Clock
 
@@ -243,6 +238,8 @@ type VM struct {
 
 	bootstrapped avalancheUtils.Atomic[bool]
 	IsPlugin     bool
+
+	stateSyncDone chan struct{}
 
 	logger corethlog.Logger
 	// State sync server and client
@@ -271,47 +268,17 @@ func (vm *VM) Initialize(
 	genesisBytes []byte,
 	_ []byte,
 	configBytes []byte,
-	toEngine chan<- commonEng.Message,
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
-	// TODO: this is to prevent migration of VM tests
-	// however this is not the intended change
-	// and should be removed after everything is migrated to atomicvm.VM
-	// atomicVM.Initialize() should be calling this vm's Initialize()
-	// we should prevent infinite recursion
-	// See https://github.com/ava-labs/coreth/pull/998 for the resolution of this TODO.
-	if vm.atomicVM == nil {
-		vm.atomicVM = atomicvm.WrapVM(vm)
-		if err := vm.atomicVM.Initialize(nil, chainCtx, db, genesisBytes, nil, configBytes, toEngine, nil, appSender); err != nil {
-			return fmt.Errorf("failed to initialize atomic VM: %w", err)
-		}
-		return nil
-	}
-
-	if err := vm.extensionConfig.Validate(); err != nil {
-		return fmt.Errorf("failed to validate extension config: %w", err)
-	}
-
-	vm.clock = &mockable.Clock{}
-	if vm.extensionConfig.Clock != nil {
-		vm.clock = vm.extensionConfig.Clock
-	}
-	vm.config.SetDefaults(defaultTxPoolConfig)
-	if len(configBytes) > 0 {
-		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
-			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
-		}
-	}
 	vm.ctx = chainCtx
+	vm.clock = vm.extensionConfig.Clock
 
-	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
-		return err
+	cfg, deprecateMsg, err := config.GetConfig(configBytes, vm.ctx.NetworkID)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
 	}
-	// We should deprecate config flags as the first thing, before we do anything else
-	// because this can set old flags to new flags. log the message after we have
-	// initialized the logger.
-	deprecateMsg := vm.config.Deprecate()
+	vm.config = cfg
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -341,7 +308,6 @@ func (vm *VM) Initialize(
 	// Enable debug-level metrics that might impact runtime performance
 	metrics.EnabledExpensive = vm.config.MetricsExpensiveEnabled
 
-	vm.toEngine = toEngine
 	vm.shutdownChan = make(chan struct{}, 1)
 
 	if err := vm.initializeMetrics(); err != nil {
@@ -349,9 +315,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Initialize the database
-	if err := vm.initializeDBs(db); err != nil {
-		return fmt.Errorf("failed to initialize databases: %w", err)
-	}
+	vm.initializeDBs(db)
 	if vm.config.InspectDatabase {
 		if err := vm.inspectDatabases(); err != nil {
 			return err
@@ -397,6 +361,9 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TxPool.AccountQueue = vm.config.TxPoolAccountQueue
 	vm.ethConfig.TxPool.GlobalQueue = vm.config.TxPoolGlobalQueue
 	vm.ethConfig.TxPool.Lifetime = vm.config.TxPoolLifetime.Duration
+	// If we re-enable txpool journaling, we should also add the saved local
+	// transactions to the p2p gossip on startup.
+	vm.ethConfig.TxPool.Journal = "" // disable journal
 
 	vm.ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
 	vm.ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
@@ -422,8 +389,33 @@ func (vm *VM) Initialize(
 	vm.ethConfig.CommitInterval = vm.config.CommitInterval
 	vm.ethConfig.SkipUpgradeCheck = vm.config.SkipUpgradeCheck
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
+	vm.ethConfig.StateHistory = vm.config.StateHistory
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
+	vm.ethConfig.StateScheme = vm.config.StateScheme
+
+	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+		log.Warn("Firewood state scheme is enabled")
+		log.Warn("This is untested in production, use at your own risk")
+		// Firewood only supports pruning for now.
+		if !vm.config.Pruning {
+			return errors.New("Pruning must be enabled for Firewood")
+		}
+		// Firewood does not support iterators, so the snapshot cannot be constructed
+		if vm.config.SnapshotCache > 0 {
+			return errors.New("Snapshot cache must be disabled for Firewood")
+		}
+		if vm.config.OfflinePruning {
+			return errors.New("Offline pruning is not supported for Firewood")
+		}
+		if vm.config.StateSyncEnabled == nil || *vm.config.StateSyncEnabled {
+			return errors.New("State sync is not yet supported for Firewood")
+		}
+	}
+	if vm.ethConfig.StateScheme == rawdb.PathScheme {
+		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
+		return errors.New("Path state scheme is not supported")
+	}
 
 	// Create directory for offline pruning
 	if len(vm.ethConfig.OfflinePruningDataDirectory) != 0 {
@@ -481,6 +473,8 @@ func (vm *VM) Initialize(
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
 	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
 
+	vm.stateSyncDone = make(chan struct{})
+
 	return vm.initializeStateSync(lastAcceptedHeight)
 }
 
@@ -517,9 +511,18 @@ func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
 func (vm *VM) initializeMetrics() error {
 	metrics.Enabled = true
 	vm.sdkMetrics = prometheus.NewRegistry()
-	gatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
+	gatherer := avalanchegoprometheus.NewGatherer(metrics.DefaultRegistry)
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
+	}
+
+	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == customrawdb.FirewoodScheme {
+		if err := ffi.StartMetrics(); err != nil {
+			return fmt.Errorf("failed to start firewood metrics collection: %w", err)
+		}
+		if err := vm.ctx.Metrics.Register("firewood", ffi.Gatherer{}); err != nil {
+			return fmt.Errorf("failed to register firewood metrics: %w", err)
+		}
 	}
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
@@ -583,14 +586,18 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	// Create standalone EVM TrieDB (read only) for serving leafs requests.
 	// We create a standalone TrieDB here, so that it has a standalone cache from the one
 	// used by the node when processing blocks.
-	evmTrieDB := triedb.NewDatabase(
-		vm.chaindb,
-		&triedb.Config{
-			DBOverride: hashdb.Config{
-				CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
-			}.BackendConstructor,
-		},
-	)
+	// However, Firewood does not support multiple TrieDBs, so we use the same one.
+	evmTrieDB := vm.eth.BlockChain().TrieDB()
+	if vm.ethConfig.StateScheme != customrawdb.FirewoodScheme {
+		evmTrieDB = triedb.NewDatabase(
+			vm.chaindb,
+			&triedb.Config{
+				DBOverride: hashdb.Config{
+					CleanCacheSize: vm.config.StateSyncServerTrieCache * units.MiB,
+				}.BackendConstructor,
+			},
+		)
+	}
 	leafHandlers := make(LeafHandlers)
 	leafMetricsNames := make(map[message.NodeType]string)
 	// register default leaf request handler for state trie
@@ -616,7 +623,6 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
-		vm.warpBackend,
 		vm.networkCodec,
 		leafHandlers,
 		syncStats,
@@ -640,10 +646,10 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	}
 
 	// Initialize the state sync client
-
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
-		Chain: vm.eth,
-		State: vm.State,
+		StateSyncDone: vm.stateSyncDone,
+		Chain:         vm.eth,
+		State:         vm.State,
 		Client: statesyncclient.NewClient(
 			&statesyncclient.ClientConfig{
 				NetworkClient:    vm.Network,
@@ -658,10 +664,9 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		MinBlocks:          vm.config.StateSyncMinBlocks,
 		RequestSize:        vm.config.StateSyncRequestSize,
 		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
-		ChaindDB:           vm.chaindb,
+		ChainDB:            vm.chaindb,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
-		ToEngine:           vm.toEngine,
 		Acceptor:           vm,
 		Parser:             vm.extensionConfig.SyncableParser,
 		Extender:           vm.extensionConfig.SyncExtender,
@@ -710,10 +715,6 @@ func (vm *VM) initChainState(lastAcceptedBlock *types.Block) error {
 }
 
 func (vm *VM) SetState(_ context.Context, state snow.State) error {
-	if err := vm.atomicVM.SetState(nil, state); err != nil {
-		return fmt.Errorf("failed to set atomic VM state: %w", err)
-	}
-
 	switch state {
 	case snow.StateSyncing:
 		vm.bootstrapped.Set(false)
@@ -802,8 +803,10 @@ func (vm *VM) initBlockBuilding() error {
 	vm.ethTxPushGossiper.Set(ethTxPushGossiper)
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
-	vm.builder = vm.NewBlockBuilder(vm.toEngine, vm.extensionConfig.ExtraMempool)
+	vm.builderLock.Lock()
+	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool)
 	vm.builder.awaitSubmittedTxs()
+	vm.builderLock.Unlock()
 
 	vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
@@ -858,6 +861,26 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 
 	return nil
+}
+
+func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
+	vm.builderLock.Lock()
+	builder := vm.builder
+	vm.builderLock.Unlock()
+
+	// Block building is not initialized yet, so we haven't finished syncing or bootstrapping.
+	if builder == nil {
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-vm.stateSyncDone:
+			return commonEng.StateSyncDone, nil
+		case <-vm.shutdownChan:
+			return commonEng.Message(0), errShuttingDownVM
+		}
+	}
+
+	return builder.waitForEvent(ctx)
 }
 
 // Shutdown implements the snowman.ChainVM interface
@@ -1040,10 +1063,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		return nil, err
 	}
 
-	apis, err := vm.atomicVM.CreateHandlers(nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create atomic VM handlers: %w", err)
-	}
+	apis := make(map[string]http.Handler)
 
 	if vm.config.AdminAPIEnabled {
 		adminAPI, err := utilsrpc.NewHandler("admin", NewAdminService(vm, os.ExpandEnv(fmt.Sprintf("%s_coreth_performance_%s", vm.config.AdminAPIDir, vm.chainAlias))))
@@ -1052,14 +1072,6 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		}
 		apis[adminEndpoint] = adminAPI
 		enabledAPIs = append(enabledAPIs, "coreth-admin")
-	}
-
-	// RPC APIs
-	if vm.config.SnowmanAPIEnabled {
-		if err := handler.RegisterName("snowman", &SnowmanAPI{vm}); err != nil {
-			return nil, err
-		}
-		enabledAPIs = append(enabledAPIs, "snowman")
 	}
 
 	if vm.config.WarpAPIEnabled {
@@ -1087,7 +1099,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	return apis, nil
 }
 
-func (vm *VM) CreateHTTP2Handler(context.Context) (http.Handler, error) {
+func (*VM) NewHTTPHandler(context.Context) (http.Handler, error) {
 	return nil, nil
 }
 

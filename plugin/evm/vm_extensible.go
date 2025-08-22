@@ -10,12 +10,14 @@ import (
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
-	"github.com/ava-labs/coreth/core"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	vmsync "github.com/ava-labs/coreth/plugin/evm/sync"
-	"github.com/prometheus/client_golang/prometheus"
+
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 )
 
 var _ extension.InnerVM = (*VM)(nil)
@@ -58,12 +60,15 @@ func (vm *VM) LastAcceptedExtendedBlock() extension.ExtendedBlock {
 	return lastAcceptedBlock.(*wrappedBlock)
 }
 
+// ChainConfig returns the chain config for the VM
+// Even though this is available through Blockchain().Config(),
+// ChainConfig() here will be available before the blockchain is initialized.
 func (vm *VM) ChainConfig() *params.ChainConfig {
 	return vm.chainConfig
 }
 
-func (vm *VM) Blockchain() *core.BlockChain {
-	return vm.blockChain
+func (vm *VM) Ethereum() *eth.Ethereum {
+	return vm.eth
 }
 
 func (vm *VM) Config() config.Config {
