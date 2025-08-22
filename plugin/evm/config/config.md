@@ -395,7 +395,11 @@ Specifies the maximum amount of CPU time that can be stored for a single WS conn
 
 ### `allow-unfinalized-queries`
 
+_Boolean_
+
 Allows queries for unfinalized (not yet accepted) blocks/transactions. Defaults to `false`.
+
+**⚠️ WARNING: Always keep this set to `false` in production.** Setting to `true` causes severe performance degradation as the node must track and serve all unfinalized blocks. Only enable for testing/debugging when specifically needed.
 
 ### `accepted-cache-size`
 
