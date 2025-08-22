@@ -415,13 +415,13 @@ Maximum size in bytes for HTTP request bodies. Defaults to `0` (no limit).
 
 _Integer_
 
-Maximum number of requests that can be batched in an RPC call. Defaults to `1000`.
+Maximum number of requests that can be batched in an RPC call. For no limit, set to 0. If set to 0, `batch-response-max-size` must also be set to 0. Defaults to `1000`.
 
 ### `batch-response-max-size`
 
 _Integer_
 
-Maximum size of response that can be returned from a batched RPC call. Defaults to `25 MB`.
+Maximum size of response that can be returned from a batched RPC call. For no limit, set to 0. If set to 0, `batch-request-limit` must also be set to 0. Defaults to `25 MB`.
 
 ## Transaction Pool
 
