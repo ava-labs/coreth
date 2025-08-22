@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
@@ -57,13 +58,21 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
-	s, err := NewSyncer(mockClient, clientDB, root, Config{
+	cfg := Config{
 		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		RequestSize: testRequestSize,
-	})
+	}
+	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, cfg)
+	require.NoError(t, err, "failed to create code syncer")
+	stateSyncer, err := NewSyncer(mockClient, clientDB, root, codeSyncer, cfg)
 	require.NoError(t, err, "failed to create state syncer")
 
-	err = s.Sync(ctx)
+	// Run both syncers concurrently and wait for the first error.
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error { return codeSyncer.Sync(egCtx) })
+	eg.Go(func() error { return stateSyncer.Sync(egCtx) })
+
+	err = eg.Wait()
 	require.ErrorIs(t, err, test.expectedError, "unexpected error during sync")
 
 	// Only assert database consistency if the sync was expected to succeed.

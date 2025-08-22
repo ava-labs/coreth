@@ -37,6 +37,7 @@ const (
 	atomicStateSyncOperationName = "Atomic State Sync"
 	blockSyncOperationName       = "Block Sync"
 	evmStateSyncOperationName    = "EVM State Sync"
+	codeHashSyncOperationName    = "Code Hash Sync"
 )
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
@@ -168,34 +169,45 @@ func (client *client) stateSync(ctx context.Context) error {
 }
 
 func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegistry) error {
-	// Register block syncer.
-	syncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
+	blockSyncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
 	if err != nil {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
-	if err := registry.Register(blockSyncOperationName, syncer); err != nil {
-		return fmt.Errorf("failed to register block syncer: %w", err)
-	}
 
-	// Register EVM state syncer.
-	evmSyncer, err := client.createEVMSyncer()
+	cfg := statesync.NewDefaultConfig(client.RequestSize)
+
+	codeSyncer, err := client.createCodeHashSyncer(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to create EVM syncer: %w", err)
+		return fmt.Errorf("failed to create code syncer: %w", err)
 	}
 
-	if err := registry.Register(evmStateSyncOperationName, evmSyncer); err != nil {
-		return fmt.Errorf("failed to register EVM syncer: %w", err)
+	stateSyncer, err := client.createEVMSyncer(cfg, codeSyncer)
+	if err != nil {
+		return fmt.Errorf("failed to create EVM state syncer: %w", err)
 	}
 
-	// Register atomic syncer.
+	var atomicSyncer synccommon.Syncer
 	if client.Extender != nil {
-		atomicSyncer, err := client.createAtomicSyncer(ctx)
+		atomicSyncer, err = client.createAtomicSyncer(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
+	}
 
+	// Register in a deterministic order
+	if err := registry.Register(blockSyncOperationName, blockSyncer); err != nil {
+		return fmt.Errorf("failed to register %s: %w", blockSyncOperationName, err)
+	}
+	if err := registry.Register(codeHashSyncOperationName, codeSyncer); err != nil {
+		return fmt.Errorf("failed to register %s: %w", codeHashSyncOperationName, err)
+	}
+	if err := registry.Register(evmStateSyncOperationName, stateSyncer); err != nil {
+		return fmt.Errorf("failed to register %s: %w", evmStateSyncOperationName, err)
+	}
+
+	if atomicSyncer != nil {
 		if err := registry.Register(atomicStateSyncOperationName, atomicSyncer); err != nil {
-			return fmt.Errorf("failed to register atomic syncer: %w", err)
+			return fmt.Errorf("failed to register %s: %w", atomicStateSyncOperationName, err)
 		}
 	}
 
@@ -210,8 +222,12 @@ func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64)
 	})
 }
 
-func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
-	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), statesync.NewDefaultConfig(client.RequestSize))
+func (client *client) createEVMSyncer(cfg statesync.Config, sink statesync.CodeHashSink) (synccommon.Syncer, error) {
+	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), sink, cfg)
+}
+
+func (client *client) createCodeHashSyncer(cfg statesync.Config) (statesync.CodeSyncerTask, error) {
+	return statesync.NewCodeSyncer(client.Client, client.ChainDB, cfg)
 }
 
 func (client *client) createAtomicSyncer(ctx context.Context) (synccommon.Syncer, error) {
