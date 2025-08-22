@@ -141,6 +141,10 @@ var reexecTests = []ReexecTest{
 		"ReexecMaxBlocks",
 		ReexecMaxBlocksTest,
 	},
+	{
+		"ReexecCorruptedState",
+		ReexecCorruptedStateTest,
+	},
 }
 
 func copyMemDB(db ethdb.Database) (ethdb.Database, error) {
@@ -1832,6 +1836,70 @@ func ReexecMaxBlocksTest(t *testing.T, create ReexecTestFunc) {
 			if txLookup == nil {
 				t.Fatalf("missing transaction: %v", tx)
 			}
+		}
+	}
+}
+
+func ReexecCorruptedStateTest(t *testing.T, create ReexecTestFunc) {
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		chainDB = rawdb.NewMemoryDatabase()
+	)
+
+	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000)
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+	}
+
+	tempDir := t.TempDir()
+	blockchain, err := create(chainDB, gspec, common.Hash{}, tempDir, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that we are generating enough blocks to test the reexec functionality.
+	genNumBlocks := 5
+	signer := types.HomesteadSigner{}
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, genNumBlocks, 10, func(i int, gen *BlockGen) {
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		gen.AddTx(tx)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert three blocks into the chain and accept only the first block.
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	// Accept only the first block.
+	if err := blockchain.Accept(chain[0]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate a crash by updating the acceptor tip
+	blockchain.writeBlockAcceptedIndices(chain[1])
+	blockchain.Stop()
+
+	// Restart blockchain with existing state
+	restartedBlockchain, err := create(chainDB, gspec, chain[1].Hash(), tempDir, 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restartedBlockchain.Stop()
+
+	// We should be able to accept the remaining blocks
+	for _, block := range chain[2:] {
+		if err := restartedBlockchain.InsertBlock(block); err != nil {
+			t.Fatal(err)
+		}
+		if err := restartedBlockchain.Accept(block); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
