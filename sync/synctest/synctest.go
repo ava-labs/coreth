@@ -4,7 +4,7 @@
 // Package utilstest provides small testing helpers used across the codebase.
 // It includes lightweight syncer adapters and utilities for coordinating
 // goroutines under test.
-package utilstest
+package synctest
 
 import (
 	"context"

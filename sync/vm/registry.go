@@ -57,7 +57,7 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		g.Go(func() error {
 			log.Info("starting syncer", "name", task.name, "summary", client.summary)
 			if err := task.syncer.Sync(ctx); err != nil {
-				log.Error("failed to complete", "name", task.name, "summary", client.summary, "err", err)
+				log.Error("failed syncing", "name", task.name, "summary", client.summary, "err", err)
 				return fmt.Errorf("%s failed: %w", task.name, err)
 			}
 			log.Info("completed successfully", "name", task.name, "summary", client.summary)
