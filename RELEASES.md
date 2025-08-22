@@ -2,6 +2,8 @@
 
 ## Pending Release
 
+- Enabled RPC batch limits by default, and configurable with `batch-request-limit` and `batch-max-response-size`.
+
 ## [v0.15.3](https://github.com/ava-labs/coreth/releases/tag/v0.15.3)
 
 - Removed legacy warp message handlers in favor of ACP-118 SDK handlers.
