@@ -401,7 +401,7 @@ Allows queries for unfinalized (not yet accepted) blocks/transactions. Defaults 
 
 This flag is mainly used for development environments, offering an insight into how the consensus is working, especially useful for developers working on the execution client.
 
-**⚠️ WARNING: Always keep this set to `false` in production.** Setting to `true` causes poor node querying for users due to unfinalized data and increased response times, as most of the data corresponds to unfinalized blocks.
+**⚠️ WARNING: Always keep this set to `false` in production.** Setting to `true` causes poor node querying for users due to unfinalized data and increased response times, as most of the data corresponds to unfinalized blocks. 
 
 ### `accepted-cache-size`
 
