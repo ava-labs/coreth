@@ -397,9 +397,11 @@ Specifies the maximum amount of CPU time that can be stored for a single WS conn
 
 _Boolean_
 
-Allows queries for unfinalized (not yet accepted) blocks/transactions. Defaults to `false`.
+Allows queries for unfinalized (not yet accepted) blocks/transactions. Defaults to `false`. 
 
-**⚠️ WARNING: Always keep this set to `false` in production.** Setting to `true` causes severe performance degradation as the node must track and serve all unfinalized blocks. Only enable for testing/debugging when specifically needed.
+This flag is mainly used for development environments, offering an insight into how the consensus is working, especially useful for developers working on the execution client.
+
+**⚠️ WARNING: Always keep this set to `false` in production.** Setting to `true` causes poor node querying for users due to unfinalized data and increased response times, as most of the data corresponds to unfinalized blocks.
 
 ### `accepted-cache-size`
 
