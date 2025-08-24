@@ -399,9 +399,9 @@ _Boolean_
 
 Allows queries for unfinalized (not yet accepted) blocks/transactions. Defaults to `false`. 
 
-This flag is mainly used for development environments, offering an insight into how the consensus is working, especially useful for developers working on the execution client.
+**⚠️ WARNING: Always keep this set to `false` in production.** Enabling this flag can result in a confusing/unreliable user experience. Enabling this flag should only be done when users are expected to have knowledge of how Snow* consensus finalizes blocks.
 
-**⚠️ WARNING: Always keep this set to `false` in production.** Setting to `true` causes poor node querying for users due to unfinalized data and increased response times, as most of the data corresponds to unfinalized blocks. 
+Unlike chains with reorgs and forks that require block confirmations, Avalanche provides 100% finalized blocks every ~2 seconds. There is no need to wait for additional blocks to confirm finalization. Enabling this flag provides no benefit while causing confusion about block finality. 
 
 ### `accepted-cache-size`
 
