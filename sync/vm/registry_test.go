@@ -28,7 +28,7 @@ func newMockSyncer(name string, syncError error) *mockSyncer {
 	return &mockSyncer{name: name, syncError: syncError}
 }
 
-func (m *mockSyncer) Sync(ctx context.Context) error {
+func (m *mockSyncer) Sync(_ context.Context) error {
 	m.started = true
 	return m.syncError
 }
@@ -122,7 +122,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 		name          string
 		syncers       []syncerConfig
 		expectedError string
-		assertState   func(t *testing.T, mockSyncers []*mockSyncer, expectedError string)
+		assertState   func(t *testing.T, mockSyncers []*mockSyncer)
 	}{
 		{
 			name: "successful execution",
@@ -130,7 +130,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer1", nil},
 				{"Syncer2", nil},
 			},
-			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
+			assertState: func(t *testing.T, mockSyncers []*mockSyncer) {
 				for i, mockSyncer := range mockSyncers {
 					require.True(t, mockSyncer.started, "Syncer %d should have been started", i)
 				}
@@ -142,8 +142,8 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				{"Syncer2", nil},
 			},
 			expectedError: "Syncer1 failed",
-			assertState: func(t *testing.T, mockSyncers []*mockSyncer, expectedError string) {
-				// First syncer should have been started.
+			assertState: func(t *testing.T, mockSyncers []*mockSyncer) {
+				// First syncer should be started and waited on (but wait failed).
 				require.True(t, mockSyncers[0].started, "First syncer should have been started")
 				// With concurrency, the second may or may not have started -> don't assert it.
 			},
@@ -171,7 +171,8 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			tt.assertState(t, mockSyncers, tt.expectedError)
+			// Use custom assertion function for each test case.
+			tt.assertState(t, mockSyncers)
 		})
 	}
 }
