@@ -73,6 +73,8 @@ var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledC
 
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
 	var precompiles map[common.Address]contract.StatefulPrecompiledContract
+	var addresses []common.Address
+
 	switch {
 	case r.IsBanff:
 		precompiles = PrecompiledContractsBanff
@@ -82,9 +84,13 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 		precompiles = PrecompiledContractsApricotPhasePre6
 	case r.IsApricotPhase2:
 		precompiles = PrecompiledContractsApricotPhase2
+	case r.IsGranite:
+		// Add p256verify address if Granite is enabled
+		for addr := range vm.PrecompiledContractsP256Verify {
+			addresses = append(addresses, addr)
+		}
 	}
 
-	var addresses []common.Address
 	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
 	addresses = append(addresses, existing...)
 	return addresses
@@ -114,6 +120,22 @@ func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.Preco
 	return makePrecompile(precompile), true
 }
 
+// p256verifyOverrideBuiltin handles the p256verify precompile registration
+func (r RulesExtra) p256verifyOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
+	// Check if p256verify is enabled at the current timestamp
+	if !r.AvalancheRules.IsGranite {
+		return nil, false
+	}
+
+	// Get the p256verify precompile from libevm
+	precompile, ok := vm.PrecompiledContractsP256Verify[addr]
+	if !ok {
+		return nil, false
+	}
+
+	return precompile, true
+}
+
 func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.PrecompiledContract {
 	run := func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 		header, err := env.BlockHeader()
@@ -140,7 +162,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if callType := env.IncomingCallType(); callType == vm.DelegateCall || callType == vm.CallCode {
 			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
 		}
-		return contract.Run(accessibleState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
+		return contract.Run(accessibleState, env.Addresses().EVMSemantic.Caller, env.Addresses().EVMSemantic.Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
 }
@@ -149,6 +171,12 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 	if p, ok := r.precompileOverrideBuiltin(addr); ok {
 		return p, true
 	}
+
+	// Handle p256verify as a stateless precompile
+	if p, ok := r.p256verifyOverrideBuiltin(addr); ok {
+		return p, true
+	}
+
 	if _, ok := r.Precompiles[addr]; !ok {
 		return nil, false
 	}
