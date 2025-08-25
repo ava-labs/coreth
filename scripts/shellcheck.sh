@@ -52,4 +52,8 @@ for file in ${IGNORED_FILES}; do
   IGNORED_CONDITIONS+=(-path "${REPO_ROOT}/${file}" -prune)
 done
 
-find "${REPO_ROOT}" \( "${IGNORED_CONDITIONS[@]}" \) -o -type f -name "*.sh" -print0 | xargs -0 "${SHELLCHECK}" "${@}"
+if [[ $# -gt 0 ]]; then
+  find "${REPO_ROOT}" \( "${IGNORED_CONDITIONS[@]}" \) -o -type f -name "*.sh" -print0 | xargs -0 "${SHELLCHECK}" "$@"
+else
+  find "${REPO_ROOT}" \( "${IGNORED_CONDITIONS[@]}" \) -o -type f -name "*.sh" -print0 | xargs -0 "${SHELLCHECK}"
+fi

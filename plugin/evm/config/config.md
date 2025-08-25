@@ -104,7 +104,7 @@ Enables the Warp API. Defaults to `false`.
 
 ### Enabling EVM APIs
 
-### `eth-apis` (\[\]string)
+### `eth-apis` ([]string)
 
 Use the `eth-apis` field to specify the exact set of below services to enable on your node. If this field is not set, then the default list will be: `["eth","eth-filter","net","web3","internal-eth","internal-blockchain","internal-transaction"]`.
 
@@ -113,22 +113,22 @@ The names used in this configuration flag have been updated in Coreth `v0.8.14`.
 
 The mapping of deprecated values and their updated equivalent follows:
 
-|Deprecated                      |Use instead         |
-|--------------------------------|--------------------|
-|public-eth                      |eth                 |
-|public-eth-filter               |eth-filter          |
-|private-admin                   |admin               |
-|private-debug                   |debug               |
-|public-debug                    |debug               |
-|internal-public-eth             |internal-eth        |
-|internal-public-blockchain      |internal-blockchain |
-|internal-public-transaction-pool|internal-transaction|
-|internal-public-tx-pool         |internal-tx-pool    |
-|internal-public-debug           |internal-debug      |
-|internal-private-debug          |internal-debug      |
-|internal-public-account         |internal-account    |
-|internal-private-personal       |internal-personal   |
-</Callout>
+| Deprecated                       | Use instead          |
+| -------------------------------- | -------------------- |
+| public-eth                       | eth                  |
+| public-eth-filter                | eth-filter           |
+| private-admin                    | admin                |
+| private-debug                    | debug                |
+| public-debug                     | debug                |
+| internal-public-eth              | internal-eth         |
+| internal-public-blockchain       | internal-blockchain  |
+| internal-public-transaction-pool | internal-transaction |
+| internal-public-tx-pool          | internal-tx-pool     |
+| internal-public-debug            | internal-debug       |
+| internal-private-debug           | internal-debug       |
+| internal-public-account          | internal-account     |
+| internal-private-personal        | internal-personal    |
+| </Callout>                       |                      |
 
 <Callout title="Note">
 If you populate this field, it will override the defaults so you must include every service you wish to enable.
@@ -187,6 +187,7 @@ Adds the following RPC calls to the `debug_*` namespace. Defaults to `false`.
 - `debug_getAccessibleState`
 
 The following RPC calls are disabled for any nodes with `state-scheme = firewood`:
+
 - `debug_storageRangeAt`
 - `debug_getModifiedAccountsByNumber`
 - `debug_getModifiedAccountsByHash`
@@ -367,7 +368,7 @@ The maximum gas to be consumed by an RPC Call (used in `eth_estimateGas` and `et
 
 _Integer_
 
-Global transaction fee (price \* `gaslimit`) cap (measured in AVAX) for send-transaction variants. Defaults to `100`.
+Global transaction fee (price * `gaslimit`) cap (measured in AVAX) for send-transaction variants. Defaults to `100`.
 
 ### `api-max-duration`
 
@@ -425,7 +426,7 @@ If `true`, the APIs will allow transactions that are not replay protected (EIP-1
 
 ### `allow-unprotected-tx-hashes`
 
-_\[\]TxHash_
+_[]TxHash_
 
 Specifies an array of transaction hashes that should be allowed to bypass replay protection. This flag is intended for node operators that want to explicitly allow specific transactions to be issued through their API. Defaults to an empty list.
 
@@ -632,8 +633,6 @@ Max concurrent disk reads trie pre-fetcher should perform at once. Defaults to `
 _Integer_
 
 Size of the snapshot disk layer clean cache (in MBs). Should be a multiple of `64`. Defaults to `256`.
-
-
 
 ### `acceptor-queue-limit`
 
