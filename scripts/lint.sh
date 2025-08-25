@@ -7,62 +7,16 @@ if ! [[ "$0" =~ scripts/lint.sh ]]; then
   exit 255
 fi
 
-OS_NAME="$(uname -s)"
-
-# Darwin-specific environment handling: ensure Bash 4+ and GNU grep availability.
-function handle_darwin {
-  # Re-exec with Homebrew bash when system bash is < 4 (macOS default 3.2)
-  if ! { test -n "${BASH_VERSINFO:-}" && [ "${BASH_VERSINFO[0]}" -ge 4 ]; }; then
-    for homebrew_bash_path in "/opt/homebrew/bin/bash" "/usr/local/bin/bash"; do
-      if [[ -x "${homebrew_bash_path}" ]]; then
-        exec "${homebrew_bash_path}" "$0" "$@"
-      fi
-    done
-    echo >&2 "error: This script requires bash >= 4. On macOS, install with:  brew install bash"
-    echo >&2 "       Then ensure Homebrew bash is used first in PATH or re-run via: /opt/homebrew/bin/bash scripts/lint.sh"
-    exit 255
-  fi
-
-  # Prefer ggrep when available; make a shim so plain `grep` resolves to it
-  if command -v ggrep >/dev/null 2>&1 && ggrep -P 'lint.sh' scripts/lint.sh &>/dev/null; then
-    local gnu_grep_shim_dir
-    gnu_grep_shim_dir="$(mktemp -d)"
-    ln -s "$(command -v ggrep)" "${gnu_grep_shim_dir}/grep" 2>/dev/null || true
-    export PATH="${gnu_grep_shim_dir}:${PATH}"
-  fi
-
-  # Try Homebrew gnubin via brew and well-known locations
-  local -a candidate_gnubin_dirs=()
-  if command -v brew >/dev/null 2>&1; then
-    candidate_gnubin_dirs+=("$(brew --prefix grep 2>/dev/null)/libexec/gnubin")
-  fi
-  candidate_gnubin_dirs+=(
-    "/opt/homebrew/opt/grep/libexec/gnubin"
-    "/usr/local/opt/grep/libexec/gnubin"
-  )
-  for candidate_dir in "${candidate_gnubin_dirs[@]}"; do
-    if [[ -d "${candidate_dir}" ]]; then
-      export PATH="${candidate_dir}:$PATH"
-    fi
-  done
-}
-
-# Run Darwin adjustments early if applicable
-if [[ "$OS_NAME" == "Darwin" ]]; then
-  handle_darwin "$@"
-fi
-
-# Final probe; fail hard if still unsupported
-if ! grep -P 'lint.sh' scripts/lint.sh &>/dev/null; then
+# The -P option is not supported by the grep version installed by
+# default on macos. Since `-o errexit` is ignored in an if
+# conditional, triggering the problem here ensures script failure when
+# using an unsupported version of grep.
+grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
   echo >&2 "error: This script requires a recent version of gnu grep."
-  if [[ "$OS_NAME" == "Darwin" ]]; then
-    echo >&2 "       On macOS, install with:  brew install grep"
-    echo >&2 "       Ensure gnubin is on PATH, e.g.:"
-    echo >&2 "         export PATH=\"/opt/homebrew/opt/grep/libexec/gnubin:\$PATH\"  # Apple Silicon"
-    echo >&2 "         export PATH=\"/usr/local/opt/grep/libexec/gnubin:\$PATH\"     # Intel"
-  fi
+  echo >&2 "       On macos, gnu grep can be installed with 'brew install grep'."
+  echo >&2 "       It will also be necessary to ensure that gnu grep is available in the path."
   exit 255
-fi
+)
 
 # Read excluded directories into arrays
 DEFAULT_FILES=()

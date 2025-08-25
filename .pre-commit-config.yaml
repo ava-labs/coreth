@@ -36,10 +36,12 @@ repos:
       # Stricter extra lints (golangci-lint v2) on staged changes at pre-commit
       - id: extra-golangci-lint
         name: golangci-lint (extra via scripts/lint.sh)
-        entry: bash -lc 'TESTS="avalanche_golangci_lint" scripts/lint.sh'
+        entry: scripts/lint.sh
         language: system
         stages: [pre-commit]
         pass_filenames: false
+        env:
+          TESTS: "avalanche_golangci_lint"
 
       - id: actionlint
         name: actionlint
