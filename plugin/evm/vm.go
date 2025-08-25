@@ -426,9 +426,9 @@ func (vm *VM) Initialize(
 	}
 
 	vm.chainConfig = g.Config
-
+  
 	vm.networkCodec = message.Codec
-	vm.Network, err = network.NewNetwork(vm.ctx, appSender, vm.networkCodec, vm.config.MaxOutboundActiveRequests, vm.sdkMetrics)
+	vm.Network, err = network.NewNetwork(vm.ctx, vm.p2pSender, vm.networkCodec, vm.config.MaxOutboundActiveRequests, vm.sdkMetrics)
 	if err != nil {
 		return fmt.Errorf("failed to create network: %w", err)
 	}
