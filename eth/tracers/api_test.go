@@ -425,7 +425,7 @@ func testTraceCall(t *testing.T, scheme string) {
 			expectErr: nil,
 			expect: ` {"gas":53020,"failed":false,"returnValue":"","structLogs":[
 		{"pc":0,"op":"NUMBER","gas":24946982,"gasCost":2,"depth":1,"stack":[]},
-		{"pc":1,"op":"STOP","gas":2494698,"gasCost":0,"depth":1,"stack":["0x1337"]}]}`,
+		{"pc":1,"op":"STOP","gas":24946980,"gasCost":0,"depth":1,"stack":["0x1337"]}]}`,
 		},
 	}
 	for i, testspec := range testSuite {
