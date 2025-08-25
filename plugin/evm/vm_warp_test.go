@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -42,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/warp"
 
@@ -388,19 +388,20 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 	exampleWarpAddress := crypto.CreateAddress(vmtest.TestEthAddrs[0], 0)
 
 	tx, err := types.SignTx(
-		predicate.NewPredicateTx(
-			vm.chainConfig.ChainID,
-			1,
-			&exampleWarpAddress,
-			1_000_000,
-			big.NewInt(225*utils.GWei),
-			big.NewInt(utils.GWei),
-			common.Big0,
-			txPayload,
-			types.AccessList{},
-			warpcontract.ContractAddress,
-			signedMessage.Bytes(),
-		),
+		types.NewTx(&types.DynamicFeeTx{
+			ChainID:   vm.chainConfig.ChainID,
+			Nonce:     1,
+			To:        &exampleWarpAddress,
+			Gas:       1_000_000,
+			GasFeeCap: big.NewInt(225 * utils.GWei),
+			GasTipCap: big.NewInt(utils.GWei),
+			Value:     common.Big0,
+			Data:      txPayload,
+			AccessList: types.AccessList{{ // Access list predicate
+				Address:     warpcontract.ContractAddress,
+				StorageKeys: predicate.New(signedMessage.Bytes()),
+			}},
+		}),
 		types.LatestSignerForChainID(vm.chainConfig.ChainID),
 		vmtest.TestKeys[0].ToECDSA(),
 	)
@@ -572,7 +573,8 @@ func testReceiveWarpMessageWithScheme(t *testing.T, scheme string) {
 func testReceiveWarpMessage(
 	t *testing.T, vm *VM,
 	sourceChainID ids.ID,
-	msgFrom warpMsgFrom, useSigners useWarpMsgSigners,
+	msgFrom warpMsgFrom,
+	useSigners useWarpMsgSigners,
 	blockTime time.Time,
 ) {
 	require := require.New(t)
@@ -598,7 +600,8 @@ func testReceiveWarpMessage(
 		signature *bls.Signature
 		weight    uint64
 	}
-	newSigner := func(weight uint64) signer {
+	weight := uint64(50)
+	newSigner := func() signer {
 		secret, err := localsigner.New()
 		require.NoError(err)
 		sig, err := secret.Sign(unsignedMessage.Bytes())
@@ -613,12 +616,12 @@ func testReceiveWarpMessage(
 	}
 
 	primarySigners := []signer{
-		newSigner(50),
-		newSigner(50),
+		newSigner(),
+		newSigner(),
 	}
 	subnetSigners := []signer{
-		newSigner(50),
-		newSigner(50),
+		newSigner(),
+		newSigner(),
 	}
 	signers := subnetSigners
 	if useSigners == signersPrimary {
@@ -684,19 +687,20 @@ func testReceiveWarpMessage(
 	getWarpMsgInput, err := warpcontract.PackGetVerifiedWarpMessage(0)
 	require.NoError(err)
 	getVerifiedWarpMessageTx, err := types.SignTx(
-		predicate.NewPredicateTx(
-			vm.chainConfig.ChainID,
-			vm.txPool.Nonce(vmtest.TestEthAddrs[0]),
-			&warpcontract.Module.Address,
-			1_000_000,
-			big.NewInt(225*utils.GWei),
-			big.NewInt(utils.GWei),
-			common.Big0,
-			getWarpMsgInput,
-			types.AccessList{},
-			warpcontract.ContractAddress,
-			signedMessage.Bytes(),
-		),
+		types.NewTx(&types.DynamicFeeTx{
+			ChainID:   vm.chainConfig.ChainID,
+			Nonce:     vm.txPool.Nonce(vmtest.TestEthAddrs[0]),
+			To:        &warpcontract.Module.Address,
+			Gas:       1_000_000,
+			GasFeeCap: big.NewInt(225 * utils.GWei),
+			GasTipCap: big.NewInt(utils.GWei),
+			Value:     common.Big0,
+			Data:      getWarpMsgInput,
+			AccessList: types.AccessList{{
+				Address:     warpcontract.ContractAddress,
+				StorageKeys: predicate.New(signedMessage.Bytes()),
+			}},
+		}),
 		types.LatestSignerForChainID(vm.chainConfig.ChainID),
 		vmtest.TestKeys[0].ToECDSA(),
 	)
@@ -722,17 +726,13 @@ func testReceiveWarpMessage(
 	ethBlock := block2.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	rules := params.GetExtra(vm.chainConfig).GetAvalancheRules(ethBlock.Time())
 	headerPredicateResultsBytes := customheader.PredicateBytesFromExtra(rules, ethBlock.Extra())
-	results, err := predicate.ParseResults(headerPredicateResultsBytes)
+	blockResults, err := predicate.ParseBlockResults(headerPredicateResultsBytes)
 	require.NoError(err)
 
 	// Predicate results encode the index of invalid warp messages in a bitset.
 	// An empty bitset indicates success.
-	txResultsBytes := results.GetResults(
-		getVerifiedWarpMessageTx.Hash(),
-		warpcontract.ContractAddress,
-	)
-	bitset := set.BitsFromBytes(txResultsBytes)
-	require.Zero(bitset.Len()) // Empty bitset indicates success
+	txBits := blockResults.Get(getVerifiedWarpMessageTx.Hash(), warpcontract.ContractAddress)
+	require.Zero(txBits.Len()) // Empty bitset indicates success
 
 	block2VerifyWithCtx, ok := block2.(block.WithVerifyContext)
 	require.True(ok)
