@@ -20,6 +20,7 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -38,7 +39,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
@@ -535,7 +535,8 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	txsPerBlock := 10
 	toAddress := TestEthAddrs[1] // arbitrary choice
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
-		b, err := predicate.NewResults().Bytes()
+		br := predicate.BlockResults{}
+		b, err := br.Bytes()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -570,7 +571,8 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 
 	// Generate blocks after we have entered normal consensus as well
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
-		b, err := predicate.NewResults().Bytes()
+		br := predicate.BlockResults{}
+		b, err := br.Bytes()
 		if err != nil {
 			t.Fatal(err)
 		}
