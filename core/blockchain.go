@@ -601,6 +601,7 @@ func (bc *BlockChain) startAcceptor() {
 		acceptorQueueGauge.Dec(1)
 
 		// Update acceptor tip and transaction lookup index
+		// Write this prior to state changes to allow easier reconstruction in `reprocessState`.
 		if err := bc.writeBlockAcceptedIndices(next); err != nil {
 			log.Crit("failed to write accepted block effects", "err", err)
 		}
