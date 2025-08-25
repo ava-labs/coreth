@@ -54,10 +54,11 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		clientDB = rawdb.NewMemoryDatabase()
 	}
 
-	codeSyncer, err := newCodeSyncer(
+	cfg := NewDefaultConfig(testRequestSize)
+	codeSyncer, err := NewCodeSyncer(
 		mockClient,
 		clientDB,
-		NewDefaultConfig(testRequestSize),
+		cfg,
 	)
 	require.NoError(t, err)
 	if test.setupCodeSyncer != nil {
@@ -69,7 +70,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		codeSyncer.notifyAccountTrieCompleted()
+		codeSyncer.AccountTrieCompleted()
 	}()
 
 	err = codeSyncer.Sync(context.Background())

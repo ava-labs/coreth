@@ -47,8 +47,9 @@ type codeSyncer struct {
 	done                  <-chan struct{}
 }
 
-// newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
-func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*codeSyncer, error) {
+// NewCodeSyncer allows external packages (e.g., registry wiring) to create a code syncer as a separate task and
+// inject it as a [CodeHashSink] into the state syncer.
+func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*codeSyncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	dbCodeHashes, err := getCodeToFetchFromDB(db)
@@ -217,11 +218,11 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 	return c.addHashesToQueue(selectedCodeHashes)
 }
 
-// notifyAccountTrieCompleted notifies the code syncer that there will be no more incoming
-// code hashes from syncing the account trie, so it only needs to compelete its outstanding
-// work.
+// AccountTrieCompleted implements CodeHashSink by signaling no further code hashes will be added.
+// Notifies the code syncer that there will be no more incoming code hashes from syncing the account trie,
+// so it only needs to complete its outstanding work.
 // Note: this allows the worker threads to exit and return a nil error.
-func (c *codeSyncer) notifyAccountTrieCompleted() {
+func (c *codeSyncer) AccountTrieCompleted() {
 	<-c.open // The code syncer must queue the previous code from the db first
 	close(c.codeHashes)
 }
