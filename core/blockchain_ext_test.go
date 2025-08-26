@@ -1867,7 +1867,7 @@ func ReexecCorruptedStateTest(t *testing.T, create ReexecTestFunc) {
 	// Check that we are generating enough blocks to test the reexec functionality.
 	signer := types.HomesteadSigner{}
 	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(_ int, gen *BlockGen) {
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil), signer, key1)
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), ethparams.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
 	if err != nil {
