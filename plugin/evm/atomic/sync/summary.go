@@ -1,19 +1,18 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package atomic
+package sync
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/crypto"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 var _ message.Syncable = (*Summary)(nil)

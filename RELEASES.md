@@ -2,21 +2,29 @@
 
 ## Pending Release
 
+- Removed deprecated flags `coreth-admin-api-enabled`, `coreth-admin-api-dir`, `tx-regossip-frequency`, `tx-lookup-limit`. Use `admin-api-enabled`, `admin-api-dir`, `regossip-frequency`, `transaction-history` instead.
+
+## [v0.15.3](https://github.com/ava-labs/coreth/releases/tag/v0.15.3)
+
 - Removed legacy warp message handlers in favor of ACP-118 SDK handlers.
 - Use `state-history` eth config flag to designate the number of recent states queryable.
 - Added maximum number of addresses (1000) to be queried in a single filter.
 - Moves atomic operations from plugin/evm to plugin/evm/atomic and wraps the plugin/evm/VM in `atomicvm` to separate the atomic operations from the EVM execution.
 - Demoted unnecessary error log in `core/txpool/legacypool.go` to warning, displaying unexpected but valid behavior.
 - Removed the `snowman-api-enabled` flag and the corresponding API implementation.
-- Enable expermiental `state-scheme` flag to specify Firewood as a state database.
+- Enable experimental `state-scheme` flag to specify Firewood as a state database.
 - Added prometheus metrics for Firewood if it is enabled and expensive metrics are being used.
 - Disable incompatible APIs for Firewood.
+
+## [v0.15.2](https://github.com/ava-labs/coreth/releases/tag/v0.15.2)
+
 
 ## [v0.15.1](https://github.com/ava-labs/coreth/releases/tag/v0.15.1)
 
 - Major refactor to use [`libevm`](https://github.com/ava-labs/libevm) for EVM execution, database access, types & chain configuration. This improves maintainability and enables keeping up with upstream changes more easily.
 - Add metrics for ACP-176
 - Removed the `"price-options-max-base-fee"` config flag
+- Removed extra type support in "ethclient.BlockByHash", "ethclient.BlockByNumber".
 - Moved extra types returned in `ethclient` package to a new package `plugin/evm/customethclient` which supports the same functionality as `ethclient` but with the new types registered in header and block.
 
 ## [v0.15.0](https://github.com/ava-labs/coreth/releases/tag/v0.15.0)

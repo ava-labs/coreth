@@ -9,8 +9,9 @@ import (
 
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/utils/profiler"
-	"github.com/ava-labs/coreth/plugin/evm/client"
 	"github.com/ava-labs/libevm/log"
+
+	"github.com/ava-labs/coreth/plugin/evm/client"
 )
 
 // Admin is the API service for admin API calls
@@ -37,7 +38,7 @@ func (p *Admin) StartCPUProfiler(_ *http.Request, _ *struct{}, _ *api.EmptyReply
 }
 
 // StopCPUProfiler stops the cpu profile
-func (p *Admin) StopCPUProfiler(r *http.Request, _ *struct{}, _ *api.EmptyReply) error {
+func (p *Admin) StopCPUProfiler(_ *http.Request, _ *struct{}, _ *api.EmptyReply) error {
 	log.Info("Admin: StopCPUProfiler called")
 
 	p.vm.ctx.Lock.Lock()
@@ -66,7 +67,7 @@ func (p *Admin) LockProfile(_ *http.Request, _ *struct{}, _ *api.EmptyReply) err
 	return p.profiler.LockProfile()
 }
 
-func (p *Admin) SetLogLevel(_ *http.Request, args *client.SetLogLevelArgs, reply *api.EmptyReply) error {
+func (p *Admin) SetLogLevel(_ *http.Request, args *client.SetLogLevelArgs, _ *api.EmptyReply) error {
 	log.Info("EVM: SetLogLevel called", "logLevel", args.Level)
 
 	p.vm.ctx.Lock.Lock()

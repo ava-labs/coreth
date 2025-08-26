@@ -6,21 +6,20 @@ package txpool
 import (
 	"container/heap"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
-// txEntry is used to track the [gasPrice] transactions pay to be included in
-// the mempool.
 type txEntry struct {
 	id       ids.ID
-	gasPrice uint64
+	gasPrice uint256.Int
 	tx       *atomic.Tx
 	index    int
 }
 
-// internalTxHeap is used to track pending atomic transactions by [gasPrice]
+// internalTxHeap is used to track pending atomic transactions by gasPrice
 type internalTxHeap struct {
 	isMinHeap bool
 	items     []*txEntry
@@ -39,9 +38,9 @@ func (th internalTxHeap) Len() int { return len(th.items) }
 
 func (th internalTxHeap) Less(i, j int) bool {
 	if th.isMinHeap {
-		return th.items[i].gasPrice < th.items[j].gasPrice
+		return th.items[i].gasPrice.Lt(&th.items[j].gasPrice)
 	}
-	return th.items[i].gasPrice > th.items[j].gasPrice
+	return th.items[i].gasPrice.Gt(&th.items[j].gasPrice)
 }
 
 func (th internalTxHeap) Swap(i, j int) {
@@ -93,7 +92,7 @@ func newTxHeap(maxSize int) *txHeap {
 	}
 }
 
-func (th *txHeap) Push(tx *atomic.Tx, gasPrice uint64) {
+func (th *txHeap) Push(tx *atomic.Tx, gasPrice uint256.Int) {
 	txID := tx.ID()
 	oldLen := th.Len()
 	heap.Push(th.maxHeap, &txEntry{
@@ -110,24 +109,24 @@ func (th *txHeap) Push(tx *atomic.Tx, gasPrice uint64) {
 	})
 }
 
-// Assumes there is non-zero items in [txHeap]
-func (th *txHeap) PeekMax() (*atomic.Tx, uint64) {
+// Assumes there is non-zero items
+func (th *txHeap) PeekMax() (*atomic.Tx, uint256.Int) {
 	txEntry := th.maxHeap.items[0]
 	return txEntry.tx, txEntry.gasPrice
 }
 
-// Assumes there is non-zero items in [txHeap]
-func (th *txHeap) PeekMin() (*atomic.Tx, uint64) {
+// Assumes there is non-zero items
+func (th *txHeap) PeekMin() (*atomic.Tx, uint256.Int) {
 	txEntry := th.minHeap.items[0]
 	return txEntry.tx, txEntry.gasPrice
 }
 
-// Assumes there is non-zero items in [txHeap]
+// Assumes there is non-zero items
 func (th *txHeap) PopMax() *atomic.Tx {
 	return th.Remove(th.maxHeap.items[0].id)
 }
 
-// Assumes there is non-zero items in [txHeap]
+// Assumes there is non-zero items
 func (th *txHeap) PopMin() *atomic.Tx {
 	return th.Remove(th.minHeap.items[0].id)
 }

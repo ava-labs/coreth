@@ -8,15 +8,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
-
-	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/leveldb"
@@ -31,6 +22,14 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie/trienode"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+
+	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 )
 
 const testCommitInterval = 100
@@ -818,6 +817,8 @@ func benchmarkApplyToSharedMemory(b *testing.B, disk database.Database, blocks u
 
 // verifyOperations creates an iterator over the atomicTrie at [rootHash] and verifies that the all of the operations in the trie in the interval [from, to] are identical to
 // the atomic operations contained in [operationsMap] on the same interval.
+//
+//nolint:unparam // it's reasonable to provide a `from` height for this function.
 func verifyOperations(t testing.TB, atomicTrie *AtomicTrie, codec codec.Manager, rootHash common.Hash, from, to uint64, operationsMap map[uint64]map[ids.ID]*avalancheatomic.Requests) {
 	t.Helper()
 

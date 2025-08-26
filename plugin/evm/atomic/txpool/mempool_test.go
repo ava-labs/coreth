@@ -4,14 +4,17 @@
 package txpool
 
 import (
+	"math"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	"github.com/ava-labs/avalanchego/utils/bloom"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
+	"github.com/ava-labs/coreth/plugin/evm/config"
 )
 
 func TestMempoolAddTx(t *testing.T) {
@@ -27,12 +30,7 @@ func TestMempoolAddTx(t *testing.T) {
 
 	txs := make([]*atomic.Tx, 0)
 	for i := 0; i < 3_000; i++ {
-		tx := &atomic.Tx{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
-		}
-
+		tx := atomictest.GenerateTestImportTxWithGas(1, 1)
 		txs = append(txs, tx)
 		require.NoError(m.Add(tx))
 	}
@@ -54,29 +52,77 @@ func TestMempoolAdd(t *testing.T) {
 	)
 	require.NoError(err)
 
-	tx := &atomic.Tx{
-		UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-			IDV: ids.GenerateTestID(),
-		},
-	}
-
+	tx := atomictest.GenerateTestImportTxWithGas(1, 1)
 	require.NoError(m.Add(tx))
 	err = m.Add(tx)
 	require.ErrorIs(err, ErrAlreadyKnown)
 }
 
+// Add should return an error if a tx doesn't consume any gas
+func TestMempoolAddNoGas(t *testing.T) {
+	require := require.New(t)
+
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	m, err := NewMempool(
+		NewTxs(ctx, 5_000),
+		prometheus.NewRegistry(),
+		nil,
+	)
+	require.NoError(err)
+
+	tx := atomictest.GenerateTestImportTxWithGas(0, 1)
+	err = m.Add(tx)
+	require.ErrorIs(err, atomic.ErrNoGasUsed)
+}
+
+// Add should return an error if a tx doesn't consume any gas
+func TestMempoolAddBloomReset(t *testing.T) {
+	require := require.New(t)
+
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	m, err := NewMempool(
+		NewTxs(ctx, 2),
+		prometheus.NewRegistry(),
+		nil,
+	)
+	require.NoError(err)
+
+	maxFeeTx := atomictest.GenerateTestImportTxWithGas(1, math.MaxUint64)
+	require.NoError(m.Add(maxFeeTx))
+
+	// Mark maxFeeTx as Current
+	tx, ok := m.NextTx()
+	require.True(ok)
+	require.Equal(maxFeeTx, tx)
+
+	numHashes, numEntries := bloom.OptimalParameters(
+		config.TxGossipBloomMinTargetElements,
+		config.TxGossipBloomTargetFalsePositiveRate,
+	)
+	txsToAdd := bloom.EstimateCount(
+		numHashes,
+		numEntries,
+		config.TxGossipBloomResetFalsePositiveRate,
+	)
+	for fee := range txsToAdd {
+		// Keep increasing the fee to evict older transactions
+		tx := atomictest.GenerateTestImportTxWithGas(1, uint64(fee))
+		require.NoError(m.Add(tx))
+	}
+
+	// Mark maxFeeTx as Pending
+	m.CancelCurrentTxs()
+
+	m.Iterate(func(tx *atomic.Tx) bool {
+		require.True(m.bloom.Has(tx))
+		return true // Iterate over the whole mempool
+	})
+}
+
 func TestAtomicMempoolIterate(t *testing.T) {
 	txs := []*atomic.Tx{
-		{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
-		},
-		{
-			UnsignedAtomicTx: &atomictest.TestUnsignedTx{
-				IDV: ids.GenerateTestID(),
-			},
-		},
+		atomictest.GenerateTestImportTxWithGas(1, 1),
+		atomictest.GenerateTestImportTxWithGas(1, 1),
 	}
 
 	tests := []struct {
@@ -157,21 +203,32 @@ func TestMempoolMaxSizeHandling(t *testing.T) {
 		nil,
 	)
 	require.NoError(err)
-	// create candidate tx (we will drop before validation)
-	tx := atomictest.GenerateTestImportTx()
 
-	require.NoError(mempool.AddRemoteTx(tx))
-	require.True(mempool.Has(tx.ID()))
-	// promote tx to be issued
-	_, ok := mempool.NextTx()
+	lowFeeTx := atomictest.GenerateTestImportTxWithGas(1, 1)
+	highFeeTx := atomictest.GenerateTestImportTxWithGas(1, 2)
+
+	require.NoError(mempool.Add(lowFeeTx))
+
+	// Mark the lowFeeTx as Current
+	tx, ok := mempool.NextTx()
 	require.True(ok)
+	require.Equal(lowFeeTx, tx)
+
+	// Because Current transactions can not be evicted, the mempool should
+	// report full.
+	err = mempool.Add(highFeeTx)
+	require.ErrorIs(err, ErrMempoolFull)
+
+	// Mark the lowFeeTx as Issued
 	mempool.IssueCurrentTxs()
 
-	// try to add one more tx
-	tx2 := atomictest.GenerateTestImportTx()
-	err = mempool.AddRemoteTx(tx2)
+	// Issued transactions also can not be evicted.
+	err = mempool.Add(highFeeTx)
 	require.ErrorIs(err, ErrMempoolFull)
-	require.False(mempool.Has(tx2.ID()))
+
+	// If we make space, the highFeeTx should be allowed.
+	mempool.RemoveTx(lowFeeTx)
+	require.NoError(mempool.Add(highFeeTx))
 }
 
 // mempool will drop transaction with the lowest fee
@@ -201,4 +258,41 @@ func TestMempoolPriorityDrop(t *testing.T) {
 	require.False(mempool.Has(tx1.ID()))
 	require.False(mempool.Has(tx2.ID()))
 	require.True(mempool.Has(tx3.ID()))
+}
+
+// PendingLen should only return the number of Pending transactions, not
+// Current, Issued, or Discarded.
+func TestMempoolPendingLen(t *testing.T) {
+	require := require.New(t)
+
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	mempool, err := NewMempool(
+		NewTxs(ctx, 2),
+		prometheus.NewRegistry(),
+		nil,
+	)
+	require.NoError(err)
+
+	tx1 := atomictest.GenerateTestImportTxWithGas(1, 1)
+	tx2 := atomictest.GenerateTestImportTxWithGas(1, 2)
+
+	require.NoError(mempool.AddRemoteTx(tx1))
+	require.NoError(mempool.AddRemoteTx(tx2))
+	require.Equal(2, mempool.PendingLen())
+
+	nextTx, ok := mempool.NextTx()
+	require.True(ok)
+	require.Equal(tx2, nextTx)
+	require.Equal(1, mempool.PendingLen()) // Shouldn't include Current txs
+
+	mempool.IssueCurrentTxs()
+	require.Equal(1, mempool.PendingLen()) // Shouldn't include Issued txs
+
+	nextTx, ok = mempool.NextTx()
+	require.True(ok)
+	require.Equal(tx1, nextTx)
+	require.Zero(mempool.PendingLen()) // Still shouldn't include Current txs
+
+	mempool.DiscardCurrentTxs()
+	require.Zero(mempool.PendingLen()) // Shouldn't include Discarded txs
 }

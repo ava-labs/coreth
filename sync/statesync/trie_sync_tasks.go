@@ -6,7 +6,6 @@ package statesync
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth/sync/syncutils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -14,6 +13,8 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
+
+	"github.com/ava-labs/coreth/sync/syncutils"
 )
 
 var (
@@ -50,7 +51,7 @@ func (m *mainTrieTask) IterateLeafs(seek common.Hash) ethdb.Iterator {
 }
 
 // OnStart always returns false since the main trie task cannot be skipped.
-func (m *mainTrieTask) OnStart() (bool, error) {
+func (*mainTrieTask) OnStart() (bool, error) {
 	return false, nil
 }
 
@@ -85,7 +86,7 @@ func (m *mainTrieTask) OnLeafs(db ethdb.KeyValueWriter, keys, vals [][]byte) err
 		}
 	}
 	// Add collected code hashes to the code syncer.
-	return m.sync.codeSyncer.addCode(codeHashes)
+	return m.sync.codeSyncer.AddCode(codeHashes)
 }
 
 type storageTrieTask struct {

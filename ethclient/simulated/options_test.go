@@ -1,6 +1,14 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
-
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -26,10 +34,10 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/core/types"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 // Tests that the simulator starts with the initial gas limit in the genesis block,
@@ -63,7 +71,7 @@ func TestWithCallGasLimitOption(t *testing.T) {
 	// Construct a simulator, targeting a different gas limit
 	sim := NewBackend(types.GenesisAlloc{
 		testAddr: {Balance: big.NewInt(10000000000000000)},
-	}, WithCallGasLimit(params.TxGas-1))
+	}, WithCallGasLimit(ethparams.TxGas-1))
 	defer sim.Close()
 
 	client := sim.Client()
