@@ -82,9 +82,21 @@ func TestAtomicTxGossip(t *testing.T) {
 	peerSender := &enginetest.SenderStub{
 		SentAppRequest: make(chan []byte, 1),
 	}
-	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	validatorSet := p2p.NewValidators(
+		logging.NoLog{},
+		snowCtx.SubnetID,
+		validatorState,
+		0,
+	)
+	network, err := p2p.NewNetwork(
+		logging.NoLog{},
+		peerSender,
+		prometheus.NewRegistry(),
+		"",
+		validatorSet,
+	)
 	require.NoError(err)
-	client := network.NewClient(p2p.AtomicTxGossipHandlerID)
+	client := network.NewClient(p2p.AtomicTxGossipHandlerID, validatorSet)
 
 	// we only accept gossip requests from validators
 	requestingNodeID := ids.GenerateTestNodeID()
@@ -121,7 +133,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, _ ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -156,7 +168,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	wg.Add(1)
 
 	marshaller := atomic.TxMarshaller{}
-	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, _ ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}

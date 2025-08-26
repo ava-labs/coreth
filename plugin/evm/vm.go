@@ -203,9 +203,6 @@ type VM struct {
 	// [versiondb] is the VM's current versioned database
 	versiondb *versiondb.Database
 
-	// [db] is the VM's current database
-	db database.Database
-
 	// metadataDB is used to store one off keys.
 	metadataDB database.Database
 
@@ -318,9 +315,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Initialize the database
-	if err := vm.initializeDBs(db); err != nil {
-		return fmt.Errorf("failed to initialize databases: %w", err)
-	}
+	vm.initializeDBs(db)
 	if vm.config.InspectDatabase {
 		if err := vm.inspectDatabases(); err != nil {
 			return err
@@ -628,7 +623,6 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
-		vm.warpBackend,
 		vm.networkCodec,
 		leafHandlers,
 		syncStats,
@@ -767,7 +761,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.P2PValidators()))
+	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID)
 	ethTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -814,16 +808,21 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
-	vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
+	vm.ethTxGossipHandler, err = gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
 		ethTxGossipMarshaller,
 		ethTxPool,
 		ethTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.P2PValidators(),
+		vm.sdkMetrics,
+		"eth_tx_gossip",
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize eth tx gossip handler: %w", err)
+	}
 
 	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, vm.ethTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add eth tx gossip handler: %w", err)
@@ -916,7 +915,7 @@ func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
 	return vm.buildBlockWithContext(ctx, nil)
 }
 
-func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
+func (vm *VM) buildBlockWithContext(_ context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
 	if proposerVMBlockCtx != nil {
 		log.Debug("Building block with context", "pChainBlockHeight", proposerVMBlockCtx.PChainHeight)
 	} else {
@@ -1053,7 +1052,7 @@ func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, erro
 	return ids.ID(hash), nil
 }
 
-func (vm *VM) Version(context.Context) (string, error) {
+func (*VM) Version(_ context.Context) (string, error) {
 	return Version, nil
 }
 
@@ -1235,6 +1234,6 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 	return lastAcceptedHeight == 0
 }
 
-func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
-	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
+func (vm *VM) PutLastAcceptedID(id ids.ID) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, id[:])
 }

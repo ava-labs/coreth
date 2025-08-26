@@ -84,9 +84,6 @@ type syncer struct {
 	// lastHeight is the greatest height for which key / values
 	// were last inserted into the [atomicTrie]
 	lastHeight uint64
-
-	// numWorkers is the number of worker goroutines to use for syncing
-	numWorkers int
 }
 
 // addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
@@ -119,7 +116,6 @@ func newSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie 
 		targetRoot:   targetRoot,
 		targetHeight: cfg.TargetHeight,
 		lastHeight:   lastCommit,
-		numWorkers:   cfg.NumWorkers,
 	}
 
 	// Create tasks channel with capacity for the number of workers.
@@ -222,12 +218,12 @@ type syncerLeafTask struct {
 }
 
 func (a *syncerLeafTask) Start() []byte                  { return addZeroes(a.syncer.lastHeight + 1) }
-func (a *syncerLeafTask) End() []byte                    { return nil }
-func (a *syncerLeafTask) NodeType() message.NodeType     { return TrieNode }
+func (_ *syncerLeafTask) End() []byte                    { return nil }
+func (_ *syncerLeafTask) NodeType() message.NodeType     { return TrieNode }
 func (a *syncerLeafTask) OnFinish(context.Context) error { return a.syncer.onFinish() }
-func (a *syncerLeafTask) OnStart() (bool, error)         { return false, nil }
+func (_ *syncerLeafTask) OnStart() (bool, error)         { return false, nil }
 func (a *syncerLeafTask) Root() common.Hash              { return a.syncer.targetRoot }
-func (a *syncerLeafTask) Account() common.Hash           { return common.Hash{} }
+func (_ *syncerLeafTask) Account() common.Hash           { return common.Hash{} }
 func (a *syncerLeafTask) OnLeafs(keys, vals [][]byte) error {
 	return a.syncer.onLeafs(keys, vals)
 }

@@ -17,6 +17,8 @@ import (
 
 // libevmInit would ideally be a regular init() function, but it MUST be run
 // before any calls to [params.ChainConfig.Rules]. See `config.go` for its call site.
+//
+//nolint:unparam // must return to be run
 func libevmInit() any {
 	payloads = ethparams.RegisterExtras(ethparams.Extras[*extras.ChainConfig, RulesExtra]{
 		ReuseJSONRoot: true, // Reuse the root JSON input when unmarshalling the extra payload.
@@ -30,7 +32,7 @@ var payloads ethparams.ExtraPayloads[*extras.ChainConfig, RulesExtra]
 // constructRulesExtra acts as an adjunct to the [params.ChainConfig.Rules]
 // method. Its primary purpose is to construct the extra payload for the
 // [params.Rules] but it MAY also modify the [params.Rules].
-func constructRulesExtra(c *ethparams.ChainConfig, r *ethparams.Rules, cEx *extras.ChainConfig, blockNum *big.Int, isMerge bool, timestamp uint64) RulesExtra {
+func constructRulesExtra(_ *ethparams.ChainConfig, _ *ethparams.Rules, cEx *extras.ChainConfig, _ *big.Int, _ bool, timestamp uint64) RulesExtra {
 	var rules RulesExtra
 	if cEx == nil {
 		return rules

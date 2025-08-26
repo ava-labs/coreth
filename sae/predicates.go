@@ -8,10 +8,10 @@ import (
 
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/predicate"
 	"github.com/ava-labs/libevm/core/types"
 )
 
@@ -21,20 +21,20 @@ func calculatePredicateResults(
 	rules params.Rules,
 	blockContext *block.Context,
 	txs []*types.Transaction,
-) (*predicate.Results, error) {
+) (predicate.BlockResults, error) {
 	predicateContext := precompileconfig.PredicateContext{
 		SnowCtx:            snowContext,
 		ProposerVMBlockCtx: blockContext,
 	}
-	predicateResults := predicate.NewResults()
+	var results predicate.BlockResults
 	// TODO: Each transaction's predicates should be able to be calculated
 	// concurrently.
 	for _, tx := range txs {
-		results, err := core.CheckPredicates(rules, &predicateContext, tx)
+		txResults, err := core.CheckPredicates(rules, &predicateContext, tx)
 		if err != nil {
 			return nil, err
 		}
-		predicateResults.SetTxResults(tx.Hash(), results)
+		results.Set(tx.Hash(), txResults)
 	}
-	return predicateResults, nil
+	return results, nil
 }

@@ -47,6 +47,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 var (
@@ -60,24 +61,19 @@ var (
 	}
 )
 
-func defaultExtensions() (*extension.Config, error) {
+func defaultExtensions() *extension.Config {
 	return &extension.Config{
 		SyncSummaryProvider: &message.BlockSyncSummaryProvider{},
 		SyncableParser:      &message.BlockSyncSummaryParser{},
 		Clock:               &mockable.Clock{},
-	}, nil
+	}
 }
 
 // newDefaultTestVM returns a new instance of the VM with default extensions
 // This should not be called if the VM is being extended
 func newDefaultTestVM() *VM {
 	vm := &VM{}
-	exts, err := defaultExtensions()
-	if err != nil {
-		panic(err)
-	}
-
-	if err := vm.SetExtensionConfig(exts); err != nil {
+	if err := vm.SetExtensionConfig(defaultExtensions()); err != nil {
 		panic(err)
 	}
 	return vm
@@ -1696,7 +1692,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 			Nonce:      0,
 			GasTipCap:  uint256.NewInt(1),
 			GasFeeCap:  uint256.MustFromBig(fee),
-			Gas:        params.TxGas,
+			Gas:        ethparams.TxGas,
 			To:         vmtest.TestEthAddrs[0],
 			BlobFeeCap: uint256.NewInt(1),
 			BlobHashes: []common.Hash{{1}}, // This blob is expected to cause verification to fail
@@ -1787,7 +1783,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require := require.New(t)
 
 	fork := upgradetest.Fortuna
-	amount := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(4000))
+	amount := new(big.Int).Mul(big.NewInt(ethparams.Ether), big.NewInt(4000))
 	genesis := vmtest.NewTestGenesis(vmtest.ForkToChainConfig[fork])
 	for _, addr := range vmtest.TestEthAddrs {
 		genesis.Alloc[addr] = types.Account{Balance: amount}
