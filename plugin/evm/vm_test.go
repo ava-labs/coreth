@@ -35,7 +35,9 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/miner"
+	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -290,7 +292,7 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 		context.Background(),
 		newCTX,
 		tvm.DB,
-		[]byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork])),
+		[]byte(vmtest.GenesisJSON(paramstest.ForkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(conf),
 		[]*commonEng.Fx{},
@@ -1565,7 +1567,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
-	genesis := []byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork]))
+	genesis := []byte(vmtest.GenesisJSON(paramstest.ForkToChainConfig[fork]))
 	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, []byte{}, []*commonEng.Fx{}, tvm.AppSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
@@ -1788,7 +1790,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 
 	fork := upgradetest.Fortuna
 	amount := new(big.Int).Mul(big.NewInt(ethparams.Ether), big.NewInt(4000))
-	genesis := vmtest.NewTestGenesis(vmtest.ForkToChainConfig[fork])
+	genesis := vmtest.NewTestGenesis(paramstest.ForkToChainConfig[fork])
 	for _, addr := range vmtest.TestEthAddrs {
 		genesis.Alloc[addr] = types.Account{Balance: amount}
 	}
@@ -2027,5 +2029,84 @@ func TestWaitForEvent(t *testing.T) {
 			testCase.testCase(t, vm)
 			vm.Shutdown(context.Background())
 		})
+	}
+}
+
+// Copied from rpc/testservice_test.go
+type testService struct{}
+
+type echoArgs struct {
+	S string
+}
+type echoResult struct {
+	String string
+	Int    int
+	Args   *echoArgs
+}
+
+func (*testService) Echo(str string, i int, args *echoArgs) echoResult {
+	return echoResult{str, i, args}
+}
+
+// emulates server test
+func TestCreateHandlers(t *testing.T) {
+	var (
+		ctx  = context.Background()
+		fork = upgradetest.Latest
+		vm   = newDefaultTestVM()
+	)
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		Fork: &fork,
+	})
+	defer func() {
+		require.NoError(t, vm.Shutdown(ctx))
+	}()
+
+	handlers, err := vm.CreateHandlers(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, handlers)
+
+	handler, ok := handlers[ethRPCEndpoint]
+	require.True(t, ok)
+	server, ok := handler.(*rpc.Server)
+	require.True(t, ok)
+
+	// registers at test_echo
+	require.NoError(t, server.RegisterName("test", new(testService)))
+	var (
+		batch        []rpc.BatchElem
+		client       = rpc.DialInProc(server)
+		maxResponses = node.DefaultConfig.BatchRequestLimit // Should be default
+	)
+	defer client.Close()
+
+	// Make a request at limit, ensure that all requests are handled
+	for i := 0; i < maxResponses; i++ {
+		batch = append(batch, rpc.BatchElem{
+			Method: "test_echo",
+			Args:   []any{"x", 1},
+			Result: new(echoResult),
+		})
+	}
+	require.NoError(t, client.BatchCall(batch))
+	for _, r := range batch {
+		require.NoError(t, r.Error, "error in batch response")
+	}
+
+	// Create a new batch that is too large
+	batch = nil
+	for i := 0; i < maxResponses+1; i++ {
+		batch = append(batch, rpc.BatchElem{
+			Method: "test_echo",
+			Args:   []any{"x", 1},
+			Result: new(echoResult),
+		})
+	}
+	require.NoError(t, client.BatchCall(batch))
+	require.ErrorContains(t, batch[0].Error, "batch too large")
+
+	// All other elements should have an error indicating there's no response
+	for _, elem := range batch[1:] {
+		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
 	}
 }
