@@ -96,7 +96,7 @@ type Database struct {
 // Any error during creation will cause the program to exit.
 func New(config *Config) *Database {
 	if config == nil {
-		config = &Defaults
+		log.Crit("firewood: config must be provided")
 	}
 
 	fwConfig, err := validatePath(config)
