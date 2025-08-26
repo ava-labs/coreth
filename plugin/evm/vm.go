@@ -250,7 +250,6 @@ type VM struct {
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
 
-	// Initialize only sets these if nil so they can be overridden in tests
 	ethTxPushGossiper avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
 
 	chainAlias string
