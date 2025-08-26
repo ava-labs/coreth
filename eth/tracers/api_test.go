@@ -54,6 +54,7 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
+	ethparams "github.com/ava-labs/libevm/params"
 	"golang.org/x/exp/slices"
 )
 
@@ -246,7 +247,7 @@ func testTraceCall(t *testing.T, scheme string) {
 	// Initialize test accounts
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{
-		Config: params.TestBanffChainConfig, // TODO: go-ethereum has not enabled Shanghai yet, so we use Banff here so tests pass.
+		Config: params.TestChainConfig,
 		Alloc: types.GenesisAlloc{
 			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -264,7 +265,7 @@ func testTraceCall(t *testing.T, scheme string) {
 			Nonce:    nonce,
 			To:       &accounts[1].addr,
 			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
+			Gas:      ethparams.TxGas,
 			GasPrice: b.BaseFee(),
 			Data:     nil}),
 			signer, accounts[0].key)
@@ -277,7 +278,7 @@ func testTraceCall(t *testing.T, scheme string) {
 				Nonce:    nonce,
 				To:       &accounts[2].addr,
 				Value:    big.NewInt(1000),
-				Gas:      params.TxGas,
+				Gas:      ethparams.TxGas,
 				GasPrice: b.BaseFee(),
 				Data:     nil}),
 				signer, accounts[0].key)
@@ -289,7 +290,7 @@ func testTraceCall(t *testing.T, scheme string) {
 				Nonce:    nonce,
 				To:       &accounts[1].addr,
 				Value:    big.NewInt(1000),
-				Gas:      params.TxGas,
+				Gas:      ethparams.TxGas,
 				GasPrice: b.BaseFee(),
 				Data:     nil}),
 				signer, accounts[0].key)
@@ -423,9 +424,9 @@ func testTraceCall(t *testing.T, scheme string) {
 				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
 			expectErr: nil,
-			expect: ` {"gas":53018,"failed":false,"returnValue":"","structLogs":[
-		{"pc":0,"op":"NUMBER","gas":24946984,"gasCost":2,"depth":1,"stack":[]},
-		{"pc":1,"op":"STOP","gas":24946982,"gasCost":0,"depth":1,"stack":["0x1337"]}]}`,
+			expect: ` {"gas":53020,"failed":false,"returnValue":"","structLogs":[
+		{"pc":0,"op":"NUMBER","gas":24946982,"gasCost":2,"depth":1,"stack":[]},
+		{"pc":1,"op":"STOP","gas":24946980,"gasCost":0,"depth":1,"stack":["0x1337"]}]}`,
 		},
 	}
 	for i, testspec := range testSuite {
@@ -487,7 +488,7 @@ func testTraceTransaction(t *testing.T, scheme string) {
 			Nonce:    uint64(i),
 			To:       &accounts[1].addr,
 			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
+			Gas:      ethparams.TxGas,
 			GasPrice: new(big.Int).Add(b.BaseFee(), big.NewInt(int64(500*params.GWei))),
 			Data:     nil}),
 			signer, accounts[0].key)
@@ -505,7 +506,7 @@ func testTraceTransaction(t *testing.T, scheme string) {
 		t.Errorf("failed to unmarshal result %v", err)
 	}
 	expected := &logger.ExecutionResult{
-		Gas:         params.TxGas,
+		Gas:         ethparams.TxGas,
 		Failed:      false,
 		ReturnValue: "",
 		StructLogs:  []logger.StructLogRes{},
@@ -552,7 +553,7 @@ func testTraceBlock(t *testing.T, scheme string) {
 			Nonce:    uint64(i),
 			To:       &accounts[1].addr,
 			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
+			Gas:      ethparams.TxGas,
 			GasPrice: b.BaseFee(),
 			Data:     nil}),
 			signer, accounts[0].key)
@@ -632,7 +633,7 @@ func testTracingWithOverrides(t *testing.T, scheme string) {
 	accounts := newAccounts(3)
 	storageAccount := common.Address{0x13, 37}
 	genesis := &core.Genesis{
-		Config: params.TestCortinaChainConfig, // TODO: go-ethereum has not enabled Shanghai yet, so we use Cortina here so tests pass.
+		Config: params.TestChainConfig,
 		Alloc: types.GenesisAlloc{
 			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -657,7 +658,7 @@ func testTracingWithOverrides(t *testing.T, scheme string) {
 			Nonce:    uint64(i),
 			To:       &accounts[1].addr,
 			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
+			Gas:      ethparams.TxGas,
 			GasPrice: b.BaseFee(),
 			Data:     nil}),
 			signer, accounts[0].key)
@@ -749,7 +750,7 @@ func testTracingWithOverrides(t *testing.T, scheme string) {
 			config: &TraceCallConfig{
 				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
-			want: `{"gas":59537,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000001337"}`,
+			want: `{"gas":59539,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000001337"}`,
 		},
 		{ // Override blocknumber, and query a blockhash
 			blockNumber: rpc.LatestBlockNumber,
@@ -769,7 +770,7 @@ func testTracingWithOverrides(t *testing.T, scheme string) {
 			config: &TraceCallConfig{
 				BlockOverrides: &ethapi.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(0x1337))},
 			},
-			want: `{"gas":72666,"failed":false,"returnValue":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}`,
+			want: `{"gas":72668,"failed":false,"returnValue":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"}`,
 		},
 		/*
 			pragma solidity =0.8.12;
@@ -1031,7 +1032,7 @@ func testTraceChain(t *testing.T, scheme string) {
 		//    value: 1000 wei
 		//    fee:   0 wei
 		for j := 0; j < i+1; j++ {
-			tx, _ := types.SignTx(types.NewTransaction(nonce, accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
+			tx, _ := types.SignTx(types.NewTransaction(nonce, accounts[1].addr, big.NewInt(1000), ethparams.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 			b.AddTx(tx)
 			nonce += 1
 		}
