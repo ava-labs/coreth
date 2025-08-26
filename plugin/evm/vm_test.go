@@ -2098,11 +2098,10 @@ func TestCreateHandlers(t *testing.T) {
 		})
 	}
 	require.NoError(t, client.BatchCall(batch))
+	require.ErrorContains(t, batch[0].Error, "batch too large")
 
-	// All in batch should have an error
-	for _, r := range batch {
-		require.Error(t, r.Error)
+	// All other elements should have an error indicating there's no response
+	for _, elem := range batch[1:] {
+		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
 	}
-	// Only first error shows batch size
-	require.Contains(t, batch[0].Error.Error(), "batch too large")
 }
