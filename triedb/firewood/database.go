@@ -381,6 +381,7 @@ func (db *Database) Close() error {
 	// We don't need to explicitly dereference the proposals, since they will be cleaned up
 	// within the firewood close method.
 	db.proposalMap = nil
+	db.dereference(db.proposalTree)
 	db.proposalTree.Children = nil
 	// Close the database
 	return db.fwDisk.Close()
