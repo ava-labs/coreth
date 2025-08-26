@@ -144,7 +144,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(client.AppRequest(ctx, set.Of(vm.Ctx.NodeID), requestBytes, onResponse))
 	require.NoError(vm.AppRequest(ctx, requestingNodeID, 1, time.Time{}, <-peerSender.SentAppRequest))
 	require.NoError(network.AppResponse(ctx, snowCtx.NodeID, 1, <-responseSender.SentAppResponse))
-	wg.Wait()
+	utilstest.WaitGroupWithContext(t, ctx, wg)
 
 	// Issue a tx to the VM
 	utxo, err := addUTXO(
@@ -157,18 +157,18 @@ func TestAtomicTxGossip(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.Clock().Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 
 	// wait so we aren't throttled by the vm
-	time.Sleep(5 * time.Second)
+	utilstest.SleepWithContext(ctx, 5*time.Second)
 
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
 
 	marshaller := atomic.TxMarshaller{}
-	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, _ ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -184,7 +184,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	require.NoError(client.AppRequest(ctx, set.Of(vm.Ctx.NodeID), requestBytes, onResponse))
 	require.NoError(vm.AppRequest(ctx, requestingNodeID, 3, time.Time{}, <-peerSender.SentAppRequest))
 	require.NoError(network.AppResponse(ctx, snowCtx.NodeID, 3, <-responseSender.SentAppResponse))
-	wg.Wait()
+	utilstest.WaitGroupWithContext(t, ctx, wg)
 }
 
 // Tests that a tx is gossiped when it is issued
@@ -240,7 +240,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.Clock().Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 	vm.AtomicTxPushGossiper.Add(tx)
