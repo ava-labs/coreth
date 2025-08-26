@@ -52,13 +52,13 @@ linters:
   default: none
   enable:
     - asciicheck
-    # - bodyclose
+    - bodyclose
     - copyloopvar
     # - depguard
     # - errcheck
     - errorlint
     # - forbidigo
-    # - goconst
+    - goconst
     # - gocritic
     - goprintffuncname
     # - gosec
@@ -68,19 +68,19 @@ linters:
     - misspell
     - nakedret
     # - nilerr
-    # - noctx
+    - noctx
     - nolintlint
     - perfsprint
     # - prealloc
     # - predeclared
-    # - revive
+    - revive
     - spancheck
     # - staticcheck
     - tagalign
     # - testifylint
     - unconvert
-    # - unparam
-    # - unused
+    - unparam
+    - unused
     - usestdlibvars
     - whitespace
   settings:
@@ -137,6 +137,9 @@ linters:
           disabled: false
         # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#empty-lines
         - name: empty-lines
+          disabled: false
+        # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#redundant-import-alias
+        - name: redundant-import-alias
           disabled: false
         # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#string-format
         - name: string-format

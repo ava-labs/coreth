@@ -13,8 +13,6 @@ import (
 	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/ethclient"
-
-	ethereum "github.com/ava-labs/libevm"
 )
 
 type ethereumTxWorker struct {
@@ -23,13 +21,12 @@ type ethereumTxWorker struct {
 	acceptedNonce uint64
 	address       common.Address
 
-	sub      ethereum.Subscription
 	newHeads chan *types.Header
 }
 
 // NewSingleAddressTxWorker creates and returns a new ethereumTxWorker that confirms transactions by checking the latest
 // nonce of [address] and assuming any transaction with a lower nonce was already accepted.
-func NewSingleAddressTxWorker(ctx context.Context, client *ethclient.Client, address common.Address) *ethereumTxWorker {
+func NewSingleAddressTxWorker(client *ethclient.Client, address common.Address) *ethereumTxWorker {
 	newHeads := make(chan *types.Header)
 	tw := &ethereumTxWorker{
 		client:   client,
@@ -37,30 +34,16 @@ func NewSingleAddressTxWorker(ctx context.Context, client *ethclient.Client, add
 		newHeads: newHeads,
 	}
 
-	sub, err := client.SubscribeNewHead(ctx, newHeads)
-	if err != nil {
-		log.Debug("failed to subscribe new heads, falling back to polling", "err", err)
-	} else {
-		tw.sub = sub
-	}
-
 	return tw
 }
 
 // NewTxReceiptWorker creates and returns a new ethereumTxWorker that confirms transactions by checking for the
 // corresponding transaction receipt.
-func NewTxReceiptWorker(ctx context.Context, client *ethclient.Client) *ethereumTxWorker {
+func NewTxReceiptWorker(client *ethclient.Client) *ethereumTxWorker {
 	newHeads := make(chan *types.Header)
 	tw := &ethereumTxWorker{
 		client:   client,
 		newHeads: newHeads,
-	}
-
-	sub, err := client.SubscribeNewHead(ctx, newHeads)
-	if err != nil {
-		log.Debug("failed to subscribe new heads, falling back to polling", "err", err)
-	} else {
-		tw.sub = sub
 	}
 
 	return tw
