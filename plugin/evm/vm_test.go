@@ -2029,6 +2029,7 @@ func TestWaitForEvent(t *testing.T) {
 
 // Copied from rpc/testservice_test.go
 type testService struct{}
+
 type echoArgs struct {
 	S string
 }
@@ -2038,7 +2039,7 @@ type echoResult struct {
 	Args   *echoArgs
 }
 
-func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
+func (*testService) Echo(str string, i int, args *echoArgs) echoResult {
 	return echoResult{str, i, args}
 }
 
