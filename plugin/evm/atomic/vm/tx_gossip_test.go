@@ -40,7 +40,9 @@ import (
 
 func TestAtomicTxGossip(t *testing.T) {
 	require := require.New(t)
-	ctx := context.Background()
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
+
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
 	validatorState := utils.NewTestValidatorState()
@@ -51,15 +53,14 @@ func TestAtomicTxGossip(t *testing.T) {
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)
 	address := pk.EthAddress()
-	genesis := newPrefundedGenesis(100_000_000_000_000_000, address)
+	genesis := vmtest.NewPrefundedGenesis(100_000_000_000_000_000, address)
 	genesisBytes, err := genesis.MarshalJSON()
 	require.NoError(err)
 
 	responseSender := &enginetest.SenderStub{
 		SentAppResponse: make(chan []byte, 1),
 	}
-	innerVM := &VM{}
-	vm := atomicvm.WrapVM(innerVM)
+	vm := newAtomicTestVM()
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -132,7 +133,7 @@ func TestAtomicTxGossip(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, _ ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -156,7 +157,7 @@ func TestAtomicTxGossip(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.Clock().Unix(), vm.Ctx.XChainID, address, initialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.Clock().Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 
@@ -239,7 +240,7 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		pk.Address(),
 	)
 	require.NoError(err)
-	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
+	tx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.Clock().Unix(), vm.Ctx.XChainID, address, vmtest.InitialBaseFee, secp256k1fx.NewKeychain(pk), []*avax.UTXO{utxo})
 	require.NoError(err)
 	require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 	vm.AtomicTxPushGossiper.Add(tx)
