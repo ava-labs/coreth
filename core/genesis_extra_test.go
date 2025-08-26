@@ -35,6 +35,7 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -119,7 +120,7 @@ func TestGenesisToBlockDecoding(t *testing.T) {
 		upgradetest.Fortuna:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
 		upgradetest.Granite:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
 	}
-	for fork, chainConfig := range params.ForkToChainConfig {
+	for fork, chainConfig := range paramstest.ForkToChainConfig {
 		t.Run(fork.String(), func(t *testing.T) {
 			db := rawdb.NewMemoryDatabase()
 			tdb := triedb.NewDatabase(db, triedb.HashDefaults)
