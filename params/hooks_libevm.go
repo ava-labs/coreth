@@ -82,8 +82,8 @@ var PrecompiledContractsGranite = map[common.Address]vm.PrecompiledContract{
 }
 
 func init() {
-	for addr := range vm.PrecompiledContractsP256Verify {
-		PrecompiledContractsGranite[addr] = vm.PrecompiledContractsP256Verify[addr]
+	for addr, precompile := range vm.PrecompiledContractsP256Verify {
+		PrecompiledContractsGranite[addr] = precompile
 	}
 }
 
