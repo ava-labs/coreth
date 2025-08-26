@@ -415,13 +415,13 @@ Maximum size in bytes for HTTP request bodies. Defaults to `0` (no limit).
 
 _Integer_
 
-Maximum number of requests that can be batched in an RPC call. For no limit, set to 0. If set to 0, `batch-response-max-size` must also be set to 0. Defaults to `1000`.
+Maximum number of requests that can be batched in an RPC call. For no limit, set both this parameter and `batch-response-max-size` to 0. Defaults to `1000`.
 
 ### `batch-response-max-size`
 
 _Integer_
 
-Maximum size of response that can be returned from a batched RPC call. For no limit, set to 0. If set to 0, `batch-request-limit` must also be set to 0. Defaults to `25 MB`.
+Maximum size (in bytes) of response that can be returned from a batched RPC call. For no limit, set both this parameter and `batch-request-limit` to 0. Defaults to `25 MB`.
 
 ## Transaction Pool
 
@@ -707,7 +707,7 @@ If `true`, clears the warp database on startup. Defaults to `false`.
 
 _Boolean_
 
-If `true`, offline pruning will run on startup and block until it completes (approximately one hour on Mainnet). This will reduce the size of the database by deleting old trie nodes. **While performing offline pruning, your node will not be able to process blocks and will be considered offline.** While ongoing, the pruning process consumes a small amount of additional disk space (for deletion markers and the bloom filter). For more information see [here.](https://build.avax.network/docs/nodes/maintain/reduce-disk-usage#disk-space-considerations)
+If `true`, offline pruning will run on startup and block until it completes (approximately one hour on Mainnet). This will reduce the size of the database by deleting old trie nodes. __While performing offline pruning, your node will not be able to process blocks and will be considered offline.__ While ongoing, the pruning process consumes a small amount of additional disk space (for deletion markers and the bloom filter). For more information see [here.](https://build.avax.network/docs/nodes/maintain/reduce-disk-usage#disk-space-considerations)
 
 Since offline pruning deletes old state data, this should not be run on nodes that need to support archival API requests.
 
