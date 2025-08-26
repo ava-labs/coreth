@@ -90,8 +90,6 @@ type Database struct {
 	// in the case of duplicate state roots.
 	// The root of the tree is stored here, and represents the top-most layer on disk.
 	proposalTree *ProposalContext
-
-	closeOnce sync.Once
 }
 
 // New creates a new Firewood database with the given disk database and configuration.
@@ -374,22 +372,15 @@ func (*Database) Cap(_ common.StorageSize) error {
 }
 
 func (db *Database) Close() error {
-	var err error
-	db.closeOnce.Do(func() {
-		db.proposalLock.Lock()
-		defer db.proposalLock.Unlock()
+	db.proposalLock.Lock()
+	defer db.proposalLock.Unlock()
 
-		// Drop all outstanding proposals
-		for _, pCtx := range db.proposalTree.Children {
-			db.dereference(pCtx)
-		}
-		db.proposalTree = nil
-		db.proposalMap = nil
-
-		// Close the database
-		err = db.fwDisk.Close()
-	})
-	return err
+	// We don't need to explicitly dereference the proposals, since they will be cleaned up
+	// within the firewood close method.
+	db.proposalMap = nil
+	db.proposalTree.Children = nil
+	// Close the database
+	return db.fwDisk.Close()
 }
 
 // createProposal creates a new proposal from the given layer

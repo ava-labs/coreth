@@ -284,7 +284,7 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 	newCTX := snowtest.Context(t, snowtest.CChainID)
 	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
 	newCTX.ChainDataDir = tvm.Ctx.ChainDataDir
-	conf, err := vmtest.OverrideSchemeConfig(scheme, `{"pruning-enabled":true}`)
+	conf, err := vmtest.OverrideSchemeConfig(scheme, "")
 	require.NoError(t, err)
 	if err := restartedVM.Initialize(
 		context.Background(),
