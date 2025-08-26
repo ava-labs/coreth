@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/log"
-
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
@@ -19,6 +16,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
@@ -92,9 +92,7 @@ func (a *AtomicRepository) initializeHeightIndex(lastAcceptedHeight uint64) erro
 	indexHeightBytes, err := a.atomicRepoMetadataDB.Get(maxIndexedHeightKey)
 	switch err {
 	case nil:
-		break
 	case database.ErrNotFound:
-		break
 	default: // unexpected value in the database
 		return fmt.Errorf("found invalid value at max indexed height: %v", indexHeightBytes)
 	}

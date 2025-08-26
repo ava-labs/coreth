@@ -9,12 +9,12 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/triedb"
+
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
-
-	"github.com/ava-labs/libevm/metrics"
-	"github.com/ava-labs/libevm/triedb"
 )
 
 var (
@@ -25,7 +25,7 @@ var (
 
 type uninitializedHandler struct{}
 
-func (h *uninitializedHandler) OnLeafsRequest(ctx context.Context, nodeID ids.NodeID, requestID uint32, leafsRequest message.LeafsRequest) ([]byte, error) {
+func (*uninitializedHandler) OnLeafsRequest(_ context.Context, _ ids.NodeID, _ uint32, _ message.LeafsRequest) ([]byte, error) {
 	return nil, errUninitialized
 }
 

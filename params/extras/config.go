@@ -9,8 +9,10 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
+
+	"github.com/ava-labs/coreth/utils"
+
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -120,7 +122,7 @@ type ChainConfig struct {
 	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Not serialized.
 }
 
-func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, headNumber *big.Int, headTimestamp uint64) *ethparams.ConfigCompatError {
+func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, _ *big.Int, headTimestamp uint64) *ethparams.ConfigCompatError {
 	if c == nil {
 		return nil
 	}
@@ -156,7 +158,7 @@ func (c *ChainConfig) Description() string {
 	if err != nil {
 		upgradeConfigBytes = []byte("cannot marshal UpgradeConfig")
 	}
-	banner += fmt.Sprintf("Upgrade Config: %s", string(upgradeConfigBytes))
+	banner += "Upgrade Config: " + string(upgradeConfigBytes)
 	banner += "\n"
 	return banner
 }
@@ -232,12 +234,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	// Note: we do not add the precompile configs here because they are optional
 	// and independent, i.e. the order in which they are enabled does not impact
 	// the correctness of the chain config.
-	return checkForks(c.forkOrder(), false)
+	return checkForks(c.forkOrder())
 }
 
 // checkForks checks that forks are enabled in order and returns an error if not.
 // `blockFork` is true if the fork is a block number fork, false if it is a timestamp fork
-func checkForks(forks []fork, blockFork bool) error {
+func checkForks(forks []fork) error {
 	lastFork := fork{}
 	for _, cur := range forks {
 		if lastFork.name != "" {

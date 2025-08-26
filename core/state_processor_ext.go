@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/log"
+
 	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
-	"github.com/ava-labs/libevm/log"
 )
 
 // ApplyPrecompileActivations checks if any of the precompiles specified by the chain config are enabled or disabled by the block
@@ -59,8 +60,8 @@ func ApplyPrecompileActivations(c *params.ChainConfig, parentTimestamp *uint64, 
 			// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
 			// that it does not attempt to invoke a non-existent contract.
 			statedb.SetCode(module.Address, []byte{0x1})
-			extstatedb := extstate.New(statedb)
-			if err := module.Configure(params.GetExtra(c), activatingConfig, extstatedb, blockContext); err != nil {
+			wrappedStateDB := extstate.New(statedb)
+			if err := module.Configure(params.GetExtra(c), activatingConfig, wrappedStateDB, blockContext); err != nil {
 				return fmt.Errorf("could not configure precompile, name: %s, reason: %w", module.ConfigKey, err)
 			}
 		}

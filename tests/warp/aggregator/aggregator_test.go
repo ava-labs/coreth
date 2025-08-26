@@ -8,13 +8,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"go.uber.org/mock/gomock"
-
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
@@ -285,7 +284,7 @@ func TestAggregateSignatures(t *testing.T) {
 			aggregatorFunc: func(ctrl *gomock.Controller, cancel context.CancelFunc) *Aggregator {
 				client := NewMockSignatureGetter(ctrl)
 				client.EXPECT().GetSignature(gomock.Any(), nodeID1, gomock.Any()).DoAndReturn(
-					func(ctx context.Context, _ ids.NodeID, _ *avalancheWarp.UnsignedMessage) (*bls.Signature, error) {
+					func(_ context.Context, _ ids.NodeID, _ *avalancheWarp.UnsignedMessage) (*bls.Signature, error) {
 						// cancel the context and return the signature
 						cancel()
 						return sig1, nil

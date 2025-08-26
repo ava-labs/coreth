@@ -9,15 +9,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/holiman/uint256"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/math"
@@ -28,6 +22,13 @@ import (
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"
+	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 )
 
 var (
@@ -134,7 +135,7 @@ func (utx *UnsignedExportTx) Verify(
 func (utx *UnsignedExportTx) GasUsed(fixedFee bool) (uint64, error) {
 	byteCost := calcBytesCost(len(utx.Bytes()))
 	numSigs := uint64(len(utx.Ins))
-	sigCost, err := math.Mul64(numSigs, secp256k1fx.CostPerSignature)
+	sigCost, err := math.Mul(numSigs, secp256k1fx.CostPerSignature)
 	if err != nil {
 		return 0, err
 	}
@@ -279,7 +280,7 @@ func NewExportTx(
 		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
 	default:
 		var newAvaxNeeded uint64
-		newAvaxNeeded, err = math.Add64(avaxNeeded, ap0.AtomicTxFee)
+		newAvaxNeeded, err = math.Add(avaxNeeded, ap0.AtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}

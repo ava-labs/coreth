@@ -4,12 +4,14 @@
 package firewood
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -21,8 +23,6 @@ import (
 	"github.com/ava-labs/libevm/trie/triestate"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/ava-labs/libevm/triedb/database"
-
-	ffi "github.com/ava-labs/firewood-go-ethhash/ffi"
 )
 
 var (
@@ -125,43 +125,24 @@ func New(config *Config) *Database {
 
 func validatePath(trieConfig *Config) (*ffi.Config, error) {
 	if trieConfig.FilePath == "" {
-		return nil, fmt.Errorf("firewood database file path must be set")
+		return nil, errors.New("firewood database file path must be set")
 	}
 
 	// Check that the directory exists
 	dir := filepath.Dir(trieConfig.FilePath)
-	info, err := os.Stat(dir)
+	_, err := os.Stat(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			log.Info("Database directory not found, creating", "path", dir)
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				return nil, fmt.Errorf("error creating database directory: %w", err)
-			}
-		} else {
+		if !os.IsNotExist(err) {
 			return nil, fmt.Errorf("error checking database directory: %w", err)
 		}
-	}
-
-	// Check if the file exists
-	info, err = os.Stat(trieConfig.FilePath)
-	exists := false
-	switch {
-	case err == nil:
-		if info.IsDir() {
-			return nil, fmt.Errorf("database file path is a directory: %s", trieConfig.FilePath)
+		log.Info("Database directory not found, creating", "path", dir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("error creating database directory: %w", err)
 		}
-		// File exists
-		log.Info("Database file found", "path", trieConfig.FilePath)
-		exists = true
-	case os.IsNotExist(err):
-		log.Info("Database file not found, will create", "path", trieConfig.FilePath)
-	default:
-		return nil, fmt.Errorf("unknown error checking database file: %w", err)
 	}
 
 	// Create the Firewood config from the provided config.
 	config := &ffi.Config{
-		Create:               !exists,                               // Use any existing file
 		NodeCacheEntries:     uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		FreeListCacheEntries: trieConfig.FreeListCacheEntries,
 		Revisions:            trieConfig.Revisions,
@@ -178,7 +159,7 @@ func validatePath(trieConfig *Config) (*ffi.Config, error) {
 // it must be overwritten to use something like:
 // `_, ok := db.(*Database); if !ok { return "" }`
 // to recognize the Firewood database.
-func (db *Database) Scheme() string {
+func (*Database) Scheme() string {
 	return rawdb.HashScheme
 }
 
@@ -253,7 +234,7 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 			continue
 		}
 		log.Debug("firewood: proposing from parent proposal", "parent", parentProposal.Root.Hex(), "root", root.Hex(), "height", block)
-		p, err := db.createProposal(parentProposal.Proposal, root, keys, values)
+		p, err := createProposal(parentProposal.Proposal, root, keys, values)
 		if err != nil {
 			return err
 		}
@@ -280,7 +261,7 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 	}
 
 	log.Debug("firewood: proposing from database root", "root", root.Hex(), "height", block)
-	p, err := db.createProposal(db.fwDisk, root, keys, values)
+	p, err := createProposal(db.fwDisk, root, keys, values)
 	if err != nil {
 		return err
 	}
@@ -368,12 +349,12 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 // Only used for metrics and Commit intervals in APIs.
 // This will be implemented in the firewood database eventually.
 // Currently, Firewood stores all revisions in disk and proposals in memory.
-func (db *Database) Size() (common.StorageSize, common.StorageSize) {
+func (*Database) Size() (common.StorageSize, common.StorageSize) {
 	return 0, 0
 }
 
 // This isn't called anywhere in coreth
-func (db *Database) Reference(_ common.Hash, _ common.Hash) {
+func (*Database) Reference(_ common.Hash, _ common.Hash) {
 	log.Error("firewood: Reference not implemented")
 }
 
@@ -385,11 +366,11 @@ func (db *Database) Reference(_ common.Hash, _ common.Hash) {
 // We commit root A, and immediately dereference root B and its child.
 // Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
 // Thus, we recognize the single root C as the only proposal, and dereference it.
-func (db *Database) Dereference(root common.Hash) {
+func (*Database) Dereference(_ common.Hash) {
 }
 
 // Firewood does not support this.
-func (db *Database) Cap(limit common.StorageSize) error {
+func (*Database) Cap(_ common.StorageSize) error {
 	return nil
 }
 
@@ -407,7 +388,7 @@ func (db *Database) Close() error {
 
 // createProposal creates a new proposal from the given layer
 // If there are no changes, it will return nil.
-func (db *Database) createProposal(layer proposable, root common.Hash, keys, values [][]byte) (p *ffi.Proposal, err error) {
+func createProposal(layer proposable, root common.Hash, keys, values [][]byte) (p *ffi.Proposal, err error) {
 	// If there's an error after creating the proposal, we must drop it.
 	defer func() {
 		if err != nil && p != nil {
@@ -548,7 +529,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		// Propose from the database root.
 		p, err = db.fwDisk.Propose(keys, values)
 		if err != nil {
-			return common.Hash{}, fmt.Errorf("firewood: error proposing from root %s: %v", parentRoot.Hex(), err)
+			return common.Hash{}, fmt.Errorf("firewood: error proposing from root %s: %w", parentRoot.Hex(), err)
 		}
 	} else {
 		// Find any proposal with the given parent root.
@@ -562,7 +543,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 
 		p, err = rootProposal.Propose(keys, values)
 		if err != nil {
-			return common.Hash{}, fmt.Errorf("firewood: error proposing from parent proposal %s: %v", parentRoot.Hex(), err)
+			return common.Hash{}, fmt.Errorf("firewood: error proposing from parent proposal %s: %w", parentRoot.Hex(), err)
 		}
 	}
 	ffiHashCount.Inc(1)
