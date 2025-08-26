@@ -84,7 +84,7 @@ func TestAtomicTxGossip(t *testing.T) {
 	}
 	validatorSet := p2p.NewValidators(
 		logging.NoLog{},
-		ids.GenerateTestID(),
+		snowCtx.SubnetID,
 		validatorState,
 		0,
 	)
