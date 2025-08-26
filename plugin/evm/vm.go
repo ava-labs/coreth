@@ -817,7 +817,7 @@ func (vm *VM) initBlockBuilding() error {
 		config.TxGossipThrottlingPeriod,
 		config.TxGossipRequestsPerPeer,
 		vm.P2PValidators(),
-		vm.MetricRegistry(),
+		vm.sdkMetrics,
 		"eth_tx_gossip",
 	)
 	if err != nil {
