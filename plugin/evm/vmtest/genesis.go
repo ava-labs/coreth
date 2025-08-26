@@ -22,6 +22,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -123,12 +124,12 @@ func SetupGenesis(
 	ctx.Lock.Lock()
 
 	prefixedDB := prefixdb.New([]byte{1}, baseDB)
-	genesisJSON := GenesisJSON(params.ForkToChainConfig[fork])
+	genesisJSON := GenesisJSON(paramstest.ForkToChainConfig[fork])
 	return ctx, prefixedDB, []byte(genesisJSON), atomicMemory
 }
 
 func ForkToRules(fork upgradetest.Fork) *extras.Rules {
-	chainConfig, ok := params.ForkToChainConfig[fork]
+	chainConfig, ok := paramstest.ForkToChainConfig[fork]
 	if !ok {
 		panic(fmt.Sprintf("unknown fork: %s", fork))
 	}
