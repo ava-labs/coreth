@@ -92,6 +92,8 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 	var addresses []common.Address
 
 	switch {
+	case r.IsGranite:
+		precompiles = PrecompiledContractsGranite
 	case r.IsBanff:
 		precompiles = PrecompiledContractsBanff
 	case r.IsApricotPhase6:
@@ -100,8 +102,6 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 		precompiles = PrecompiledContractsApricotPhasePre6
 	case r.IsApricotPhase2:
 		precompiles = PrecompiledContractsApricotPhase2
-	case r.IsGranite:
-		precompiles = PrecompiledContractsGranite
 	}
 
 	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
@@ -115,6 +115,8 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
 	var precompiles map[common.Address]vm.PrecompiledContract
 	switch {
+	case r.IsGranite:
+		precompiles = PrecompiledContractsGranite
 	case r.IsBanff:
 		precompiles = PrecompiledContractsBanff
 	case r.IsApricotPhase6:
@@ -123,8 +125,6 @@ func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.Preco
 		precompiles = PrecompiledContractsApricotPhasePre6
 	case r.IsApricotPhase2:
 		precompiles = PrecompiledContractsApricotPhase2
-	case r.IsGranite:
-		precompiles = PrecompiledContractsGranite
 	}
 
 	precompile, ok := precompiles[addr]
@@ -166,7 +166,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			}
 		}
 
-		return contract.Run(accessibleState, env.Addresses().EVMSemantic.Caller, env.Addresses().EVMSemantic.Self, input, suppliedGas, env.ReadOnly())
+		return contract.Run(accessibleState, env.Addresses().Raw.Caller, env.Addresses().Raw.Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
 }
