@@ -153,7 +153,7 @@ func NewNetwork(
 		appRequestHandler:          message.NoopRequestHandler{},
 		peers:                      NewPeerTracker(),
 		appStats:                   stats.NewRequestHandlerStats(),
-		p2pValidators: p2pValidators,
+		p2pValidators:              p2pValidators,
 	}, nil
 }
 
