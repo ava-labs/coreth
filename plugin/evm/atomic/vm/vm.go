@@ -95,7 +95,6 @@ type VM struct {
 	AtomicBackend *atomicstate.AtomicBackend
 
 	AtomicTxPushGossiper *avalanchegossip.PushGossiper[*atomic.Tx]
-	AtomicTxPullGossiper avalanchegossip.Gossiper
 
 	// cancel may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
@@ -323,7 +322,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.AtomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
+	atomicTxPullGossiperWhenValidator := &avalanchegossip.ValidatorGossiper{
 		Gossiper:   atomicTxPullGossiper,
 		NodeID:     vm.Ctx.NodeID,
 		Validators: vm.InnerVM.P2PValidators(),
@@ -337,7 +336,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.Ctx.Log, vm.AtomicTxPullGossiper, vm.InnerVM.Config().PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.Ctx.Log, atomicTxPullGossiperWhenValidator, vm.InnerVM.Config().PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 

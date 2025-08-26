@@ -252,7 +252,6 @@ type VM struct {
 
 	// Initialize only sets these if nil so they can be overridden in tests
 	ethTxPushGossiper avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
-	ethTxPullGossiper avalanchegossip.Gossiper
 
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
@@ -836,7 +835,7 @@ func (vm *VM) initBlockBuilding() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.ethTxPullGossiper = avalanchegossip.ValidatorGossiper{
+	ethTxPullGossiperWhenValidator := avalanchegossip.ValidatorGossiper{
 		Gossiper:   ethTxPullGossiper,
 		NodeID:     vm.ctx.NodeID,
 		Validators: vm.P2PValidators(),
@@ -849,7 +848,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPullGossiperWhenValidator, vm.config.PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
@@ -860,7 +859,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPullGossiperWhenValidator, vm.config.PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
