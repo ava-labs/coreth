@@ -94,9 +94,8 @@ type VM struct {
 	// AtomicBackend abstracts verification and processing of atomic transactions
 	AtomicBackend *atomicstate.AtomicBackend
 
-	atomicTxGossipHandler p2p.Handler
-	AtomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
-	AtomicTxPullGossiper  avalanchegossip.Gossiper
+	AtomicTxPushGossiper *avalanchegossip.PushGossiper[*atomic.Tx]
+	AtomicTxPullGossiper avalanchegossip.Gossiper
 
 	// cancel may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
@@ -295,7 +294,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
 	}
 
-	vm.atomicTxGossipHandler, err = gossip.NewTxGossipHandler[*atomic.Tx](
+	atomicTxGossipHandler, err := gossip.NewTxGossipHandler[*atomic.Tx](
 		vm.Ctx.Log,
 		&atomicTxGossipMarshaller,
 		vm.AtomicMempool,
@@ -311,7 +310,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
 	}
 
-	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
+	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, atomicTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
 	}
 
