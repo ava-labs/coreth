@@ -90,6 +90,8 @@ type Database struct {
 	// in the case of duplicate state roots.
 	// The root of the tree is stored here, and represents the top-most layer on disk.
 	proposalTree *ProposalContext
+
+	closeOnce sync.Once
 }
 
 // New creates a new Firewood database with the given disk database and configuration.
@@ -99,12 +101,17 @@ func New(config *Config) *Database {
 		log.Crit("firewood: config must be provided")
 	}
 
-	fwConfig, err := validatePath(config)
+	err := validatePath(config.FilePath)
 	if err != nil {
 		log.Crit("firewood: error validating config", "error", err)
 	}
 
-	fw, err := ffi.New(config.FilePath, fwConfig)
+	fw, err := ffi.New(config.FilePath, &ffi.Config{
+		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
+		FreeListCacheEntries: config.FreeListCacheEntries,
+		Revisions:            config.Revisions,
+		ReadCacheStrategy:    config.ReadCacheStrategy,
+	})
 	if err != nil {
 		log.Crit("firewood: error creating firewood database", "error", err)
 	}
@@ -123,33 +130,25 @@ func New(config *Config) *Database {
 	}
 }
 
-func validatePath(trieConfig *Config) (*ffi.Config, error) {
-	if trieConfig.FilePath == "" {
-		return nil, errors.New("firewood database file path must be set")
+func validatePath(path string) error {
+	if path == "" {
+		return errors.New("firewood database file path must be set")
 	}
 
 	// Check that the directory exists
-	dir := filepath.Dir(trieConfig.FilePath)
+	dir := filepath.Dir(path)
 	_, err := os.Stat(dir)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("error checking database directory: %w", err)
-		}
-		log.Info("Database directory not found, creating", "path", dir)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("error creating database directory: %w", err)
-		}
+	if err == nil {
+		return nil // Directory exists
 	}
-
-	// Create the Firewood config from the provided config.
-	config := &ffi.Config{
-		NodeCacheEntries:     uint(trieConfig.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
-		FreeListCacheEntries: trieConfig.FreeListCacheEntries,
-		Revisions:            trieConfig.Revisions,
-		ReadCacheStrategy:    trieConfig.ReadCacheStrategy,
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("error checking database directory: %w", err)
 	}
-
-	return config, nil
+	log.Info("Database directory not found, creating", "path", dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("error creating database directory: %w", err)
+	}
+	return nil
 }
 
 // Scheme returns the scheme of the database.
@@ -375,16 +374,22 @@ func (*Database) Cap(_ common.StorageSize) error {
 }
 
 func (db *Database) Close() error {
-	db.proposalLock.Lock()
-	defer db.proposalLock.Unlock()
+	var err error
+	db.closeOnce.Do(func() {
+		db.proposalLock.Lock()
+		defer db.proposalLock.Unlock()
 
-	// We don't need to explicitly dereference the proposals, since they will be cleaned up
-	// within the firewood close method.
-	db.proposalMap = nil
-	db.dereference(db.proposalTree)
-	db.proposalTree.Children = nil
-	// Close the database
-	return db.fwDisk.Close()
+		// Drop all outstanding proposals
+		for _, pCtx := range db.proposalTree.Children {
+			db.dereference(pCtx)
+		}
+		db.proposalTree = nil
+		db.proposalMap = nil
+
+		// Close the database
+		err = db.fwDisk.Close()
+	})
+	return err
 }
 
 // createProposal creates a new proposal from the given layer
