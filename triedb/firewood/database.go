@@ -68,8 +68,8 @@ type Config struct {
 	ReadCacheStrategy    ffi.CacheStrategy
 }
 
-// Note that `FilePath` is not specificied, and must always be set by the user.
-var Defaults = &Config{
+// Note that `FilePath` is not specified, and must always be set by the user.
+var Defaults = Config{
 	CleanCacheSize:       1024 * 1024, // 1MB
 	FreeListCacheEntries: 40_000,
 	Revisions:            100,
@@ -96,7 +96,7 @@ type Database struct {
 // Any error during creation will cause the program to exit.
 func New(config *Config) *Database {
 	if config == nil {
-		config = Defaults
+		config = &Defaults
 	}
 
 	fwConfig, err := validatePath(config)
