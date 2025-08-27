@@ -34,10 +34,10 @@ const (
 	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 	BlocksToFetch = 256
 
-	atomicStateSyncOperationName = "Atomic State Sync"
-	blockSyncOperationName       = "Block Sync"
-	evmStateSyncOperationName    = "EVM State Sync"
-	codeHashSyncOperationName    = "Code Hash Sync"
+	atomicStateSyncOperationName = "Atomic State Syncer"
+	blockSyncOperationName       = "Block Syncer"
+	evmStateSyncOperationName    = "EVM State Syncer"
+	codeHashSyncOperationName    = "Code Syncer"
 )
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")

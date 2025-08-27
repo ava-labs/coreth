@@ -26,7 +26,7 @@ import (
 
 type codeSyncerTest struct {
 	clientDB          ethdb.Database
-	setupCodeSyncer   func(*codeSyncer)
+	setupCodeSyncer   func(*CodeSyncer)
 	codeRequestHashes [][]common.Hash
 	codeByteSlices    [][]byte
 	getCodeIntercept  func(hashes []common.Hash, codeBytes [][]byte) ([][]byte, error)
@@ -107,7 +107,7 @@ func TestCodeSyncerManyCodeHashes(t *testing.T) {
 	}
 
 	testCodeSyncer(t, codeSyncerTest{
-		setupCodeSyncer: func(c *codeSyncer) {
+		setupCodeSyncer: func(c *CodeSyncer) {
 			c.codeHashes = make(chan common.Hash, 10)
 		},
 		codeRequestHashes: [][]common.Hash{codeHashes[0:100], codeHashes[100:2000], codeHashes[2000:2005], codeHashes[2005:]},
