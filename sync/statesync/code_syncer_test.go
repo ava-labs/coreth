@@ -70,7 +70,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		codeSyncer.AccountTrieCompleted()
+		codeSyncer.FinishCodeCollection()
 	}()
 
 	err = codeSyncer.Sync(context.Background())

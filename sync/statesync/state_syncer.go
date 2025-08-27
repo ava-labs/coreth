@@ -69,21 +69,6 @@ func (c Config) WithUnsetDefaults() Config {
 	return out
 }
 
-// CodeHashSink is a minimal interface for accepting discovered code hashes
-// and signaling when no more code hashes will be produced from the account trie.
-// Implemented by codeSyncer to support decoupled wiring.
-type CodeHashSink interface {
-	AddCode(codeHashes []common.Hash) error
-	AccountTrieCompleted()
-}
-
-// CodeSyncerTask is implemented by the concrete code syncer and combines
-// the sink and runnable task behaviors so callers can use a single type.
-type CodeSyncerTask interface {
-	CodeHashSink
-	synccommon.Syncer
-}
-
 // stateSync keeps the state of the entire state sync operation.
 type stateSync struct {
 	db        ethdb.Database            // database we are syncing
@@ -92,10 +77,10 @@ type stateSync struct {
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
 	batchSize uint                      // write batches when they reach this size
 
-	segments  chan syncclient.LeafSyncTask   // channel of tasks to sync
-	syncer    *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
-	codeSink  CodeHashSink                   // sink that manages the asynchronous download and batching of code hashes
-	trieQueue *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
+	segments    chan syncclient.LeafSyncTask   // channel of tasks to sync
+	syncer      *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
+	codeFetcher synccommon.CodeFetcher         // fetcher that manages the asynchronous download and batching of code hashes
+	trieQueue   *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
 
 	// track the main account trie specifically to commit its root at the end of the operation
 	mainTrie *trieToSync
@@ -111,7 +96,7 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, sink CodeHashSink, config Config) (synccommon.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher synccommon.CodeFetcher, config Config) (synccommon.Syncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	ss := &stateSync{
@@ -141,10 +126,10 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, si
 		OnFailure:   ss.onSyncFailure,
 	})
 
-	if sink == nil {
-		return nil, errors.New("CodeHashSink must be provided")
+	if fetcher == nil {
+		return nil, errors.New("CodeFetcher must be provided")
 	}
-	ss.codeSink = sink
+	ss.codeFetcher = fetcher
 
 	var err error
 	ss.trieQueue = NewTrieQueue(db)
@@ -187,7 +172,7 @@ func (t *stateSync) onStorageTrieFinished(root common.Hash) error {
 
 // onMainTrieFinished is called after the main trie finishes syncing.
 func (t *stateSync) onMainTrieFinished() error {
-	t.codeSink.AccountTrieCompleted()
+	t.codeFetcher.FinishCodeCollection()
 
 	// count the number of storage tries we need to sync for eta purposes.
 	numStorageTries, err := t.trieQueue.countTries()

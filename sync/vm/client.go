@@ -223,11 +223,11 @@ func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64)
 	})
 }
 
-func (client *client) createEVMSyncer(cfg statesync.Config, sink statesync.CodeHashSink) (synccommon.Syncer, error) {
-	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), sink, cfg)
+func (client *client) createEVMSyncer(cfg statesync.Config, fetcher synccommon.CodeFetcher) (synccommon.Syncer, error) {
+	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), fetcher, cfg)
 }
 
-func (client *client) createCodeHashSyncer(cfg statesync.Config) (statesync.CodeSyncerTask, error) {
+func (client *client) createCodeHashSyncer(cfg statesync.Config) (synccommon.CodeSyncer, error) {
 	return statesync.NewCodeSyncer(client.Client, client.ChainDB, cfg)
 }
 
