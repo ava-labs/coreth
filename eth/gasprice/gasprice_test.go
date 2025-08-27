@@ -99,7 +99,7 @@ func (b *testBackend) teardown() {
 }
 
 func newTestBackendFakerEngine(t *testing.T, config *params.ChainConfig, numBlocks int, extDataGasUsage *big.Int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config: config,
 		Alloc:  types.GenesisAlloc{addr: {Balance: bal}},
 	}
@@ -126,7 +126,7 @@ func newTestBackendFakerEngine(t *testing.T, config *params.ChainConfig, numBloc
 // newTestBackend creates a test backend. OBS: don't forget to invoke tearDown
 // after use, otherwise the blockchain instance will mem-leak via goroutines.
 func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, extDataGasUsage *big.Int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config: config,
 		Alloc:  types.GenesisAlloc{addr: {Balance: bal}},
 	}
@@ -382,13 +382,29 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 }
 
 func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
-	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestChainConfig,
-		numBlocks:       200,
-		extDataGasUsage: common.Big0,
-		genBlock:        testGenBlock(t, 550, 80),
-		expectedTip:     big.NewInt(3),
-	}, defaultOracleConfig())
+	cases := []struct {
+		chainConfig *params.ChainConfig
+		expectedTip *big.Int
+	}{
+		// TODO: remove Fortuna case when we activate Granite
+		{
+			chainConfig: params.TestFortunaChainConfig,
+			expectedTip: big.NewInt(3),
+		},
+		{
+			chainConfig: params.TestChainConfig,
+			expectedTip: big.NewInt(1),
+		},
+	}
+	for _, c := range cases {
+		applyGasPriceTest(t, suggestTipCapTest{
+			chainConfig:     c.chainConfig,
+			numBlocks:       200,
+			extDataGasUsage: common.Big0,
+			genBlock:        testGenBlock(t, 550, 80),
+			expectedTip:     c.expectedTip,
+		}, defaultOracleConfig())
+	}
 }
 
 func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
@@ -402,14 +418,30 @@ func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
 }
 
 func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
-	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestChainConfig,
-		numBlocks:       1000,
-		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(ethparams.TxGas)),
-		// The tip on the transaction is very large to pay the block gas cost.
-		genBlock: testGenBlock(t, 100_000, 1),
-		// The actual tip doesn't matter, we just want to ensure that the tip is
-		// non-zero when almost all the gas is coming from the extDataGasUsage.
-		expectedTip: big.NewInt(44_252),
-	}, defaultOracleConfig())
+	cases := []struct {
+		chainConfig *params.ChainConfig
+		expectedTip *big.Int
+	}{
+		// TODO: remove Fortuna case when we activate Granite
+		{
+			chainConfig: params.TestFortunaChainConfig,
+			expectedTip: big.NewInt(44_252),
+		},
+		{
+			chainConfig: params.TestChainConfig,
+			expectedTip: big.NewInt(1),
+		},
+	}
+	for _, c := range cases {
+		applyGasPriceTest(t, suggestTipCapTest{
+			chainConfig:     c.chainConfig,
+			numBlocks:       1000,
+			extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(ethparams.TxGas)),
+			// The tip on the transaction is very large to pay the block gas cost.
+			genBlock: testGenBlock(t, 100_000, 1),
+			// The actual tip doesn't matter, we just want to ensure that the tip is
+			// non-zero when almost all the gas is coming from the extDataGasUsage.
+			expectedTip: c.expectedTip,
+		}, defaultOracleConfig())
+	}
 }

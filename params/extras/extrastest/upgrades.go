@@ -6,6 +6,7 @@ package extrastest
 import (
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+
 	"github.com/ava-labs/coreth/params/extras"
 )
 
