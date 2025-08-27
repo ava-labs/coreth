@@ -5,6 +5,7 @@ package sync
 
 import (
 	"context"
+
 	"github.com/ava-labs/libevm/common"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
