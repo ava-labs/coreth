@@ -4,7 +4,6 @@
 package statesync
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -75,7 +74,11 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		codeSyncer.FinishCodeCollection()
 	}()
 
-	err = codeSyncer.Sync(context.Background())
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
+
+	// Run the sync and handle expected error
+	err = codeSyncer.Sync(ctx)
 	require.ErrorIs(t, err, test.err)
 	if err != nil {
 		return // don't check the state
@@ -178,7 +181,7 @@ func TestCodeSyncerReady(t *testing.T) {
 
 	select {
 	case <-codeSyncer.Ready():
-		// If already closed, this would mean ready before Sync which shouldn't happen
+		// If already closed, this would mean ready before Sync which shouldn't happen.
 		t.Fatalf("Ready should not be closed before Sync starts")
 	default:
 	}
@@ -188,7 +191,7 @@ func TestCodeSyncerReady(t *testing.T) {
 	doneCh := make(chan error, 1)
 	go func() { doneCh <- codeSyncer.Sync(ctx) }()
 
-	// Wait briefly for Sync to initialize and close the ready channel
+	// Wait briefly for Sync to initialize and close the ready channel.
 	utilstest.SleepWithContext(ctx, 50*time.Millisecond)
 
 	select {
