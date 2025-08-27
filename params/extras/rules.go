@@ -4,8 +4,9 @@
 package extras
 
 import (
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
+
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 type Rules struct {
@@ -29,7 +30,8 @@ func (r *Rules) PredicatersExist() bool {
 	return len(r.Predicaters) > 0
 }
 
-func (r *Rules) PredicaterExists(addr common.Address) bool {
+// HasPredicate implements the avalanchego predicate.Predicates interface.
+func (r *Rules) HasPredicate(addr common.Address) bool {
 	_, ok := r.Predicaters[addr]
 	return ok
 }

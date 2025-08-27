@@ -7,18 +7,17 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/libevm/common"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/utils"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
-	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 )
 
 func TestCalculateDynamicFee(t *testing.T) {
@@ -60,7 +59,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 
 type atomicTxVerifyTest struct {
 	ctx         *snow.Context
-	generate    func(t *testing.T) atomic.UnsignedAtomicTx
+	generate    func() atomic.UnsignedAtomicTx
 	rules       *extras.Rules
 	expectedErr string
 }
@@ -68,7 +67,7 @@ type atomicTxVerifyTest struct {
 // executeTxVerifyTest tests
 func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
-	atomicTx := test.generate(t)
+	atomicTx := test.generate()
 	err := atomicTx.Verify(test.ctx, *test.rules)
 	if len(test.expectedErr) == 0 {
 		require.NoError(err)

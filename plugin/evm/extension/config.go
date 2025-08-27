@@ -12,10 +12,10 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
-	"github.com/ava-labs/avalanchego/utils/timer/mockable"
-
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -24,12 +24,11 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	synccommon "github.com/ava-labs/coreth/sync"
 	"github.com/ava-labs/coreth/sync/handlers"
-	vmsync "github.com/ava-labs/coreth/sync/vm"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
+	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	synccommon "github.com/ava-labs/coreth/sync"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 )
 
 var (
@@ -44,7 +43,7 @@ type ExtensibleVM interface {
 	// Should be called before any other method and only once
 	SetExtensionConfig(config *Config) error
 	// NewClient returns a client to send messages with for the given protocol
-	NewClient(protocol uint64, options ...p2p.ClientOption) *p2p.Client
+	NewClient(protocol uint64) *p2p.Client
 	// AddHandler registers a server handler for an application protocol
 	AddHandler(protocol uint64, handler p2p.Handler) error
 	// SetLastAcceptedBlock sets the last accepted block

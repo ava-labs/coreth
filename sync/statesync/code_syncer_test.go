@@ -9,20 +9,19 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils"
-
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers"
+
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 )
 
 type codeSyncerTest struct {
@@ -122,7 +121,7 @@ func TestCodeSyncerRequestErrors(t *testing.T) {
 	testCodeSyncer(t, codeSyncerTest{
 		codeRequestHashes: [][]common.Hash{{codeHash}},
 		codeByteSlices:    [][]byte{codeBytes},
-		getCodeIntercept: func(hashes []common.Hash, codeBytes [][]byte) ([][]byte, error) {
+		getCodeIntercept: func(_ []common.Hash, _ [][]byte) ([][]byte, error) {
 			return nil, err
 		},
 		err: err,

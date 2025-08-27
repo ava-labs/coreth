@@ -8,14 +8,16 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ava-labs/coreth/core/state/snapshot"
-	synccommon "github.com/ava-labs/coreth/sync"
-	syncclient "github.com/ava-labs/coreth/sync/client"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/ava-labs/coreth/core/state/snapshot"
+
+	synccommon "github.com/ava-labs/coreth/sync"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
 const (
@@ -73,7 +75,6 @@ type stateSync struct {
 	trieDB    *triedb.Database          // trieDB on top of db we are syncing. used to restore any existing tries.
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
 	batchSize uint                      // write batches when they reach this size
-	client    syncclient.Client         // used to contact peers over the network
 
 	segments   chan syncclient.LeafSyncTask   // channel of tasks to sync
 	syncer     *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
@@ -91,7 +92,6 @@ type stateSync struct {
 	mainTrieDone       chan struct{}
 	storageTriesDone   chan struct{}
 	triesInProgressSem chan struct{}
-	done               chan error
 	stats              *trieSyncStats
 }
 
@@ -101,7 +101,6 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 	ss := &stateSync{
 		batchSize:       cfg.BatchSize,
 		db:              db,
-		client:          client,
 		root:            root,
 		trieDB:          triedb.NewDatabase(db, nil),
 		snapshot:        snapshot.NewDiskLayer(db),
@@ -118,7 +117,6 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		segments:         make(chan syncclient.LeafSyncTask, defaultNumWorkers*numStorageTrieSegments),
 		mainTrieDone:     make(chan struct{}),
 		storageTriesDone: make(chan struct{}),
-		done:             make(chan error, 1),
 	}
 
 	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, &syncclient.LeafSyncerConfig{

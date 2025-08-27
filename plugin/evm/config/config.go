@@ -5,6 +5,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -167,7 +168,9 @@ type Config struct {
 	WarpOffChainMessages []hexutil.Bytes `json:"warp-off-chain-messages"`
 
 	// RPC settings
-	HttpBodyLimit uint64 `json:"http-body-limit"`
+	HttpBodyLimit        uint64 `json:"http-body-limit"`
+	BatchRequestLimit    uint64 `json:"batch-request-limit"`
+	BatchResponseMaxSize uint64 `json:"batch-response-max-size"`
 
 	// Database Scheme
 	StateScheme string `json:"state-scheme"`
@@ -240,14 +243,14 @@ func (c *Config) validate(networkID uint32) error {
 	}
 
 	if !c.Pruning && c.OfflinePruning {
-		return fmt.Errorf("cannot run offline pruning while pruning is disabled")
+		return errors.New("cannot run offline pruning while pruning is disabled")
 	}
 	// If pruning is enabled, the commit interval must be non-zero so the node commits state tries every CommitInterval blocks.
 	if c.Pruning && c.CommitInterval == 0 {
-		return fmt.Errorf("cannot use commit interval of 0 with pruning enabled")
+		return errors.New("cannot use commit interval of 0 with pruning enabled")
 	}
 	if c.Pruning && c.StateHistory == 0 {
-		return fmt.Errorf("cannot use state history of 0 with pruning enabled")
+		return errors.New("cannot use state history of 0 with pruning enabled")
 	}
 
 	if c.PushGossipPercentStake < 0 || c.PushGossipPercentStake > 1 {
@@ -259,7 +262,7 @@ func (c *Config) validate(networkID uint32) error {
 // deprecate returns a string of deprecation messages for the config.
 // This is used to log a message when the config is loaded and contains deprecated flags.
 // This function should be kept as a placeholder even if it is empty.
-func (c *Config) deprecate() string {
+func (*Config) deprecate() string {
 	msg := ""
 
 	return msg

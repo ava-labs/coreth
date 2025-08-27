@@ -9,26 +9,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/vmtest"
-	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/common"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
-
-	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/libevm/common"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
+	"github.com/ava-labs/coreth/utils"
+
+	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 )
 
 // createImportTxOptions adds a UTXO to shared memory and generates a list of import transactions sending this UTXO
@@ -131,7 +132,7 @@ func TestImportTxVerify(t *testing.T) {
 
 	tests := map[string]atomicTxVerifyTest{
 		"nil tx": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				var importTx *atomic.UnsignedImportTx
 				return importTx
 			},
@@ -140,7 +141,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrNilTx.Error(),
 		},
 		"valid import tx": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				return importTx
 			},
 			ctx:         ctx,
@@ -148,7 +149,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "", // Expect this transaction to be valid in Apricot Phase 0
 		},
 		"valid import tx banff": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				return importTx
 			},
 			ctx:         ctx,
@@ -156,7 +157,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "", // Expect this transaction to be valid in Banff
 		},
 		"invalid network ID": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.NetworkID++
 				return &tx
@@ -166,7 +167,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrWrongNetworkID.Error(),
 		},
 		"invalid blockchain ID": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.BlockchainID = ids.GenerateTestID()
 				return &tx
@@ -176,7 +177,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"P-chain source before AP5": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.SourceChain = constants.PlatformChainID
 				return &tx
@@ -186,7 +187,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"P-chain source after AP5": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.SourceChain = constants.PlatformChainID
 				return &tx
@@ -195,7 +196,7 @@ func TestImportTxVerify(t *testing.T) {
 			rules: vmtest.ForkToRules(upgradetest.ApricotPhase5),
 		},
 		"invalid source chain ID": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.SourceChain = ids.GenerateTestID()
 				return &tx
@@ -205,7 +206,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrWrongChainID.Error(),
 		},
 		"no inputs": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.ImportedInputs = nil
 				return &tx
@@ -215,7 +216,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrNoImportInputs.Error(),
 		},
 		"inputs sorted incorrectly": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.ImportedInputs = []*avax.TransferableInput{
 					tx.ImportedInputs[1],
@@ -228,7 +229,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
 		},
 		"invalid input": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.ImportedInputs = []*avax.TransferableInput{
 					tx.ImportedInputs[0],
@@ -241,7 +242,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "atomic input failed verification",
 		},
 		"unsorted outputs phase 0 passes verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					tx.Outs[1],
@@ -254,7 +255,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "",
 		},
 		"non-unique outputs phase 0 passes verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					tx.Outs[0],
@@ -267,7 +268,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "",
 		},
 		"unsorted outputs phase 1 fails verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					tx.Outs[1],
@@ -280,7 +281,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrOutputsNotSorted.Error(),
 		},
 		"non-unique outputs phase 1 passes verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					tx.Outs[0],
@@ -293,7 +294,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "",
 		},
 		"outputs not sorted and unique phase 2 fails verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					tx.Outs[0],
@@ -306,7 +307,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrOutputsNotSortedUnique.Error(),
 		},
 		"outputs not sorted phase 2 fails verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					tx.Outs[1],
@@ -319,7 +320,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrOutputsNotSortedUnique.Error(),
 		},
 		"invalid EVMOutput fails verification": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					{
@@ -335,7 +336,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "EVM Output failed verification",
 		},
 		"no outputs apricot phase 3": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = nil
 				return &tx
@@ -345,7 +346,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrNoEVMOutputs.Error(),
 		},
 		"non-AVAX input Apricot Phase 6": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.ImportedInputs = []*avax.TransferableInput{
 					{
@@ -369,7 +370,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "",
 		},
 		"non-AVAX output Apricot Phase 6": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					{
@@ -385,7 +386,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: "",
 		},
 		"non-AVAX input Banff": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.ImportedInputs = []*avax.TransferableInput{
 					{
@@ -409,7 +410,7 @@ func TestImportTxVerify(t *testing.T) {
 			expectedErr: atomic.ErrImportNonAVAXInputBanff.Error(),
 		},
 		"non-AVAX output Banff": {
-			generate: func(t *testing.T) atomic.UnsignedAtomicTx {
+			generate: func() atomic.UnsignedAtomicTx {
 				tx := *importTx
 				tx.Outs = []atomic.EVMOutput{
 					{
@@ -887,7 +888,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 	ethAddress := key.PublicKey().EthAddress()
 	tests := map[string]atomicTxTest{
 		"UTXO not present during bootstrapping": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *VM, _ *avalancheatomic.Memory) *atomic.Tx {
 				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
 					NetworkID:    vm.Ctx.NetworkID,
 					BlockchainID: vm.Ctx.ChainID,
@@ -916,7 +917,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 			bootstrapping: true,
 		},
 		"UTXO not present": {
-			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
+			setup: func(t *testing.T, vm *VM, _ *avalancheatomic.Memory) *atomic.Tx {
 				tx := &atomic.Tx{UnsignedAtomicTx: &atomic.UnsignedImportTx{
 					NetworkID:    vm.Ctx.NetworkID,
 					BlockchainID: vm.Ctx.ChainID,

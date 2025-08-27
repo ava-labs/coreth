@@ -20,20 +20,20 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
-	agoUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
-
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/core/types"
+
+	agoUtils "github.com/ava-labs/avalanchego/utils"
 )
 
 func TestEthTxGossip(t *testing.T) {
@@ -75,10 +75,21 @@ func TestEthTxGossip(t *testing.T) {
 	peerSender := &enginetest.SenderStub{
 		SentAppRequest: make(chan []byte, 1),
 	}
-
-	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	validatorSet := p2p.NewValidators(
+		logging.NoLog{},
+		snowCtx.SubnetID,
+		validatorState,
+		0,
+	)
+	network, err := p2p.NewNetwork(
+		logging.NoLog{},
+		peerSender,
+		prometheus.NewRegistry(),
+		"",
+		validatorSet,
+	)
 	require.NoError(err)
-	client := network.NewClient(p2p.TxGossipHandlerID)
+	client := network.NewClient(p2p.TxGossipHandlerID, validatorSet)
 
 	// we only accept gossip requests from validators
 	requestingNodeID := ids.GenerateTestNodeID()
@@ -115,7 +126,7 @@ func TestEthTxGossip(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	onResponse := func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse := func(_ context.Context, _ ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -143,7 +154,7 @@ func TestEthTxGossip(t *testing.T) {
 	marshaller := GossipEthTxMarshaller{}
 	// Ask the VM for new transactions. We should get the newly issued tx.
 	wg.Add(1)
-	onResponse = func(_ context.Context, nodeID ids.NodeID, responseBytes []byte, err error) {
+	onResponse = func(_ context.Context, _ ids.NodeID, responseBytes []byte, err error) {
 		require.NoError(err)
 
 		response := &sdk.PullGossipResponse{}
@@ -227,7 +238,6 @@ func TestEthTxPushGossipInbound(t *testing.T) {
 
 	sender := &enginetest.Sender{}
 	vm := newDefaultTestVM()
-	vm.ethTxPullGossiper = gossip.NoOpGossiper{}
 
 	pk, err := secp256k1.NewPrivateKey()
 	require.NoError(err)

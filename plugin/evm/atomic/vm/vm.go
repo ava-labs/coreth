@@ -11,23 +11,13 @@ import (
 	"net/http"
 	"sync"
 
-	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
-
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
-	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p"
-	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/logging"
@@ -36,25 +26,34 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/utils/rpc"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/state"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/log"
+
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
+	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
+	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
+	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 var (
@@ -95,9 +94,7 @@ type VM struct {
 	// AtomicBackend abstracts verification and processing of atomic transactions
 	AtomicBackend *atomicstate.AtomicBackend
 
-	atomicTxGossipHandler p2p.Handler
-	AtomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
-	AtomicTxPullGossiper  avalanchegossip.Gossiper
+	AtomicTxPushGossiper *avalanchegossip.PushGossiper[*atomic.Tx]
 
 	// cancel may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
@@ -264,7 +261,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
 	atomicTxGossipMarshaller := atomic.TxMarshaller{}
-	atomicTxGossipClient := vm.InnerVM.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.InnerVM.P2PValidators()))
+	atomicTxGossipClient := vm.InnerVM.NewClient(p2p.AtomicTxGossipHandlerID)
 	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.InnerVM.MetricRegistry(), atomicTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
@@ -296,18 +293,23 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
 	}
 
-	vm.atomicTxGossipHandler = gossip.NewTxGossipHandler[*atomic.Tx](
+	atomicTxGossipHandler, err := gossip.NewTxGossipHandler[*atomic.Tx](
 		vm.Ctx.Log,
 		&atomicTxGossipMarshaller,
 		vm.AtomicMempool,
 		atomicTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.InnerVM.P2PValidators(),
+		vm.MetricRegistry(),
+		"atomic_tx_gossip",
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
+	}
 
-	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
+	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, atomicTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
 	}
 
@@ -320,7 +322,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.AtomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
+	atomicTxPullGossiperWhenValidator := &avalanchegossip.ValidatorGossiper{
 		Gossiper:   atomicTxPullGossiper,
 		NodeID:     vm.Ctx.NodeID,
 		Validators: vm.InnerVM.P2PValidators(),
@@ -334,7 +336,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.Ctx.Log, vm.AtomicTxPullGossiper, vm.InnerVM.Config().PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.Ctx.Log, atomicTxPullGossiperWhenValidator, vm.InnerVM.Config().PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 

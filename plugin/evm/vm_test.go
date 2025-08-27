@@ -18,18 +18,26 @@ import (
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/miner"
+	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -39,12 +47,9 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/trie"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
+
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 var (
@@ -58,24 +63,19 @@ var (
 	}
 )
 
-func defaultExtensions() (*extension.Config, error) {
+func defaultExtensions() *extension.Config {
 	return &extension.Config{
 		SyncSummaryProvider: &message.BlockSyncSummaryProvider{},
 		SyncableParser:      &message.BlockSyncSummaryParser{},
 		Clock:               &mockable.Clock{},
-	}, nil
+	}
 }
 
 // newDefaultTestVM returns a new instance of the VM with default extensions
 // This should not be called if the VM is being extended
 func newDefaultTestVM() *VM {
 	vm := &VM{}
-	exts, err := defaultExtensions()
-	if err != nil {
-		panic(err)
-	}
-
-	if err := vm.SetExtensionConfig(exts); err != nil {
+	if err := vm.SetExtensionConfig(defaultExtensions()); err != nil {
 		panic(err)
 	}
 	return vm
@@ -202,12 +202,6 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 		Scheme: scheme,
 	})
 
-	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}()
-
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
@@ -283,17 +277,22 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 		t.Fatalf("Found unexpected blkID for parent of blk2")
 	}
 
+	// Close the vm and all databases
+	if err := vm.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
 	restartedVM := newDefaultTestVM()
 	newCTX := snowtest.Context(t, snowtest.CChainID)
 	newCTX.NetworkUpgrades = upgradetest.GetConfig(fork)
 	newCTX.ChainDataDir = tvm.Ctx.ChainDataDir
-	conf, err := vmtest.OverrideSchemeConfig(scheme, `{"pruning-enabled":true}`)
+	conf, err := vmtest.OverrideSchemeConfig(scheme, "")
 	require.NoError(t, err)
 	if err := restartedVM.Initialize(
 		context.Background(),
 		newCTX,
 		tvm.DB,
-		[]byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork])),
+		[]byte(vmtest.GenesisJSON(paramstest.ForkToChainConfig[fork])),
 		[]byte(""),
 		[]byte(conf),
 		[]*commonEng.Fx{},
@@ -311,6 +310,11 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 	ethBlk2 := blk2.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	if ethBlk2Root := ethBlk2.Root(); !restartedVM.Ethereum().BlockChain().HasState(ethBlk2Root) {
 		t.Fatalf("Expected blk2 state root to not be pruned after shutdown (last accepted tip should be committed)")
+	}
+
+	// Shutdown the newest VM
+	if err := restartedVM.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1563,7 +1567,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, upgradetest.Latest, upgrade.UnscheduledActivationTime)
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork+1, blk.Timestamp())
 	upgradetest.SetTimesTo(&newCTX.NetworkUpgrades, fork, upgrade.InitiallyActiveTime)
-	genesis := []byte(vmtest.GenesisJSON(vmtest.ForkToChainConfig[fork]))
+	genesis := []byte(vmtest.GenesisJSON(paramstest.ForkToChainConfig[fork]))
 	err = reinitVM.Initialize(context.Background(), newCTX, tvm.DB, genesis, []byte{}, []byte{}, []*commonEng.Fx{}, tvm.AppSender)
 	require.ErrorContains(t, err, "mismatching Cancun fork timestamp in database")
 
@@ -1694,7 +1698,7 @@ func TestNoBlobsAllowed(t *testing.T) {
 			Nonce:      0,
 			GasTipCap:  uint256.NewInt(1),
 			GasFeeCap:  uint256.MustFromBig(fee),
-			Gas:        params.TxGas,
+			Gas:        ethparams.TxGas,
 			To:         vmtest.TestEthAddrs[0],
 			BlobFeeCap: uint256.NewInt(1),
 			BlobHashes: []common.Hash{{1}}, // This blob is expected to cause verification to fail
@@ -1785,8 +1789,8 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require := require.New(t)
 
 	fork := upgradetest.Fortuna
-	amount := new(big.Int).Mul(big.NewInt(params.Ether), big.NewInt(4000))
-	genesis := vmtest.NewTestGenesis(vmtest.ForkToChainConfig[fork])
+	amount := new(big.Int).Mul(big.NewInt(ethparams.Ether), big.NewInt(4000))
+	genesis := vmtest.NewTestGenesis(paramstest.ForkToChainConfig[fork])
 	for _, addr := range vmtest.TestEthAddrs {
 		genesis.Alloc[addr] = types.Account{Balance: amount}
 	}
@@ -2025,6 +2029,85 @@ func TestWaitForEvent(t *testing.T) {
 			testCase.testCase(t, vm)
 			vm.Shutdown(context.Background())
 		})
+	}
+}
+
+// Copied from rpc/testservice_test.go
+type testService struct{}
+
+type echoArgs struct {
+	S string
+}
+type echoResult struct {
+	String string
+	Int    int
+	Args   *echoArgs
+}
+
+func (*testService) Echo(str string, i int, args *echoArgs) echoResult {
+	return echoResult{str, i, args}
+}
+
+// emulates server test
+func TestCreateHandlers(t *testing.T) {
+	var (
+		ctx  = context.Background()
+		fork = upgradetest.Latest
+		vm   = newDefaultTestVM()
+	)
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		Fork: &fork,
+	})
+	defer func() {
+		require.NoError(t, vm.Shutdown(ctx))
+	}()
+
+	handlers, err := vm.CreateHandlers(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, handlers)
+
+	handler, ok := handlers[ethRPCEndpoint]
+	require.True(t, ok)
+	server, ok := handler.(*rpc.Server)
+	require.True(t, ok)
+
+	// registers at test_echo
+	require.NoError(t, server.RegisterName("test", new(testService)))
+	var (
+		batch        []rpc.BatchElem
+		client       = rpc.DialInProc(server)
+		maxResponses = node.DefaultConfig.BatchRequestLimit // Should be default
+	)
+	defer client.Close()
+
+	// Make a request at limit, ensure that all requests are handled
+	for i := 0; i < maxResponses; i++ {
+		batch = append(batch, rpc.BatchElem{
+			Method: "test_echo",
+			Args:   []any{"x", 1},
+			Result: new(echoResult),
+		})
+	}
+	require.NoError(t, client.BatchCall(batch))
+	for _, r := range batch {
+		require.NoError(t, r.Error, "error in batch response")
+	}
+
+	// Create a new batch that is too large
+	batch = nil
+	for i := 0; i < maxResponses+1; i++ {
+		batch = append(batch, rpc.BatchElem{
+			Method: "test_echo",
+			Args:   []any{"x", 1},
+			Result: new(echoResult),
+		})
+	}
+	require.NoError(t, client.BatchCall(batch))
+	require.ErrorContains(t, batch[0].Error, "batch too large")
+
+	// All other elements should have an error indicating there's no response
+	for _, elem := range batch[1:] {
+		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
 	}
 }
 

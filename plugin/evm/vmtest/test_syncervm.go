@@ -11,35 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
-	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/enginetest"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
-
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/coretest"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/plugin/evm/database"
-	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/predicate"
-	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
-	vmsync "github.com/ava-labs/coreth/sync/vm"
-	"github.com/ava-labs/coreth/utils/utilstest"
-
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -47,6 +27,26 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/coretest"
+	"github.com/ava-labs/coreth/params/paramstest"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/database"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
+	"github.com/ava-labs/coreth/utils/utilstest"
+
+	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
 )
 
 type SyncerVMTest struct {
@@ -166,7 +166,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	}
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
-	genesisJSON := []byte(GenesisJSON(ForkToChainConfig[upgradetest.Latest]))
+	genesisJSON := []byte(GenesisJSON(paramstest.ForkToChainConfig[upgradetest.Latest]))
 	if err := syncDisabledVM.Initialize(
 		context.Background(),
 		testSyncVMSetup.syncerVM.SnowCtx,
@@ -535,7 +535,8 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	txsPerBlock := 10
 	toAddress := TestEthAddrs[1] // arbitrary choice
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
-		b, err := predicate.NewResults().Bytes()
+		br := predicate.BlockResults{}
+		b, err := br.Bytes()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -570,7 +571,8 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 
 	// Generate blocks after we have entered normal consensus as well
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
-		b, err := predicate.NewResults().Bytes()
+		br := predicate.BlockResults{}
+		b, err := br.Bytes()
 		if err != nil {
 			t.Fatal(err)
 		}

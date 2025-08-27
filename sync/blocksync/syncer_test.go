@@ -9,19 +9,22 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers"
+
+	syncclient "github.com/ava-labs/coreth/sync/client"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 func TestBlockSyncer_ParameterizedTests(t *testing.T) {
@@ -153,9 +156,9 @@ func newTestEnvironment(t *testing.T, numBlocks int) *testEnvironment {
 	}
 	engine := dummy.NewETHFaker()
 
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 0, func(i int, gen *core.BlockGen) {
+	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 0, func(_ int, gen *core.BlockGen) {
 		// Generate a transaction to create a unique block
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr), addr, big.NewInt(10), params.TxGas, nil, nil), signer, key)
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr), addr, big.NewInt(10), ethparams.TxGas, nil, nil), signer, key)
 		gen.AddTx(tx)
 	})
 	require.NoError(t, err)

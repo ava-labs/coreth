@@ -10,19 +10,26 @@ import (
 	"slices"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/nativeasset"
-	"github.com/ava-labs/coreth/params/extras"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/precompile/modules"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/predicate"
+	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/legacy"
+
+	"github.com/ava-labs/coreth/nativeasset"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/precompile/contract"
+	"github.com/ava-labs/coreth/precompile/modules"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	ethparams "github.com/ava-labs/libevm/params"
 )
+
+// invalidateDelegateTime is the Unix timestamp for August 2nd, 2025, midnight Eastern Time
+// (August 2nd, 2025, 04:00 UTC)
+const invalidateDelegateUnix = 1754107200
 
 type RulesExtra extras.Rules
 
@@ -31,23 +38,23 @@ func GetRulesExtra(r Rules) *extras.Rules {
 	return (*extras.Rules)(rules)
 }
 
-func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
+func (RulesExtra) CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (uint64, error) {
 	return gas, nil
 }
 
-func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
+func (RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
 	return nil
 }
 
 // MinimumGasConsumption is a no-op.
-func (r RulesExtra) MinimumGasConsumption(x uint64) uint64 {
+func (RulesExtra) MinimumGasConsumption(x uint64) uint64 {
 	return (ethparams.NOOPHooks{}).MinimumGasConsumption(x)
 }
 
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -59,7 +66,7 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
@@ -117,10 +124,10 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if err != nil {
 			panic(err) // Should never happen
 		}
-		var predicateResults *predicate.Results
+		var predicateResults predicate.BlockResults
 		rules := GetRulesExtra(env.Rules()).AvalancheRules
 		if predicateResultsBytes := customheader.PredicateBytesFromExtra(rules, header.Extra); len(predicateResultsBytes) > 0 {
-			predicateResults, err = predicate.ParseResults(predicateResultsBytes)
+			predicateResults, err = predicate.ParseBlockResults(predicateResultsBytes)
 			if err != nil {
 				panic(err) // Should never happen, as results are already validated in block validation
 			}
@@ -134,9 +141,14 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			},
 		}
 
-		if callType := env.IncomingCallType(); callType == vm.DelegateCall || callType == vm.CallCode {
-			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
+		callType := env.IncomingCallType()
+		isDissallowedCallType := callType == vm.DelegateCall || callType == vm.CallCode
+		if env.BlockTime() >= invalidateDelegateUnix {
+			if isDissallowedCallType {
+				env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
+			}
 		}
+
 		return contract.Run(accessibleState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
@@ -193,7 +205,7 @@ func (a accessibleState) GetPrecompileEnv() vm.PrecompileEnvironment {
 type precompileBlockContext struct {
 	number           *big.Int
 	time             uint64
-	predicateResults *predicate.Results
+	predicateResults predicate.BlockResults
 }
 
 func (p *precompileBlockContext) Number() *big.Int {
@@ -204,9 +216,6 @@ func (p *precompileBlockContext) Timestamp() uint64 {
 	return p.time
 }
 
-func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte {
-	if p.predicateResults == nil {
-		return nil
-	}
-	return p.predicateResults.GetPredicateResults(txHash, precompileAddress)
+func (p *precompileBlockContext) GetPredicateResults(txHash common.Hash, precompileAddress common.Address) set.Bits {
+	return p.predicateResults.Get(txHash, precompileAddress)
 }

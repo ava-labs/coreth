@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/log"
 	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/precompile/contract"
 )
 
 // PrecompiledContractsApricot contains the default set of pre-compiled Ethereum
@@ -52,7 +53,7 @@ func UnpackNativeAssetBalanceInput(input []byte) (common.Address, common.Hash, e
 }
 
 // Run implements StatefulPrecompiledContract
-func (b *NativeAssetBalance) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (b *NativeAssetBalance) Run(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, input []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	// input: encodePacked(address 20 bytes, assetID 32 bytes)
 	if suppliedGas < b.GasCost {
 		return nil, 0, vm.ErrOutOfGas
@@ -103,12 +104,12 @@ func UnpackNativeAssetCallInput(input []byte) (common.Address, common.Hash, *big
 }
 
 // Run implements [contract.StatefulPrecompiledContract]
-func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller common.Address, _ common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	env := accessibleState.GetPrecompileEnv()
 	if !env.UseGas(c.GasCost) {
 		return nil, 0, vm.ErrOutOfGas
 	}
-	ret, err = c.run(env, accessibleState.GetStateDB(), caller, addr, input, readOnly)
+	ret, err = c.run(env, accessibleState.GetStateDB(), caller, input, readOnly)
 	// This precompile will be wrapped in a libevm `legacy.PrecompiledStatefulContract`, which
 	// allows for the deprecated pattern of returning remaining gas by calling
 	// env.UseGas() on the difference between gas in and gas out. Since we call
@@ -120,7 +121,7 @@ func (c *NativeAssetCall) Run(accessibleState contract.AccessibleState, caller c
 // run implements the contract logic, using `env.Gas()` and `env.UseGas()` in
 // place of `suppliedGas` and returning `remainingGas`, respectively. This
 // avoids mixing gas-accounting patterns when using `env.Call()`.
-func (c *NativeAssetCall) run(env vm.PrecompileEnvironment, stateDB contract.StateDB, caller common.Address, addr common.Address, input []byte, readOnly bool) (ret []byte, err error) {
+func (c *NativeAssetCall) run(env vm.PrecompileEnvironment, stateDB contract.StateDB, caller common.Address, input []byte, readOnly bool) (ret []byte, err error) {
 	if readOnly {
 		return nil, vm.ErrExecutionReverted
 	}
@@ -165,6 +166,6 @@ func (c *NativeAssetCall) run(env vm.PrecompileEnvironment, stateDB contract.Sta
 
 type DeprecatedContract struct{}
 
-func (*DeprecatedContract) Run(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func (*DeprecatedContract) Run(_ contract.AccessibleState, _ common.Address, _ common.Address, _ []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	return nil, suppliedGas, vm.ErrExecutionReverted
 }
