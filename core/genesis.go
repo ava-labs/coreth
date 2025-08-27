@@ -320,6 +320,11 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BlobGasUsed = new(uint64)
 			}
 		}
+		// Apply Granite upgrade - add TimeMillisecondsPart
+		if params.GetExtra(conf).IsGranite(g.Timestamp) {
+			headerExtra := customtypes.GetHeaderExtra(head)
+			headerExtra.TimeMillisecondsPart = new(uint64)
+		}
 	}
 
 	// Create the genesis block to use the block hash

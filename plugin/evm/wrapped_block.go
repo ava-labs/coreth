@@ -434,6 +434,9 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, customtypes.BlockGasCost(b.ethBlock))
 		}
 	}
+	if err := header.VerifyTimeMilliseconds(rulesExtra.AvalancheRules, ethHeader); err != nil {
+		return err
+	}
 
 	if b.extension != nil {
 		if err := b.extension.SyntacticVerify(*rulesExtra); err != nil {

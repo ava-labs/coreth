@@ -259,6 +259,10 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *header.BlobGasUsed)
 		}
 	}
+
+	if err := customheader.VerifyTimeMilliseconds(rules, header); err != nil {
+		return err
+	}
 	return nil
 }
 

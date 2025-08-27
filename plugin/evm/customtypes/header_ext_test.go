@@ -114,9 +114,10 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		ParentBeaconRoot: &common.Hash{20},
 	}
 	extra := &HeaderExtra{
-		ExtDataHash:    common.Hash{21},
-		ExtDataGasUsed: big.NewInt(22),
-		BlockGasCost:   big.NewInt(23),
+		ExtDataHash:          common.Hash{21},
+		ExtDataGasUsed:       big.NewInt(22),
+		BlockGasCost:         big.NewInt(23),
+		TimeMillisecondsPart: ptrTo(uint64(123)), // Milliseconds portion (0-999)
 	}
 	return WithHeaderExtra(header, extra), extra
 }
