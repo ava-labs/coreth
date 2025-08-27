@@ -160,7 +160,7 @@ func (client *client) stateSync(ctx context.Context) error {
 	// Create and register all syncers.
 	registry := NewSyncerRegistry()
 
-	if err := client.registerSyncers(ctx, registry); err != nil {
+	if err := client.registerSyncers(registry); err != nil {
 		return err
 	}
 
@@ -168,7 +168,8 @@ func (client *client) stateSync(ctx context.Context) error {
 	return registry.RunSyncerTasks(ctx, client)
 }
 
-func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegistry) error {
+func (client *client) registerSyncers(registry *SyncerRegistry) error {
+	// Register block syncer.
 	blockSyncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
 	if err != nil {
 		return fmt.Errorf("failed to create block syncer: %w", err)
@@ -188,7 +189,7 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 
 	var atomicSyncer synccommon.Syncer
 	if client.Extender != nil {
-		atomicSyncer, err = client.createAtomicSyncer(ctx)
+		atomicSyncer, err = client.createAtomicSyncer()
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
@@ -230,8 +231,8 @@ func (client *client) createCodeHashSyncer(cfg statesync.Config) (statesync.Code
 	return statesync.NewCodeSyncer(client.Client, client.ChainDB, cfg)
 }
 
-func (client *client) createAtomicSyncer(ctx context.Context) (synccommon.Syncer, error) {
-	return client.Extender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
+func (client *client) createAtomicSyncer() (synccommon.Syncer, error) {
+	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
