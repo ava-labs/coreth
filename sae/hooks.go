@@ -198,7 +198,7 @@ func (h *hooks) constructBlock(
 		txs,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("calculatePredicateResults: %w", err)
+		return nil, fmt.Errorf("CheckBlockPredicates: %w", err)
 	}
 
 	predicateResultsBytes, err := predicateResults.Bytes()
