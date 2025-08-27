@@ -430,7 +430,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	if rulesExtra.IsGranite {
-		if customtypes.BlockGasCost(b.ethBlock).Sign() != 0 {
+		if customtypes.BlockGasCost(b.ethBlock).Cmp(common.Big0) != 0 {
 			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, customtypes.BlockGasCost(b.ethBlock))
 		}
 	}

@@ -315,7 +315,7 @@ func (eng *DummyEngine) verifyBlockFee(
 	}
 	// In Granite we don't need to verify the block fee
 	if rules.IsGranite {
-		if requiredBlockGasCost.Sign() != 0 {
+		if requiredBlockGasCost.Cmp(common.Big0) != 0 {
 			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, requiredBlockGasCost)
 		}
 		// skip block fee verification in Granite
