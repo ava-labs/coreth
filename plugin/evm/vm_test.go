@@ -2194,5 +2194,6 @@ func TestGraniteInvalidBlockGasCost(t *testing.T) {
 	modifiedBlk, err := wrapBlock(modifiedBlock, vm)
 	require.NoError(t, err)
 
-	require.ErrorIs(t, modifiedBlk.Verify(context.Background()), errInvalidBlockGasCostGranite)
+	err = modifiedBlk.Verify(context.Background())
+	require.ErrorIs(t, err, errInvalidBlockGasCostGranite)
 }
