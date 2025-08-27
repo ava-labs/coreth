@@ -47,6 +47,7 @@ type Extender interface {
 type CodeFetcher interface {
 	AddCode(codeHashes []common.Hash) error
 	FinishCodeCollection()
+	Ready() <-chan struct{}
 }
 
 // CodeSyncer is implemented by the concrete code syncer and combines

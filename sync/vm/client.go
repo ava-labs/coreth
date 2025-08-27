@@ -195,20 +195,24 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		}
 	}
 
-	// Register in a deterministic order
-	if err := registry.Register(blockSyncOperationName, blockSyncer); err != nil {
-		return fmt.Errorf("failed to register %s: %w", blockSyncOperationName, err)
+	syncers := []struct {
+		name   string
+		syncer synccommon.Syncer
+	}{
+		{blockSyncOperationName, blockSyncer},
+		{codeHashSyncOperationName, codeSyncer},
+		{evmStateSyncOperationName, stateSyncer},
 	}
-	if err := registry.Register(codeHashSyncOperationName, codeSyncer); err != nil {
-		return fmt.Errorf("failed to register %s: %w", codeHashSyncOperationName, err)
-	}
-	if err := registry.Register(evmStateSyncOperationName, stateSyncer); err != nil {
-		return fmt.Errorf("failed to register %s: %w", evmStateSyncOperationName, err)
+	if atomicSyncer != nil {
+		syncers = append(syncers, struct {
+			name   string
+			syncer synccommon.Syncer
+		}{atomicStateSyncOperationName, atomicSyncer})
 	}
 
-	if atomicSyncer != nil {
-		if err := registry.Register(atomicStateSyncOperationName, atomicSyncer); err != nil {
-			return fmt.Errorf("failed to register %s: %w", atomicStateSyncOperationName, err)
+	for _, s := range syncers {
+		if err := registry.Register(s.name, s.syncer); err != nil {
+			return fmt.Errorf("failed to register %s: %w", s.name, err)
 		}
 	}
 

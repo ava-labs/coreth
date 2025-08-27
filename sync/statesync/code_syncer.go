@@ -223,9 +223,12 @@ func (c *CodeSyncer) addCode(codeHashes []common.Hash) error {
 // so it only needs to complete its outstanding work.
 // Note: this allows the worker threads to exit and return a nil error.
 func (c *CodeSyncer) FinishCodeCollection() {
-	<-c.open // The code syncer must queue the previous code from the db first
+	<-c.open // The code syncer must queue the previous code from the db first.
 	close(c.codeHashes)
 }
+
+// Ready returns a channel that is closed when the code syncer is ready to accept code hashes.
+func (c *CodeSyncer) Ready() <-chan struct{} { return c.open }
 
 // addHashesToQueue adds [codeHashes] to the queue and blocks until it is able to do so.
 // This should be called after all other operation to add code hashes to the queue has been completed.

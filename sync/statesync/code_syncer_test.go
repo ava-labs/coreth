@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/libevm/common"
@@ -19,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
+	"github.com/ava-labs/coreth/utils/utilstest"
 
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -162,4 +164,40 @@ func TestCodeSyncerAddsMoreInProgressThanQueueSize(t *testing.T) {
 		codeRequestHashes: nil,
 		codeByteSlices:    codeByteSlices,
 	})
+}
+
+func TestCodeSyncerReady(t *testing.T) {
+	serverDB := memorydb.New()
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewTestClient(message.Codec, nil, codeRequestHandler, nil)
+
+	clientDB := rawdb.NewMemoryDatabase()
+	cfg := NewDefaultConfig(testRequestSize)
+	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, cfg)
+	require.NoError(t, err)
+
+	select {
+	case <-codeSyncer.Ready():
+		// If already closed, this would mean ready before Sync which shouldn't happen
+		t.Fatalf("Ready should not be closed before Sync starts")
+	default:
+	}
+
+	ctx, cancel := utilstest.NewTestContext(t)
+
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- codeSyncer.Sync(ctx) }()
+
+	// Wait briefly for Sync to initialize and close the ready channel
+	utilstest.SleepWithContext(ctx, 50*time.Millisecond)
+
+	select {
+	case <-codeSyncer.Ready():
+		// ok
+	default:
+		t.Fatalf("Ready should be closed after Sync initialization")
+	}
+
+	cancel()
+	require.Error(t, <-doneCh)
 }

@@ -28,7 +28,10 @@ const (
 	defaultNumWorkers      = 8
 )
 
-var _ synccommon.Syncer = (*stateSync)(nil)
+var (
+	_                      synccommon.Syncer = (*stateSync)(nil)
+	errCodeFetcherRequired                   = errors.New("code fetcher is required")
+)
 
 type Config struct {
 	BatchSize uint
@@ -127,8 +130,9 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fe
 	})
 
 	if fetcher == nil {
-		return nil, errors.New("CodeFetcher must be provided")
+		return nil, errCodeFetcherRequired
 	}
+
 	ss.codeFetcher = fetcher
 
 	var err error
@@ -256,6 +260,13 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Sync(ctx context.Context) error {
+	// Wait for the code fetcher to be ready before starting.
+	select {
+	case <-t.codeFetcher.Ready():
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 	// Start the leaf syncer and storage trie producer.
 	eg, egCtx := errgroup.WithContext(ctx)
 
@@ -265,7 +276,7 @@ func (t *stateSync) Sync(ctx context.Context) error {
 		}
 		return t.onSyncComplete()
 	})
-	// Note: code syncer is no longer started here. It should be run by the registry if registered separately.
+	// Note: code syncer is no longer started here. It should be run by the [SyncerRegistry] and registered separately.
 	eg.Go(func() error {
 		return t.storageTrieProducer(egCtx)
 	})
