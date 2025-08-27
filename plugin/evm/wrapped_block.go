@@ -32,6 +32,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
@@ -430,7 +431,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	if rulesExtra.IsGranite {
-		if customtypes.BlockGasCost(b.ethBlock).Cmp(common.Big0) != 0 {
+		if !utils.BigEqual(customtypes.BlockGasCost(b.ethBlock), common.Big0) {
 			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, customtypes.BlockGasCost(b.ethBlock))
 		}
 	}

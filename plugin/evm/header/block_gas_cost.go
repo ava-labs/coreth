@@ -5,6 +5,7 @@ package header
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/libevm/common"
@@ -14,13 +15,16 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
-	errBaseFeeNil        = errors.New("base fee is nil")
-	errBlockGasCostNil   = errors.New("block gas cost is nil")
-	errExtDataGasUsedNil = errors.New("extDataGasUsed is nil")
-	errNoGasUsed         = errors.New("no gas used")
+	errBaseFeeNil                 = errors.New("base fee is nil")
+	errBlockGasCostNil            = errors.New("block gas cost is nil")
+	errExtDataGasUsedNil          = errors.New("extDataGasUsed is nil")
+	errNoGasUsed                  = errors.New("no gas used")
+	errInvalidBlockGasCostGranite = errors.New("invalid block gas cost in Granite")
+	ErrInsufficientBlockGas       = errors.New("insufficient gas to cover the block cost")
 )
 
 // BlockGasCost calculates the required block gas cost based on the parent
@@ -128,4 +132,83 @@ func EstimateRequiredTip(
 	// estimatedTip = totalRequiredTips / totalGasUsed
 	estimatedTip := totalRequiredTips.Div(totalRequiredTips, totalGasUsed)
 	return estimatedTip, nil
+}
+
+// VerifyBlockFee verifies that the total block gas cost is sufficient to cover the required block gas cost.
+func VerifyBlockFee(
+	baseFee *big.Int,
+	requiredBlockGasCost *big.Int,
+	txs []*types.Transaction,
+	receipts []*types.Receipt,
+	extraStateChangeContribution *big.Int,
+	rules extras.AvalancheRules,
+) error {
+	switch {
+	case rules.IsGranite:
+		if !utils.BigEqual(requiredBlockGasCost, common.Big0) {
+			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, requiredBlockGasCost)
+		}
+		return nil
+	case !rules.IsApricotPhase4:
+		return nil
+	}
+
+	if baseFee == nil || baseFee.Sign() <= 0 {
+		return fmt.Errorf("invalid base fee (%d) in apricot phase 4", baseFee)
+	}
+	if requiredBlockGasCost == nil || !requiredBlockGasCost.IsUint64() {
+		return fmt.Errorf("invalid block gas cost (%d) in apricot phase 4", requiredBlockGasCost)
+	}
+
+	var (
+		gasUsed              = new(big.Int)
+		blockFeeContribution = new(big.Int)
+		totalBlockFee        = new(big.Int)
+	)
+
+	// Add in the external contribution
+	if extraStateChangeContribution != nil {
+		if extraStateChangeContribution.Cmp(common.Big0) < 0 {
+			return fmt.Errorf("invalid extra state change contribution: %d", extraStateChangeContribution)
+		}
+		totalBlockFee.Add(totalBlockFee, extraStateChangeContribution)
+	}
+
+	// Calculate the total excess (denominated in AVAX) over the base fee that was paid towards the block fee
+	for i, receipt := range receipts {
+		// Each transaction contributes the excess over the baseFee towards the totalBlockFee
+		// This should be equivalent to the sum of the "priority fees" within EIP-1559.
+		txFeePremium, err := txs[i].EffectiveGasTip(baseFee)
+		if err != nil {
+			return err
+		}
+		// Multiply the [txFeePremium] by the gasUsed in the transaction since this gives the total AVAX that was paid
+		// above the amount required if the transaction had simply paid the minimum base fee for the block.
+		//
+		// Ex. LegacyTx paying a gas price of 100 gwei for 1M gas in a block with a base fee of 10 gwei.
+		// Total Fee = 100 gwei * 1M gas
+		// Minimum Fee = 10 gwei * 1M gas (minimum fee that would have been accepted for this transaction)
+		// Fee Premium = 90 gwei
+		// Total Overpaid = 90 gwei * 1M gas
+
+		blockFeeContribution.Mul(txFeePremium, gasUsed.SetUint64(receipt.GasUsed))
+		totalBlockFee.Add(totalBlockFee, blockFeeContribution)
+	}
+	// Calculate how much gas the [totalBlockFee] would purchase at the price level
+	// set by the base fee of this block.
+	blockGas := new(big.Int).Div(totalBlockFee, baseFee)
+
+	// Require that the amount of gas purchased by the effective tips within the
+	// block covers at least `requiredBlockGasCost`.
+	//
+	// NOTE: To determine the required block fee, multiply
+	// `requiredBlockGasCost` by `baseFee`.
+	if blockGas.Cmp(requiredBlockGasCost) < 0 {
+		return fmt.Errorf("%w: expected %d but got %d",
+			ErrInsufficientBlockGas,
+			requiredBlockGasCost,
+			blockGas,
+		)
+	}
+	return nil
 }

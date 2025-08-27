@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
@@ -2119,7 +2120,7 @@ func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 	}{
 		{
 			fork:          upgradetest.Fortuna,
-			expectedError: dummy.ErrInsufficientBlockGas,
+			expectedError: customheader.ErrInsufficientBlockGas,
 		},
 		{
 			fork:                 upgradetest.Granite,
@@ -2146,8 +2147,16 @@ func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 
 		vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
 		// have another tx very quickly after the first one
-		tx = types.NewTransaction(uint64(1), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
-		signedTx, err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		tx = types.NewTx(&types.DynamicFeeTx{
+			Nonce:     uint64(1),
+			To:        &vmtest.TestEthAddrs[1],
+			Value:     big.NewInt(1),
+			Gas:       21000,
+			GasFeeCap: common.Big1,
+			GasTipCap: common.Big0,
+			Data:      nil,
+		})
+		signedTx, err = types.SignTx(tx, types.LatestSigner(vm.chainConfig), vmtest.TestKeys[0].ToECDSA())
 		require.NoError(t, err)
 		blk, err = vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 		require.ErrorIs(t, err, test.expectedError)
@@ -2170,8 +2179,16 @@ func TestGraniteInvalidBlockGasCost(t *testing.T) {
 
 	vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
 
-	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+	tx := types.NewTx(&types.DynamicFeeTx{
+		Nonce:     uint64(0),
+		To:        &vmtest.TestEthAddrs[1],
+		Value:     big.NewInt(1),
+		Gas:       21000,
+		GasFeeCap: common.Big1,
+		GasTipCap: common.Big0,
+		Data:      nil,
+	})
+	signedTx, err := types.SignTx(tx, types.LatestSigner(vm.chainConfig), vmtest.TestKeys[0].ToECDSA())
 	require.NoError(t, err)
 	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 	require.NoError(t, err)
