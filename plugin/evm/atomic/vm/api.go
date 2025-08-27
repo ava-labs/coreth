@@ -14,10 +14,11 @@ import (
 	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
+	"github.com/ava-labs/libevm/log"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/client"
-	"github.com/ava-labs/libevm/log"
 )
 
 const (
@@ -40,7 +41,7 @@ type VersionReply struct {
 }
 
 // ClientVersion returns the version of the VM running
-func (service *AvaxAPI) Version(r *http.Request, _ *struct{}, reply *VersionReply) error {
+func (service *AvaxAPI) Version(_ *http.Request, _ *struct{}, reply *VersionReply) error {
 	version, err := service.vm.InnerVM.Version(context.Background())
 	if err != nil {
 		return err
@@ -50,7 +51,7 @@ func (service *AvaxAPI) Version(r *http.Request, _ *struct{}, reply *VersionRepl
 }
 
 // GetUTXOs gets all utxos for passed in addresses
-func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply *api.GetUTXOsReply) error {
+func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply *api.GetUTXOsReply) error {
 	log.Info("EVM: GetUTXOs called", "Addresses", args.Addresses)
 
 	if len(args.Addresses) == 0 {
@@ -138,7 +139,7 @@ func (service *AvaxAPI) GetUTXOs(r *http.Request, args *api.GetUTXOsArgs, reply 
 	return nil
 }
 
-func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response *api.JSONTxID) error {
+func (service *AvaxAPI) IssueTx(_ *http.Request, args *api.FormattedTx, response *api.JSONTxID) error {
 	log.Info("EVM: IssueTx called")
 
 	txBytes, err := formatting.Decode(args.Encoding, args.Tx)
@@ -173,7 +174,7 @@ func (service *AvaxAPI) IssueTx(r *http.Request, args *api.FormattedTx, response
 }
 
 // GetAtomicTxStatus returns the status of the specified transaction
-func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, reply *client.GetAtomicTxStatusReply) error {
+func (service *AvaxAPI) GetAtomicTxStatus(_ *http.Request, args *api.JSONTxID, reply *client.GetAtomicTxStatusReply) error {
 	log.Info("EVM: GetAtomicTxStatus called", "txID", args.TxID)
 
 	if args.TxID == ids.Empty {
@@ -190,7 +191,7 @@ func (service *AvaxAPI) GetAtomicTxStatus(r *http.Request, args *api.JSONTxID, r
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			reply.Status = atomic.Processing
 			return nil
@@ -208,7 +209,7 @@ type FormattedTx struct {
 }
 
 // GetAtomicTx returns the specified transaction
-func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply *FormattedTx) error {
+func (service *AvaxAPI) GetAtomicTx(_ *http.Request, args *api.GetTxArgs, reply *FormattedTx) error {
 	log.Info("EVM: GetAtomicTx called", "txID", args.TxID)
 
 	if args.TxID == ids.Empty {
@@ -237,7 +238,7 @@ func (service *AvaxAPI) GetAtomicTx(r *http.Request, args *api.GetTxArgs, reply 
 		// Since chain state updates run asynchronously with VM block acceptance,
 		// avoid returning [Accepted] until the chain state reaches the block
 		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Blockchain().LastAcceptedBlock()
+		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
 		if height > lastAccepted.NumberU64() {
 			return nil
 		}

@@ -9,64 +9,23 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers"
+
+	syncclient "github.com/ava-labs/coreth/sync/client"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	ethparams "github.com/ava-labs/libevm/params"
 )
-
-func TestConfigValidation(t *testing.T) {
-	mockClient := syncclient.NewTestClient(
-		message.Codec,
-		nil,
-		nil,
-		nil,
-	)
-	validHash := common.HexToHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
-
-	tests := []struct {
-		name    string
-		config  *Config
-		wantErr error
-	}{
-		{
-			name:    "valid config",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: mockClient, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: nil,
-		},
-		{
-			name:    "nil database",
-			config:  &Config{ChainDB: nil, Client: mockClient, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errNilDatabase,
-		},
-		{
-			name:    "nil client",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: nil, FromHash: validHash, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errNilClient,
-		},
-		{
-			name:    "empty from hash",
-			config:  &Config{ChainDB: rawdb.NewMemoryDatabase(), Client: mockClient, FromHash: common.Hash{}, FromHeight: 10, BlocksToFetch: 5},
-			wantErr: errInvalidFromHash,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			require.ErrorIs(t, err, tt.wantErr)
-		})
-	}
-}
 
 func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 	tests := []struct {
@@ -197,9 +156,9 @@ func newTestEnvironment(t *testing.T, numBlocks int) *testEnvironment {
 	}
 	engine := dummy.NewETHFaker()
 
-	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 0, func(i int, gen *core.BlockGen) {
+	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 0, func(_ int, gen *core.BlockGen) {
 		// Generate a transaction to create a unique block
-		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr), addr, big.NewInt(10), params.TxGas, nil, nil), signer, key)
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr), addr, big.NewInt(10), ethparams.TxGas, nil, nil), signer, key)
 		gen.AddTx(tx)
 	})
 	require.NoError(t, err)
@@ -256,15 +215,11 @@ func (e *testEnvironment) createSyncer(fromHeight uint64, blocksToFetch uint64) 
 		return nil, fmt.Errorf("fromHeight %d exceeds available blocks %d", fromHeight, len(e.blocks))
 	}
 
-	config := &Config{
-		ChainDB:       e.chainDB,
-		Client:        e.client,
+	return NewSyncer(e.client, e.chainDB, Config{
 		FromHash:      e.blocks[fromHeight].Hash(),
 		FromHeight:    fromHeight,
 		BlocksToFetch: blocksToFetch,
-	}
-
-	return NewSyncer(config)
+	})
 }
 
 // verifyBlocksInDB checks that the expected blocks are present in the database (by block height)

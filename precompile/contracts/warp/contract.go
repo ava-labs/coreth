@@ -9,15 +9,15 @@ import (
 
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/precompile/contract"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 
 	_ "embed"
 
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/common/math"
-	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/precompile/contract"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
 
 	GasCostPerWarpSigner            uint64 = 500
-	GasCostPerWarpMessageBytes      uint64 = 100
+	GasCostPerWarpMessageChunk      uint64 = 3_200
 	GasCostPerSignatureVerification uint64 = 200_000
 )
 
@@ -93,7 +93,7 @@ func PackGetBlockchainIDOutput(blockchainID common.Hash) ([]byte, error) {
 }
 
 // getBlockchainID returns the snow Chain Context ChainID of this blockchain.
-func getBlockchainID(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func getBlockchainID(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, _ []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	if remainingGas, err = contract.DeductGas(suppliedGas, GetBlockchainIDGasCost); err != nil {
 		return nil, 0, err
 	}
@@ -144,7 +144,7 @@ func UnpackGetVerifiedWarpBlockHashOutput(output []byte) (GetVerifiedWarpBlockHa
 	return outputStruct, err
 }
 
-func getVerifiedWarpBlockHash(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func getVerifiedWarpBlockHash(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, input []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	return handleWarpMessage(accessibleState, input, suppliedGas, blockHashHandler{})
 }
 
@@ -188,7 +188,7 @@ func UnpackGetVerifiedWarpMessageOutput(output []byte) (GetVerifiedWarpMessageOu
 
 // getVerifiedWarpMessage retrieves the pre-verified warp message from the predicate storage slots and returns
 // the expected ABI encoding of the message to the caller.
-func getVerifiedWarpMessage(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func getVerifiedWarpMessage(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, input []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	return handleWarpMessage(accessibleState, input, suppliedGas, addressedPayloadHandler{})
 }
 
@@ -229,7 +229,7 @@ func UnpackSendWarpMessageOutput(output []byte) (common.Hash, error) {
 
 // sendWarpMessage constructs an Avalanche Warp Message containing an AddressedPayload and emits a log to signal validators that they should
 // be willing to sign this message.
-func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Address, _ common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	if remainingGas, err = contract.DeductGas(suppliedGas, SendWarpMessageGasCost); err != nil {
 		return nil, 0, err
 	}
@@ -248,7 +248,7 @@ func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Add
 	// unpack the arguments
 	payloadData, err := UnpackSendWarpMessageInput(input)
 	if err != nil {
-		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidSendInput, err)
+		return nil, remainingGas, fmt.Errorf("%w: %w", errInvalidSendInput, err)
 	}
 
 	var (

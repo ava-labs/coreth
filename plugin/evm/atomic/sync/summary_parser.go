@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/libevm/crypto"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
 )
 
 var _ message.SyncableParser = (*summaryParser)(nil)
@@ -18,7 +19,7 @@ func NewSummaryParser() *summaryParser {
 	return &summaryParser{}
 }
 
-func (a *summaryParser) Parse(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
+func (*summaryParser) Parse(summaryBytes []byte, acceptImpl message.AcceptImplFn) (message.Syncable, error) {
 	summary := Summary{}
 	if _, err := message.Codec.Unmarshal(summaryBytes, &summary); err != nil {
 		return nil, fmt.Errorf("failed to parse syncable summary: %w", err)

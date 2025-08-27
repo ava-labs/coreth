@@ -13,10 +13,11 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	warpprecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
-	warpValidators "github.com/ava-labs/coreth/warp/validators"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/log"
+
+	warpprecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
+	warpValidators "github.com/ava-labs/coreth/warp/validators"
 )
 
 var errNoValidators = errors.New("cannot aggregate signatures from subnet with no validators")
@@ -39,7 +40,7 @@ func NewAPI(chainCtx *snow.Context, backend Backend, signatureAggregator *acp118
 }
 
 // GetMessage returns the Warp message associated with a messageID.
-func (a *API) GetMessage(ctx context.Context, messageID ids.ID) (hexutil.Bytes, error) {
+func (a *API) GetMessage(_ context.Context, messageID ids.ID) (hexutil.Bytes, error) {
 	message, err := a.backend.GetMessage(messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message %s with error %w", messageID, err)

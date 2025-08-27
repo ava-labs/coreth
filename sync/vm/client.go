@@ -8,24 +8,25 @@ import (
 	"fmt"
 	"sync"
 
-	synccommon "github.com/ava-labs/coreth/sync"
-	"github.com/ava-labs/coreth/sync/blocksync"
-	syncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/statesync"
-
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
-	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
+
+	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/blocksync"
+	"github.com/ava-labs/coreth/sync/statesync"
+
+	synccommon "github.com/ava-labs/coreth/sync"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
 const (
@@ -158,7 +159,7 @@ func (client *client) stateSync(ctx context.Context) error {
 	// Create and register all syncers.
 	registry := NewSyncerRegistry()
 
-	if err := client.registerSyncers(ctx, registry); err != nil {
+	if err := client.registerSyncers(registry); err != nil {
 		return err
 	}
 
@@ -166,9 +167,9 @@ func (client *client) stateSync(ctx context.Context) error {
 	return registry.RunSyncerTasks(ctx, client)
 }
 
-func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegistry) error {
+func (client *client) registerSyncers(registry *SyncerRegistry) error {
 	// Register block syncer.
-	syncer, err := client.createBlockSyncer(ctx, client.summary.GetBlockHash(), client.summary.Height())
+	syncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
 	if err != nil {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
@@ -188,7 +189,7 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 
 	// Register atomic syncer.
 	if client.Extender != nil {
-		atomicSyncer, err := client.createAtomicSyncer(ctx)
+		atomicSyncer, err := client.createAtomicSyncer()
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
@@ -201,10 +202,8 @@ func (client *client) registerSyncers(ctx context.Context, registry *SyncerRegis
 	return nil
 }
 
-func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Hash, fromHeight uint64) (synccommon.Syncer, error) {
-	return blocksync.NewSyncer(&blocksync.Config{
-		ChainDB:       client.ChainDB,
-		Client:        client.Client,
+func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64) (synccommon.Syncer, error) {
+	return blocksync.NewSyncer(client.Client, client.ChainDB, blocksync.Config{
 		FromHash:      fromHash,
 		FromHeight:    fromHeight,
 		BlocksToFetch: BlocksToFetch,
@@ -212,19 +211,11 @@ func (client *client) createBlockSyncer(ctx context.Context, fromHash common.Has
 }
 
 func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
-	return statesync.NewSyncer(&statesync.Config{
-		Client:                   client.Client,
-		Root:                     client.summary.GetBlockRoot(),
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.ChainDB,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.RequestSize,
-	})
+	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), statesync.NewDefaultConfig(client.RequestSize))
 }
 
-func (client *client) createAtomicSyncer(ctx context.Context) (synccommon.Syncer, error) {
-	return client.Extender.CreateSyncer(ctx, client.Client, client.VerDB, client.summary)
+func (client *client) createAtomicSyncer() (synccommon.Syncer, error) {
+	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process

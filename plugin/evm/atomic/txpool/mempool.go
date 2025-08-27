@@ -9,10 +9,12 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/p2p/gossip"
+	"github.com/ava-labs/libevm/log"
+	"github.com/holiman/uint256"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
-	"github.com/ava-labs/libevm/log"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -126,11 +128,11 @@ func (m *Mempool) ForceAddTx(tx *atomic.Tx) error {
 // same input UTXOs as the provided transaction. If any conflicts are present,
 // it returns the highest gas price of any conflicting transaction, the ID of
 // the corresponding tx and the full list of conflicting transactions.
-func (m *Mempool) checkConflictTx(tx *atomic.Tx) (uint64, ids.ID, []*atomic.Tx, error) {
+func (m *Mempool) checkConflictTx(tx *atomic.Tx) (uint256.Int, ids.ID, []*atomic.Tx, error) {
 	utxoSet := tx.InputUTXOs()
 
 	var (
-		highestGasPrice             uint64
+		highestGasPrice             uint256.Int
 		highestGasPriceConflictTxID ids.ID
 		conflictingTxs              []*atomic.Tx
 	)
@@ -140,15 +142,15 @@ func (m *Mempool) checkConflictTx(tx *atomic.Tx) (uint64, ids.ID, []*atomic.Tx, 
 		if !ok {
 			continue
 		}
-		conflictTxID := conflictTx.ID()
-		conflictTxGasPrice, err := m.atomicTxGasPrice(conflictTx)
-		// Should never error to calculate the gas price of a transaction already in the mempool
+		conflictTxGasPrice, err := atomic.EffectiveGasPrice(conflictTx, m.ctx.AVAXAssetID, true)
+		// Should never error to calculate the gas price of a transaction
+		// already in the mempool
 		if err != nil {
-			return 0, ids.ID{}, conflictingTxs, fmt.Errorf("failed to re-calculate gas price for conflict tx due to: %w", err)
+			return uint256.Int{}, ids.ID{}, conflictingTxs, fmt.Errorf("failed to re-calculate gas price for conflict tx due to: %w", err)
 		}
-		if highestGasPrice < conflictTxGasPrice {
+		if highestGasPrice.Lt(&conflictTxGasPrice) {
 			highestGasPrice = conflictTxGasPrice
-			highestGasPriceConflictTxID = conflictTxID
+			highestGasPriceConflictTxID = conflictTx.ID()
 		}
 		conflictingTxs = append(conflictingTxs, conflictTx)
 	}
@@ -190,7 +192,7 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 		}
 	}
 
-	gasPrice, err := m.atomicTxGasPrice(tx)
+	gasPrice, err := atomic.EffectiveGasPrice(tx, m.ctx.AVAXAssetID, true)
 	if err != nil {
 		return err
 	}
@@ -200,8 +202,9 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	}
 	if len(conflictingTxs) != 0 && !force {
 		// If the transaction does not have a higher fee than all of its
-		// conflicts, we refuse to add it to the mempool.
-		if highestGasPrice >= gasPrice {
+		// conflicts, we refuse to add it to the mempool. (Prefer items already
+		// in the mempool).
+		if !gasPrice.Gt(&highestGasPrice) {
 			return fmt.Errorf(
 				"%w: issued tx (%s) gas price %d <= conflict tx (%s) gas price %d (%d total conflicts in mempool)",
 				ErrConflict,
@@ -224,26 +227,26 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 	// add a new transaction we only need to evict at most one other
 	// transaction.
 	if m.length() >= m.maxSize {
-		if m.pendingTxs.Len() > 0 {
-			// Get the transaction with the lowest gasPrice
-			minTx, minGasPrice := m.pendingTxs.PeekMin()
-			// If the lowest gasPrice >= the gasPrice of the new transaction,
-			// Discard new transaction. (Prefer items already in the mempool).
-			if minGasPrice >= gasPrice {
-				return fmt.Errorf(
-					"%w currentMin=%d provided=%d",
-					ErrInsufficientFee,
-					minGasPrice,
-					gasPrice,
-				)
-			}
-
-			m.removeTx(minTx, true)
-		} else {
+		if m.pendingTxs.Len() == 0 {
 			// This could occur if we have used our entire size allowance on
 			// transactions that are either Current or Issued.
 			return ErrMempoolFull
 		}
+		// Get the transaction with the lowest gasPrice
+		minTx, minGasPrice := m.pendingTxs.PeekMin()
+		// If the new tx doesn't have a higher fee than the transaction it
+		// would replace, discard new transaction. (Prefer items already
+		// in the mempool).
+		if !gasPrice.Gt(&minGasPrice) {
+			return fmt.Errorf(
+				"%w currentMin=%d provided=%d",
+				ErrInsufficientFee,
+				minGasPrice,
+				gasPrice,
+			)
+		}
+
+		m.removeTx(minTx, true)
 	}
 
 	// If the transaction was recently discarded, log the event and evict from
@@ -287,13 +290,10 @@ func (m *Mempool) addTx(tx *atomic.Tx, local bool, force bool) error {
 
 	// When adding a transaction to the mempool, we make sure that there is an
 	// item in Pending to signal the VM to produce a block.
-	//
-	// If the VM's buildStatus has already been set to something other than
-	// dontBuild, this will be ignored and won't be reset until the engine calls
-	// BuildBlock. This case is handled in [Txs.IssueCurrentTxs] and
-	// [Txs.CancelCurrentTxs].
-	m.addPending()
-
+	select {
+	case m.pending <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
