@@ -89,8 +89,6 @@ func init() {
 
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
 	var precompiles map[common.Address]vm.PrecompiledContract
-	var addresses []common.Address
-
 	switch {
 	case r.IsGranite:
 		precompiles = PrecompiledContractsGranite
@@ -104,6 +102,7 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 		precompiles = PrecompiledContractsApricotPhase2
 	}
 
+	var addresses []common.Address
 	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
 	addresses = append(addresses, existing...)
 	return addresses
