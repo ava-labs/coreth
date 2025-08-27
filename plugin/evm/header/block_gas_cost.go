@@ -26,21 +26,22 @@ var (
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
 // Prior to AP4, the returned block gas cost will be nil.
+// In Granite, the returned block gas cost will be 0.
 func BlockGasCost(
 	rules extras.AvalancheRules,
 	parent *types.Header,
 	timestamp uint64,
 ) *big.Int {
+	var step uint64
 	switch {
-	// Granite does not have a block gas cost
-	case rules.IsGranite:
+	case rules.IsGranite: // Granite does not have a block gas cost
 		return big.NewInt(0)
-	case !rules.IsApricotPhase4:
+	case rules.IsApricotPhase5:
+		step = uint64(ap5.BlockGasCostStep)
+	case rules.IsApricotPhase4:
+		step = uint64(ap4.BlockGasCostStep)
+	default: // prior to AP4, the returned block gas cost will be nil
 		return nil
-	}
-	step := uint64(ap4.BlockGasCostStep)
-	if rules.IsApricotPhase5 {
-		step = ap5.BlockGasCostStep
 	}
 	// Treat an invalid parent/current time combination as 0 elapsed time.
 	//
@@ -89,7 +90,7 @@ func BlockGasCostWithStep(
 // transactions. The only correctness check performed is that the sum of all
 // tips is >= the required block fee.
 //
-// This function will return nil for all return values prior to Apricot Phase 4.
+// This function will return nil for all return values prior to Apricot Phase 4, and 0 for all return values in Granite.
 func EstimateRequiredTip(
 	config *extras.ChainConfig,
 	header *types.Header,
