@@ -218,11 +218,11 @@ func (c *CodeSyncer) addCode(codeHashes []common.Hash) error {
 	return c.addHashesToQueue(selectedCodeHashes)
 }
 
-// FinishCodeCollection implements CodeFetcher by signaling no further code hashes will be added.
+// Finalize implements CodeFetcher by signaling no further code hashes will be added.
 // Notifies the code syncer that there will be no more incoming code hashes from syncing the account trie,
 // so it only needs to complete its outstanding work.
 // Note: this allows the worker threads to exit and return a nil error.
-func (c *CodeSyncer) FinishCodeCollection() {
+func (c *CodeSyncer) Finalize() {
 	<-c.open // The code syncer must queue the previous code from the db first.
 	close(c.codeHashes)
 }

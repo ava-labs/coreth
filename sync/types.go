@@ -46,7 +46,7 @@ type Extender interface {
 // Implemented by [codeSyncer] to support decoupled wiring.
 type CodeFetcher interface {
 	AddCode(codeHashes []common.Hash) error
-	FinishCodeCollection()
+	Finalize()
 	Ready() <-chan struct{}
 }
 

@@ -71,7 +71,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		codeSyncer.FinishCodeCollection()
+		codeSyncer.Finalize()
 	}()
 
 	ctx, cancel := utilstest.NewTestContext(t)
