@@ -82,9 +82,21 @@ func TestAtomicTxGossip(t *testing.T) {
 	peerSender := &enginetest.SenderStub{
 		SentAppRequest: make(chan []byte, 1),
 	}
-	network, err := p2p.NewNetwork(logging.NoLog{}, peerSender, prometheus.NewRegistry(), "")
+	validatorSet := p2p.NewValidators(
+		logging.NoLog{},
+		snowCtx.SubnetID,
+		validatorState,
+		0,
+	)
+	network, err := p2p.NewNetwork(
+		logging.NoLog{},
+		peerSender,
+		prometheus.NewRegistry(),
+		"",
+		validatorSet,
+	)
 	require.NoError(err)
-	client := network.NewClient(p2p.AtomicTxGossipHandlerID)
+	client := network.NewClient(p2p.AtomicTxGossipHandlerID, validatorSet)
 
 	// we only accept gossip requests from validators
 	requestingNodeID := ids.GenerateTestNodeID()
@@ -199,7 +211,6 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 		SentAppGossip: make(chan []byte, 1),
 	}
 	vm := newAtomicTestVM()
-	vm.AtomicTxPullGossiper = gossip.NoOpGossiper{}
 
 	require.NoError(vm.Initialize(
 		ctx,
@@ -268,7 +279,6 @@ func TestAtomicTxPushGossipInbound(t *testing.T) {
 
 	sender := &enginetest.Sender{}
 	vm := newAtomicTestVM()
-	vm.AtomicTxPullGossiper = gossip.NoOpGossiper{}
 
 	require.NoError(vm.Initialize(
 		ctx,

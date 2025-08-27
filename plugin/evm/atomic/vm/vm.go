@@ -94,9 +94,7 @@ type VM struct {
 	// AtomicBackend abstracts verification and processing of atomic transactions
 	AtomicBackend *atomicstate.AtomicBackend
 
-	atomicTxGossipHandler p2p.Handler
-	AtomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
-	AtomicTxPullGossiper  avalanchegossip.Gossiper
+	AtomicTxPushGossiper *avalanchegossip.PushGossiper[*atomic.Tx]
 
 	// cancel may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
@@ -263,7 +261,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	vm.cancel = cancel
 	atomicTxGossipMarshaller := atomic.TxMarshaller{}
-	atomicTxGossipClient := vm.InnerVM.NewClient(p2p.AtomicTxGossipHandlerID, p2p.WithValidatorSampling(vm.InnerVM.P2PValidators()))
+	atomicTxGossipClient := vm.InnerVM.NewClient(p2p.AtomicTxGossipHandlerID)
 	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.InnerVM.MetricRegistry(), atomicTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
@@ -295,18 +293,23 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
 	}
 
-	vm.atomicTxGossipHandler = gossip.NewTxGossipHandler[*atomic.Tx](
+	atomicTxGossipHandler, err := gossip.NewTxGossipHandler[*atomic.Tx](
 		vm.Ctx.Log,
 		&atomicTxGossipMarshaller,
 		vm.AtomicMempool,
 		atomicTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.InnerVM.P2PValidators(),
+		vm.MetricRegistry(),
+		"atomic_tx_gossip",
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
+	}
 
-	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
+	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, atomicTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
 	}
 
@@ -319,7 +322,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.AtomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
+	atomicTxPullGossiperWhenValidator := &avalanchegossip.ValidatorGossiper{
 		Gossiper:   atomicTxPullGossiper,
 		NodeID:     vm.Ctx.NodeID,
 		Validators: vm.InnerVM.P2PValidators(),
@@ -333,7 +336,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.Ctx.Log, vm.AtomicTxPullGossiper, vm.InnerVM.Config().PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.Ctx.Log, atomicTxPullGossiperWhenValidator, vm.InnerVM.Config().PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
