@@ -78,8 +78,9 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	defer cancel()
 
 	// Run the sync and handle expected error.
-	require.ErrorIs(t, codeSyncer.Sync(ctx), test.err)
-	if test.err != nil {
+	err = codeSyncer.Sync(ctx)
+	require.ErrorIs(t, err, test.err)
+	if err != nil {
 		return // don't check the state
 	}
 

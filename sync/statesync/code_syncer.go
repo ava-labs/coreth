@@ -67,7 +67,7 @@ func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Conf
 	}, nil
 }
 
-// Sync tart the worker thread and populate the code hashes queue with active work.
+// Sync starts the worker thread and populates the code hashes queue with active work.
 // Blocks until all outstanding code requests from a previous sync have been
 // fetched and the code channel has been closed, or the context is cancelled.
 func (c *CodeSyncer) Sync(ctx context.Context) error {
