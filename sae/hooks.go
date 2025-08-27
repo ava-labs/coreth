@@ -18,11 +18,13 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/strevm/hook"
@@ -187,11 +189,12 @@ func (h *hooks) constructBlock(
 	// 	return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	// }
 
-	predicateResults, err := calculatePredicateResults(
-		ctx,
-		h.ctx,
+	predicateResults, err := core.CheckBlockPredicates(
 		rules,
-		blockContext,
+		&precompileconfig.PredicateContext{
+			SnowCtx:            h.ctx,
+			ProposerVMBlockCtx: blockContext,
+		},
 		txs,
 	)
 	if err != nil {
