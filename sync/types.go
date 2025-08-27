@@ -43,10 +43,23 @@ type Extender interface {
 
 // CodeFetcher is a minimal interface for accepting discovered code hashes
 // and signaling when no more code hashes will be produced from the account trie.
-// Implemented by [codeSyncer] to support decoupled wiring.
 type CodeFetcher interface {
+	// AddCode enqueues the provided code hashes for fetching, ignoring any
+	// hashes already present locally or already queued. Implementations may
+	// block until [CodeFetcher.Ready] is closed to ensure the fetcher is prepared to accept
+	// work. Returns a non-nil error if the fetcher is shutting down or if
+	// persisting enqueue markers fails.
 	AddCode(codeHashes []common.Hash) error
+
+	// Finalize signals that no more code hashes will be produced by the
+	// producer (e.g., after the account trie has been fully scanned). After
+	// this call, the fetcher should complete any outstanding work and then
+	// return from [Syncer.Sync] without waiting for additional input.
 	Finalize()
+
+	// Ready returns a channel that is closed once the fetcher is ready to
+	// accept code hashes via [CodeFetcher.AddCode]. Callers can wait on this signal to avoid
+	// enqueueing work before the fetcher has initialized.
 	Ready() <-chan struct{}
 }
 
