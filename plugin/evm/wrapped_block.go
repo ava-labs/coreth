@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
@@ -127,8 +126,16 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 		return nil
 	}
 
+	// read from cache as we're no longer store receipts in LevelDB
+	receipts, ok := b.vm.eth.BlockChain().GetWarmReceipts(b.ethBlock.Hash())
+	if !ok {
+		return errors.New("warm receipt not in cache")
+	}
+
 	// Read receipts from disk
-	receipts := rawdb.ReadReceipts(b.vm.chaindb, b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.ethBlock.Time(), b.vm.chainConfig)
+	// receipts := rawdb.ReadReceipts(b.vm.chaindb, b.ethBlock.Hash(),
+	// b.ethBlock.NumberU64(), b.ethBlock.Time(), b.vm.chainConfig)
+
 	// If there are no receipts, ReadReceipts may be nil, so we check the length and confirm the ReceiptHash
 	// is empty to ensure that missing receipts results in an error on accept.
 	if len(receipts) == 0 && b.ethBlock.ReceiptHash() != types.EmptyRootHash {

@@ -378,6 +378,8 @@ type BlockChain struct {
 
 	// [txIndexTailLock] is used to synchronize the updating of the tx index tail.
 	txIndexTailLock sync.Mutex
+
+	warmBlockRecipts FIFOCache[common.Hash, types.Receipts]
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -427,6 +429,7 @@ func NewBlockChain(
 		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
 		quit:              make(chan struct{}),
 		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
+		warmBlockRecipts:  NewFIFOCache[common.Hash, types.Receipts](512),
 	}
 	bc.stateCache = extstate.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -1218,7 +1221,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 	// should be written atomically. BlockBatch is used for containing all components.
 	blockBatch := bc.db.NewBatch()
 	rawdb.WriteBlock(blockBatch, block)
-	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+
+	// write block receipts to cache to avoid writing to LevelDB
+	// we need to save the most recent block receipts due to handlePrecompileAccept()
+	bc.warmBlockRecipts.Put(block.Hash(), receipts)
+	// rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1452,9 +1460,16 @@ func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*
 	if excessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(*excessBlobGas)
 	}
-	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
+
+	var receipts types.Receipts
+	if r, ok := bc.GetWarmReceipts(b.Hash()); ok {
+		receipts = r
+	} else {
+		receipts = rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
+	}
+
 	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), blobGasPrice, b.Transactions()); err != nil {
-		log.Error("Failed to derive block receipts fields", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
+		log.Error("Failed to derive block receipts fields in collectUnflattenedLogs", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
 	}
 
 	// Note: gross but this needs to be initialized here because returning nil will be treated specially as an incorrect
@@ -2198,4 +2213,9 @@ func (bc *BlockChain) repairTxIndexTail(newTail uint64) error {
 		rawdb.WriteTxIndexTail(bc.db, newTail)
 	}
 	return nil
+}
+
+// Helper function for wrappedBlock
+func (bc *BlockChain) GetWarmReceipts(hash common.Hash) (types.Receipts, bool) {
+	return bc.warmBlockRecipts.Get(hash)
 }
