@@ -6,10 +6,9 @@ package sync
 import (
 	"context"
 
-	"github.com/ava-labs/libevm/common"
-
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
