@@ -6,7 +6,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
 	github.com/ava-labs/avalanchego v1.13.5-rc.4
 	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.11
-	github.com/ava-labs/libevm v1.13.14-0.3.0.rc.6
+	github.com/ava-labs/libevm v1.13.14-0.3.0.rc.7
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/fjl/gencodec v0.1.1
@@ -173,5 +173,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/ava-labs/libevm => github.com/ava-labs/libevm v0.0.0-20250813203936-9e4c147bf2b7
