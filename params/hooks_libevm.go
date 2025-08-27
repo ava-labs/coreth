@@ -27,6 +27,10 @@ import (
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
+// invalidateDelegateTime is the Unix timestamp for August 2nd, 2025, midnight Eastern Time
+// (August 2nd, 2025, 04:00 UTC)
+const invalidateDelegateUnix = 1754107200
+
 type RulesExtra extras.Rules
 
 func GetRulesExtra(r Rules) *extras.Rules {
@@ -34,23 +38,23 @@ func GetRulesExtra(r Rules) *extras.Rules {
 	return (*extras.Rules)(rules)
 }
 
-func (r RulesExtra) CanCreateContract(ac *libevm.AddressContext, gas uint64, state libevm.StateReader) (uint64, error) {
+func (RulesExtra) CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (uint64, error) {
 	return gas, nil
 }
 
-func (r RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
+func (RulesExtra) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {
 	return nil
 }
 
 // MinimumGasConsumption is a no-op.
-func (r RulesExtra) MinimumGasConsumption(x uint64) uint64 {
+func (RulesExtra) MinimumGasConsumption(x uint64) uint64 {
 	return (ethparams.NOOPHooks{}).MinimumGasConsumption(x)
 }
 
 var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
@@ -62,7 +66,7 @@ var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulP
 var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
 	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
 	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: CallNewAccountGas},
+	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
 }
 
 var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
@@ -137,9 +141,14 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			},
 		}
 
-		if callType := env.IncomingCallType(); callType == vm.DelegateCall || callType == vm.CallCode {
-			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
+		callType := env.IncomingCallType()
+		isDissallowedCallType := callType == vm.DelegateCall || callType == vm.CallCode
+		if env.BlockTime() >= invalidateDelegateUnix {
+			if isDissallowedCallType {
+				env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
+			}
 		}
+
 		return contract.Run(accessibleState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
