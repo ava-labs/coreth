@@ -77,9 +77,12 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	ctx, cancel := utilstest.NewTestContext(t)
 	defer cancel()
 
-	// Run the sync and handle expected error
+	// Run the sync and handle expected error.
+	// Note: we intentionally do not inline the call into require.ErrorIs because we need the
+	// captured err value below to decide whether to skip subsequent state assertions when an
+	// error is expected from the sync. Inlining would prevent this control flow.
 	err = codeSyncer.Sync(ctx)
-	require.ErrorIs(t, err, test.err)
+	require.ErrorIs(t, err, test.err) // nolint:require_no_error_inline_func — keep non-inlined to use err below
 	if err != nil {
 		return // don't check the state
 	}
