@@ -2112,6 +2112,7 @@ func TestCreateHandlers(t *testing.T) {
 	for _, elem := range batch[1:] {
 		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
 	}
+}
 
 // deployContract deploys the provided EVM bytecode using a prefunded test account
 // and returns the created contract address. It is reusable for any contract code.
