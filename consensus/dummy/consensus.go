@@ -378,7 +378,6 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		if headerExtra.ExtDataGasUsed == nil {
 			headerExtra.ExtDataGasUsed = new(big.Int)
 		}
-
 	}
 
 	if !eng.consensusMode.ModeSkipBlockFee {
