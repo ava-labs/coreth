@@ -2152,77 +2152,118 @@ func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common
 	return crypto.CreateAddress(callerAddr, nonce)
 }
 
-func TestMakePrecompileRevert_Granite(t *testing.T) {
-	fork := upgradetest.Granite
-	vm := newDefaultTestVM()
-	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-		Fork: &fork,
-	})
-	defer vm.Shutdown(context.Background())
+func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
+	// Mirror params.invalidateDelegateUnix here - if exported and
+	// imported we get a circular dependency
+	const invalidateDelegateUnix = 1754107200
 
-	contractAddr := deployContract(t, vm, vmtest.InitialBaseFee, common.FromHex(delegateCallPrecompileCode))
-
-	// Ensure block timestamps are after the delegate invalidation cutoff so Granite behavior applies.
-	vm.clock.Set(time.Unix(2000000000, 0))
-
-	// Call delegateSendHello(): 0x8b336b5e
-	data := common.FromHex("0x8b336b5e")
-	nonce := vm.txPool.Nonce(vmtest.TestEthAddrs[0])
-	tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 100000, vmtest.InitialBaseFee, data)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
-	require.NoError(t, err)
-	for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
-		require.NoError(t, err)
+	tests := []struct {
+		name                  string
+		fork                  upgradetest.Fork
+		deployGasPrice        *big.Int
+		txGasPrice            *big.Int
+		preDeploySetTime      func(vm *VM)
+		setTime               func(vm *VM)
+		refillCapacityFortuna bool
+		wantIncluded          bool
+		wantReceiptStatus     uint64
+	}{
+		{
+			name:           "granite_should_revert",
+			fork:           upgradetest.Granite,
+			deployGasPrice: vmtest.InitialBaseFee,
+			txGasPrice:     vmtest.InitialBaseFee,
+			setTime: func(vm *VM) {
+				vm.clock.Set(time.Unix(2000000000, 0))
+			},
+			refillCapacityFortuna: false,
+			wantIncluded:          true,
+			wantReceiptStatus:     0,
+		},
+		{
+			name:           "fortuna_post_cutoff_should_invalidate",
+			fork:           upgradetest.Fortuna,
+			deployGasPrice: big.NewInt(ap0.MinGasPrice),
+			txGasPrice:     big.NewInt(ap0.MinGasPrice),
+			setTime: func(vm *VM) {
+				// Ensure timestamp is >= cutoff by adding the necessary delta
+				now := vm.clock.Time().Unix()
+				if now < int64(invalidateDelegateUnix+1) {
+					delta := (int64(invalidateDelegateUnix+1) - now)
+					vm.clock.Set(vm.clock.Time().Add(time.Duration(delta) * time.Second))
+				}
+			},
+			refillCapacityFortuna: true,
+			wantIncluded:          false,
+		},
+		{
+			name:           "fortuna_pre_cutoff_should_succeed",
+			fork:           upgradetest.Fortuna,
+			deployGasPrice: big.NewInt(ap0.MinGasPrice),
+			txGasPrice:     big.NewInt(ap0.MinGasPrice),
+			preDeploySetTime: func(vm *VM) {
+				// Ensure we are pre-cutoff before deployment and remain increasing afterwards
+				vm.clock.Set(time.Unix(invalidateDelegateUnix-10, 0))
+			},
+			setTime:               nil, // stay pre-cutoff
+			refillCapacityFortuna: true,
+			wantIncluded:          true,
+			wantReceiptStatus:     1,
+		},
 	}
 
-	blk, err := vm.BuildBlock(context.Background())
-	require.NoError(t, err)
-	require.NoError(t, blk.Verify(context.Background()))
-	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
-	require.NoError(t, blk.Accept(context.Background()))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fork := tt.fork
+			vm := newDefaultTestVM()
+			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &fork,
+			})
+			defer vm.Shutdown(context.Background())
 
-	ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			if tt.preDeploySetTime != nil {
+				tt.preDeploySetTime(vm)
+			}
 
-	// Granite reverts the transaction which is still included in the block
-	require.Len(t, ethBlock.Transactions(), 1)
+			contractAddr := deployContract(t, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
 
-	// Receipt should show the transaction failed (0)
-	receipts := vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
-	require.Len(t, receipts, 1)
-	require.Equal(t, uint64(0), receipts[0].Status)
-}
+			if tt.refillCapacityFortuna {
+				// Refill gas capacity between blocks on Fortuna
+				vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+			}
 
-func TestMakePrecompileInvalidate_Fortuna(t *testing.T) {
-	fork := upgradetest.Fortuna
-	vm := newDefaultTestVM()
-	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-		Fork: &fork,
-	})
-	defer vm.Shutdown(context.Background())
+			// Set the desired block time for this test case
+			if tt.setTime != nil {
+				tt.setTime(vm)
+			}
 
-	contractAddr := deployContract(t, vm, big.NewInt(ap0.MinGasPrice), common.FromHex(delegateCallPrecompileCode))
+			// Call delegateSendHello(): 0x8b336b5e
+			data := common.FromHex("0x8b336b5e")
+			nonce := vm.txPool.Nonce(vmtest.TestEthAddrs[0])
+			tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 100000, tt.txGasPrice, data)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+			require.NoError(t, err)
+			for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
+				require.NoError(t, err)
+			}
 
-	// Refill gas capacity between blocks on Fortuna
-	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+			blk, err := vm.BuildBlock(context.Background())
+			require.NoError(t, err)
+			require.NoError(t, blk.Verify(context.Background()))
+			require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+			require.NoError(t, blk.Accept(context.Background()))
 
-	// Call delegateSendHello(): 0x8b336b5e
-	data := common.FromHex("0x8b336b5e")
-	nonce := vm.txPool.Nonce(vmtest.TestEthAddrs[0])
-	tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 100000, big.NewInt(ap0.MinGasPrice), data)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
-	require.NoError(t, err)
-	for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
-		require.NoError(t, err)
+			ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+
+			if !tt.wantIncluded {
+				require.Empty(t, ethBlock.Transactions())
+				return
+			}
+
+			require.Len(t, ethBlock.Transactions(), 1)
+			receipts := vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
+			require.Len(t, receipts, 1)
+			require.Equal(t, tt.wantReceiptStatus, receipts[0].Status)
+		})
 	}
-
-	blk, err := vm.BuildBlock(context.Background())
-	require.NoError(t, err)
-	require.NoError(t, blk.Verify(context.Background()))
-	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
-	require.NoError(t, blk.Accept(context.Background()))
-
-	ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
-
-	// Pre-Granite invalidation leads to exclusion from block
-	require.Empty(t, ethBlock.Transactions())
 }
