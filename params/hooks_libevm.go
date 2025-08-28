@@ -149,7 +149,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			}
 		}
 
-		return contract.Run(accessibleState, env.Addresses().Raw.Caller, env.Addresses().Raw.Self, input, suppliedGas, env.ReadOnly())
+		return contract.Run(accessibleState, env.Addresses().EVMSemantic.Caller, env.Addresses().EVMSemantic.Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
 }
