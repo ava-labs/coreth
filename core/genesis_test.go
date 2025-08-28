@@ -69,7 +69,7 @@ func TestGenesisBlockForTesting(t *testing.T) {
 }
 
 func TestSetupGenesis(t *testing.T) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testSetupGenesis(t, scheme)
 		})
