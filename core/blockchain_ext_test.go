@@ -20,9 +20,9 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 

@@ -40,7 +40,6 @@ import (
 	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
@@ -50,6 +49,7 @@ import (
 	"github.com/ava-labs/coreth/utils"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
