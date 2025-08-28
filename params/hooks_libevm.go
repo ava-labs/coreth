@@ -165,7 +165,8 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			}
 		}
 
-		return contract.Run(accessibleState, env.Addresses().Raw.Caller, env.Addresses().Raw.Self, input, suppliedGas, env.ReadOnly())
+		// EVM semantic addresses are used here to maintain consistency with prior behavior as present in AvalancheGo 1.13.0.
+		return contract.Run(accessibleState, env.Addresses().EVMSemantic.Caller, env.Addresses().EVMSemantic.Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
 }
