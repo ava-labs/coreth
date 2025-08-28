@@ -49,7 +49,7 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	avagoUtils "github.com/ava-labs/avalanchego/utils"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 )
 

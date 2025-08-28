@@ -23,7 +23,7 @@ import (
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 

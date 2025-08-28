@@ -53,7 +53,7 @@ import (
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 )
 
 var (
