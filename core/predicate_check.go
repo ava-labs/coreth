@@ -84,7 +84,7 @@ func CheckTxPredicates(
 
 	var (
 		txHash           = tx.Hash()
-		predicateResults = make(predicate.PrecompileResults)
+		predicateResults = make(predicate.PrecompileResults, len(predicateArguments))
 	)
 	for address, predicates := range predicateArguments {
 		// Since address is only added to predicateArguments when there's a
