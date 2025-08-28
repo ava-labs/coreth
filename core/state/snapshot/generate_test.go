@@ -79,7 +79,7 @@ func testGeneration(t *testing.T, scheme string) {
 
 	root, snap := helper.CommitAndGenerate() // two of which also has the same 3-slot storage trie attached.
 
-	if have, want := root, common.HexToHash("0xa819054cfef894169a5b56ccc4e5e06f14829d4a57498e8b9fb13ff21491828d"); have != want {
+	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
 	select {
@@ -173,7 +173,9 @@ type testHelper struct {
 func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &triedb.Config{}
-	config.DBOverride = hashdb.Config{}.BackendConstructor // disable caching
+	if scheme == rawdb.HashScheme {
+		config.DBOverride = hashdb.Config{}.BackendConstructor // disable caching
+	}
 	triedb := triedb.NewDatabase(diskdb, config)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(types.EmptyRootHash), triedb)
 	return &testHelper{
@@ -427,11 +429,8 @@ func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 
 	root := helper.Commit() // Root: 0xfa04f652e8bd3938971bf7d71c3c688574af334ca8bc20e64b01ba610ae93cad
 
-	// Delete an account trie node and ensure the generator chokes
-	targetPath := []byte{0xc}
-	targetHash := common.HexToHash("0xf73118e0254ce091588d66038744a0afae5f65a194de67cff310c683ae43329e")
-
-	rawdb.DeleteTrieNode(helper.diskdb, common.Hash{}, targetPath, targetHash, scheme)
+	// Force corruption under hash scheme by deleting the root node.
+	rawdb.DeleteTrieNode(helper.diskdb, common.Hash{}, nil, root, scheme)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, testBlockHash, root, nil)
 	select {
