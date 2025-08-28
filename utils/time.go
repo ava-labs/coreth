@@ -5,7 +5,8 @@ package utils
 
 import "time"
 
-// ExtractMilliseconds returns the fractional milliseconds (0–999) of t within its second.
-func ExtractMilliseconds(t time.Time) uint16 {
-	return uint16(t.Nanosecond() / int(time.Millisecond))
+// ExtractMillisecondsTimestamp returns the fractional milliseconds (0–999) of t within its second,
+// extracted from the Unix milliseconds timestamp.
+func ExtractMillisecondsTimestamp(t time.Time) uint16 {
+	return uint16(t.UnixMilli() % 1000)
 }

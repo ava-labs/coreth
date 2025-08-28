@@ -25,7 +25,7 @@ func TimeMillisecondsPart(rulesExtra extras.AvalancheRules, tstart time.Time) *u
 		return nil
 	}
 	// Extract milliseconds portion from tstart
-	timeMillisecondsPart := uint64(utils.ExtractMilliseconds(tstart))
+	timeMillisecondsPart := uint64(utils.ExtractMillisecondsTimestamp(tstart))
 	return &timeMillisecondsPart
 }
 
