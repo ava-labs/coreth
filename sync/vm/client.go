@@ -29,16 +29,9 @@ import (
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
-const (
-	// BlocksToFetch is the number of the block parents the state syncs to.
-	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
-	BlocksToFetch = 256
-
-	extenderStateSyncOperationName = "Atomic State Syncer"
-	blockSyncOperationName         = "Block Syncer"
-	evmStateSyncOperationName      = "EVM State Syncer"
-	codeHashSyncOperationName      = "Code Syncer"
-)
+// BlocksToFetch is the number of the block parents the state syncs to.
+// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
+const BlocksToFetch = 256
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
 
@@ -195,24 +188,18 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		}
 	}
 
-	syncers := []struct {
-		name   string
-		syncer synccommon.Syncer
-	}{
-		{blockSyncOperationName, blockSyncer},
-		{codeHashSyncOperationName, codeSyncer},
-		{evmStateSyncOperationName, stateSyncer},
+	syncers := []synccommon.Syncer{
+		blockSyncer,
+		codeSyncer,
+		stateSyncer,
 	}
 	if extenderSyncer != nil {
-		syncers = append(syncers, struct {
-			name   string
-			syncer synccommon.Syncer
-		}{extenderStateSyncOperationName, extenderSyncer})
+		syncers = append(syncers, extenderSyncer)
 	}
 
 	for _, s := range syncers {
-		if err := registry.Register(s.name, s.syncer); err != nil {
-			return fmt.Errorf("failed to register %s: %w", s.name, err)
+		if err := registry.Register(s); err != nil {
+			return fmt.Errorf("failed to register %s syncer: %w", s.Name(), err)
 		}
 	}
 

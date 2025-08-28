@@ -40,6 +40,9 @@ var (
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 )
 
+// Name returns the human-readable name for this sync task.
+func (*syncer) Name() string { return "atomic" }
+
 // Config holds the configuration for creating a new atomic syncer.
 type Config struct {
 	// TargetHeight is the target block height to sync to.

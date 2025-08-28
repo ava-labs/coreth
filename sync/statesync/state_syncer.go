@@ -33,6 +33,9 @@ var (
 	errCodeFetcherRequired                   = errors.New("code fetcher is required")
 )
 
+// Name returns the human-readable name for this sync task.
+func (*stateSync) Name() string { return "evm state" }
+
 type Config struct {
 	BatchSize uint
 	// Maximum number of code hashes in the code syncer queue.

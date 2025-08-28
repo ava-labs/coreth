@@ -22,6 +22,9 @@ type Syncer interface {
 	// Sync completes the full sync operation, returning any errors encountered.
 	// The sync will respect context cancellation.
 	Sync(ctx context.Context) error
+
+	// Name returns a human-readable name for this syncer implementation.
+	Name() string
 }
 
 // SummaryProvider is an interface for providing state summaries.

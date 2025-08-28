@@ -34,7 +34,8 @@ func NewSyncerRegistry() *SyncerRegistry {
 
 // Register adds a syncer to the registry.
 // Returns an error if a syncer with the same name is already registered.
-func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
+func (r *SyncerRegistry) Register(syncer synccommon.Syncer) error {
+	name := syncer.Name()
 	if r.registeredNames[name] {
 		return fmt.Errorf("syncer with name '%s' is already registered", name)
 	}
