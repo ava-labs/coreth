@@ -34,10 +34,10 @@ const (
 	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
 	BlocksToFetch = 256
 
-	atomicStateSyncOperationName = "Atomic State Syncer"
-	blockSyncOperationName       = "Block Syncer"
-	evmStateSyncOperationName    = "EVM State Syncer"
-	codeHashSyncOperationName    = "Code Syncer"
+	extenderStateSyncOperationName = "Atomic State Syncer"
+	blockSyncOperationName         = "Block Syncer"
+	evmStateSyncOperationName      = "EVM State Syncer"
+	codeHashSyncOperationName      = "Code Syncer"
 )
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
@@ -187,9 +187,9 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		return fmt.Errorf("failed to create EVM state syncer: %w", err)
 	}
 
-	var atomicSyncer synccommon.Syncer
+	var extenderSyncer synccommon.Syncer
 	if client.Extender != nil {
-		atomicSyncer, err = client.createAtomicSyncer()
+		extenderSyncer, err = client.createExtenderSyncer()
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
@@ -203,11 +203,11 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		{codeHashSyncOperationName, codeSyncer},
 		{evmStateSyncOperationName, stateSyncer},
 	}
-	if atomicSyncer != nil {
+	if extenderSyncer != nil {
 		syncers = append(syncers, struct {
 			name   string
 			syncer synccommon.Syncer
-		}{atomicStateSyncOperationName, atomicSyncer})
+		}{extenderStateSyncOperationName, extenderSyncer})
 	}
 
 	for _, s := range syncers {
@@ -235,7 +235,7 @@ func (client *client) createCodeHashSyncer(cfg statesync.Config) (synccommon.Cod
 	return statesync.NewCodeSyncer(client.Client, client.ChainDB, cfg)
 }
 
-func (client *client) createAtomicSyncer() (synccommon.Syncer, error) {
+func (client *client) createExtenderSyncer() (synccommon.Syncer, error) {
 	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
 }
 
