@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
@@ -2108,5 +2109,210 @@ func TestCreateHandlers(t *testing.T) {
 	// All other elements should have an error indicating there's no response
 	for _, elem := range batch[1:] {
 		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
+	}
+}
+
+func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
+	tests := []struct {
+		fork                 upgradetest.Fork
+		expectedError        error
+		expectedBlockGasCost *big.Int
+	}{
+		{
+			fork:          upgradetest.Fortuna,
+			expectedError: dummy.ErrInsufficientBlockGas,
+		},
+		{
+			fork:                 upgradetest.Granite,
+			expectedError:        nil,
+			expectedBlockGasCost: big.NewInt(0),
+		},
+	}
+
+	for _, test := range tests {
+		vm := newDefaultTestVM()
+		_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+			Fork: &test.fork,
+		})
+
+		defer vm.Shutdown(context.Background())
+
+		vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
+		tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		require.NoError(t, err)
+		blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
+		require.NoError(t, err)
+		require.NoError(t, blk.Accept(context.Background()))
+
+		vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
+		// have another tx very quickly after the first one
+		tx = types.NewTransaction(uint64(1), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+		signedTx, err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+		require.NoError(t, err)
+		blk, err = vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
+		require.ErrorIs(t, err, test.expectedError)
+		if test.expectedError == nil && test.expectedBlockGasCost != nil {
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			headerExtra := customtypes.GetHeaderExtra(ethBlk.Header())
+			require.Equal(t, test.expectedBlockGasCost, headerExtra.BlockGasCost)
+		}
+	}
+}
+
+func TestGraniteInvalidBlockGasCost(t *testing.T) {
+	fork := upgradetest.Granite
+	vm := newDefaultTestVM()
+	_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		Fork: &fork, // Granite
+	})
+
+	defer vm.Shutdown(context.Background())
+
+	vm.clock.Set(vm.clock.Time().Add(time.Second * 1))
+
+	tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+	require.NoError(t, err)
+	blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+	require.NoError(t, err)
+
+	ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+	require.Equal(t, big.NewInt(0), customtypes.GetHeaderExtra(ethBlk.Header()).BlockGasCost)
+	modifiedHeader := types.CopyHeader(ethBlk.Header())
+	modifiedExtra := customtypes.GetHeaderExtra(modifiedHeader)
+	modifiedExtra.BlockGasCost = big.NewInt(1)
+	modifiedBlock := customtypes.NewBlockWithExtData(
+		modifiedHeader,
+		nil,
+		nil,
+		nil,
+		new(trie.Trie),
+		customtypes.BlockExtData(ethBlk),
+		false,
+	)
+	modifiedBlk, err := wrapBlock(modifiedBlock, vm)
+	require.NoError(t, err)
+
+	err = modifiedBlk.Verify(context.Background())
+	require.ErrorIs(t, err, errInvalidBlockGasCostGranite)
+}
+
+func TestTimeMilliseconds(t *testing.T) {
+	cases := []struct {
+		fork                         upgradetest.Fork
+		buildTime                    time.Time
+		expectedTimeMillisecondsPart *uint64
+		expectedTimeMilliseconds     uint64
+	}{
+		{
+			fork:                         upgradetest.Fortuna,
+			buildTime:                    time.Unix(1714339200, 123_456_789),
+			expectedTimeMillisecondsPart: nil,
+			expectedTimeMilliseconds:     1714339200000,
+		},
+		{
+			fork:                         upgradetest.Granite,
+			buildTime:                    time.Unix(1714339200, 123_456_789),
+			expectedTimeMillisecondsPart: utils.NewUint64(123),
+			expectedTimeMilliseconds:     1714339200123,
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.fork.String(), func(t *testing.T) {
+			vm := newDefaultTestVM()
+			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &test.fork,
+			})
+
+			defer vm.Shutdown(context.Background())
+
+			vm.clock.Set(test.buildTime)
+			tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+			require.NoError(t, err)
+
+			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+			require.NoError(t, err)
+			require.NoError(t, blk.Accept(context.Background()))
+
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			require.Equal(t, test.expectedTimeMillisecondsPart, customtypes.BlockTimeMillisecondsPart(ethBlk))
+			require.Equal(t, test.expectedTimeMilliseconds, customtypes.BlockTimestampMilliseconds(ethBlk))
+		})
+	}
+}
+
+func TestInvalidTimeMilliseconds(t *testing.T) {
+	cases := []struct {
+		fork                 upgradetest.Fork
+		expectedError        error
+		timeMillisecondsPart *uint64
+	}{
+		{
+			fork:                 upgradetest.Fortuna,
+			timeMillisecondsPart: utils.NewUint64(1000),
+			expectedError:        header.ErrTimeMillisecondsBeforeGranite,
+		},
+		{
+			fork:                 upgradetest.Fortuna,
+			timeMillisecondsPart: nil,
+			expectedError:        nil,
+		},
+		{
+			fork:                 upgradetest.Granite,
+			timeMillisecondsPart: utils.NewUint64(1000),
+			expectedError:        header.ErrTimeMillisecondsInvalid,
+		},
+		{
+			fork:                 upgradetest.Granite,
+			timeMillisecondsPart: nil,
+			expectedError:        header.ErrTimeMillisecondsRequired,
+		},
+		{
+			fork:                 upgradetest.Granite,
+			timeMillisecondsPart: utils.NewUint64(100),
+			expectedError:        nil,
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.fork.String(), func(t *testing.T) {
+			vm := newDefaultTestVM()
+			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &test.fork,
+			})
+
+			defer vm.Shutdown(context.Background())
+
+			tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+			require.NoError(t, err)
+
+			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+			require.NoError(t, err)
+
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			receipts := vm.blockChain.GetReceiptsByHash(ethBlk.Hash())
+			modifiedHeader := types.CopyHeader(ethBlk.Header())
+			modifiedExtra := customtypes.GetHeaderExtra(modifiedHeader)
+			modifiedExtra.TimeMillisecondsPart = test.timeMillisecondsPart
+			modifiedBlock := customtypes.NewBlockWithExtData(
+				modifiedHeader,
+				ethBlk.Transactions(),
+				nil,
+				receipts,
+				trie.NewStackTrie(nil),
+				customtypes.BlockExtData(ethBlk),
+				false,
+			)
+			modifiedBlk, err := wrapBlock(modifiedBlock, vm)
+			require.NoError(t, err)
+			require.NoError(t, err)
+
+			err = modifiedBlk.Verify(context.Background())
+			require.ErrorIs(t, err, test.expectedError)
+		})
 	}
 }

@@ -39,6 +39,8 @@ type HeaderExtra struct {
 	ExtDataHash    common.Hash
 	ExtDataGasUsed *big.Int
 	BlockGasCost   *big.Int
+	// TimeMillisecondsPart is the milliseconds part of the timestamp.
+	TimeMillisecondsPart *uint64
 }
 
 // EncodeRLP RLP encodes the given [ethtypes.Header] and [HeaderExtra] together
@@ -101,6 +103,10 @@ func (h *HeaderExtra) PostCopy(dst *ethtypes.Header) {
 	if h.ExtDataGasUsed != nil {
 		cp.ExtDataGasUsed = new(big.Int).Set(h.ExtDataGasUsed)
 	}
+	if h.TimeMillisecondsPart != nil {
+		copyMilli := *h.TimeMillisecondsPart
+		cp.TimeMillisecondsPart = &copyMilli
+	}
 	SetHeaderExtra(dst, cp)
 }
 
@@ -152,12 +158,14 @@ func (h *HeaderSerializable) updateFromExtras(extras *HeaderExtra) {
 	h.ExtDataHash = extras.ExtDataHash
 	h.ExtDataGasUsed = extras.ExtDataGasUsed
 	h.BlockGasCost = extras.BlockGasCost
+	h.TimeMillisecondsPart = extras.TimeMillisecondsPart
 }
 
 func (h *HeaderSerializable) updateToExtras(extras *HeaderExtra) {
 	extras.ExtDataHash = h.ExtDataHash
 	extras.ExtDataGasUsed = h.ExtDataGasUsed
 	extras.BlockGasCost = h.BlockGasCost
+	extras.TimeMillisecondsPart = h.TimeMillisecondsPart
 }
 
 // NOTE: both generators currently do not support type aliases.
@@ -211,22 +219,26 @@ type HeaderSerializable struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	// TimeMillisecondsPart was added by Granite and is ignored in legacy headers.
+	TimeMillisecondsPart *uint64 `json:"timeMillisecondsPart" rlp:"optional"`
 }
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty     *hexutil.Big
-	Number         *hexutil.Big
-	GasLimit       hexutil.Uint64
-	GasUsed        hexutil.Uint64
-	Time           hexutil.Uint64
-	Extra          hexutil.Bytes
-	BaseFee        *hexutil.Big
-	ExtDataGasUsed *hexutil.Big
-	BlockGasCost   *hexutil.Big
-	Hash           common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	BlobGasUsed    *hexutil.Uint64
-	ExcessBlobGas  *hexutil.Uint64
+	Difficulty           *hexutil.Big
+	Number               *hexutil.Big
+	GasLimit             hexutil.Uint64
+	GasUsed              hexutil.Uint64
+	Time                 hexutil.Uint64
+	Extra                hexutil.Bytes
+	BaseFee              *hexutil.Big
+	ExtDataGasUsed       *hexutil.Big
+	BlockGasCost         *hexutil.Big
+	Hash                 common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	BlobGasUsed          *hexutil.Uint64
+	ExcessBlobGas        *hexutil.Uint64
+	TimeMillisecondsPart *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its

@@ -31,10 +31,11 @@ var (
 
 	ErrInsufficientBlockGas = errors.New("insufficient gas to cover the block cost")
 
-	errInvalidBlockTime       = errors.New("timestamp less than parent's")
-	errUnclesUnsupported      = errors.New("uncles unsupported")
-	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
-	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockTime           = errors.New("timestamp less than parent's")
+	errUnclesUnsupported          = errors.New("uncles unsupported")
+	errExtDataGasUsedNil          = errors.New("extDataGasUsed is nil")
+	errExtDataGasUsedTooLarge     = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockGasCostGranite = errors.New("invalid block gas cost in Granite")
 )
 
 type Mode struct {
@@ -173,7 +174,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 
 	// Enforce BlockGasCost constraints
 	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
+		config.GetAvalancheRules(header.Time),
 		parent,
 		header.Time,
 	)
@@ -258,6 +259,10 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *header.BlobGasUsed)
 		}
 	}
+
+	if err := customheader.VerifyTimeMilliseconds(rules, header); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -301,6 +306,7 @@ func (eng *DummyEngine) verifyBlockFee(
 	txs []*types.Transaction,
 	receipts []*types.Receipt,
 	extraStateChangeContribution *big.Int,
+	rules extras.AvalancheRules,
 ) error {
 	if eng.consensusMode.ModeSkipBlockFee {
 		return nil
@@ -310,6 +316,14 @@ func (eng *DummyEngine) verifyBlockFee(
 	}
 	if requiredBlockGasCost == nil || !requiredBlockGasCost.IsUint64() {
 		return fmt.Errorf("invalid block gas cost (%d) in apricot phase 4", requiredBlockGasCost)
+	}
+	// In Granite we don't need to verify the block fee
+	if rules.IsGranite {
+		if requiredBlockGasCost.Cmp(common.Big0) != 0 {
+			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, requiredBlockGasCost)
+		}
+		// skip block fee verification in Granite
+		return nil
 	}
 
 	var (
@@ -382,15 +396,16 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 	timestamp := block.Time()
 	// Verify the BlockGasCost set in the header matches the expected value.
 	blockGasCost := customtypes.BlockGasCost(block)
+	rules := config.GetAvalancheRules(timestamp)
 	expectedBlockGasCost := customheader.BlockGasCost(
-		config,
+		rules,
 		parent,
 		timestamp,
 	)
 	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
 		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 	}
-	if config.IsApricotPhase4(timestamp) {
+	if rules.IsApricotPhase4 {
 		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
@@ -409,6 +424,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 			block.Transactions(),
 			receipts,
 			contribution,
+			rules,
 		); err != nil {
 			return err
 		}
@@ -434,13 +450,14 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 
 	configExtra := params.GetExtra(chain.Config())
 	headerExtra := customtypes.GetHeaderExtra(header)
+	rules := configExtra.GetAvalancheRules(header.Time)
 	// Calculate the required block gas cost for this block.
 	headerExtra.BlockGasCost = customheader.BlockGasCost(
-		configExtra,
+		rules,
 		parent,
 		header.Time,
 	)
-	if configExtra.IsApricotPhase4(header.Time) {
+	if rules.IsApricotPhase4 {
 		headerExtra.ExtDataGasUsed = extDataGasUsed
 		if headerExtra.ExtDataGasUsed == nil {
 			headerExtra.ExtDataGasUsed = new(big.Int)
@@ -453,6 +470,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 			txs,
 			receipts,
 			contribution,
+			rules,
 		); err != nil {
 			return nil, err
 		}

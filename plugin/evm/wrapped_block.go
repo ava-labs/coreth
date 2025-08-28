@@ -41,6 +41,14 @@ var (
 )
 
 var (
+	errInvalidBlock                  = errors.New("invalid block")
+	errInvalidNonce                  = errors.New("invalid nonce")
+	errUnclesUnsupported             = errors.New("uncles unsupported")
+	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
+	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
+	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
+	errInvalidBlockGasCostGranite    = errors.New("invalid block gas cost in Granite")
+
 	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
@@ -419,6 +427,15 @@ func (b *wrappedBlock) syntacticVerify() error {
 		} else if *ethHeader.BlobGasUsed > 0 {
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
 		}
+	}
+
+	if rulesExtra.IsGranite {
+		if customtypes.BlockGasCost(b.ethBlock).Cmp(common.Big0) != 0 {
+			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, customtypes.BlockGasCost(b.ethBlock))
+		}
+	}
+	if err := header.VerifyTimeMilliseconds(rulesExtra.AvalancheRules, ethHeader); err != nil {
+		return err
 	}
 
 	if b.extension != nil {

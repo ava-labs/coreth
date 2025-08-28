@@ -45,6 +45,7 @@ import (
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
@@ -170,6 +171,11 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		Time:       timestamp,
 		BaseFee:    baseFee,
 	}
+
+	// Add TimeMillisecondsPart
+	headerExtra := customtypes.GetHeaderExtra(header)
+	rulesExtra := params.GetRulesExtra(w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time))
+	headerExtra.TimeMillisecondsPart = customheader.TimeMillisecondsPart(rulesExtra.AvalancheRules, tstart)
 
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {

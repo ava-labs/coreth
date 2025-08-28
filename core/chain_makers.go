@@ -34,6 +34,7 @@ import (
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/consensus/misc/eip4844"
@@ -409,6 +410,12 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
+	}
+	extraConfig := params.GetExtra(cm.config)
+	if extraConfig.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		// we don't have a time milliseconds here, so we set it to 0
+		headerExtra.TimeMillisecondsPart = new(uint64)
 	}
 	return header
 }
