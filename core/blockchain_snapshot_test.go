@@ -416,7 +416,7 @@ func TestRestartWithNewSnapshot(t *testing.T) {
 	// Expected head header    : C8
 	// Expected head block     : C4
 	// Expected snapshot disk  : C4
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme} {
 		test := &snapshotTest{
 			snapshotTestBasic{
 				scheme:             scheme,
@@ -452,7 +452,7 @@ func TestNoCommitCrashWithNewSnapshot(t *testing.T) {
 	//
 	// Expected head block     : C4
 	// Expected snapshot disk  : C4
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme} {
 		test := &crashSnapshotTest{
 			snapshotTestBasic{
 				scheme:             scheme,
@@ -488,7 +488,7 @@ func TestLowCommitCrashWithNewSnapshot(t *testing.T) {
 	//
 	// Expected head block     : C4
 	// Expected snapshot disk  : C4
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme} {
 		test := &crashSnapshotTest{
 			snapshotTestBasic{
 				scheme:             scheme,
@@ -524,7 +524,7 @@ func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
 	//
 	// Expected head block     : C4
 	// Expected snapshot disk  : C4
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme} {
 		test := &crashSnapshotTest{
 			snapshotTestBasic{
 				scheme:             scheme,
@@ -556,7 +556,7 @@ func TestGappedNewSnapshot(t *testing.T) {
 	//
 	// Expected head block     : G
 	// Expected snapshot disk  : G
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme} {
 		test := &gappedSnapshotTest{
 			snapshotTestBasic: snapshotTestBasic{
 				scheme:             scheme,
@@ -589,7 +589,7 @@ func TestRecoverSnapshotFromWipingCrash(t *testing.T) {
 	//
 	// Expected head block     : C4
 	// Expected snapshot disk  : C4
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+	for _, scheme := range []string{rawdb.HashScheme} {
 		test := &wipeCrashSnapshotTest{
 			snapshotTestBasic: snapshotTestBasic{
 				scheme:             scheme,

@@ -985,12 +985,6 @@ func (bc *BlockChain) Stop() {
 	if bc.snaps != nil {
 		bc.snaps.Release()
 	}
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		// Ensure that the in-memory trie nodes are journaled to disk properly.
-		if err := bc.triedb.Journal(bc.CurrentBlock().Root); err != nil {
-			log.Info("Failed to journal in-memory trie nodes", "err", err)
-		}
-	}
 	log.Info("Shutting down state manager")
 	start := time.Now()
 	if err := bc.stateManager.Shutdown(); err != nil {
@@ -1220,11 +1214,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.
 	_, err := bc.commitWithSnap(block, parentRoot, state)
 	if err != nil {
 		return err
-	}
-	// If node is running in path mode, skip explicit gc operation
-	// which is unnecessary in this mode.
-	if bc.triedb.Scheme() == rawdb.PathScheme {
-		return nil
 	}
 
 	// Note: if InsertTrie must be the last step in verification that can return an error.
