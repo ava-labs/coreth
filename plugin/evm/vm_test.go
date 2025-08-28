@@ -2311,7 +2311,8 @@ func TestInvalidTimeMilliseconds(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, err)
 
-			require.ErrorIs(t, modifiedBlk.Verify(context.Background()), test.expectedError)
+			err = modifiedBlk.Verify(context.Background())
+			require.ErrorIs(t, err, test.expectedError)
 		})
 	}
 }

@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/libevm/core/types"
+
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/core/types"
 )
 
 var (

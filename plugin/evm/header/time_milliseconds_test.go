@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTimeMillisecondsPart(t *testing.T) {
