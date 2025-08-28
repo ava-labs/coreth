@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -176,11 +175,7 @@ type testHelper struct {
 func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &triedb.Config{}
-	if scheme == rawdb.PathScheme {
-		config.DBOverride = pathdb.Config{}.BackendConstructor // disable caching
-	} else {
-		config.DBOverride = hashdb.Config{}.BackendConstructor // disable caching
-	}
+	config.DBOverride = hashdb.Config{}.BackendConstructor // disable caching
 	triedb := triedb.NewDatabase(diskdb, config)
 	accTrie, _ := trie.NewStateTrie(trie.StateTrieID(types.EmptyRootHash), triedb)
 	return &testHelper{

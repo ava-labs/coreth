@@ -52,7 +52,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
 	"github.com/ava-labs/libevm/consensus/misc/eip4844"
@@ -215,13 +214,6 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			CleanCacheSize:                  c.TrieCleanLimit * 1024 * 1024,
 			StatsPrefix:                     trieCleanCacheStatsNamespace,
 			ReferenceRootAtomicallyOnUpdate: true,
-		}.BackendConstructor
-	}
-	if c.StateScheme == rawdb.PathScheme {
-		config.DBOverride = pathdb.Config{
-			StateHistory:   c.StateHistory,
-			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
-			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
 	if c.StateScheme == customrawdb.FirewoodScheme {

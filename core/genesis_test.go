@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/triedb/firewood"
-	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -302,8 +301,6 @@ func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 	switch scheme {
 	case rawdb.HashScheme:
 		return triedb.HashDefaults
-	case rawdb.PathScheme:
-		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
 	case customrawdb.FirewoodScheme:
 		fwCfg := firewood.Defaults
 		// Create a unique temporary directory for each test
@@ -352,7 +349,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, DBOverride: pathdb.Defaults.BackendConstructor})
+	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true})
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
