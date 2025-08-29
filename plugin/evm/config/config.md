@@ -108,6 +108,9 @@ Configuration is provided as a JSON object. All fields are optional unless other
 
 ### Transaction Processing
 
+> **⚠️ WARNING: `allow-unfinalized-queries` should likely be set to `false` in production.** Enabling this flag can result in a confusing/unreliable user experience. Enabling this flag should only be done when users are expected to have knowledge of how Snow* consensus finalizes blocks.
+> Unlike chains with reorgs and forks that require block confirmations, Avalanche **does not** increase the confidence that a block will be finalized based on the depth of the chain. Waiting for additional blocks **does not** confirm finalization. Enabling this flag removes the guarantee that the node only exposes finalized blocks; requiring users to guess if a block is finalized.
+
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
 | `preimages-enabled` | bool | Enable preimage recording | `false` |
