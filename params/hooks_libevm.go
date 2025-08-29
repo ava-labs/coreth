@@ -142,9 +142,14 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		}
 
 		callType := env.IncomingCallType()
-		isDissallowedCallType := callType == vm.DelegateCall || callType == vm.CallCode
-		if env.BlockTime() >= invalidateDelegateUnix {
-			if isDissallowedCallType {
+		isDisallowedCallType := callType == vm.DelegateCall || callType == vm.CallCode
+		if isDisallowedCallType {
+			switch {
+			case rules.IsGranite:
+				// After Granite activation, revert the transaction (include with failed receipt)
+				return nil, 0, vm.ErrExecutionReverted
+			case env.BlockTime() >= invalidateDelegateUnix:
+				// After expiration, invalidate execution to exclude the tx from the block
 				env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
 			}
 		}

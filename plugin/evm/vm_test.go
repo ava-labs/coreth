@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
@@ -51,6 +52,8 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	ethparams "github.com/ava-labs/libevm/params"
 )
+
+const delegateCallPrecompileCode = "6080604052348015600e575f5ffd5b506106608061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061003f575f3560e01c80638b336b5e14610043578063b771b3bc14610061578063e4246eec1461007f575b5f5ffd5b61004b61009d565b604051610058919061029e565b60405180910390f35b610069610256565b6040516100769190610331565b60405180910390f35b61008761026e565b604051610094919061036a565b60405180910390f35b5f5f6040516020016100ae906103dd565b60405160208183030381529060405290505f63ee5b48eb60e01b826040516024016100d9919061046b565b604051602081830303815290604052907bffffffffffffffffffffffffffffffffffffffffffffffffffffffff19166020820180517bffffffffffffffffffffffffffffffffffffffffffffffffffffffff838183161783525050505090505f5f73020000000000000000000000000000000000000573ffffffffffffffffffffffffffffffffffffffff168360405161017391906104c5565b5f60405180830381855af49150503d805f81146101ab576040519150601f19603f3d011682016040523d82523d5f602084013e6101b0565b606091505b5091509150816101f5576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016101ec9061054b565b60405180910390fd5b808060200190518101906102099190610597565b94505f5f1b850361024f576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016102469061060c565b60405180910390fd5b5050505090565b73020000000000000000000000000000000000000581565b73020000000000000000000000000000000000000581565b5f819050919050565b61029881610286565b82525050565b5f6020820190506102b15f83018461028f565b92915050565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f819050919050565b5f6102f96102f46102ef846102b7565b6102d6565b6102b7565b9050919050565b5f61030a826102df565b9050919050565b5f61031b82610300565b9050919050565b61032b81610311565b82525050565b5f6020820190506103445f830184610322565b92915050565b5f610354826102b7565b9050919050565b6103648161034a565b82525050565b5f60208201905061037d5f83018461035b565b92915050565b5f82825260208201905092915050565b7f68656c6c6f0000000000000000000000000000000000000000000000000000005f82015250565b5f6103c7600583610383565b91506103d282610393565b602082019050919050565b5f6020820190508181035f8301526103f4816103bb565b9050919050565b5f81519050919050565b5f82825260208201905092915050565b8281835e5f83830152505050565b5f601f19601f8301169050919050565b5f61043d826103fb565b6104478185610405565b9350610457818560208601610415565b61046081610423565b840191505092915050565b5f6020820190508181035f8301526104838184610433565b905092915050565b5f81905092915050565b5f61049f826103fb565b6104a9818561048b565b93506104b9818560208601610415565b80840191505092915050565b5f6104d08284610495565b915081905092915050565b7f44656c65676174652063616c6c20746f2073656e64576172704d6573736167655f8201527f206661696c656400000000000000000000000000000000000000000000000000602082015250565b5f610535602783610383565b9150610540826104db565b604082019050919050565b5f6020820190508181035f83015261056281610529565b9050919050565b5f5ffd5b61057681610286565b8114610580575f5ffd5b50565b5f815190506105918161056d565b92915050565b5f602082840312156105ac576105ab610569565b5b5f6105b984828501610583565b91505092915050565b7f4661696c656420746f2073656e642077617270206d65737361676500000000005f82015250565b5f6105f6601b83610383565b9150610601826105c2565b602082019050919050565b5f6020820190508181035f830152610623816105ea565b905091905056fea2646970667358221220192acba01cff6d70ce187c63c7ccac116d811f6c35e316fde721f14929ced12564736f6c634300081e0033"
 
 var (
 	genesisJSONCancun = vmtest.GenesisJSON(activateCancun(params.TestChainConfig))
@@ -2108,5 +2111,159 @@ func TestCreateHandlers(t *testing.T) {
 	// All other elements should have an error indicating there's no response
 	for _, elem := range batch[1:] {
 		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
+	}
+}
+
+// deployContract deploys the provided EVM bytecode using a prefunded test account
+// and returns the created contract address. It is reusable for any contract code.
+func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common.Address {
+	callerAddr := vmtest.TestEthAddrs[0]
+	callerKey := vmtest.TestKeys[0]
+
+	nonce := vm.txPool.Nonce(callerAddr)
+	tx := types.NewContractCreation(nonce, big.NewInt(0), 1000000, gasPrice, code)
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), callerKey.ToECDSA())
+	require.NoError(t, err)
+
+	for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
+		require.NoError(t, err)
+	}
+
+	blk, err := vm.BuildBlock(context.Background())
+	require.NoError(t, err)
+	require.NoError(t, blk.Verify(context.Background()))
+	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+	require.NoError(t, blk.Accept(context.Background()))
+
+	ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+	receipts := vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
+	require.Len(t, receipts, len(ethBlock.Transactions()))
+
+	found := false
+	for i, btx := range ethBlock.Transactions() {
+		if btx.Hash() == signedTx.Hash() {
+			found = true
+			require.Equal(t, uint64(1), receipts[i].Status) // 1 = success
+			break
+		}
+	}
+	require.True(t, found)
+
+	return crypto.CreateAddress(callerAddr, nonce)
+}
+
+func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
+	// Mirror params.invalidateDelegateUnix here - if exported and
+	// imported we get a circular dependency
+	const invalidateDelegateUnix = 1754107200
+
+	tests := []struct {
+		name                  string
+		fork                  upgradetest.Fork
+		deployGasPrice        *big.Int
+		txGasPrice            *big.Int
+		preDeploySetTime      func(vm *VM)
+		setTime               func(vm *VM)
+		refillCapacityFortuna bool
+		wantIncluded          bool
+		wantReceiptStatus     uint64
+	}{
+		{
+			name:           "granite_should_revert",
+			fork:           upgradetest.Granite,
+			deployGasPrice: vmtest.InitialBaseFee,
+			txGasPrice:     vmtest.InitialBaseFee,
+			setTime: func(vm *VM) {
+				vm.clock.Set(time.Unix(2000000000, 0))
+			},
+			refillCapacityFortuna: false,
+			wantIncluded:          true,
+			wantReceiptStatus:     0,
+		},
+		{
+			name:           "fortuna_post_cutoff_should_invalidate",
+			fork:           upgradetest.Fortuna,
+			deployGasPrice: big.NewInt(ap0.MinGasPrice),
+			txGasPrice:     big.NewInt(ap0.MinGasPrice),
+			setTime: func(vm *VM) {
+				// Ensure timestamp is >= cutoff by adding the necessary delta
+				now := vm.clock.Time().Unix()
+				if now < int64(invalidateDelegateUnix+1) {
+					delta := (int64(invalidateDelegateUnix+1) - now)
+					vm.clock.Set(vm.clock.Time().Add(time.Duration(delta) * time.Second))
+				}
+			},
+			refillCapacityFortuna: true,
+			wantIncluded:          false,
+		},
+		{
+			name:           "fortuna_pre_cutoff_should_succeed",
+			fork:           upgradetest.Fortuna,
+			deployGasPrice: big.NewInt(ap0.MinGasPrice),
+			txGasPrice:     big.NewInt(ap0.MinGasPrice),
+			preDeploySetTime: func(vm *VM) {
+				// Ensure we are pre-cutoff before deployment and remain increasing afterwards
+				vm.clock.Set(time.Unix(invalidateDelegateUnix-10, 0))
+			},
+			setTime:               nil, // stay pre-cutoff
+			refillCapacityFortuna: true,
+			wantIncluded:          true,
+			wantReceiptStatus:     1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fork := tt.fork
+			vm := newDefaultTestVM()
+			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &fork,
+			})
+			defer vm.Shutdown(context.Background())
+
+			if tt.preDeploySetTime != nil {
+				tt.preDeploySetTime(vm)
+			}
+
+			contractAddr := deployContract(t, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
+
+			if tt.refillCapacityFortuna {
+				// Refill gas capacity between blocks on Fortuna
+				vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
+			}
+
+			// Set the desired block time for this test case
+			if tt.setTime != nil {
+				tt.setTime(vm)
+			}
+
+			// Call delegateSendHello(): 0x8b336b5e
+			data := common.FromHex("0x8b336b5e")
+			nonce := vm.txPool.Nonce(vmtest.TestEthAddrs[0])
+			tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 100000, tt.txGasPrice, data)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+			require.NoError(t, err)
+			for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
+				require.NoError(t, err)
+			}
+
+			blk, err := vm.BuildBlock(context.Background())
+			require.NoError(t, err)
+			require.NoError(t, blk.Verify(context.Background()))
+			require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+			require.NoError(t, blk.Accept(context.Background()))
+
+			ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+
+			if !tt.wantIncluded {
+				require.Empty(t, ethBlock.Transactions())
+				return
+			}
+
+			require.Len(t, ethBlock.Transactions(), 1)
+			receipts := vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
+			require.Len(t, receipts, 1)
+			require.Equal(t, tt.wantReceiptStatus, receipts[0].Status)
+		})
 	}
 }
