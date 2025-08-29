@@ -5,6 +5,7 @@ package statesync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -27,7 +28,10 @@ const (
 	defaultNumWorkers      = 8
 )
 
-var _ synccommon.Syncer = (*stateSync)(nil)
+var (
+	_                      synccommon.Syncer = (*stateSync)(nil)
+	errCodeFetcherRequired                   = errors.New("code fetcher is required")
+)
 
 type Config struct {
 	BatchSize uint
@@ -76,10 +80,10 @@ type stateSync struct {
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
 	batchSize uint                      // write batches when they reach this size
 
-	segments   chan syncclient.LeafSyncTask   // channel of tasks to sync
-	syncer     *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
-	codeSyncer *codeSyncer                    // manages the asynchronous download and batching of code hashes
-	trieQueue  *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
+	segments    chan syncclient.LeafSyncTask   // channel of tasks to sync
+	syncer      *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
+	codeFetcher synccommon.CodeFetcher         // fetcher that manages the asynchronous download and batching of code hashes
+	trieQueue   *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
 
 	// track the main account trie specifically to commit its root at the end of the operation
 	mainTrie *trieToSync
@@ -95,7 +99,7 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, config Config) (synccommon.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher synccommon.CodeFetcher, config Config) (synccommon.Syncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	ss := &stateSync{
@@ -125,12 +129,13 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		OnFailure:   ss.onSyncFailure,
 	})
 
-	var err error
-	ss.codeSyncer, err = newCodeSyncer(client, db, cfg)
-	if err != nil {
-		return nil, err
+	if fetcher == nil {
+		return nil, errCodeFetcherRequired
 	}
 
+	ss.codeFetcher = fetcher
+
+	var err error
 	ss.trieQueue = NewTrieQueue(db)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
 		return nil, err
@@ -171,7 +176,7 @@ func (t *stateSync) onStorageTrieFinished(root common.Hash) error {
 
 // onMainTrieFinished is called after the main trie finishes syncing.
 func (t *stateSync) onMainTrieFinished() error {
-	t.codeSyncer.notifyAccountTrieCompleted()
+	t.codeFetcher.Finalize()
 
 	// count the number of storage tries we need to sync for eta purposes.
 	numStorageTries, err := t.trieQueue.countTries()
@@ -255,7 +260,14 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Sync(ctx context.Context) error {
-	// Start the code syncer and leaf syncer.
+	// Wait for the code fetcher to be ready before starting.
+	select {
+	case <-t.codeFetcher.Ready():
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	// Start the leaf syncer and storage trie producer.
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
@@ -264,9 +276,7 @@ func (t *stateSync) Sync(ctx context.Context) error {
 		}
 		return t.onSyncComplete()
 	})
-	eg.Go(func() error {
-		return t.codeSyncer.Sync(egCtx)
-	})
+	// Note: code syncer is no longer started here. It should be run by the [SyncerRegistry] and registered separately.
 	eg.Go(func() error {
 		return t.storageTrieProducer(egCtx)
 	})

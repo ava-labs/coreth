@@ -28,14 +28,14 @@ const (
 )
 
 var (
-	_ synccommon.Syncer = (*codeSyncer)(nil)
+	_ synccommon.Syncer = (*CodeSyncer)(nil)
 
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 )
 
-// codeSyncer syncs code bytes from the network in a seprate thread.
+// CodeSyncer syncs code bytes from the network in a seprate thread.
 // Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
-type codeSyncer struct {
+type CodeSyncer struct {
 	db                    ethdb.Database
 	client                statesyncclient.Client
 	config                Config
@@ -47,8 +47,9 @@ type codeSyncer struct {
 	done                  <-chan struct{}
 }
 
-// newCodeSyncer returns a code syncer that will sync code bytes from the network in a separate thread.
-func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*codeSyncer, error) {
+// NewCodeSyncer allows external packages (e.g., registry wiring) to create a code syncer as a separate task and
+// inject it as a [CodeFetcher] into the state syncer.
+func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*CodeSyncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	dbCodeHashes, err := getCodeToFetchFromDB(db)
@@ -56,7 +57,7 @@ func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Conf
 		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
 	}
 
-	return &codeSyncer{
+	return &CodeSyncer{
 		db:           db,
 		client:       client,
 		config:       cfg,
@@ -66,10 +67,10 @@ func newCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Conf
 	}, nil
 }
 
-// Start the worker thread and populate the code hashes queue with active work.
+// Sync starts the worker thread and populates the code hashes queue with active work.
 // Blocks until all outstanding code requests from a previous sync have been
 // fetched and the code channel has been closed, or the context is cancelled.
-func (c *codeSyncer) Sync(ctx context.Context) error {
+func (c *CodeSyncer) Sync(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 	c.done = egCtx.Done()
 
@@ -80,7 +81,7 @@ func (c *codeSyncer) Sync(ctx context.Context) error {
 
 	// Queue the code hashes from the previous sync
 	if err := c.addCode(c.dbCodeHashes); err != nil {
-		return fmt.Errorf("Unable to resume previous sync: %w", err)
+		return fmt.Errorf("unable to resume previous sync: %w", err)
 	}
 	c.dbCodeHashes = nil
 	close(c.open)
@@ -128,7 +129,7 @@ func getCodeToFetchFromDB(db ethdb.Database) ([]common.Hash, error) {
 
 // work fulfills any incoming requests from the producer channel by fetching code bytes from the network
 // and fulfilling them by updating the database.
-func (c *codeSyncer) work(ctx context.Context) error {
+func (c *CodeSyncer) work(ctx context.Context) error {
 	codeHashes := make([]common.Hash, 0, message.MaxCodeHashesPerRequest)
 
 	for {
@@ -165,7 +166,7 @@ func (c *codeSyncer) work(ctx context.Context) error {
 // marks the work as complete.
 // codeHashes should not be empty or contain duplicate hashes.
 // Returns an error if one is encountered, signaling the worker thread to terminate.
-func (c *codeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common.Hash) error {
+func (c *CodeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common.Hash) error {
 	codeByteSlices, err := c.client.GetCode(ctx, codeHashes)
 	if err != nil {
 		return err
@@ -190,12 +191,12 @@ func (c *codeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 // AddCode checks if [codeHashes] need to be fetched from the network and adds them to the queue if so.
 // assumes that [codeHashes] are valid non-empty code hashes.
 // This blocks until the code syncer is open and ready to accept requests.
-func (c *codeSyncer) AddCode(codeHashes []common.Hash) error {
+func (c *CodeSyncer) AddCode(codeHashes []common.Hash) error {
 	<-c.open
 	return c.addCode(codeHashes)
 }
 
-func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
+func (c *CodeSyncer) addCode(codeHashes []common.Hash) error {
 	batch := c.db.NewBatch()
 
 	c.lock.Lock()
@@ -217,18 +218,21 @@ func (c *codeSyncer) addCode(codeHashes []common.Hash) error {
 	return c.addHashesToQueue(selectedCodeHashes)
 }
 
-// notifyAccountTrieCompleted notifies the code syncer that there will be no more incoming
-// code hashes from syncing the account trie, so it only needs to compelete its outstanding
-// work.
+// Finalize implements CodeFetcher by signaling no further code hashes will be added.
+// Notifies the code syncer that there will be no more incoming code hashes from syncing the account trie,
+// so it only needs to complete its outstanding work.
 // Note: this allows the worker threads to exit and return a nil error.
-func (c *codeSyncer) notifyAccountTrieCompleted() {
-	<-c.open // The code syncer must queue the previous code from the db first
+func (c *CodeSyncer) Finalize() {
+	<-c.open // The code syncer must queue the previous code from the db first.
 	close(c.codeHashes)
 }
 
+// Ready returns a channel that is closed when the code syncer is ready to accept code hashes.
+func (c *CodeSyncer) Ready() <-chan struct{} { return c.open }
+
 // addHashesToQueue adds [codeHashes] to the queue and blocks until it is able to do so.
 // This should be called after all other operation to add code hashes to the queue has been completed.
-func (c *codeSyncer) addHashesToQueue(codeHashes []common.Hash) error {
+func (c *CodeSyncer) addHashesToQueue(codeHashes []common.Hash) error {
 	for _, codeHash := range codeHashes {
 		select {
 		case c.codeHashes <- codeHash:

@@ -4,9 +4,9 @@
 package statesync
 
 import (
-	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/libevm/common"
@@ -19,6 +19,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
+	"github.com/ava-labs/coreth/utils/utilstest"
 
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -26,7 +27,7 @@ import (
 
 type codeSyncerTest struct {
 	clientDB          ethdb.Database
-	setupCodeSyncer   func(*codeSyncer)
+	setupCodeSyncer   func(*CodeSyncer)
 	codeRequestHashes [][]common.Hash
 	codeByteSlices    [][]byte
 	getCodeIntercept  func(hashes []common.Hash, codeBytes [][]byte) ([][]byte, error)
@@ -54,10 +55,11 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		clientDB = rawdb.NewMemoryDatabase()
 	}
 
-	codeSyncer, err := newCodeSyncer(
+	cfg := NewDefaultConfig(testRequestSize)
+	codeSyncer, err := NewCodeSyncer(
 		mockClient,
 		clientDB,
-		NewDefaultConfig(testRequestSize),
+		cfg,
 	)
 	require.NoError(t, err)
 	if test.setupCodeSyncer != nil {
@@ -69,10 +71,14 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		codeSyncer.notifyAccountTrieCompleted()
+		codeSyncer.Finalize()
 	}()
 
-	err = codeSyncer.Sync(context.Background())
+	ctx, cancel := utilstest.NewTestContext(t)
+	defer cancel()
+
+	// Run the sync and handle expected error.
+	err = codeSyncer.Sync(ctx)
 	require.ErrorIs(t, err, test.err)
 	if err != nil {
 		return // don't check the state
@@ -106,7 +112,7 @@ func TestCodeSyncerManyCodeHashes(t *testing.T) {
 	}
 
 	testCodeSyncer(t, codeSyncerTest{
-		setupCodeSyncer: func(c *codeSyncer) {
+		setupCodeSyncer: func(c *CodeSyncer) {
 			c.codeHashes = make(chan common.Hash, 10)
 		},
 		codeRequestHashes: [][]common.Hash{codeHashes[0:100], codeHashes[100:2000], codeHashes[2000:2005], codeHashes[2005:]},
@@ -161,4 +167,40 @@ func TestCodeSyncerAddsMoreInProgressThanQueueSize(t *testing.T) {
 		codeRequestHashes: nil,
 		codeByteSlices:    codeByteSlices,
 	})
+}
+
+func TestCodeSyncerReady(t *testing.T) {
+	serverDB := memorydb.New()
+	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
+	mockClient := statesyncclient.NewTestClient(message.Codec, nil, codeRequestHandler, nil)
+
+	clientDB := rawdb.NewMemoryDatabase()
+	cfg := NewDefaultConfig(testRequestSize)
+	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, cfg)
+	require.NoError(t, err)
+
+	select {
+	case <-codeSyncer.Ready():
+		// If already closed, this would mean ready before Sync which shouldn't happen.
+		t.Fatalf("Ready should not be closed before Sync starts")
+	default:
+	}
+
+	ctx, cancel := utilstest.NewTestContext(t)
+
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- codeSyncer.Sync(ctx) }()
+
+	// Wait briefly for Sync to initialize and close the ready channel.
+	utilstest.SleepWithContext(ctx, 50*time.Millisecond)
+
+	select {
+	case <-codeSyncer.Ready():
+		// ok
+	default:
+		t.Fatalf("Ready should be closed after Sync initialization")
+	}
+
+	cancel()
+	require.Error(t, <-doneCh)
 }
