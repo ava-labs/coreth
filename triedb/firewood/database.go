@@ -376,11 +376,9 @@ func (db *Database) Close() error {
 	defer db.proposalLock.Unlock()
 
 	db.proposalMap = nil
-
-	// Before closing the database, we must drop all of the proposals so firewood
-	// can free any allocated memory. But, avoid the unnecessary work in
-	// `removeProposalFromMap` (which also fails because of the clear above).
-	db.proposalTree.recursivelyFree(true)
+	// Before closing the database, we must drop all of the proposals so firewood can
+	// free any allocated memory.
+	db.dereference(db.proposalTree)
 
 	// Close the database
 	return db.fwDisk.Close()
@@ -455,8 +453,16 @@ func (db *Database) dereference(pCtx *ProposalContext) {
 	}
 	pCtx.Children = nil
 
-	// Remove the proposal from the map.
-	db.removeProposalFromMap(pCtx)
+	// map will be nil on teardown so we can skip the extra work
+	if db.proposalMap != nil {
+		// Remove the proposal from the map.
+		db.removeProposalFromMap(pCtx)
+	} else if pCtx == db.proposalTree {
+		// if db.proposalMap is nil, then we are tearing down all proposals but the root
+		// doesn't have a proposal, so we skip the drop to prevent a nil dereference.
+		// However, we don't check for a nil proposal to force errors to propagate.
+		return
+	}
 
 	// Drop the proposal in the backend.
 	if err := pCtx.Proposal.Drop(); err != nil {
@@ -590,25 +596,4 @@ func arrangeKeyValuePairs(nodes *trienode.MergedNodeSet) ([][]byte, [][]byte) {
 	keys := append(storageKeys, acctKeys...)
 	values := append(storageValues, acctValues...)
 	return keys, values
-}
-
-// recursivelyFree dereferences the proposal and all of its children.
-// Should only be accessed with the proposal lock held and from the close method
-// of the database because it bypasses the proposal map removal.
-//
-// If skipRoot is true, the root proposal will not be freed. When freeing the
-// root ProposalContext, this will be nil thefore skipRoot must be true.
-func (pCtx *ProposalContext) recursivelyFree(skipRoot bool) {
-	for _, child := range pCtx.Children {
-		child.recursivelyFree(false)
-	}
-
-	pCtx.Children = nil
-
-	if !skipRoot {
-		if err := pCtx.Proposal.Drop(); err != nil {
-			log.Error("firewood: error dropping proposal", "root", pCtx.Root.Hex(), "error", err)
-		}
-		ffiOutstandingProposals.Dec(1)
-	}
 }
