@@ -33,6 +33,12 @@ var (
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 )
 
+// Name returns the human-readable name for this sync task.
+func (*CodeSyncer) Name() string { return "Code Syncer" }
+
+// ID returns the stable identifier for this sync task.
+func (*CodeSyncer) ID() string { return "state_code_sync" }
+
 // CodeSyncer syncs code bytes from the network in a seprate thread.
 // Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
 type CodeSyncer struct {
