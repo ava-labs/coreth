@@ -36,6 +36,7 @@ func (m *mockSyncer) Sync(_ context.Context) error {
 }
 
 func (m *mockSyncer) Name() string { return m.name }
+func (m *mockSyncer) ID() string   { return m.name }
 
 // namedSyncer adapts an existing syncer with a provided name to satisfy Syncer with Name().
 type namedSyncer struct {
@@ -45,6 +46,7 @@ type namedSyncer struct {
 
 func (n *namedSyncer) Sync(ctx context.Context) error { return n.syncer.Sync(ctx) }
 func (n *namedSyncer) Name() string                   { return n.name }
+func (n *namedSyncer) ID() string                     { return n.name }
 
 // syncerConfig describes a test syncer setup for RunSyncerTasks table tests.
 type syncerConfig struct {
@@ -75,12 +77,12 @@ func TestSyncerRegistry_Register(t *testing.T) {
 			expectedCount: 2,
 		},
 		{
-			name: "duplicate name registration",
+			name: "duplicate id registration",
 			registrations: []*mockSyncer{
 				newMockSyncer("Syncer1", nil),
 				newMockSyncer("Syncer1", nil),
 			},
-			expectedError: "syncer with name 'Syncer1' is already registered",
+			expectedError: "syncer with id 'Syncer1' is already registered",
 			expectedCount: 1,
 		},
 		{

@@ -25,7 +25,8 @@ type FuncSyncer struct {
 func (f FuncSyncer) Sync(ctx context.Context) error { return f.fn(ctx) }
 
 // Name returns the provided name or a default if unspecified.
-func (FuncSyncer) Name() string { return "test" }
+func (FuncSyncer) Name() string { return "Test Name" }
+func (FuncSyncer) ID() string   { return "test_id" }
 
 var _ synccommon.Syncer = FuncSyncer{}
 

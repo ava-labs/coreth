@@ -34,7 +34,10 @@ var (
 )
 
 // Name returns the human-readable name for this sync task.
-func (*stateSync) Name() string { return "evm state" }
+func (*stateSync) Name() string { return "EVM State Syncer" }
+
+// ID returns the stable identifier for this sync task.
+func (*stateSync) ID() string { return "state_evm_state_sync" }
 
 type Config struct {
 	BatchSize uint
