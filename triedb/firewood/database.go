@@ -380,7 +380,7 @@ func (db *Database) Close() error {
 	// Before closing the database, we must drop all of the proposals so firewood
 	// can free any allocated memory. But, avoid the unnecessary work in
 	// `removeProposalFromMap` (which also fails because of the clear above).
-	db.proposalTree.recursivelyFree()
+	db.proposalTree.recursivelyFree(true)
 
 	// Close the database
 	return db.fwDisk.Close()
@@ -595,15 +595,20 @@ func arrangeKeyValuePairs(nodes *trienode.MergedNodeSet) ([][]byte, [][]byte) {
 // recursivelyFree dereferences the proposal and all of its children.
 // Should only be accessed with the proposal lock held and from the close method
 // of the database because it bypasses the proposal map removal.
-func (pCtx *ProposalContext) recursivelyFree() {
+//
+// If skipRoot is true, the root proposal will not be freed. When freeing the
+// root ProposalContext, this will be nil thefore skipRoot must be true.
+func (pCtx *ProposalContext) recursivelyFree(skipRoot bool) {
 	for _, child := range pCtx.Children {
-		child.recursivelyFree()
+		child.recursivelyFree(false)
 	}
 
 	pCtx.Children = nil
 
-	if err := pCtx.Proposal.Drop(); err != nil {
-		log.Error("firewood: error dropping proposal", "root", pCtx.Root.Hex(), "error", err)
+	if !skipRoot {
+		if err := pCtx.Proposal.Drop(); err != nil {
+			log.Error("firewood: error dropping proposal", "root", pCtx.Root.Hex(), "error", err)
+		}
+		ffiOutstandingProposals.Dec(1)
 	}
-	ffiOutstandingProposals.Dec(1)
 }
