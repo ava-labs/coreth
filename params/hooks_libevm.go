@@ -51,33 +51,47 @@ func (RulesExtra) MinimumGasConsumption(x uint64) uint64 {
 	return (ethparams.NOOPHooks{}).MinimumGasConsumption(x)
 }
 
-var PrecompiledContractsApricotPhase2 = map[common.Address]contract.StatefulPrecompiledContract{
-	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
+var PrecompiledContractsApricotPhase2 = map[common.Address]vm.PrecompiledContract{
+	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot}),
+	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas}),
 }
 
-var PrecompiledContractsApricotPhasePre6 = map[common.Address]contract.StatefulPrecompiledContract{
-	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.DeprecatedContract{},
+var PrecompiledContractsApricotPhasePre6 = map[common.Address]vm.PrecompiledContract{
+	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
 }
 
-var PrecompiledContractsApricotPhase6 = map[common.Address]contract.StatefulPrecompiledContract{
-	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas},
+var PrecompiledContractsApricotPhase6 = map[common.Address]vm.PrecompiledContract{
+	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.NativeAssetBalance{GasCost: AssetBalanceApricot}),
+	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.NativeAssetCall{GasCost: AssetCallApricot, CallNewAccountGas: ethparams.CallNewAccountGas}),
 }
 
-var PrecompiledContractsBanff = map[common.Address]contract.StatefulPrecompiledContract{
-	nativeasset.GenesisContractAddr:    &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetBalanceAddr: &nativeasset.DeprecatedContract{},
-	nativeasset.NativeAssetCallAddr:    &nativeasset.DeprecatedContract{},
+var PrecompiledContractsBanff = map[common.Address]vm.PrecompiledContract{
+	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+}
+
+var PrecompiledContractsGranite = map[common.Address]vm.PrecompiledContract{
+	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.DeprecatedContract{}),
+	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+}
+
+func init() {
+	for addr, precompile := range vm.PrecompiledContractsP256Verify {
+		PrecompiledContractsGranite[addr] = precompile
+	}
 }
 
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
-	var precompiles map[common.Address]contract.StatefulPrecompiledContract
+	var precompiles map[common.Address]vm.PrecompiledContract
 	switch {
+	case r.IsGranite:
+		precompiles = PrecompiledContractsGranite
 	case r.IsBanff:
 		precompiles = PrecompiledContractsBanff
 	case r.IsApricotPhase6:
@@ -98,8 +112,10 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 // dynamic precompile activation registry.
 // These were only active historically and are not active in the current network.
 func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
-	var precompiles map[common.Address]contract.StatefulPrecompiledContract
+	var precompiles map[common.Address]vm.PrecompiledContract
 	switch {
+	case r.IsGranite:
+		precompiles = PrecompiledContractsGranite
 	case r.IsBanff:
 		precompiles = PrecompiledContractsBanff
 	case r.IsApricotPhase6:
@@ -115,7 +131,7 @@ func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.Preco
 		return nil, false
 	}
 
-	return makePrecompile(precompile), true
+	return precompile, true
 }
 
 func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.PrecompiledContract {
@@ -159,6 +175,7 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledC
 	if p, ok := r.precompileOverrideBuiltin(addr); ok {
 		return p, true
 	}
+
 	if _, ok := r.Precompiles[addr]; !ok {
 		return nil, false
 	}
