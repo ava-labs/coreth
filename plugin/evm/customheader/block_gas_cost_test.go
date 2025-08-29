@@ -1,13 +1,16 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package header
+package customheader
 
 import (
 	"math/big"
 	"testing"
 
+<<<<<<< HEAD:plugin/evm/header/block_gas_cost_test.go
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+=======
+>>>>>>> master:plugin/evm/customheader/block_gas_cost_test.go
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
@@ -308,6 +311,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 }
 
 func TestVerifyBlockFee(t *testing.T) {
+	testAddr := common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8")
 	tests := map[string]struct {
 		baseFee                *big.Int
 		parentBlockGasCost     *big.Int
@@ -324,7 +328,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(0),
 			timeElapsed:        0,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100, big.NewInt(100), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100, big.NewInt(100), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 1000},
@@ -338,7 +342,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(0),
 			timeElapsed:        0,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100_000, big.NewInt(200), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(200), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 100_000},
@@ -352,8 +356,8 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(0),
 			timeElapsed:        0,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100_000, big.NewInt(200), nil),
-				types.NewTransaction(1, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100_000, big.NewInt(100), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(200), nil),
+				types.NewTransaction(1, testAddr, big.NewInt(0), 100_000, big.NewInt(100), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 100_000},
@@ -368,8 +372,8 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(0),
 			timeElapsed:        0,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100_000, big.NewInt(150), nil),
-				types.NewTransaction(1, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100_000, big.NewInt(150), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(150), nil),
+				types.NewTransaction(1, testAddr, big.NewInt(0), 100_000, big.NewInt(150), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 100_000},
@@ -384,7 +388,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(0),
 			timeElapsed:        0,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100_000, big.NewInt(150), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(150), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 100_000},
@@ -438,7 +442,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(500_000),
 			timeElapsed:        ap4.TargetBlockRate + 10,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100, big.NewInt(100), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100, big.NewInt(100), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 1000},
@@ -452,7 +456,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			parentBlockGasCost: big.NewInt(100_000),
 			timeElapsed:        math.MaxUint64,
 			txs: []*types.Transaction{
-				types.NewTransaction(0, common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"), big.NewInt(0), 100, big.NewInt(100), nil),
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100, big.NewInt(100), nil),
 			},
 			receipts: []*types.Receipt{
 				{GasUsed: 1000},
