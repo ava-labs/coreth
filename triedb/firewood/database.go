@@ -375,10 +375,13 @@ func (db *Database) Close() error {
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
-	// We don't need to explicitly dereference the proposals, since they will be cleaned up
-	// within the firewood close method.
 	db.proposalMap = nil
-	db.proposalTree.Children = nil
+
+	// Before closing the database, we must drop all of the proposals so firewood
+	// can free any allocated memory. But, avoid the unnecessary work in
+	// `removeProposalFromMap` (which also fails because of the clear above).
+	db.proposalTree.recursivelyFree()
+
 	// Close the database
 	return db.fwDisk.Close()
 }
@@ -587,4 +590,20 @@ func arrangeKeyValuePairs(nodes *trienode.MergedNodeSet) ([][]byte, [][]byte) {
 	keys := append(storageKeys, acctKeys...)
 	values := append(storageValues, acctValues...)
 	return keys, values
+}
+
+// recursivelyFree dereferences the proposal and all of its children.
+// Should only be accessed with the proposal lock held and from the close method
+// of the database because it bypasses the proposal map removal.
+func (pCtx *ProposalContext) recursivelyFree() {
+	for _, child := range pCtx.Children {
+		child.recursivelyFree()
+	}
+
+	pCtx.Children = nil
+
+	if err := pCtx.Proposal.Drop(); err != nil {
+		log.Error("firewood: error dropping proposal", "root", pCtx.Root.Hex(), "error", err)
+	}
+	ffiOutstandingProposals.Dec(1)
 }
