@@ -129,20 +129,9 @@ func BlockGasCost(b *ethtypes.Block) *big.Int {
 	return new(big.Int).Set(cost)
 }
 
-// BlockTimeMillisecondsPart returns the milliseconds part of the timestamp.
-func BlockTimeMillisecondsPart(b *ethtypes.Block) *uint64 {
-	return GetHeaderExtra(b.Header()).TimeMillisecondsPart
-}
-
-// BlockTimestampMilliseconds calculates the full timestamp in milliseconds: (seconds * 1000) + milliseconds_part
-func BlockTimestampMilliseconds(b *ethtypes.Block) uint64 {
-	millisecondsPart := GetHeaderExtra(b.Header()).TimeMillisecondsPart
-	timeInMilliseconds := b.Time() * 1000
-	if millisecondsPart == nil {
-		return timeInMilliseconds
-	}
-
-	return timeInMilliseconds + *millisecondsPart
+// BlockTimestampMilliseconds returns the milliseconds part of the timestamp.
+func BlockTimestampMilliseconds(b *ethtypes.Block) *uint64 {
+	return GetHeaderExtra(b.Header()).TimestampMilliseconds
 }
 
 func CalcExtDataHash(extdata []byte) common.Hash {

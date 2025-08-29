@@ -22,7 +22,7 @@
   "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
   "size": "0x24a",
   "stateRoot": "0xb7b3d2030ccceaa351c051a03a77862e839cf96e5eec451c4697232e703b754b",
-  "timeMillisecondsPart": "0x0",
+  "timestampMilliseconds": "0x0",
   "timestamp": "0x0",
   "totalDifficulty": "0x0",
   "transactions": [],

@@ -20,7 +20,7 @@
   "receiptsRoot": "0x056b23fbba480696b65fe5a59b8f2148a1299103c4f57df839233af2cf4ca2d2",
   "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
   "stateRoot": "0x0079c4f658ca6481223860cbe48a032a7b54de44ef980b1aa9b6be2859663fa4",
-  "timeMillisecondsPart": "0x0",
+  "timestampMilliseconds": "0x0",
   "timestamp": "0x5a",
   "totalDifficulty": "0x9",
   "transactionsRoot": "0xf3f69c61b639254ec6538351b9edaebce124270a70dd2d7fbc8d197b2a7cd928"

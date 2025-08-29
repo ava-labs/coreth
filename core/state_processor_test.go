@@ -31,6 +31,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/coreth/consensus"
@@ -368,10 +369,10 @@ func TestStateProcessorErrors(t *testing.T) {
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
-	time := parent.Time() + 10
+	timestamp := parent.Time() + 10
 	configExtra := params.GetExtra(config)
-	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), time)
-	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), time)
+	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), timestamp)
+	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), timestamp)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
@@ -383,7 +384,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		}),
 		GasLimit:  gasLimit,
 		Number:    new(big.Int).Add(parent.Number(), common.Big1),
-		Time:      time,
+		Time:      timestamp,
 		UncleHash: types.EmptyUncleHash,
 		BaseFee:   baseFee,
 	}
@@ -425,10 +426,11 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.ParentBeaconRoot = new(common.Hash)
 	}
 
-	if params.GetExtra(config).IsGranite(header.Time) {
-		headerExtra := customtypes.GetHeaderExtra(header)
-		headerExtra.TimeMillisecondsPart = new(uint64)
-	}
+	headerExtra := customtypes.GetHeaderExtra(header)
+	headerTime := time.Unix(int64(header.Time), 0)
+	rulesExtra := params.GetRulesExtra(config.Rules(header.Number, params.IsMergeTODO, header.Time))
+	headerExtra.TimestampMilliseconds = customheader.TimestampMilliseconds(rulesExtra.AvalancheRules, headerTime)
+
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

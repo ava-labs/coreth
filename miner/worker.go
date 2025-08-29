@@ -172,10 +172,10 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		BaseFee:    baseFee,
 	}
 
-	// Add TimeMillisecondsPart
+	// Add TimestampMilliseconds
 	headerExtra := customtypes.GetHeaderExtra(header)
 	rulesExtra := params.GetRulesExtra(w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time))
-	headerExtra.TimeMillisecondsPart = customheader.TimeMillisecondsPart(rulesExtra.AvalancheRules, tstart)
+	headerExtra.TimestampMilliseconds = customheader.TimestampMilliseconds(rulesExtra.AvalancheRules, tstart)
 
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {

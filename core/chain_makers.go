@@ -30,12 +30,14 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/header"
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -374,14 +376,14 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 }
 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
-	time := parent.Time() + gap // block time is fixed at [gap] seconds
+	timestamp := parent.Time() + gap // block time is fixed at [gap] seconds
 
 	config := params.GetExtra(cm.config)
-	gasLimit, err := header.GasLimit(config, parent.Header(), time)
+	gasLimit, err := header.GasLimit(config, parent.Header(), timestamp)
 	if err != nil {
 		panic(err)
 	}
-	baseFee, err := header.BaseFee(config, parent.Header(), time)
+	baseFee, err := header.BaseFee(config, parent.Header(), timestamp)
 	if err != nil {
 		panic(err)
 	}
@@ -390,10 +392,10 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		Root:       state.IntermediateRoot(cm.config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: engine.CalcDifficulty(cm, time, parent.Header()),
+		Difficulty: engine.CalcDifficulty(cm, timestamp, parent.Header()),
 		GasLimit:   gasLimit,
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
-		Time:       time,
+		Time:       timestamp,
 		BaseFee:    baseFee,
 	}
 
@@ -411,12 +413,11 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
 	}
-	extraConfig := params.GetExtra(cm.config)
-	if extraConfig.IsGranite(header.Time) {
-		headerExtra := customtypes.GetHeaderExtra(header)
-		// we don't have a time milliseconds here, so we set it to 0
-		headerExtra.TimeMillisecondsPart = new(uint64)
-	}
+
+	headerExtra := customtypes.GetHeaderExtra(header)
+	headerTime := time.Unix(int64(header.Time), 0)
+	rulesExtra := params.GetRulesExtra(cm.config.Rules(header.Number, params.IsMergeTODO, header.Time))
+	headerExtra.TimestampMilliseconds = customheader.TimestampMilliseconds(rulesExtra.AvalancheRules, headerTime)
 	return header
 }
 

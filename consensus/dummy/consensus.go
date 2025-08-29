@@ -260,7 +260,7 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		}
 	}
 
-	if err := customheader.VerifyTimeMilliseconds(rules, header); err != nil {
+	if err := customheader.VerifyTimestampMilliseconds(rules, header); err != nil {
 		return err
 	}
 	return nil

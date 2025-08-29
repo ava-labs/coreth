@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
@@ -52,6 +53,8 @@ import (
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
+
+	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -320,11 +323,10 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		// Apply Granite upgrade - add TimeMillisecondsPart
-		if params.GetExtra(conf).IsGranite(g.Timestamp) {
-			headerExtra := customtypes.GetHeaderExtra(head)
-			headerExtra.TimeMillisecondsPart = new(uint64)
-		}
+		// add TimestampMilliseconds
+		rulesExtra := params.GetRulesExtra(conf.Rules(num, params.IsMergeTODO, g.Timestamp))
+		genesisTime := time.Unix(int64(head.Time), 0)
+		headerExtra.TimestampMilliseconds = customheader.TimestampMilliseconds(rulesExtra.AvalancheRules, genesisTime)
 	}
 
 	// Create the genesis block to use the block hash

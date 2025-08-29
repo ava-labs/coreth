@@ -312,20 +312,20 @@ func TestBlockGetters(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                 string
-		headerExtra          *HeaderExtra
-		blockExtra           *BlockBodyExtra
-		wantExtDataGasUsed   *big.Int
-		wantBlockGasCost     *big.Int
-		wantVersion          uint32
-		wantExtData          []byte
-		wantTimeMilliseconds *uint64
+		name                      string
+		headerExtra               *HeaderExtra
+		blockExtra                *BlockBodyExtra
+		wantExtDataGasUsed        *big.Int
+		wantBlockGasCost          *big.Int
+		wantVersion               uint32
+		wantExtData               []byte
+		wantTimestampMilliseconds *uint64
 	}{
 		{
-			name:                 "empty",
-			headerExtra:          &HeaderExtra{},
-			blockExtra:           &BlockBodyExtra{},
-			wantTimeMilliseconds: nil,
+			name:                      "empty",
+			headerExtra:               &HeaderExtra{},
+			blockExtra:                &BlockBodyExtra{},
+			wantTimestampMilliseconds: nil,
 		},
 		{
 			name: "fields_set",
@@ -337,11 +337,11 @@ func TestBlockGetters(t *testing.T) {
 				Version: 3,
 				ExtData: &[]byte{4},
 			},
-			wantExtDataGasUsed:   big.NewInt(1),
-			wantBlockGasCost:     big.NewInt(2),
-			wantVersion:          3,
-			wantExtData:          []byte{4},
-			wantTimeMilliseconds: nil,
+			wantExtDataGasUsed:        big.NewInt(1),
+			wantBlockGasCost:          big.NewInt(2),
+			wantVersion:               3,
+			wantExtData:               []byte{4},
+			wantTimestampMilliseconds: nil,
 		},
 	}
 
@@ -366,8 +366,8 @@ func TestBlockGetters(t *testing.T) {
 			blockGasCost := BlockGasCost(block)
 			assert.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
 
-			timeMillisecondsPart := BlockTimeMillisecondsPart(block)
-			assert.Equal(t, test.wantTimeMilliseconds, timeMillisecondsPart, "BlockTimeMilliseconds()")
+			timestampMilliseconds := BlockTimestampMilliseconds(block)
+			assert.Equal(t, test.wantTimestampMilliseconds, timestampMilliseconds, "BlockTimestampMilliseconds()")
 		})
 	}
 }
