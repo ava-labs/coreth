@@ -375,10 +375,11 @@ func (db *Database) Close() error {
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
-	// We don't need to explicitly dereference the proposals, since they will be cleaned up
-	// within the firewood close method.
 	db.proposalMap = nil
-	db.proposalTree.Children = nil
+	// Before closing the database, we must drop all of the proposals so firewood can
+	// free any allocated memory.
+	db.dereference(db.proposalTree)
+
 	// Close the database
 	return db.fwDisk.Close()
 }
@@ -452,8 +453,16 @@ func (db *Database) dereference(pCtx *ProposalContext) {
 	}
 	pCtx.Children = nil
 
-	// Remove the proposal from the map.
-	db.removeProposalFromMap(pCtx)
+	// map will be nil on teardown so we can skip the extra work
+	if db.proposalMap != nil {
+		// Remove the proposal from the map.
+		db.removeProposalFromMap(pCtx)
+	} else if pCtx == db.proposalTree {
+		// if db.proposalMap is nil, then we are tearing down all proposals but the root
+		// doesn't have a proposal, so we skip the drop to prevent a nil dereference.
+		// However, we don't check for a nil proposal to force errors to propagate.
+		return
+	}
 
 	// Drop the proposal in the backend.
 	if err := pCtx.Proposal.Drop(); err != nil {
