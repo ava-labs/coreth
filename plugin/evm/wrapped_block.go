@@ -31,6 +31,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
@@ -40,6 +41,14 @@ var (
 )
 
 var (
+	errInvalidBlock                  = errors.New("invalid block")
+	errInvalidNonce                  = errors.New("invalid nonce")
+	errUnclesUnsupported             = errors.New("uncles unsupported")
+	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
+	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
+	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
+	errInvalidBlockGasCostGranite    = errors.New("invalid block gas cost in Granite")
+
 	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
@@ -417,6 +426,12 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return errors.New("blob gas used must not be nil in Cancun")
 		} else if *ethHeader.BlobGasUsed > 0 {
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
+		}
+	}
+
+	if rulesExtra.IsGranite {
+		if !utils.BigEqual(customtypes.BlockGasCost(b.ethBlock), common.Big0) {
+			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, customtypes.BlockGasCost(b.ethBlock))
 		}
 	}
 

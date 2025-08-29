@@ -15,31 +15,37 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+	"github.com/ava-labs/coreth/utils"
 )
 
 var (
-	errBaseFeeNil        = errors.New("base fee is nil")
-	errBlockGasCostNil   = errors.New("block gas cost is nil")
-	errExtDataGasUsedNil = errors.New("extDataGasUsed is nil")
-	errNoGasUsed         = errors.New("no gas used")
-
-	ErrInsufficientBlockGas = errors.New("insufficient gas to cover the block cost")
+	errBaseFeeNil                 = errors.New("base fee is nil")
+	errBlockGasCostNil            = errors.New("block gas cost is nil")
+	errExtDataGasUsedNil          = errors.New("extDataGasUsed is nil")
+	errNoGasUsed                  = errors.New("no gas used")
+	errInvalidBlockGasCostGranite = errors.New("invalid block gas cost in Granite")
+	ErrInsufficientBlockGas       = errors.New("insufficient gas to cover the block cost")
 )
 
 // BlockGasCost calculates the required block gas cost based on the parent
 // header and the timestamp of the new block.
 // Prior to AP4, the returned block gas cost will be nil.
+// In Granite, the returned block gas cost will be 0.
 func BlockGasCost(
-	config *extras.ChainConfig,
+	rules extras.AvalancheRules,
 	parent *types.Header,
 	timestamp uint64,
 ) *big.Int {
-	if !config.IsApricotPhase4(timestamp) {
-		return nil
-	}
-	step := uint64(ap4.BlockGasCostStep)
-	if config.IsApricotPhase5(timestamp) {
+	var step uint64
+	switch {
+	case rules.IsGranite: // Granite does not have a block gas cost
+		return big.NewInt(0)
+	case rules.IsApricotPhase5:
 		step = ap5.BlockGasCostStep
+	case rules.IsApricotPhase4:
+		step = ap4.BlockGasCostStep
+	default: // prior to AP4, the returned block gas cost will be nil
+		return nil
 	}
 	// Treat an invalid parent/current time combination as 0 elapsed time.
 	//
@@ -88,13 +94,16 @@ func BlockGasCostWithStep(
 // transactions. The only correctness check performed is that the sum of all
 // tips is >= the required block fee.
 //
-// This function will return nil for all return values prior to Apricot Phase 4.
+// This function will return nil for all return values prior to Apricot Phase 4,
+// and 0 for all return values in Granite.
 func EstimateRequiredTip(
 	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
 	extra := customtypes.GetHeaderExtra(header)
 	switch {
+	case config.IsGranite(header.Time):
+		return big.NewInt(0), nil
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:
@@ -126,13 +135,25 @@ func EstimateRequiredTip(
 	return estimatedTip, nil
 }
 
+// VerifyBlockFee verifies that the total block gas cost is sufficient to cover the required block gas cost.
 func VerifyBlockFee(
 	baseFee *big.Int,
 	requiredBlockGasCost *big.Int,
 	txs []*types.Transaction,
 	receipts []*types.Receipt,
 	extraStateChangeContribution *big.Int,
+	rules extras.AvalancheRules,
 ) error {
+	switch {
+	case rules.IsGranite:
+		if !utils.BigEqual(requiredBlockGasCost, common.Big0) {
+			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, requiredBlockGasCost)
+		}
+		return nil
+	case !rules.IsApricotPhase4:
+		return nil
+	}
+
 	if baseFee == nil || baseFee.Sign() <= 0 {
 		return fmt.Errorf("invalid base fee (%d) in apricot phase 4", baseFee)
 	}
