@@ -209,6 +209,9 @@ type VM struct {
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
 
+	// blockdb is the database to store the block data
+	blockdb database.BlockDatabase
+
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
 	acceptedBlockDB database.Database
@@ -315,7 +318,10 @@ func (vm *VM) Initialize(
 	}
 
 	// Initialize the database
-	vm.initializeDBs(db)
+	if err := vm.initializeDBs(db); err != nil {
+		return err
+	}
+
 	if vm.config.InspectDatabase {
 		if err := vm.inspectDatabases(); err != nil {
 			return err

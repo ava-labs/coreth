@@ -129,6 +129,7 @@ func SetupGenesis(
 ) {
 	ctx := snowtest.Context(t, snowtest.CChainID)
 	ctx.NetworkUpgrades = upgradetest.GetConfig(fork)
+	ctx.ChainDataDir = t.TempDir()
 
 	baseDB := memdb.New()
 
