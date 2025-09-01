@@ -137,11 +137,12 @@ var (
 )
 
 const (
-	bodyCacheLimit     = 256
-	blockCacheLimit    = 256
-	receiptsCacheLimit = 32
-	txLookupCacheLimit = 1024
-	badBlockLimit      = 10
+	bodyCacheLimit          = 256
+	blockCacheLimit         = 256
+	verifiedBlockCacheLimit = 256
+	receiptsCacheLimit      = 32
+	txLookupCacheLimit      = 1024
+	badBlockLimit           = 10
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -293,12 +294,13 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db           ethdb.Database   // Low level persistent database to store final content in
-	snaps        *snapshot.Tree   // Snapshot tree for fast trie leaf access
-	triedb       *triedb.Database // The database handler for maintaining trie nodes.
-	stateCache   state.Database   // State database to reuse between imports (contains state cache)
-	txIndexer    *txIndexer       // Transaction indexer, might be nil if not enabled
-	stateManager TrieWriter
+	db                 ethdb.Database   // Low level persistent database to store final content in
+	snaps              *snapshot.Tree   // Snapshot tree for fast trie leaf access
+	triedb             *triedb.Database // The database handler for maintaining trie nodes.
+	stateCache         state.Database   // State database to reuse between imports (contains state cache)
+	txIndexer          *txIndexer       // Transaction indexer, might be nil if not enabled
+	stateManager       TrieWriter
+	verifiedBlockCache FIFOCache[common.Hash, *types.Block] // cache for verified but not accepted blocks
 
 	hc                *HeaderChain
 	rmLogsFeed        event.Feed
@@ -412,21 +414,22 @@ func NewBlockChain(
 	log.Info("")
 
 	bc := &BlockChain{
-		chainConfig:       chainConfig,
-		cacheConfig:       cacheConfig,
-		db:                db,
-		triedb:            triedb,
-		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
-		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:        lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache:     lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
-		badBlocks:         lru.NewCache[common.Hash, *badBlock](badBlockLimit),
-		engine:            engine,
-		vmConfig:          vmConfig,
-		senderCacher:      NewTxSenderCacher(runtime.NumCPU()),
-		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
-		quit:              make(chan struct{}),
-		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
+		chainConfig:        chainConfig,
+		cacheConfig:        cacheConfig,
+		db:                 db,
+		triedb:             triedb,
+		bodyCache:          lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		receiptsCache:      lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:         lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache:      lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		badBlocks:          lru.NewCache[common.Hash, *badBlock](badBlockLimit),
+		verifiedBlockCache: NewFIFOCache[common.Hash, *types.Block](verifiedBlockCacheLimit),
+		engine:             engine,
+		vmConfig:           vmConfig,
+		senderCacher:       NewTxSenderCacher(runtime.NumCPU()),
+		acceptorQueue:      make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
+		quit:               make(chan struct{}),
+		acceptedLogsCache:  NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
 	bc.stateCache = extstate.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -1106,6 +1109,9 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		}
 	}
 
+	// insert block on accept after reorg handling
+	bc.insertBlock(block, true)
+
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
 	bc.addAcceptorQueue(block)
@@ -1154,6 +1160,7 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 
 	// Remove the block from the block cache (ignore return value of whether it was in the cache)
 	_ = bc.blockCache.Remove(block.Hash())
+	bc.verifiedBlockCache.Remove(block.Hash())
 
 	return nil
 }
@@ -1296,6 +1303,81 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 func (bc *BlockChain) InsertBlock(block *types.Block) error {
 	return bc.InsertBlockManual(block, true)
+}
+
+// ReadVerifiedBlockReceipts reads the receipts for a verified block from the database.
+// This is needed since verified blocks are not written to the database, therefore
+// it cannot be read using rawdb.ReadReceipts as that will try to read the block
+// header and body from the database.
+func (bc *BlockChain) ReadVerifiedBlockReceipts(block *types.Block) ([]*types.Receipt, error) {
+	block, ok := bc.verifiedBlockCache.Get(block.Hash())
+	if !ok {
+		return nil, fmt.Errorf("block not found in verified block cache")
+	}
+	var baseFee *big.Int
+	if block.Header() == nil {
+		baseFee = big.NewInt(0)
+	} else {
+		baseFee = block.Header().BaseFee
+	}
+	// Compute effective blob gas price.
+	var blobGasPrice *big.Int
+	if block.Header() != nil && block.Header().ExcessBlobGas != nil {
+		blobGasPrice = eip4844.CalcBlobFee(*block.Header().ExcessBlobGas)
+	}
+	receipts := rawdb.ReadRawReceipts(bc.db, block.Hash(), block.NumberU64())
+	if receipts == nil {
+		return nil, fmt.Errorf("failed to fetch receipts for accepted block with non-empty root hash (%s) (Block: %s, Height: %d)", block.ReceiptHash(), block.Hash(), block.NumberU64())
+	}
+	config := bc.chainConfig
+	if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), baseFee, blobGasPrice, block.Transactions()); err != nil {
+		log.Error("Failed to derive block receipts fields", "hash", block.Hash(), "number", block.NumberU64(), "err", err)
+		return nil, err
+	}
+	return receipts, nil
+}
+
+func (bc *BlockChain) WriteVerifiedBlock(block *types.Block) error {
+	bc.verifiedBlockCache.Put(block.Hash(), block)
+
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+	if err != nil {
+		return err
+	}
+
+	// process block so we can write the receipts receipts are queried before the block
+	// is accepted.
+	receipts, _, _, err := bc.processor.Process(block, parent, statedb, bc.vmConfig)
+	if err != nil {
+		return err
+	}
+	rawdb.WriteReceipts(bc.db, block.Hash(), block.NumberU64(), receipts)
+
+	// write trie so we can build blocks on top on verified blocks.
+	rawdb.WritePreimages(bc.db, statedb.Preimages())
+
+	// Commit all cached state changes into underlying memory database.
+	_, err = bc.commitWithSnap(block, parent.Root, statedb)
+	if err != nil {
+		return err
+	}
+
+	// If node is running in path mode, skip trie insertion
+	if bc.triedb.Scheme() == rawdb.PathScheme {
+		return nil
+	}
+
+	if err := bc.stateManager.InsertTrie(block); err != nil {
+		if bc.snaps != nil {
+			discardErr := bc.snaps.Discard(block.Hash())
+			if discardErr != nil {
+				log.Debug("failed to discard snapshot after being unable to insert block trie", "block", block.Hash(), "root", block.Root())
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func (bc *BlockChain) InsertBlockManual(block *types.Block, writes bool) error {

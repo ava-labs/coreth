@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
@@ -127,8 +126,12 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 		return nil
 	}
 
-	// Read receipts from disk
-	receipts := rawdb.ReadReceipts(b.vm.chaindb, b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.ethBlock.Time(), b.vm.chainConfig)
+	// Read receipts from verified block cache
+	receipts, err := b.vm.blockChain.ReadVerifiedBlockReceipts(b.ethBlock)
+	if err != nil {
+		return err
+	}
+
 	// If there are no receipts, ReadReceipts may be nil, so we check the length and confirm the ReceiptHash
 	// is empty to ensure that missing receipts results in an error on accept.
 	if len(receipts) == 0 && b.ethBlock.ReceiptHash() != types.EmptyRootHash {
@@ -264,7 +267,11 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 		return nil
 	}
 
-	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, false)
+	if writes {
+		b.vm.blockChain.WriteVerifiedBlock(b.ethBlock)
+	}
+
 	// If this was not called with intention to writing to the database or
 	// got an error while inserting to blockchain, we may need to cleanup the extension.
 	// so that the extension can be garbage collected.

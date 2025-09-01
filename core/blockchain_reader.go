@@ -61,6 +61,9 @@ func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (bc *BlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	if block, ok := bc.verifiedBlockCache.Get(hash); ok {
+		return block.Header()
+	}
 	return bc.hc.GetHeader(hash, number)
 }
 
@@ -83,6 +86,9 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 	if cached, ok := bc.bodyCache.Get(hash); ok {
 		return cached
 	}
+	if block, ok := bc.verifiedBlockCache.Get(hash); ok {
+		return block.Body()
+	}
 	number := bc.hc.GetBlockNumber(hash)
 	if number == nil {
 		return nil
@@ -99,6 +105,9 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 // HasBlock checks if a block is fully present in the database or not.
 func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
+		return true
+	}
+	if _, ok := bc.verifiedBlockCache.Get(hash); ok {
 		return true
 	}
 	if !bc.HasHeader(hash, number) {
@@ -123,6 +132,9 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	// Short circuit if the block's already in the cache, retrieve otherwise
 	if block, ok := bc.blockCache.Get(hash); ok {
+		return block
+	}
+	if block, ok := bc.verifiedBlockCache.Get(hash); ok {
 		return block
 	}
 	block := rawdb.ReadBlock(bc.db, hash, number)
