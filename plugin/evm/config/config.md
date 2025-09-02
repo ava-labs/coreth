@@ -621,7 +621,8 @@ _String_
 
 Can be one of `hash` or `firewood`. Defaults to `hash`.
 
-__WARNING__: `firewood` scheme is untested in production.
+__WARNING__: `firewood` scheme is untested in production. To use `firewood`, the database must also be pruning (`pruning-enabled: false`, the default), the snapshot must be disabled (`snapshot-cache: 0`) and state sync must be disabled (`state-sync-enabled: false`). Not all APIs are available - see these portions of the config documentation for more details.
+
 
 ### `trie-clean-cache`
 
