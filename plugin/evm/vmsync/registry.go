@@ -7,9 +7,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/log"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
 
 	synccommon "github.com/ava-labs/coreth/sync"
 )
@@ -48,23 +49,24 @@ func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
 
 // RunSyncerTasks executes all registered syncers.
 // The provided summary is used only for logging to decouple from concrete client types.
-func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary common.Hash) error {
+func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary message.Syncable) error {
 	if len(r.syncers) == 0 {
 		return nil
 	}
 
-	summaryStr := summary.Hex()
+	summaryBlockHashHex := summary.GetBlockHash().Hex()
+	blockHeight := summary.Height()
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, task := range r.syncers {
 		g.Go(func() error {
-			log.Info("starting syncer", "name", task.name, "summary", summaryStr)
+			log.Info("starting syncer", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
 			if err := task.syncer.Sync(ctx); err != nil {
-				log.Error("failed syncing", "name", task.name, "summary", summaryStr, "err", err)
+				log.Error("failed syncing", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight, "err", err)
 				return fmt.Errorf("%s failed: %w", task.name, err)
 			}
-			log.Info("completed successfully", "name", task.name, "summary", summaryStr)
+			log.Info("completed successfully", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
 
 			return nil
 		})
@@ -74,7 +76,7 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary common.Hash
 		return err
 	}
 
-	log.Info("all syncers completed successfully", "count", len(r.syncers), "summary", summaryStr)
+	log.Info("all syncers completed successfully", "count", len(r.syncers), "summary", summaryBlockHashHex)
 
 	return nil
 }

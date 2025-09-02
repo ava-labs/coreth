@@ -164,7 +164,7 @@ func (client *client) stateSync(ctx context.Context) error {
 	}
 
 	// Run all registered syncers sequentially.
-	return registry.RunSyncerTasks(ctx, client.summary.GetBlockHash())
+	return registry.RunSyncerTasks(ctx, client.summary)
 }
 
 func (client *client) registerSyncers(registry *SyncerRegistry) error {
