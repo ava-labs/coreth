@@ -141,14 +141,12 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			},
 		}
 
-		callType := env.IncomingCallType()
 		switch call := env.IncomingCallType(); {
 		case call != vm.DelegateCall && call != vm.CallCode: // Others always allowed
 		case rules.IsGranite:
-				return nil, 0, vm.ErrExecutionReverted
-			case env.BlockTime() >= invalidateDelegateUnix:
-				env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
-			}
+			return nil, 0, vm.ErrExecutionReverted
+		case env.BlockTime() >= invalidateDelegateUnix:
+			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", call))
 		}
 
 		// EVM semantic addresses are used here to maintain consistency with prior behavior as present in AvalancheGo 1.13.0.
