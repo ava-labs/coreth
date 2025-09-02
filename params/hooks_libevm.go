@@ -31,6 +31,9 @@ import (
 // (August 2nd, 2025, 04:00 UTC)
 const invalidateDelegateUnix = 1754107200
 
+// P256VerifyAddress is the address of the p256 signature verification precompile
+var P256VerifyAddress = common.BytesToAddress([]byte{0x1, 0x00})
+
 type RulesExtra extras.Rules
 
 func GetRulesExtra(r Rules) *extras.Rules {
@@ -82,9 +85,7 @@ var PrecompiledContractsGranite = map[common.Address]vm.PrecompiledContract{
 }
 
 func init() {
-	for addr, precompile := range vm.PrecompiledContractsP256Verify {
-		PrecompiledContractsGranite[addr] = precompile
-	}
+	PrecompiledContractsGranite[P256VerifyAddress] = vm.PrecompiledContractsP256Verify[P256VerifyAddress]
 }
 
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
