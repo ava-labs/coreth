@@ -148,7 +148,6 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			case rules.IsGranite:
 				return nil, 0, vm.ErrExecutionReverted
 			case env.BlockTime() >= invalidateDelegateUnix:
-				// After expiration, invalidate execution to exclude the tx from the block
 				env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", callType))
 			}
 		}
