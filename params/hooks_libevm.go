@@ -146,7 +146,6 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		if isDisallowedCallType {
 			switch {
 			case rules.IsGranite:
-				// After Granite activation, revert the transaction (include with failed receipt)
 				return nil, 0, vm.ErrExecutionReverted
 			case env.BlockTime() >= invalidateDelegateUnix:
 				// After expiration, invalidate execution to exclude the tx from the block
