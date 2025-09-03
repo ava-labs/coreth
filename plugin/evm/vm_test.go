@@ -2202,11 +2202,9 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: big.NewInt(ap0.MinGasPrice),
 			txGasPrice:     big.NewInt(ap0.MinGasPrice),
 			setTime: func(vm *VM) {
-				// Ensure timestamp is >= cutoff by adding the necessary delta
-				now := vm.clock.Time().Unix()
-				if now < int64(params.InvalidateDelegateUnix+1) {
-					delta := (int64(params.InvalidateDelegateUnix+1) - now)
-					vm.clock.Set(vm.clock.Time().Add(time.Duration(delta) * time.Second))
+				if now := vm.clock.Time().Unix(); now <= params.InvalidateDelegateUnix {
+					delta := time.Duration(params.InvalidateDelegateUnix-now+1) * time.Second
+					vm.clock.Set(vm.clock.Time().Add(delta))
 				}
 			},
 			refillCapacityFortuna: true,
