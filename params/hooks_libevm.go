@@ -82,13 +82,18 @@ var PrecompiledContractsGranite = map[common.Address]vm.PrecompiledContract{
 	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
 	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.DeprecatedContract{}),
 	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
+	P256VerifyAddress:                  vm.PrecompiledContractsP256Verify[P256VerifyAddress],
 }
 
-func init() {
-	PrecompiledContractsGranite[P256VerifyAddress] = vm.PrecompiledContractsP256Verify[P256VerifyAddress]
-}
-
+// ActivePrecompiles implements the RulesHooks interface
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
+	addresses, _, _ := r.ActivePrecompilesWithContract(existing, nil)
+	return addresses
+}
+
+// ActivePrecompiles specifies precompiles that were activated prior to the
+// dynamic precompile activation registry.
+func (r RulesExtra) ActivePrecompilesWithContract(existing []common.Address, addr *common.Address) ([]common.Address, libevm.PrecompiledContract, bool) {
 	var precompiles map[common.Address]vm.PrecompiledContract
 	switch {
 	case r.IsGranite:
@@ -106,33 +111,17 @@ func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Addres
 	var addresses []common.Address
 	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
 	addresses = append(addresses, existing...)
-	return addresses
-}
 
-// precompileOverrideBuiltin specifies precompiles that were activated prior to the
-// dynamic precompile activation registry.
-// These were only active historically and are not active in the current network.
-func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
-	var precompiles map[common.Address]vm.PrecompiledContract
-	switch {
-	case r.IsGranite:
-		precompiles = PrecompiledContractsGranite
-	case r.IsBanff:
-		precompiles = PrecompiledContractsBanff
-	case r.IsApricotPhase6:
-		precompiles = PrecompiledContractsApricotPhase6
-	case r.IsApricotPhasePre6:
-		precompiles = PrecompiledContractsApricotPhasePre6
-	case r.IsApricotPhase2:
-		precompiles = PrecompiledContractsApricotPhase2
+	var precompile libevm.PrecompiledContract
+	var ok bool
+	if addr != nil {
+		precompile, ok = precompiles[*addr]
+		if !ok {
+			return addresses, nil, false
+		}
 	}
 
-	precompile, ok := precompiles[addr]
-	if !ok {
-		return nil, false
-	}
-
-	return precompile, true
+	return addresses, precompile, true
 }
 
 func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.PrecompiledContract {
@@ -173,7 +162,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 }
 
 func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledContract, bool) {
-	if p, ok := r.precompileOverrideBuiltin(addr); ok {
+	if _, p, ok := r.ActivePrecompilesWithContract(nil, &addr); ok {
 		return p, true
 	}
 
