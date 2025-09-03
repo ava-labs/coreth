@@ -1752,12 +1752,14 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 		err error
 	)
 	for i := uint64(0); i < 2; i++ {
-		tx := types.NewContractCreation(
-			i,
-			big.NewInt(0),
-			acp176.MinMaxCapacity,
-			big.NewInt(ap0.MinGasPrice),
-			[]byte{0xfe}, // invalid opcode consumes all gas
+		tx := types.NewTx(
+			&types.LegacyTx{
+				Nonce:    i,
+				Value:    big.NewInt(0),
+				Gas:      acp176.MinMaxCapacity,
+				GasPrice: big.NewInt(ap0.MinGasPrice),
+				Data:     []byte{0xfe}, // invalid opcode consumes all gas
+			},
 		)
 		txs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 		require.NoError(err)
@@ -1819,12 +1821,14 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 	maxSizeTxs := make([]*types.Transaction, 2)
 	for i := uint64(0); i < 2; i++ {
-		tx := types.NewContractCreation(
-			i,
-			big.NewInt(0),
-			acp176.MinMaxCapacity,
-			highGasPrice,
-			[]byte{0xfe}, // invalid opcode consumes all gas
+		tx := types.NewTx(
+			&types.LegacyTx{
+				Nonce:    i,
+				Value:    big.NewInt(0),
+				Gas:      acp176.MinMaxCapacity,
+				GasPrice: highGasPrice,
+				Data:     []byte{0xfe}, // invalid opcode consumes all gas
+			},
 		)
 		var err error
 		maxSizeTxs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
@@ -1843,7 +1847,15 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 
 	// Build a smaller transaction that consumes less gas at a lower price. Block building should
 	// fail and enforce waiting for more capacity to avoid starving the larger transaction.
-	tx := types.NewContractCreation(0, big.NewInt(0), 2_000_000, lowGasPrice, []byte{0xfe})
+	tx := types.NewTx(
+		&types.LegacyTx{
+			Nonce:    0,
+			Value:    big.NewInt(0),
+			Gas:      2_000_000,
+			GasPrice: lowGasPrice,
+			Data:     []byte{0xfe}, // invalid opcode consumes all gas
+		},
+	)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[1].ToECDSA())
 	require.NoError(err)
 	_, err = vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
@@ -2121,7 +2133,15 @@ func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common
 	callerKey := vmtest.TestKeys[0]
 
 	nonce := vm.txPool.Nonce(callerAddr)
-	tx := types.NewContractCreation(nonce, big.NewInt(0), 1000000, gasPrice, code)
+	tx := types.NewTx(
+		&types.LegacyTx{
+			Nonce:    nonce,
+			Value:    big.NewInt(0),
+			Gas:      1000000,
+			GasPrice: gasPrice,
+			Data:     code,
+		},
+	)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), callerKey.ToECDSA())
 	require.NoError(t, err)
 
@@ -2153,10 +2173,6 @@ func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common
 }
 
 func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
-	// Mirror params.invalidateDelegateUnix here - if exported and
-	// imported we get a circular dependency
-	const invalidateDelegateUnix = 1754107200
-
 	tests := []struct {
 		name                  string
 		fork                  upgradetest.Fork
@@ -2174,7 +2190,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: vmtest.InitialBaseFee,
 			txGasPrice:     vmtest.InitialBaseFee,
 			setTime: func(vm *VM) {
-				vm.clock.Set(time.Unix(2000000000, 0))
+				vm.clock.Set(time.Unix(2000000000, 0)) // Set to after the delegate cutoff
 			},
 			refillCapacityFortuna: false,
 			wantIncluded:          true,
@@ -2188,8 +2204,8 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			setTime: func(vm *VM) {
 				// Ensure timestamp is >= cutoff by adding the necessary delta
 				now := vm.clock.Time().Unix()
-				if now < int64(invalidateDelegateUnix+1) {
-					delta := (int64(invalidateDelegateUnix+1) - now)
+				if now < int64(params.InvalidateDelegateUnix+1) {
+					delta := (int64(params.InvalidateDelegateUnix+1) - now)
 					vm.clock.Set(vm.clock.Time().Add(time.Duration(delta) * time.Second))
 				}
 			},
@@ -2203,7 +2219,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			txGasPrice:     big.NewInt(ap0.MinGasPrice),
 			preDeploySetTime: func(vm *VM) {
 				// Ensure we are pre-cutoff before deployment and remain increasing afterwards
-				vm.clock.Set(time.Unix(invalidateDelegateUnix-10, 0))
+				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix-10, 0))
 			},
 			setTime:               nil, // stay pre-cutoff
 			refillCapacityFortuna: true,

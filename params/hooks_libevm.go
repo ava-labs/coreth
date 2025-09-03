@@ -29,7 +29,7 @@ import (
 
 // invalidateDelegateTime is the Unix timestamp for August 2nd, 2025, midnight Eastern Time
 // (August 2nd, 2025, 04:00 UTC)
-const invalidateDelegateUnix = 1754107200
+const InvalidateDelegateUnix = 1754107200
 
 type RulesExtra extras.Rules
 
@@ -145,7 +145,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 		case call != vm.DelegateCall && call != vm.CallCode: // Others always allowed
 		case rules.IsGranite:
 			return nil, 0, vm.ErrExecutionReverted
-		case env.BlockTime() >= invalidateDelegateUnix:
+		case env.BlockTime() >= InvalidateDelegateUnix:
 			env.InvalidateExecution(fmt.Errorf("precompile cannot be called with %s", call))
 		}
 
