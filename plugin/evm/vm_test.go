@@ -2228,10 +2228,9 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fork := tt.fork
 			vm := newDefaultTestVM()
 			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-				Fork: &fork,
+				Fork: &tt.fork,
 			})
 			defer vm.Shutdown(context.Background())
 
