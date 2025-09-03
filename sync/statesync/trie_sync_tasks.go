@@ -116,8 +116,8 @@ func (s *storageTrieTask) OnStart() (bool, error) {
 		firstAccount = s.accounts[0]
 	}
 	storageTrie, err := trie.New(trie.StorageTrieID(s.sync.root, s.root, firstAccount), s.sync.trieDB)
-	if err != nil {
-		return false, err
+	if err != nil { // the storage trie does not exist, so it should be rerequested
+		return false, nil //nolint:nilerr
 	}
 
 	// If the storage trie is already on disk, we only need to populate the storage snapshot for [accountHash]
