@@ -48,18 +48,20 @@ type codeFetcherOptions struct {
 	maxOutstanding int
 }
 
+type CodeFetcherOption func(*codeFetcherOptions)
+
 // WithAutoInit toggles whether Init is called in the constructor.
-func WithAutoInit(auto bool) func(*codeFetcherOptions) {
+func WithAutoInit(auto bool) CodeFetcherOption {
 	return func(o *codeFetcherOptions) { o.autoInit = auto }
 }
 
 // WithMaxOutstandingCodeHashes overrides the queue capacity.
-func WithMaxOutstandingCodeHashes(n int) func(*codeFetcherOptions) {
+func WithMaxOutstandingCodeHashes(n int) CodeFetcherOption {
 	return func(o *codeFetcherOptions) { o.maxOutstanding = n }
 }
 
 // NewCodeFetcherQueue creates a new code fetcher queue applying optional functional options.
-func NewCodeFetcherQueue(db ethdb.Database, done <-chan struct{}, opts ...func(*codeFetcherOptions)) (*CodeFetcherQueue, error) {
+func NewCodeFetcherQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeFetcherOption) (*CodeFetcherQueue, error) {
 	// Apply defaults then options
 	o := codeFetcherOptions{
 		autoInit:       defaultAutoInit,
