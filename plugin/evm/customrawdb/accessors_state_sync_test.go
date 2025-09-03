@@ -18,8 +18,8 @@ func TestClearPrefix(t *testing.T) {
 	require.NoError(WriteSyncSegment(db, common.Hash{1}, common.Hash{}))
 
 	// add a key that should not be cleared
-	key := append(syncSegmentsPrefix, []byte("foo")...)
-	require.NoError(db.Put(key, []byte("bar")))
+	syncSegmentsPrefix = append(syncSegmentsPrefix, []byte("foo")...)
+	require.NoError(db.Put(syncSegmentsPrefix, []byte("bar")))
 
 	require.NoError(ClearAllSyncSegments(db))
 

@@ -584,7 +584,7 @@ func arrangeKeyValuePairs(nodes *trienode.MergedNodeSet) ([][]byte, [][]byte) {
 	}
 
 	// We need to do all storage operations first, so prefix-deletion works for accounts.
-	keys := append(storageKeys, acctKeys...)
-	values := append(storageValues, acctValues...)
-	return keys, values
+	storageKeys = append(storageKeys, acctKeys...)
+	storageValues = append(storageValues, acctValues...)
+	return storageKeys, storageValues
 }

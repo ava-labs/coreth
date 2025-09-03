@@ -1690,7 +1690,7 @@ func ReexecBlocksTest(t *testing.T, create ReexecTestFunc) {
 
 	newChain, restartedChain := checkBlockChainState(t, blockchain, gspec, chainDB, checkCreate, checkState)
 
-	allTxs := append(foundTxs, missingTxs...)
+	foundTxs = append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
 		if bc.snaps == nil && bc.cacheConfig.SnapshotLimit > 0 {
@@ -1698,7 +1698,7 @@ func ReexecBlocksTest(t *testing.T, create ReexecTestFunc) {
 		}
 
 		// We should confirm all transactions can now be queried
-		for _, tx := range allTxs {
+		for _, tx := range foundTxs {
 			txLookup, _, _ := bc.GetTransactionLookup(tx)
 			if txLookup == nil {
 				t.Fatalf("missing transaction: %v", tx)
@@ -1822,7 +1822,7 @@ func ReexecMaxBlocksTest(t *testing.T, create ReexecTestFunc) {
 	}
 	newChain, restartedChain := checkBlockChainState(t, blockchain, gspec, chainDB, checkCreate, checkState)
 
-	allTxs := append(foundTxs, missingTxs...)
+	foundTxs = append(foundTxs, missingTxs...)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
 		if bc.snaps == nil && bc.cacheConfig.SnapshotLimit > 0 {
@@ -1830,7 +1830,7 @@ func ReexecMaxBlocksTest(t *testing.T, create ReexecTestFunc) {
 		}
 
 		// We should confirm all transactions can now be queried
-		for _, tx := range allTxs {
+		for _, tx := range foundTxs {
 			txLookup, _, _ := bc.GetTransactionLookup(tx)
 			if txLookup == nil {
 				t.Fatalf("missing transaction: %v", tx)

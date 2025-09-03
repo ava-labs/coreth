@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -1131,7 +1130,7 @@ func (vm *VM) startContinuousProfiler() {
 		return
 	}
 	vm.profiler = profiler.NewContinuous(
-		filepath.Join(vm.config.ContinuousProfilerDir),
+		vm.config.ContinuousProfilerDir,
 		vm.config.ContinuousProfilerFrequency.Duration,
 		vm.config.ContinuousProfilerMaxFiles,
 	)
