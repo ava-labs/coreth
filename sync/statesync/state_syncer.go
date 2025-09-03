@@ -264,7 +264,8 @@ func (t *stateSync) Sync(ctx context.Context) error {
 		}
 		return t.onSyncComplete()
 	})
-	// Note: code syncer is no longer started here. It should be run by the [SyncerRegistry] and registered separately.
+
+	// Note: code fetcher should already be initialized.
 	eg.Go(func() error {
 		return t.storageTrieProducer(egCtx)
 	})

@@ -6,6 +6,7 @@ package statesync
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/libevm/common"
@@ -32,6 +33,8 @@ type CodeFetcherQueue struct {
 	lock sync.Mutex
 	open chan struct{}
 	done <-chan struct{}
+	// Set when Finalize has been called which disallows further AddCode.
+	finalized atomic.Bool
 
 	// Channel of code hashes to be consumed by the code syncer.
 	codeHashes chan common.Hash
@@ -60,7 +63,9 @@ func WithAutoInit(autoInit bool) CodeFetcherOption {
 // WithMaxOutstandingCodeHashes overrides the queue capacity.
 func WithMaxOutstandingCodeHashes(n int) CodeFetcherOption {
 	return func(o *codeFetcherOptions) {
-		o.maxOutstanding = n
+		if n > 0 {
+			o.maxOutstanding = n
+		}
 	}
 }
 
@@ -117,10 +122,13 @@ func (q *CodeFetcherQueue) Init() error {
 // AddCode implements [synccommon.CodeFetcher] by persisting and enqueueing new hashes.
 // Blocks until the queue is initialized via Init.
 func (q *CodeFetcherQueue) AddCode(codeHashes []common.Hash) error {
+	<-q.open
+	if q.finalized.Load() {
+		return errFailedToAddCodeHashesToQueue
+	}
 	if len(codeHashes) == 0 {
 		return nil
 	}
-	<-q.open
 
 	return q.addCode(codeHashes)
 }
@@ -128,6 +136,7 @@ func (q *CodeFetcherQueue) AddCode(codeHashes []common.Hash) error {
 // Finalize implements [synccommon.CodeFetcher] by signaling no further code hashes will be added.
 func (q *CodeFetcherQueue) Finalize() {
 	<-q.open
+	q.finalized.Store(true)
 	close(q.codeHashes)
 }
 
