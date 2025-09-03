@@ -167,3 +167,41 @@ func (q *CodeFetcherQueue) enqueue(codeHashes []common.Hash) error {
 
 	return nil
 }
+
+// Clean out any codeToFetch markers from the database that are no longer needed and
+// return any outstanding markers to the queue.
+func getCodeToFetchFromDB(db ethdb.Database) ([]common.Hash, error) {
+	it := customrawdb.NewCodeToFetchIterator(db)
+	defer it.Release()
+
+	batch := db.NewBatch()
+	codeHashes := make([]common.Hash, 0)
+	for it.Next() {
+		codeHash := common.BytesToHash(it.Key()[len(customrawdb.CodeToFetchPrefix):])
+		// If we already have the codeHash, delete the marker from the database and continue
+
+		if rawdb.HasCode(db, codeHash) {
+			customrawdb.DeleteCodeToFetch(batch, codeHash)
+			// Write the batch to disk if it has reached the ideal batch size.
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return nil, fmt.Errorf("failed to write batch removing old code markers: %w", err)
+				}
+				batch.Reset()
+			}
+			continue
+		}
+
+		codeHashes = append(codeHashes, codeHash)
+	}
+	if err := it.Error(); err != nil {
+		return nil, fmt.Errorf("failed to iterate code entries to fetch: %w", err)
+	}
+	if batch.ValueSize() > 0 {
+		if err := batch.Write(); err != nil {
+			return nil, fmt.Errorf("failed to write batch removing old code markers: %w", err)
+		}
+	}
+
+	return codeHashes, nil
+}
