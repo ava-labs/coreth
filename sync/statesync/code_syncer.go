@@ -7,9 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
-	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
@@ -22,10 +20,7 @@ import (
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 )
 
-const (
-	defaultMaxOutstandingCodeHashes = 5000
-	defaultNumCodeFetchingWorkers   = 5
-)
+const defaultNumCodeFetchingWorkers = 5
 
 var (
 	_ synccommon.Syncer = (*CodeSyncer)(nil)
@@ -33,44 +28,61 @@ var (
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 )
 
+// CodeSyncer syncs code bytes from the network in a separate thread.
+// Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
+type CodeSyncer struct {
+	db         ethdb.Database
+	client     statesyncclient.Client
+	codeHashes <-chan common.Hash // Channel of incoming code hash requests provided by the fetcher
+
+	// runtime knobs
+	numWorkers          int
+	maxCodeHashesPerReq int
+}
+
 // Name returns the human-readable name for this sync task.
 func (*CodeSyncer) Name() string { return "Code Syncer" }
 
 // ID returns the stable identifier for this sync task.
 func (*CodeSyncer) ID() string { return "state_code_sync" }
 
-// CodeSyncer syncs code bytes from the network in a seprate thread.
-// Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
-type CodeSyncer struct {
-	db                    ethdb.Database
-	client                statesyncclient.Client
-	config                Config
-	lock                  sync.Mutex
-	outstandingCodeHashes set.Set[common.Hash] // Set of code hashes that we need to fetch from the network.
-	dbCodeHashes          []common.Hash        // List of code hashes stored in the database.
-	codeHashes            chan common.Hash     // Channel of incoming code hash requests
-	open                  chan struct{}        // Signal that the code syncer is open and ready to accept requests.
-	done                  <-chan struct{}
+// CodeSyncerOption configures CodeSyncer at construction time.
+type CodeSyncerOption func(*CodeSyncer)
+
+// WithNumCodeFetchingWorkers overrides the number of concurrent workers.
+func WithNumCodeFetchingWorkers(n int) CodeSyncerOption {
+	return func(c *CodeSyncer) {
+		if n > 0 {
+			c.numWorkers = n
+		}
+	}
 }
 
-// NewCodeSyncer allows external packages (e.g., registry wiring) to create a code syncer as a separate task and
-// inject it as a [CodeFetcher] into the state syncer.
-func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Config) (*CodeSyncer, error) {
-	cfg := config.WithUnsetDefaults()
+// WithMaxCodeHashesPerRequest overrides the batching size per request.
+func WithMaxCodeHashesPerRequest(n int) CodeSyncerOption {
+	return func(c *CodeSyncer) {
+		if n > 0 {
+			c.maxCodeHashesPerReq = n
+		}
+	}
+}
 
-	dbCodeHashes, err := getCodeToFetchFromDB(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
+// NewCodeSyncer allows external packages (e.g., registry wiring) to create a code syncer
+// that consumes hashes from a provided fetcher queue.
+func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, codeHashes <-chan common.Hash, opts ...CodeSyncerOption) (*CodeSyncer, error) {
+	c := &CodeSyncer{
+		db:                  db,
+		client:              client,
+		codeHashes:          codeHashes,
+		numWorkers:          defaultNumCodeFetchingWorkers,
+		maxCodeHashesPerReq: message.MaxCodeHashesPerRequest,
 	}
 
-	return &CodeSyncer{
-		db:           db,
-		client:       client,
-		config:       cfg,
-		dbCodeHashes: dbCodeHashes,
-		codeHashes:   make(chan common.Hash, cfg.MaxOutstandingCodeHashes),
-		open:         make(chan struct{}),
-	}, nil
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c, nil
 }
 
 // Sync starts the worker thread and populates the code hashes queue with active work.
@@ -78,19 +90,11 @@ func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, config Conf
 // fetched and the code channel has been closed, or the context is cancelled.
 func (c *CodeSyncer) Sync(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(ctx)
-	c.done = egCtx.Done()
 
 	// Start NumCodeFetchingWorkers threads to fetch code from the network.
-	for i := 0; i < c.config.NumCodeFetchingWorkers; i++ {
+	for i := 0; i < c.numWorkers; i++ {
 		eg.Go(func() error { return c.work(egCtx) })
 	}
-
-	// Queue the code hashes from the previous sync
-	if err := c.addCode(c.dbCodeHashes); err != nil {
-		return fmt.Errorf("unable to resume previous sync: %w", err)
-	}
-	c.dbCodeHashes = nil
-	close(c.open)
 
 	return eg.Wait()
 }
@@ -153,9 +157,9 @@ func (c *CodeSyncer) work(ctx context.Context) error {
 			}
 
 			codeHashes = append(codeHashes, codeHash)
-			// Try to wait for at least [MaxCodeHashesPerRequest] code hashes to batch into a single request
+			// Try to wait for at least [maxCodeHashesPerReq] code hashes to batch into a single request
 			// if there's more work remaining.
-			if len(codeHashes) < message.MaxCodeHashesPerRequest {
+			if len(codeHashes) < c.maxCodeHashesPerReq {
 				continue
 			}
 			if err := c.fulfillCodeRequest(ctx, codeHashes); err != nil {
@@ -178,73 +182,14 @@ func (c *CodeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 		return err
 	}
 
-	// Hold the lock while modifying outstandingCodeHashes.
-	c.lock.Lock()
 	batch := c.db.NewBatch()
 	for i, codeHash := range codeHashes {
 		customrawdb.DeleteCodeToFetch(batch, codeHash)
-		c.outstandingCodeHashes.Remove(codeHash)
 		rawdb.WriteCode(batch, codeHash, codeByteSlices[i])
 	}
-	c.lock.Unlock() // Release the lock before writing the batch
 
 	if err := batch.Write(); err != nil {
-		return fmt.Errorf("faild to write batch for fulfilled code requests: %w", err)
-	}
-	return nil
-}
-
-// AddCode checks if [codeHashes] need to be fetched from the network and adds them to the queue if so.
-// assumes that [codeHashes] are valid non-empty code hashes.
-// This blocks until the code syncer is open and ready to accept requests.
-func (c *CodeSyncer) AddCode(codeHashes []common.Hash) error {
-	<-c.open
-	return c.addCode(codeHashes)
-}
-
-func (c *CodeSyncer) addCode(codeHashes []common.Hash) error {
-	batch := c.db.NewBatch()
-
-	c.lock.Lock()
-	selectedCodeHashes := make([]common.Hash, 0, len(codeHashes))
-	for _, codeHash := range codeHashes {
-		// Add the code hash to the queue if it's not already on the queue and we do not already have it
-		// in the database.
-		if !c.outstandingCodeHashes.Contains(codeHash) && !rawdb.HasCode(c.db, codeHash) {
-			selectedCodeHashes = append(selectedCodeHashes, codeHash)
-			c.outstandingCodeHashes.Add(codeHash)
-			customrawdb.AddCodeToFetch(batch, codeHash)
-		}
-	}
-	c.lock.Unlock()
-
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("failed to write batch of code to fetch markers due to: %w", err)
-	}
-	return c.addHashesToQueue(selectedCodeHashes)
-}
-
-// Finalize implements CodeFetcher by signaling no further code hashes will be added.
-// Notifies the code syncer that there will be no more incoming code hashes from syncing the account trie,
-// so it only needs to complete its outstanding work.
-// Note: this allows the worker threads to exit and return a nil error.
-func (c *CodeSyncer) Finalize() {
-	<-c.open // The code syncer must queue the previous code from the db first.
-	close(c.codeHashes)
-}
-
-// Ready returns a channel that is closed when the code syncer is ready to accept code hashes.
-func (c *CodeSyncer) Ready() <-chan struct{} { return c.open }
-
-// addHashesToQueue adds [codeHashes] to the queue and blocks until it is able to do so.
-// This should be called after all other operation to add code hashes to the queue has been completed.
-func (c *CodeSyncer) addHashesToQueue(codeHashes []common.Hash) error {
-	for _, codeHash := range codeHashes {
-		select {
-		case c.codeHashes <- codeHash:
-		case <-c.done:
-			return errFailedToAddCodeHashesToQueue
-		}
+		return fmt.Errorf("failed to write batch for fulfilled code requests: %w", err)
 	}
 	return nil
 }

@@ -54,26 +54,18 @@ type Extender interface {
 type CodeFetcher interface {
 	// AddCode enqueues the provided code hashes for fetching, ignoring any
 	// hashes already present locally or already queued. Implementations may
-	// block until [CodeFetcher.Ready] is closed to ensure the fetcher is prepared to accept
-	// work. Returns a non-nil error if the fetcher is shutting down or if
-	// persisting enqueue markers fails.
+	// block until internally ready to accept work. Returns a non-nil error if the
+	// fetcher is shutting down or if persisting enqueue markers fails.
 	AddCode(codeHashes []common.Hash) error
+
+	// CodeHashes returns a channel that yields code hashes to be fetched by the
+	// consumer. The channel should be closed when no further hashes will be
+	// produced (e.g., after Finalize and draining persisted markers).
+	CodeHashes() <-chan common.Hash
 
 	// Finalize signals that no more code hashes will be produced by the
 	// producer (e.g., after the account trie has been fully scanned). After
 	// this call, the fetcher should complete any outstanding work and then
 	// return from [Syncer.Sync] without waiting for additional input.
 	Finalize()
-
-	// Ready returns a channel that is closed once the fetcher is ready to
-	// accept code hashes via [CodeFetcher.AddCode]. Callers can wait on this signal to avoid
-	// enqueueing work before the fetcher has initialized.
-	Ready() <-chan struct{}
-}
-
-// CodeSyncer is implemented by the concrete code syncer and combines
-// the code fetcher and syncer behaviours so callers can use a single type.
-type CodeSyncer interface {
-	CodeFetcher
-	Syncer
 }

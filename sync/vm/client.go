@@ -168,14 +168,17 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
 
-	cfg := statesync.NewDefaultConfig(client.RequestSize)
+	fetcher, err := client.createCodeFetcher()
+	if err != nil {
+		return fmt.Errorf("failed to create code fetcher: %w", err)
+	}
 
-	codeSyncer, err := client.createCodeHashSyncer(cfg)
+	codeSyncer, err := client.createCodeSyncer(fetcher.CodeHashes())
 	if err != nil {
 		return fmt.Errorf("failed to create code syncer: %w", err)
 	}
 
-	stateSyncer, err := client.createEVMSyncer(cfg, codeSyncer)
+	stateSyncer, err := client.createEVMSyncer(fetcher)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM state syncer: %w", err)
 	}
@@ -214,12 +217,25 @@ func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64)
 	})
 }
 
-func (client *client) createEVMSyncer(cfg statesync.Config, fetcher synccommon.CodeFetcher) (synccommon.Syncer, error) {
-	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), fetcher, cfg)
+func (client *client) createEVMSyncer(fetcher synccommon.CodeFetcher) (synccommon.Syncer, error) {
+	return statesync.NewSyncer(
+		client.Client,
+		client.ChainDB,
+		client.summary.GetBlockRoot(),
+		fetcher,
+		statesync.NewDefaultConfig(client.RequestSize),
+	)
 }
 
-func (client *client) createCodeHashSyncer(cfg statesync.Config) (synccommon.CodeSyncer, error) {
-	return statesync.NewCodeSyncer(client.Client, client.ChainDB, cfg)
+func (client *client) createCodeFetcher() (synccommon.CodeFetcher, error) {
+	return statesync.NewCodeFetcherQueue(
+		client.ChainDB,
+		client.StateSyncDone,
+	)
+}
+
+func (client *client) createCodeSyncer(codeHashes <-chan common.Hash) (synccommon.Syncer, error) {
+	return statesync.NewCodeSyncer(client.Client, client.ChainDB, codeHashes)
 }
 
 func (client *client) createExtenderSyncer() (synccommon.Syncer, error) {

@@ -41,9 +41,6 @@ func (*stateSync) ID() string { return "state_evm_state_sync" }
 
 type Config struct {
 	BatchSize uint
-	// Maximum number of code hashes in the code syncer queue.
-	MaxOutstandingCodeHashes int
-	NumCodeFetchingWorkers   int
 	// Number of leafs to request from a peer at a time.
 	// NOTE: user facing option validated as the parameter [plugin/evm/config.Config.StateSyncRequestSize].
 	RequestSize uint16
@@ -54,10 +51,8 @@ type Config struct {
 // because this function is not very flexible.
 func NewDefaultConfig(requestSize uint16) Config {
 	return Config{
-		BatchSize:                ethdb.IdealBatchSize,
-		MaxOutstandingCodeHashes: defaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   defaultNumCodeFetchingWorkers,
-		RequestSize:              requestSize,
+		BatchSize:   ethdb.IdealBatchSize,
+		RequestSize: requestSize,
 	}
 }
 
@@ -67,12 +62,6 @@ func (c Config) WithUnsetDefaults() Config {
 	out := c
 	if out.BatchSize == 0 {
 		out.BatchSize = ethdb.IdealBatchSize
-	}
-	if out.MaxOutstandingCodeHashes == 0 {
-		out.MaxOutstandingCodeHashes = defaultMaxOutstandingCodeHashes
-	}
-	if out.NumCodeFetchingWorkers == 0 {
-		out.NumCodeFetchingWorkers = defaultNumCodeFetchingWorkers
 	}
 
 	return out
@@ -266,13 +255,6 @@ func (t *stateSync) storageTrieProducer(ctx context.Context) error {
 }
 
 func (t *stateSync) Sync(ctx context.Context) error {
-	// Wait for the code fetcher to be ready before starting.
-	select {
-	case <-t.codeFetcher.Ready():
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
 	// Start the leaf syncer and storage trie producer.
 	eg, egCtx := errgroup.WithContext(ctx)
 

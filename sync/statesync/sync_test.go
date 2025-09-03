@@ -58,13 +58,22 @@ func testSync(t *testing.T, test syncTest) {
 	mockClient.GetLeafsIntercept = test.GetLeafsIntercept
 	mockClient.GetCodeIntercept = test.GetCodeIntercept
 
+	// Create the code fetcher.
+	fetcher, err := NewCodeFetcherQueue(clientDB, make(chan struct{}), WithAutoInit(false))
+	require.NoError(t, err, "failed to create code fetcher")
+	require.NoError(t, fetcher.Init())
+
+	// Create the consumer code syncer.
+	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, fetcher.CodeHashes())
+	require.NoError(t, err, "failed to create code syncer")
+
 	cfg := Config{
 		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
 		RequestSize: testRequestSize,
 	}
-	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, cfg)
-	require.NoError(t, err, "failed to create code syncer")
-	stateSyncer, err := NewSyncer(mockClient, clientDB, root, codeSyncer, cfg)
+
+	// Create the state syncer.
+	stateSyncer, err := NewSyncer(mockClient, clientDB, root, fetcher, cfg)
 	require.NoError(t, err, "failed to create state syncer")
 
 	// Run both syncers concurrently and wait for the first error.
@@ -195,7 +204,8 @@ func TestCancelSync(t *testing.T) {
 	// Create trie with 2000 accounts (more than one leaf request)
 	root := fillAccountsWithStorage(t, serverDB, serverTrieDB, common.Hash{}, 2000)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
+
 	testSync(t, syncTest{
 		ctx: ctx,
 		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {

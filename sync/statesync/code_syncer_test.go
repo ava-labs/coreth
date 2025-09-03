@@ -27,7 +27,7 @@ import (
 
 type codeSyncerTest struct {
 	clientDB          ethdb.Database
-	setupCodeSyncer   func(*CodeSyncer)
+	queueCapacity     int
 	codeRequestHashes [][]common.Hash
 	codeByteSlices    [][]byte
 	getCodeIntercept  func(hashes []common.Hash, codeBytes [][]byte) ([][]byte, error)
@@ -55,27 +55,36 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		clientDB = rawdb.NewMemoryDatabase()
 	}
 
-	cfg := NewDefaultConfig(testRequestSize)
+	if test.queueCapacity == 0 {
+		test.queueCapacity = defaultMaxOutstandingCodeHashes
+	}
+
+	fetcher, err := NewCodeFetcherQueue(
+		clientDB,
+		make(chan struct{}),
+		WithAutoInit(false),
+		WithMaxOutstandingCodeHashes(test.queueCapacity),
+	)
+	require.NoError(t, err)
+	require.NoError(t, fetcher.Init())
+
 	codeSyncer, err := NewCodeSyncer(
 		mockClient,
 		clientDB,
-		cfg,
+		fetcher.CodeHashes(),
 	)
 	require.NoError(t, err)
-	if test.setupCodeSyncer != nil {
-		test.setupCodeSyncer(codeSyncer)
-	}
 	go func() {
 		for _, codeHashes := range test.codeRequestHashes {
-			if err := codeSyncer.AddCode(codeHashes); err != nil {
+			if err := fetcher.AddCode(codeHashes); err != nil {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		codeSyncer.Finalize()
+		fetcher.Finalize()
 	}()
 
 	ctx, cancel := utilstest.NewTestContext(t)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	// Run the sync and handle expected error.
 	err = codeSyncer.Sync(ctx)
@@ -112,9 +121,7 @@ func TestCodeSyncerManyCodeHashes(t *testing.T) {
 	}
 
 	testCodeSyncer(t, codeSyncerTest{
-		setupCodeSyncer: func(c *CodeSyncer) {
-			c.codeHashes = make(chan common.Hash, 10)
-		},
+		queueCapacity:     10,
 		codeRequestHashes: [][]common.Hash{codeHashes[0:100], codeHashes[100:2000], codeHashes[2000:2005], codeHashes[2005:]},
 		codeByteSlices:    codeByteSlices,
 	})
@@ -169,38 +176,52 @@ func TestCodeSyncerAddsMoreInProgressThanQueueSize(t *testing.T) {
 	})
 }
 
-func TestCodeSyncerReady(t *testing.T) {
+func TestAddCodeBlocksUntilFetcherInit(t *testing.T) {
 	serverDB := memorydb.New()
+	codeBytes := utils.RandomBytes(100)
+	codeHash := crypto.Keccak256Hash(codeBytes)
+	rawdb.WriteCode(serverDB, codeHash, codeBytes)
+
 	codeRequestHandler := handlers.NewCodeRequestHandler(serverDB, message.Codec, handlerstats.NewNoopHandlerStats())
 	mockClient := statesyncclient.NewTestClient(message.Codec, nil, codeRequestHandler, nil)
 
 	clientDB := rawdb.NewMemoryDatabase()
-	cfg := NewDefaultConfig(testRequestSize)
-	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, cfg)
+	fetcher, err := NewCodeFetcherQueue(clientDB, make(chan struct{}), WithAutoInit(false))
 	require.NoError(t, err)
 
+	// Start AddCode before fetcher.Init; it should block until initialized.
+	addedCh := make(chan error, 1)
+	go func() { addedCh <- fetcher.AddCode([]common.Hash{codeHash}) }()
+
 	select {
-	case <-codeSyncer.Ready():
-		// If already closed, this would mean ready before Sync which shouldn't happen.
-		t.Fatalf("Ready should not be closed before Sync starts")
-	default:
+	case err := <-addedCh:
+		t.Fatalf("AddCode returned before fetcher initialized: %v", err)
+	case <-time.After(50 * time.Millisecond):
+		// expected to still be blocked
 	}
 
+	// Initialize fetcher and start the code syncer.
+	require.NoError(t, fetcher.Init())
+	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, fetcher.CodeHashes())
+	require.NoError(t, err)
 	ctx, cancel := utilstest.NewTestContext(t)
-
+	t.Cleanup(cancel)
 	doneCh := make(chan error, 1)
 	go func() { doneCh <- codeSyncer.Sync(ctx) }()
 
-	// Wait briefly for Sync to initialize and close the ready channel.
-	utilstest.SleepWithContext(ctx, 50*time.Millisecond)
-
+	// After Sync starts, AddCode should unblock quickly.
 	select {
-	case <-codeSyncer.Ready():
-		// ok
-	default:
-		t.Fatalf("Ready should be closed after Sync initialization")
+	case err := <-addedCh:
+		require.NoError(t, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("AddCode did not unblock after Sync started")
 	}
 
-	cancel()
-	require.Error(t, <-doneCh)
+	// Finish the sync cleanly.
+	fetcher.Finalize()
+	require.NoError(t, <-doneCh)
+
+	// Verify that the code was fetched.
+	fetched := rawdb.ReadCode(clientDB, codeHash)
+	require.Equal(t, codeBytes, fetched)
 }
