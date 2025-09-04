@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package database
@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	_ ethdb.KeyValueStore = &ethDbWrapper{}
+	_ ethdb.KeyValueStore = (*ethDbWrapper)(nil)
 
 	ErrSnapshotNotSupported = errors.New("snapshot is not supported")
 )
@@ -22,18 +22,18 @@ type ethDbWrapper struct{ database.Database }
 func WrapDatabase(db database.Database) ethdb.KeyValueStore { return ethDbWrapper{db} }
 
 // Stat implements ethdb.Database
-func (db ethDbWrapper) Stat(string) (string, error) { return "", database.ErrNotFound }
+func (ethDbWrapper) Stat(string) (string, error) { return "", database.ErrNotFound }
 
 // NewBatch implements ethdb.Database
 func (db ethDbWrapper) NewBatch() ethdb.Batch { return wrappedBatch{db.Database.NewBatch()} }
 
 // NewBatchWithSize implements ethdb.Database
 // TODO: propagate size through avalanchego Database interface
-func (db ethDbWrapper) NewBatchWithSize(size int) ethdb.Batch {
+func (db ethDbWrapper) NewBatchWithSize(int) ethdb.Batch {
 	return wrappedBatch{db.Database.NewBatch()}
 }
 
-func (db ethDbWrapper) NewSnapshot() (ethdb.Snapshot, error) {
+func (ethDbWrapper) NewSnapshot() (ethdb.Snapshot, error) {
 	return nil, ErrSnapshotNotSupported
 }
 

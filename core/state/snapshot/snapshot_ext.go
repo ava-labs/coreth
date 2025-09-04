@@ -1,11 +1,15 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
 package snapshot
 
 import (
 	"time"
 
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
+
+	"github.com/ava-labs/coreth/utils"
 )
 
 func (t *Tree) DiskAccountIterator(seek common.Hash) AccountIterator {

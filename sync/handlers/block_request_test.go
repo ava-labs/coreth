@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package handlers
@@ -10,11 +10,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/units"
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -22,6 +17,13 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
+	"github.com/ava-labs/coreth/sync/handlers/stats/statstest"
 )
 
 type blockRequestTest struct {
@@ -35,11 +37,11 @@ type blockRequestTest struct {
 	requestedParents  uint16
 	expectedBlocks    int
 	expectNilResponse bool
-	assertResponse    func(t testing.TB, stats *stats.MockHandlerStats, b []byte)
+	assertResponse    func(t testing.TB, stats *statstest.TestHandlerStats, b []byte)
 }
 
 func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*types.Block) {
-	mockHandlerStats := &stats.MockHandlerStats{}
+	testHandlerStats := &statstest.TestHandlerStats{}
 
 	// convert into map
 	blocksDB := make(map[common.Hash]*types.Block, len(blocks))
@@ -55,7 +57,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 			return blk
 		},
 	}
-	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, mockHandlerStats)
+	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, testHandlerStats)
 
 	var blockRequest message.BlockRequest
 	if test.startBlockHash != (common.Hash{}) {
@@ -73,7 +75,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 		t.Fatal("unexpected error during block request", err)
 	}
 	if test.assertResponse != nil {
-		test.assertResponse(t, mockHandlerStats, responseBytes)
+		test.assertResponse(t, testHandlerStats, responseBytes)
 	}
 
 	if test.expectNilResponse {
@@ -98,18 +100,18 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 		assert.Equal(t, blocks[test.startBlockIndex].Hash(), block.Hash())
 		test.startBlockIndex--
 	}
-	mockHandlerStats.Reset()
+	testHandlerStats.Reset()
 }
 
 func TestBlockRequestHandler(t *testing.T) {
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
-	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
+	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(_ int, _ *core.BlockGen) {})
 	if err != nil {
 		t.Fatal("unexpected error when generating test blockchain", err)
 	}
@@ -140,8 +142,8 @@ func TestBlockRequestHandler(t *testing.T) {
 			startBlockHeight:  1_000_000,
 			requestedParents:  64,
 			expectNilResponse: true,
-			assertResponse: func(t testing.TB, mockHandlerStats *stats.MockHandlerStats, _ []byte) {
-				assert.Equal(t, uint32(1), mockHandlerStats.MissingBlockHashCount)
+			assertResponse: func(t testing.TB, testHandlerStats *statstest.TestHandlerStats, _ []byte) {
+				assert.Equal(t, uint32(1), testHandlerStats.MissingBlockHashCount)
 			},
 		},
 	}
@@ -214,14 +216,14 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 }
 
 func TestBlockRequestHandlerCtxExpires(t *testing.T) {
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
-	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
+	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(_ int, _ *core.BlockGen) {})
 	if err != nil {
 		t.Fatal("unexpected error when generating test blockchain", err)
 	}

@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 // ACP176 implements the fee logic specified here:
@@ -13,10 +13,11 @@ import (
 	"math/big"
 	"sort"
 
-	safemath "github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/holiman/uint256"
+
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 const (

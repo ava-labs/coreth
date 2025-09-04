@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package stats
@@ -166,7 +166,10 @@ func (h *handlerStats) IncSnapshotReadSuccess()    { h.snapshotReadSuccess.Inc(1
 func (h *handlerStats) IncSnapshotSegmentValid()   { h.snapshotSegmentValid.Inc(1) }
 func (h *handlerStats) IncSnapshotSegmentInvalid() { h.snapshotSegmentInvalid.Inc(1) }
 
-func NewHandlerStats(enabled bool) HandlerStats {
+// GetOrRegisterHandlerStats returns a [HandlerStats] to track state sync handler metrics.
+// If `enabled` is false, a no-op implementation is returned.
+// if `enabled` is true, calling this multiple times will return the same registered metrics.
+func GetOrRegisterHandlerStats(enabled bool) HandlerStats {
 	if !enabled {
 		return NewNoopHandlerStats()
 	}
@@ -213,29 +216,29 @@ func NewNoopHandlerStats() HandlerStats {
 }
 
 // all operations are no-ops
-func (n *noopHandlerStats) IncBlockRequest()                                    {}
-func (n *noopHandlerStats) IncMissingBlockHash()                                {}
-func (n *noopHandlerStats) UpdateBlocksReturned(uint16)                         {}
-func (n *noopHandlerStats) UpdateBlockRequestProcessingTime(time.Duration)      {}
-func (n *noopHandlerStats) IncCodeRequest()                                     {}
-func (n *noopHandlerStats) IncMissingCodeHash()                                 {}
-func (n *noopHandlerStats) IncTooManyHashesRequested()                          {}
-func (n *noopHandlerStats) IncDuplicateHashesRequested()                        {}
-func (n *noopHandlerStats) UpdateCodeReadTime(time.Duration)                    {}
-func (n *noopHandlerStats) UpdateCodeBytesReturned(uint32)                      {}
-func (n *noopHandlerStats) IncLeafsRequest()                                    {}
-func (n *noopHandlerStats) IncInvalidLeafsRequest()                             {}
-func (n *noopHandlerStats) UpdateLeafsRequestProcessingTime(time.Duration)      {}
-func (n *noopHandlerStats) UpdateLeafsReturned(uint16)                          {}
-func (n *noopHandlerStats) UpdateReadLeafsTime(duration time.Duration)          {}
-func (n *noopHandlerStats) UpdateSnapshotReadTime(duration time.Duration)       {}
-func (n *noopHandlerStats) UpdateGenerateRangeProofTime(duration time.Duration) {}
-func (n *noopHandlerStats) UpdateRangeProofValsReturned(numProofVals int64)     {}
-func (n *noopHandlerStats) IncMissingRoot()                                     {}
-func (n *noopHandlerStats) IncTrieError()                                       {}
-func (n *noopHandlerStats) IncProofError()                                      {}
-func (n *noopHandlerStats) IncSnapshotReadError()                               {}
-func (n *noopHandlerStats) IncSnapshotReadAttempt()                             {}
-func (n *noopHandlerStats) IncSnapshotReadSuccess()                             {}
-func (n *noopHandlerStats) IncSnapshotSegmentValid()                            {}
-func (n *noopHandlerStats) IncSnapshotSegmentInvalid()                          {}
+func (*noopHandlerStats) IncBlockRequest()                               {}
+func (*noopHandlerStats) IncMissingBlockHash()                           {}
+func (*noopHandlerStats) UpdateBlocksReturned(uint16)                    {}
+func (*noopHandlerStats) UpdateBlockRequestProcessingTime(time.Duration) {}
+func (*noopHandlerStats) IncCodeRequest()                                {}
+func (*noopHandlerStats) IncMissingCodeHash()                            {}
+func (*noopHandlerStats) IncTooManyHashesRequested()                     {}
+func (*noopHandlerStats) IncDuplicateHashesRequested()                   {}
+func (*noopHandlerStats) UpdateCodeReadTime(time.Duration)               {}
+func (*noopHandlerStats) UpdateCodeBytesReturned(uint32)                 {}
+func (*noopHandlerStats) IncLeafsRequest()                               {}
+func (*noopHandlerStats) IncInvalidLeafsRequest()                        {}
+func (*noopHandlerStats) UpdateLeafsRequestProcessingTime(time.Duration) {}
+func (*noopHandlerStats) UpdateLeafsReturned(uint16)                     {}
+func (*noopHandlerStats) UpdateReadLeafsTime(_ time.Duration)            {}
+func (*noopHandlerStats) UpdateSnapshotReadTime(_ time.Duration)         {}
+func (*noopHandlerStats) UpdateGenerateRangeProofTime(_ time.Duration)   {}
+func (*noopHandlerStats) UpdateRangeProofValsReturned(_ int64)           {}
+func (*noopHandlerStats) IncMissingRoot()                                {}
+func (*noopHandlerStats) IncTrieError()                                  {}
+func (*noopHandlerStats) IncProofError()                                 {}
+func (*noopHandlerStats) IncSnapshotReadError()                          {}
+func (*noopHandlerStats) IncSnapshotReadAttempt()                        {}
+func (*noopHandlerStats) IncSnapshotReadSuccess()                        {}
+func (*noopHandlerStats) IncSnapshotSegmentValid()                       {}
+func (*noopHandlerStats) IncSnapshotSegmentInvalid()                     {}

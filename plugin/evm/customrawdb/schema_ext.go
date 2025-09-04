@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package customrawdb
@@ -51,3 +51,5 @@ var (
 	// and is equal to [syncPerformedPrefix] + block number as uint64.
 	syncPerformedKeyLength = len(syncPerformedPrefix) + wrappers.LongLen
 )
+
+var FirewoodScheme = "firewood"

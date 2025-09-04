@@ -1,4 +1,4 @@
-// (c) 2024 Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 package core
 
@@ -12,6 +12,8 @@ import "github.com/ava-labs/libevm/metrics"
 //
 // This is necessary for a metric defined in libevm with the same name but a
 // different type to what we expect.
+//
+//nolint:unparam // to match native metrics call
 func getOrOverrideAsRegisteredCounter(name string, r metrics.Registry) metrics.Counter {
 	if r == nil {
 		r = metrics.DefaultRegistry

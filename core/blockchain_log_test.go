@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package core
@@ -8,16 +8,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 )
 
 func TestAcceptedLogsSubscription(t *testing.T) {
@@ -89,8 +90,7 @@ func TestAcceptedLogsSubscription(t *testing.T) {
 	require.NoError(err)
 
 	for _, block := range blocks {
-		err := chain.Accept(block)
-		require.NoError(err)
+		require.NoError(chain.Accept(block))
 	}
 	chain.DrainAcceptorQueue()
 

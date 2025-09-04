@@ -1,4 +1,4 @@
-// (c) 2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package bind_test
@@ -8,6 +8,11 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/accounts/abi/bind/backends"
@@ -15,10 +20,6 @@ import (
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/crypto"
-	"github.com/stretchr/testify/require"
 )
 
 // TestGetSenderNativeAssetCall checks that the NativeAssetCall proxies the
@@ -64,7 +65,7 @@ func TestGetSenderNativeAssetCall(t *testing.T) {
 	auth, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 	require.NoError(t, err, "Failed to create transactor")
 	alloc := types.GenesisAlloc{auth.From: {Balance: big.NewInt(1000000000000000000)}}
-	atApricotPhase2 := func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+	atApricotPhase2 := func(_ *node.Config, ethConf *ethconfig.Config) {
 		chainConfig := *params.TestApricotPhase2Config
 		chainConfig.ChainID = big.NewInt(1337)
 		ethConf.Genesis.Config = &chainConfig

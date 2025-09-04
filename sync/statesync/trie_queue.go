@@ -1,12 +1,13 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesync
 
 import (
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/ethdb"
+
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 )
 
 // trieQueue persists storage trie roots with their associated

@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 // AP0 defines constants used during the initial network launch.
@@ -6,6 +6,7 @@ package ap0
 
 import (
 	"github.com/ava-labs/avalanchego/utils/units"
+
 	"github.com/ava-labs/coreth/utils"
 )
 

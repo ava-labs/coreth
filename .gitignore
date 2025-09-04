@@ -24,6 +24,7 @@ awscpu
 .idea/
 
 *logs/
+!*customlogs/
 
 .vscode*
 
@@ -49,3 +50,6 @@ build/
 avalanchego
 
 .direnv
+
+cmd/simulator/.simulator/*
+cmd/simulator/simulator

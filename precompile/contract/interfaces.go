@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 // Defines the interface for the configuration and execution of a precompile contract
@@ -8,11 +8,16 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/snow"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/avalanchego/utils/set"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/libevm/common"
-	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+
+	ethtypes "github.com/ava-labs/libevm/core/types"
 )
 
 // StatefulPrecompiledContract is the interface for executing a precompiled contract
@@ -23,8 +28,8 @@ type StatefulPrecompiledContract interface {
 
 // StateDB is the interface for accessing EVM state
 type StateDB interface {
-	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
+	GetState(common.Address, common.Hash, ...stateconf.StateDBStateOption) common.Hash
+	SetState(common.Address, common.Hash, common.Hash, ...stateconf.StateDBStateOption)
 
 	SetNonce(common.Address, uint64)
 	GetNonce(common.Address) uint64
@@ -40,10 +45,9 @@ type StateDB interface {
 
 	AddLog(*ethtypes.Log)
 	Logs() []*ethtypes.Log
-	GetPredicateStorageSlots(address common.Address, index int) ([]byte, bool)
-	SetPredicateStorageSlots(address common.Address, predicates [][]byte)
+	GetPredicate(address common.Address, index int) (predicate.Predicate, bool)
 
-	GetTxHash() common.Hash
+	TxHash() common.Hash
 
 	Snapshot() int
 	RevertToSnapshot(int)
@@ -67,8 +71,8 @@ type ConfigurationBlockContext interface {
 type BlockContext interface {
 	ConfigurationBlockContext
 	// GetPredicateResults returns the result of verifying the predicates of the
-	// given transaction, precompile address pair as a byte array.
-	GetPredicateResults(txHash common.Hash, precompileAddress common.Address) []byte
+	// given transaction, precompile address pair.
+	GetPredicateResults(txHash common.Hash, precompileAddress common.Address) set.Bits
 }
 
 type Configurator interface {

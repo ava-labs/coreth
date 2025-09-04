@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -29,7 +30,9 @@ package tests
 import (
 	"fmt"
 	"math/big"
+	"os"
 	"sort"
+	"strings"
 
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
@@ -402,4 +405,24 @@ type UnsupportedForkError struct {
 
 func (e UnsupportedForkError) Error() string {
 	return fmt.Sprintf("unsupported fork %q", e.Name)
+}
+
+func GetRepoRootPath(suffix string) string {
+	// - When executed via a test binary, the working directory will be wherever
+	// the binary is executed from, but scripts should require execution from
+	// the repo root.
+	//
+	// - When executed via ginkgo (nicer for development + supports
+	// parallel execution) the working directory will always be the
+	// target path (e.g. [repo root]./tests/warp) and getting the repo
+	// root will require stripping the target path suffix.
+	//
+	// TODO(marun) Avoid relying on the current working directory to find test
+	// dependencies by embedding data where possible (e.g. for genesis) and
+	// explicitly configuring paths for execution.
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimSuffix(cwd, suffix)
 }
