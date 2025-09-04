@@ -2136,6 +2136,7 @@ func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common
 	tx := types.NewTx(
 		&types.LegacyTx{
 			Nonce:    nonce,
+			To:       nil, // contract creation
 			Value:    big.NewInt(0),
 			Gas:      1000000,
 			GasPrice: gasPrice,
