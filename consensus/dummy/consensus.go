@@ -331,21 +331,18 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		}
 	}
 
-	if !eng.consensusMode.ModeSkipBlockFee {
-		// Verify the block fee was paid.
-		if err := customheader.VerifyBlockFee(
-			block.BaseFee(),
-			blockGasCost,
-			block.Transactions(),
-			receipts,
-			contribution,
-			rules,
-		); err != nil {
-			return err
-		}
+	if eng.consensusMode.ModeSkipBlockFee {
+		return nil
 	}
 
-	return nil
+	return customheader.VerifyBlockFee(
+		block.BaseFee(),
+		blockGasCost,
+		block.Transactions(),
+		receipts,
+		contribution,
+		rules,
+	)
 }
 
 func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
