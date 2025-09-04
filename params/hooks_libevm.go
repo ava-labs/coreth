@@ -88,49 +88,36 @@ func init() {
 }
 
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
-	var precompiles map[common.Address]vm.PrecompiledContract
-	switch {
-	case r.IsGranite:
-		precompiles = PrecompiledContractsGranite
-	case r.IsBanff:
-		precompiles = PrecompiledContractsBanff
-	case r.IsApricotPhase6:
-		precompiles = PrecompiledContractsApricotPhase6
-	case r.IsApricotPhasePre6:
-		precompiles = PrecompiledContractsApricotPhasePre6
-	case r.IsApricotPhase2:
-		precompiles = PrecompiledContractsApricotPhase2
-	}
-
 	var addresses []common.Address
-	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
+	addresses = slices.AppendSeq(addresses, maps.Keys(r.currentPrecompiles()))
 	addresses = append(addresses, existing...)
 	return addresses
+}
+
+func (r RulesExtra) currentPrecompiles() map[common.Address]vm.PrecompiledContract {
+	switch {
+	case r.IsGranite:
+		return PrecompiledContractsGranite
+	case r.IsBanff:
+		return PrecompiledContractsBanff
+	case r.IsApricotPhase6:
+		return PrecompiledContractsApricotPhase6
+	case r.IsApricotPhasePre6:
+		return PrecompiledContractsApricotPhasePre6
+	case r.IsApricotPhase2:
+		return PrecompiledContractsApricotPhase2
+	}
+	return make(map[common.Address]vm.PrecompiledContract)
 }
 
 // precompileOverrideBuiltin specifies precompiles that were activated prior to the
 // dynamic precompile activation registry.
 // These were only active historically and are not active in the current network.
 func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
-	var precompiles map[common.Address]vm.PrecompiledContract
-	switch {
-	case r.IsGranite:
-		precompiles = PrecompiledContractsGranite
-	case r.IsBanff:
-		precompiles = PrecompiledContractsBanff
-	case r.IsApricotPhase6:
-		precompiles = PrecompiledContractsApricotPhase6
-	case r.IsApricotPhasePre6:
-		precompiles = PrecompiledContractsApricotPhasePre6
-	case r.IsApricotPhase2:
-		precompiles = PrecompiledContractsApricotPhase2
-	}
-
-	precompile, ok := precompiles[addr]
+	precompile, ok := r.currentPrecompiles()[addr]
 	if !ok {
 		return nil, false
 	}
-
 	return precompile, true
 }
 
