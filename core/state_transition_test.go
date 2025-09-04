@@ -114,11 +114,11 @@ func executeStateTransitionTest(t *testing.T, st stateTransitionTest) {
 	)
 	defer blockchain.Stop()
 
-	statedb, err := state.New(genesis.Root(), blockchain.stateCache, blockchain.snaps)
+	statedb, err := state.New(genesis.Root(), blockchain.ethBlockChain.stateCache, blockchain.ethBlockChain.snaps)
 	require.NoError(err)
 
 	block := GenerateBadBlock(genesis, engine, st.txs, blockchain.chainConfig)
-	receipts, _, _, err := blockchain.processor.Process(block, genesis.Header(), statedb, blockchain.vmConfig)
+	receipts, _, _, err := blockchain.ethBlockChain.processor.Process(block, genesis.Header(), statedb, blockchain.ethBlockChain.vmConfig)
 
 	if st.want == "" {
 		// If no error is expected, require no error and verify the correct gas used amounts from the receipts

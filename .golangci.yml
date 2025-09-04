@@ -34,3 +34,9 @@ linters-settings:
     min-len: 3 # minimum length of string constant
     min-occurrences: 6 # minimum number of occurrences
     ignore-tests: true
+
+issues:
+  exclude-rules:
+    - source: ".+\\/\\/ For git diff text alignment only"
+      linters:
+        - unused
