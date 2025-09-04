@@ -396,6 +396,13 @@ func (b *wrappedBlock) syntacticVerify() error {
 		case !headerExtra.BlockGasCost.IsUint64():
 			return fmt.Errorf("too large blockGasCost: %d", headerExtra.BlockGasCost)
 		}
+
+		// In Granite, block gas cost must be exactly 0.
+		if rulesExtra.IsGranite {
+			if !utils.BigEqual(headerExtra.BlockGasCost, common.Big0) {
+				return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, headerExtra.BlockGasCost)
+			}
+		}
 	}
 
 	// Verify the existence / non-existence of excessBlobGas
@@ -426,12 +433,6 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return errors.New("blob gas used must not be nil in Cancun")
 		} else if *ethHeader.BlobGasUsed > 0 {
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
-		}
-	}
-
-	if rulesExtra.IsGranite {
-		if !utils.BigEqual(customtypes.BlockGasCost(b.ethBlock), common.Big0) {
-			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, customtypes.BlockGasCost(b.ethBlock))
 		}
 	}
 
