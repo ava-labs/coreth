@@ -8,31 +8,42 @@ import (
 	"fmt"
 	"sync"
 
-	syncclient "github.com/ava-labs/coreth/sync/client"
-
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/blocksync"
 	"github.com/ava-labs/coreth/sync/statesync"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/log"
+
+	synccommon "github.com/ava-labs/coreth/sync"
+	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
-// ParentsToFetch is the number of the block parents the state syncs to.
-// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
-const ParentsToFetch = 256
+const (
+	// BlocksToFetch is the number of the block parents the state syncs to.
+	// The last 256 block hashes are necessary to support the BLOCKHASH opcode.
+	BlocksToFetch = 256
+
+	atomicStateSyncOperationName = "Atomic State Sync"
+	blockSyncOperationName       = "Block Sync"
+	evmStateSyncOperationName    = "EVM State Sync"
+)
 
 var stateSyncSummaryKey = []byte("stateSyncSummary")
 
+// BlockAcceptor provides a mechanism to update the last accepted block ID during state synchronization.
+// This interface is used by the state sync process to ensure the blockchain state
+// is properly updated when new blocks are synchronized from the network.
 type BlockAcceptor interface {
 	PutLastAcceptedID(ids.ID) error
 }
@@ -44,28 +55,7 @@ type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
 }
 
-// Extender is an interface that allows for extending the state sync process.
-type Extender interface {
-	// Sync is called to perform any extension-specific state sync logic.
-	Sync(ctx context.Context, client syncclient.LeafClient, verdb *versiondb.Database, syncSummary message.Syncable) error
-	// OnFinishBeforeCommit is called after the state sync process has completed but before the state sync summary is committed.
-	OnFinishBeforeCommit(lastAcceptedHeight uint64, syncSummary message.Syncable) error
-	// OnFinishAfterCommit is called after the state sync process has completed and the state sync summary is committed.
-	OnFinishAfterCommit(summaryHeight uint64) error
-}
-
-// ClientConfig defines the options and dependencies needed to construct a Client
 type ClientConfig struct {
-	Enabled    bool
-	SkipResume bool
-	// Specifies the number of blocks behind the latest state summary that the chain must be
-	// in order to prefer performing state sync over falling back to the normal bootstrapping
-	// algorithm.
-	MinBlocks   uint64
-	RequestSize uint16 // number of key/value pairs to ask peers for per request
-
-	LastAcceptedHeight uint64
-
 	Chain      *eth.Ethereum
 	State      *chain.State
 	ChainDB    ethdb.Database
@@ -73,14 +63,22 @@ type ClientConfig struct {
 	VerDB      *versiondb.Database
 	MetadataDB database.Database
 
-	// Extension points
+	// Extension points.
 	Parser message.SyncableParser
+
 	// Extender is an optional extension point for the state sync process, and can be nil.
-	Extender Extender
-
-	Client syncclient.Client
-
+	Extender      synccommon.Extender
+	Client        syncclient.Client
 	StateSyncDone chan struct{}
+
+	// Specifies the number of blocks behind the latest state summary that the chain must be
+	// in order to prefer performing state sync over falling back to the normal bootstrapping
+	// algorithm.
+	MinBlocks          uint64
+	LastAcceptedHeight uint64
+	RequestSize        uint16 // number of key/value pairs to ask peers for per request
+	Enabled            bool
+	SkipResume         bool
 }
 
 type client struct {
@@ -103,12 +101,12 @@ func NewClient(config *ClientConfig) Client {
 }
 
 type Client interface {
-	// methods that implement the client side of [block.StateSyncableVM]
+	// Methods that implement the client side of [block.StateSyncableVM].
 	StateSyncEnabled(context.Context) (bool, error)
 	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
 	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
 
-	// additional methods required by the evm package
+	// Additional methods required by the evm package.
 	ClearOngoingSummary() error
 	Shutdown() error
 	Error() error
@@ -157,22 +155,67 @@ func (client *client) ParseStateSummary(_ context.Context, summaryBytes []byte) 
 	return client.Parser.Parse(summaryBytes, client.acceptSyncSummary)
 }
 
-// stateSync blockingly performs the state sync for the EVM state and the atomic state
-// to [client.syncSummary]. returns an error if one occurred.
 func (client *client) stateSync(ctx context.Context) error {
-	if err := client.syncBlocks(ctx, client.summary.GetBlockHash(), client.summary.Height(), ParentsToFetch); err != nil {
+	// Create and register all syncers.
+	registry := NewSyncerRegistry()
+
+	if err := client.registerSyncers(registry); err != nil {
 		return err
 	}
 
-	// Sync the EVM trie.
-	if err := client.syncStateTrie(ctx); err != nil {
-		return err
+	// Run all registered syncers sequentially.
+	return registry.RunSyncerTasks(ctx, client)
+}
+
+func (client *client) registerSyncers(registry *SyncerRegistry) error {
+	// Register block syncer.
+	syncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
+	if err != nil {
+		return fmt.Errorf("failed to create block syncer: %w", err)
+	}
+	if err := registry.Register(blockSyncOperationName, syncer); err != nil {
+		return fmt.Errorf("failed to register block syncer: %w", err)
 	}
 
+	// Register EVM state syncer.
+	evmSyncer, err := client.createEVMSyncer()
+	if err != nil {
+		return fmt.Errorf("failed to create EVM syncer: %w", err)
+	}
+
+	if err := registry.Register(evmStateSyncOperationName, evmSyncer); err != nil {
+		return fmt.Errorf("failed to register EVM syncer: %w", err)
+	}
+
+	// Register atomic syncer.
 	if client.Extender != nil {
-		return client.Extender.Sync(ctx, client.Client, client.VerDB, client.summary)
+		atomicSyncer, err := client.createAtomicSyncer()
+		if err != nil {
+			return fmt.Errorf("failed to create atomic syncer: %w", err)
+		}
+
+		if err := registry.Register(atomicStateSyncOperationName, atomicSyncer); err != nil {
+			return fmt.Errorf("failed to register atomic syncer: %w", err)
+		}
 	}
+
 	return nil
+}
+
+func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64) (synccommon.Syncer, error) {
+	return blocksync.NewSyncer(client.Client, client.ChainDB, blocksync.Config{
+		FromHash:      fromHash,
+		FromHeight:    fromHeight,
+		BlocksToFetch: BlocksToFetch,
+	})
+}
+
+func (client *client) createEVMSyncer() (synccommon.Syncer, error) {
+	return statesync.NewSyncer(client.Client, client.ChainDB, client.summary.GetBlockRoot(), statesync.NewDefaultConfig(client.RequestSize))
+}
+
+func (client *client) createAtomicSyncer() (synccommon.Syncer, error) {
+	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
@@ -239,79 +282,6 @@ func (client *client) acceptSyncSummary(proposedSummary message.Syncable) (block
 		close(client.StateSyncDone)
 	}()
 	return block.StateSyncStatic, nil
-}
-
-// syncBlocks fetches (up to) [parentsToGet] blocks from peers
-// using [client] and writes them to disk.
-// the process begins with [fromHash] and it fetches parents recursively.
-// fetching starts from the first ancestor not found on disk
-func (client *client) syncBlocks(ctx context.Context, fromHash common.Hash, fromHeight uint64, parentsToGet int) error {
-	nextHash := fromHash
-	nextHeight := fromHeight
-	parentsPerRequest := uint16(32)
-
-	// first, check for blocks already available on disk so we don't
-	// request them from peers.
-	for parentsToGet >= 0 {
-		blk := rawdb.ReadBlock(client.ChainDB, nextHash, nextHeight)
-		if blk != nil {
-			// block exists
-			nextHash = blk.ParentHash()
-			nextHeight--
-			parentsToGet--
-			continue
-		}
-
-		// block was not found
-		break
-	}
-
-	// get any blocks we couldn't find on disk from peers and write
-	// them to disk.
-	batch := client.ChainDB.NewBatch()
-	for i := parentsToGet - 1; i >= 0 && (nextHash != common.Hash{}); {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		blocks, err := client.Client.GetBlocks(ctx, nextHash, nextHeight, parentsPerRequest)
-		if err != nil {
-			log.Error("could not get blocks from peer", "err", err, "nextHash", nextHash, "remaining", i+1)
-			return err
-		}
-		for _, block := range blocks {
-			rawdb.WriteBlock(batch, block)
-			rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-
-			i--
-			nextHash = block.ParentHash()
-			nextHeight--
-		}
-		log.Info("fetching blocks from peer", "remaining", i+1, "total", parentsToGet)
-	}
-	log.Info("fetched blocks from peer", "total", parentsToGet)
-	return batch.Write()
-}
-
-func (client *client) syncStateTrie(ctx context.Context) error {
-	log.Info("state sync: sync starting", "root", client.summary.GetBlockRoot())
-	evmSyncer, err := statesync.NewStateSyncer(&statesync.StateSyncerConfig{
-		Client:                   client.Client,
-		Root:                     client.summary.GetBlockRoot(),
-		BatchSize:                ethdb.IdealBatchSize,
-		DB:                       client.ChainDB,
-		MaxOutstandingCodeHashes: statesync.DefaultMaxOutstandingCodeHashes,
-		NumCodeFetchingWorkers:   statesync.DefaultNumCodeFetchingWorkers,
-		RequestSize:              client.RequestSize,
-	})
-	if err != nil {
-		return err
-	}
-	if err := evmSyncer.Start(ctx); err != nil {
-		return err
-	}
-	err = evmSyncer.Wait(ctx)
-	log.Info("state sync: sync finished", "root", client.summary.GetBlockRoot(), "err", err)
-	return err
 }
 
 func (client *client) Shutdown() error {

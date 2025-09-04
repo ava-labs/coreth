@@ -4,13 +4,12 @@ package message
 
 import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-
 	"github.com/ava-labs/libevm/core/types"
 )
 
 type BlockSyncSummaryProvider struct{}
 
 // StateSummaryAtBlock returns the block state summary at [block] if valid.
-func (a *BlockSyncSummaryProvider) StateSummaryAtBlock(blk *types.Block) (block.StateSummary, error) {
+func (*BlockSyncSummaryProvider) StateSummaryAtBlock(blk *types.Block) (block.StateSummary, error) {
 	return NewBlockSyncSummary(blk.Hash(), blk.NumberU64(), blk.Root())
 }

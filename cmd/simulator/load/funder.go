@@ -9,13 +9,15 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/log"
+
 	"github.com/ava-labs/coreth/cmd/simulator/key"
 	"github.com/ava-labs/coreth/cmd/simulator/metrics"
 	"github.com/ava-labs/coreth/cmd/simulator/txs"
 	"github.com/ava-labs/coreth/ethclient"
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/log"
+
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -107,7 +109,7 @@ func DistributeFunds(ctx context.Context, client *ethclient.Client, keys []*key.
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate fund distribution sequence from %s of length %d", maxFundsKey.Address, len(needFundsAddrs))
 	}
-	worker := NewSingleAddressTxWorker(ctx, client, maxFundsKey.Address)
+	worker := NewSingleAddressTxWorker(client, maxFundsKey.Address)
 	txFunderAgent := txs.NewIssueNAgent[*types.Transaction](txSequence, worker, numTxs, m)
 
 	if err := txFunderAgent.Execute(ctx); err != nil {

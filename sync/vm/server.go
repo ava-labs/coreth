@@ -4,27 +4,24 @@ package vm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/core"
 
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/log"
+	synccommon "github.com/ava-labs/coreth/sync"
 )
 
-var errProviderNotSet = fmt.Errorf("provider not set")
-
-type SummaryProvider interface {
-	StateSummaryAtBlock(ethBlock *types.Block) (block.StateSummary, error)
-}
+var errProviderNotSet = errors.New("provider not set")
 
 type server struct {
 	chain *core.BlockChain
 
-	provider         SummaryProvider
+	provider         synccommon.SummaryProvider
 	syncableInterval uint64
 }
 
@@ -33,7 +30,7 @@ type Server interface {
 	GetStateSummary(context.Context, uint64) (block.StateSummary, error)
 }
 
-func NewServer(chain *core.BlockChain, provider SummaryProvider, syncableInterval uint64) Server {
+func NewServer(chain *core.BlockChain, provider synccommon.SummaryProvider, syncableInterval uint64) Server {
 	return &server{
 		chain:            chain,
 		syncableInterval: syncableInterval,

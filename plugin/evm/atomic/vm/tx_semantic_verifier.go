@@ -14,8 +14,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
-	"github.com/ava-labs/avalanchego/vms/platformvm/fx"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
+
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -32,7 +32,7 @@ var (
 )
 
 type BlockFetcher interface {
-	// GetExtendedBlock returns the VMBlock for the given ID or an error if the block is not found
+	// GetExtendedBlock returns the ExtendedBlock for the given ID or an error if the block is not found
 	GetExtendedBlock(context.Context, ids.ID) (extension.ExtendedBlock, error)
 	// LastAcceptedExtendedBlock returns the last accepted VM block
 	LastAcceptedExtendedBlock() extension.ExtendedBlock
@@ -40,7 +40,7 @@ type BlockFetcher interface {
 
 type VerifierBackend struct {
 	Ctx          *snow.Context
-	Fx           fx.Fx
+	Fx           *secp256k1fx.Fx
 	Rules        extras.Rules
 	Bootstrapped bool
 	BlockFetcher BlockFetcher

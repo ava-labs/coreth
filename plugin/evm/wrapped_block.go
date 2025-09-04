@@ -11,18 +11,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/predicate"
-
+	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -30,9 +21,16 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
 
-	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 var (
@@ -188,7 +186,7 @@ func (b *wrappedBlock) Timestamp() time.Time {
 }
 
 // Verify implements the snowman.Block interface
-func (b *wrappedBlock) Verify(context.Context) error {
+func (b *wrappedBlock) Verify(_ context.Context) error {
 	return b.verify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: nil,
@@ -220,7 +218,7 @@ func (b *wrappedBlock) ShouldVerifyWithContext(context.Context) (bool, error) {
 }
 
 // VerifyWithContext implements the block.WithVerifyContext interface
-func (b *wrappedBlock) VerifyWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) error {
+func (b *wrappedBlock) VerifyWithContext(_ context.Context, proposerVMBlockCtx *block.Context) error {
 	return b.verify(&precompileconfig.PredicateContext{
 		SnowCtx:            b.vm.ctx,
 		ProposerVMBlockCtx: proposerVMBlockCtx,
@@ -324,7 +322,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	// Verify the extra data is well-formed.
-	if err := header.VerifyExtra(rulesExtra.AvalancheRules, ethHeader.Extra); err != nil {
+	if err := customheader.VerifyExtra(rulesExtra.AvalancheRules, ethHeader.Extra); err != nil {
 		return err
 	}
 
@@ -416,7 +414,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return fmt.Errorf("invalid parentBeaconRoot: have %x, expected empty hash", ethHeader.ParentBeaconRoot)
 		}
 		if ethHeader.BlobGasUsed == nil {
-			return fmt.Errorf("blob gas used must not be nil in Cancun")
+			return errors.New("blob gas used must not be nil in Cancun")
 		} else if *ethHeader.BlobGasUsed > 0 {
 			return fmt.Errorf("blobs not enabled on avalanche networks: used %d blob gas, expected 0", *ethHeader.BlobGasUsed)
 		}
@@ -442,22 +440,21 @@ func (b *wrappedBlock) verifyPredicates(predicateContext *precompileconfig.Predi
 		return nil
 	}
 
-	predicateResults := predicate.NewResults()
-	for _, tx := range b.ethBlock.Transactions() {
-		results, err := core.CheckPredicates(rules, predicateContext, tx)
-		if err != nil {
-			return err
-		}
-		predicateResults.SetTxResults(tx.Hash(), results)
+	predicateResults, err := core.CheckBlockPredicates(
+		rules,
+		predicateContext,
+		b.ethBlock.Transactions(),
+	)
+	if err != nil {
+		return err
 	}
-	// TODO: document required gas constraints to ensure marshalling predicate results does not error
 	predicateResultsBytes, err := predicateResults.Bytes()
 	if err != nil {
 		return fmt.Errorf("failed to marshal predicate results: %w", err)
 	}
 	extraData := b.ethBlock.Extra()
 	avalancheRules := rulesExtra.AvalancheRules
-	headerPredicateResultsBytes := header.PredicateBytesFromExtra(avalancheRules, extraData)
+	headerPredicateResultsBytes := customheader.PredicateBytesFromExtra(avalancheRules, extraData)
 	if !bytes.Equal(headerPredicateResultsBytes, predicateResultsBytes) {
 		return fmt.Errorf("%w (remote: %x local: %x)", errInvalidHeaderPredicateResults, headerPredicateResultsBytes, predicateResultsBytes)
 	}

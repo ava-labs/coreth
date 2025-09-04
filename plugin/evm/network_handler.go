@@ -8,13 +8,14 @@ import (
 
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	syncHandlers "github.com/ava-labs/coreth/sync/handlers"
-	"github.com/ava-labs/coreth/sync/handlers/stats"
-	"github.com/ava-labs/coreth/warp"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/handlers/stats"
+
+	syncHandlers "github.com/ava-labs/coreth/sync/handlers"
 )
 
 var _ message.RequestHandler = (*networkHandler)(nil)
@@ -39,7 +40,6 @@ type LeafRequestTypeConfig struct {
 func newNetworkHandler(
 	provider syncHandlers.SyncDataProvider,
 	diskDB ethdb.KeyValueReader,
-	warpBackend warp.Backend,
 	networkCodec codec.Manager,
 	leafRequestHandlers LeafHandlers,
 	syncStats stats.HandlerStats,

@@ -17,74 +17,36 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ava-labs/avalanchego/cache/metercacher"
-	"github.com/ava-labs/avalanchego/network/p2p"
-	"github.com/ava-labs/avalanchego/network/p2p/acp118"
-	"github.com/ava-labs/coreth/network"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
-	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/plugin/evm/gossip"
-	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
-	"github.com/ava-labs/firewood-go-ethhash/ffi"
-	"github.com/prometheus/client_golang/prometheus"
-
-	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/eth"
-	"github.com/ava-labs/coreth/eth/ethconfig"
-	corethprometheus "github.com/ava-labs/coreth/metrics/prometheus"
-	"github.com/ava-labs/coreth/miner"
-	"github.com/ava-labs/coreth/node"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/config"
-	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
-	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	vmsync "github.com/ava-labs/coreth/sync/vm"
-	"github.com/ava-labs/coreth/triedb/hashdb"
-
-	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/types"
-	"github.com/ava-labs/libevm/metrics"
-	ethparams "github.com/ava-labs/libevm/params"
-	"github.com/ava-labs/libevm/triedb"
-
-	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/rpc"
-	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	"github.com/ava-labs/coreth/sync/client/stats"
-	"github.com/ava-labs/coreth/sync/handlers"
-	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
-	utilsrpc "github.com/ava-labs/coreth/utils/rpc"
-	"github.com/ava-labs/coreth/warp"
-
-	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/ethdb"
-	"github.com/ava-labs/libevm/log"
-	"github.com/ava-labs/libevm/rlp"
-
 	"github.com/ava-labs/avalanchego/cache/lru"
+	"github.com/ava-labs/avalanchego/cache/metercacher"
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/ids"
-	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	"github.com/ava-labs/avalanchego/network/p2p/acp118"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/consensus/snowman"
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	avalancheUtils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/perms"
 	"github.com/ava-labs/avalanchego/utils/profiler"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/firewood-go-ethhash/ffi"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/triedb"
+	"github.com/prometheus/client_golang/prometheus"
 
+	// Force-load precompiles to trigger registration
+	_ "github.com/ava-labs/coreth/precompile/registry"
 	// Force-load tracer engine to trigger registration
 	//
 	// We must import this package (not referenced elsewhere) so that the native "callTracer"
@@ -93,8 +55,42 @@ import (
 	_ "github.com/ava-labs/libevm/eth/tracers/js"
 	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
-	// Force-load precompiles to trigger registration
-	_ "github.com/ava-labs/coreth/precompile/registry"
+	"github.com/ava-labs/coreth/consensus/dummy"
+	"github.com/ava-labs/coreth/constants"
+	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/core/txpool"
+	"github.com/ava-labs/coreth/eth"
+	"github.com/ava-labs/coreth/eth/ethconfig"
+	"github.com/ava-labs/coreth/miner"
+	"github.com/ava-labs/coreth/network"
+	"github.com/ava-labs/coreth/node"
+	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/gossip"
+	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/sync/client/stats"
+	"github.com/ava-labs/coreth/sync/handlers"
+	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/coreth/warp"
+
+	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	avalancheUtils "github.com/ava-labs/avalanchego/utils"
+	avalanchegoprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
+	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
+	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
+	statesyncclient "github.com/ava-labs/coreth/sync/client"
+	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
+	vmsync "github.com/ava-labs/coreth/sync/vm"
+	utilsrpc "github.com/ava-labs/coreth/utils/rpc"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 var (
@@ -207,9 +203,6 @@ type VM struct {
 	// [versiondb] is the VM's current versioned database
 	versiondb *versiondb.Database
 
-	// [db] is the VM's current database
-	db database.Database
-
 	// metadataDB is used to store one off keys.
 	metadataDB database.Database
 
@@ -257,10 +250,7 @@ type VM struct {
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
 
-	// Initialize only sets these if nil so they can be overridden in tests
-	ethTxGossipHandler p2p.Handler
-	ethTxPushGossiper  avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
-	ethTxPullGossiper  avalanchegossip.Gossiper
+	ethTxPushGossiper avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
 
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
@@ -278,27 +268,14 @@ func (vm *VM) Initialize(
 	_ []*commonEng.Fx,
 	appSender commonEng.AppSender,
 ) error {
-	if err := vm.extensionConfig.Validate(); err != nil {
-		return fmt.Errorf("failed to validate extension config: %w", err)
-	}
-
+	vm.ctx = chainCtx
 	vm.clock = vm.extensionConfig.Clock
 
-	vm.config.SetDefaults(defaultTxPoolConfig)
-	if len(configBytes) > 0 {
-		if err := json.Unmarshal(configBytes, &vm.config); err != nil {
-			return fmt.Errorf("failed to unmarshal config %s: %w", string(configBytes), err)
-		}
+	cfg, deprecateMsg, err := config.GetConfig(configBytes, vm.ctx.NetworkID)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
 	}
-	vm.ctx = chainCtx
-
-	if err := vm.config.Validate(vm.ctx.NetworkID); err != nil {
-		return err
-	}
-	// We should deprecate config flags as the first thing, before we do anything else
-	// because this can set old flags to new flags. log the message after we have
-	// initialized the logger.
-	deprecateMsg := vm.config.Deprecate()
+	vm.config = cfg
 
 	// Create logger
 	alias, err := vm.ctx.BCLookup.PrimaryAlias(vm.ctx.ChainID)
@@ -335,9 +312,7 @@ func (vm *VM) Initialize(
 	}
 
 	// Initialize the database
-	if err := vm.initializeDBs(db); err != nil {
-		return fmt.Errorf("failed to initialize databases: %w", err)
-	}
+	vm.initializeDBs(db)
 	if vm.config.InspectDatabase {
 		if err := vm.inspectDatabases(); err != nil {
 			return err
@@ -383,6 +358,9 @@ func (vm *VM) Initialize(
 	vm.ethConfig.TxPool.AccountQueue = vm.config.TxPoolAccountQueue
 	vm.ethConfig.TxPool.GlobalQueue = vm.config.TxPoolGlobalQueue
 	vm.ethConfig.TxPool.Lifetime = vm.config.TxPoolLifetime.Duration
+	// If we re-enable txpool journaling, we should also add the saved local
+	// transactions to the p2p gossip on startup.
+	vm.ethConfig.TxPool.Journal = "" // disable journal
 
 	vm.ethConfig.AllowUnfinalizedQueries = vm.config.AllowUnfinalizedQueries
 	vm.ethConfig.AllowUnprotectedTxs = vm.config.AllowUnprotectedTxs
@@ -530,7 +508,7 @@ func parseGenesis(ctx *snow.Context, bytes []byte) (*core.Genesis, error) {
 func (vm *VM) initializeMetrics() error {
 	metrics.Enabled = true
 	vm.sdkMetrics = prometheus.NewRegistry()
-	gatherer := corethprometheus.NewGatherer(metrics.DefaultRegistry)
+	gatherer := avalanchegoprometheus.NewGatherer(metrics.DefaultRegistry)
 	if err := vm.ctx.Metrics.Register(ethMetricsPrefix, gatherer); err != nil {
 		return err
 	}
@@ -642,7 +620,6 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	networkHandler := newNetworkHandler(
 		vm.blockChain,
 		vm.chaindb,
-		vm.warpBackend,
 		vm.networkCodec,
 		leafHandlers,
 		syncStats,
@@ -781,7 +758,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.cancel = cancel
 
 	ethTxGossipMarshaller := GossipEthTxMarshaller{}
-	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID, p2p.WithValidatorSampling(vm.P2PValidators()))
+	ethTxGossipClient := vm.Network.NewClient(p2p.TxGossipHandlerID)
 	ethTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.sdkMetrics, ethTxGossipNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize eth tx gossip metrics: %w", err)
@@ -828,18 +805,23 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
-	vm.ethTxGossipHandler = gossip.NewTxGossipHandler[*GossipEthTx](
+	ethTxGossipHandler, err := gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
 		ethTxGossipMarshaller,
 		ethTxPool,
 		ethTxGossipMetrics,
 		config.TxGossipTargetMessageSize,
 		config.TxGossipThrottlingPeriod,
-		config.TxGossipThrottlingLimit,
+		config.TxGossipRequestsPerPeer,
 		vm.P2PValidators(),
+		vm.sdkMetrics,
+		"eth_tx_gossip",
 	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize eth tx gossip handler: %w", err)
+	}
 
-	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, vm.ethTxGossipHandler); err != nil {
+	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, ethTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add eth tx gossip handler: %w", err)
 	}
 
@@ -852,7 +834,7 @@ func (vm *VM) initBlockBuilding() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.ethTxPullGossiper = avalanchegossip.ValidatorGossiper{
+	ethTxPullGossiperWhenValidator := avalanchegossip.ValidatorGossiper{
 		Gossiper:   ethTxPullGossiper,
 		NodeID:     vm.ctx.NodeID,
 		Validators: vm.P2PValidators(),
@@ -865,18 +847,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-
-	vm.shutdownWg.Add(1)
-	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-	vm.shutdownWg.Add(1)
-	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPullGossiperWhenValidator, vm.config.PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
@@ -930,7 +901,7 @@ func (vm *VM) buildBlock(ctx context.Context) (snowman.Block, error) {
 	return vm.buildBlockWithContext(ctx, nil)
 }
 
-func (vm *VM) buildBlockWithContext(ctx context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
+func (vm *VM) buildBlockWithContext(_ context.Context, proposerVMBlockCtx *block.Context) (snowman.Block, error) {
 	if proposerVMBlockCtx != nil {
 		log.Debug("Building block with context", "pChainBlockHeight", proposerVMBlockCtx.PChainHeight)
 	} else {
@@ -1067,13 +1038,16 @@ func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, erro
 	return ids.ID(hash), nil
 }
 
-func (vm *VM) Version(context.Context) (string, error) {
+func (*VM) Version(_ context.Context) (string, error) {
 	return Version, nil
 }
 
 // CreateHandlers makes new http handlers that can handle API calls
 func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
+	if vm.config.BatchRequestLimit > 0 && vm.config.BatchResponseMaxSize > 0 {
+		handler.SetBatchLimits(int(vm.config.BatchRequestLimit), int(vm.config.BatchResponseMaxSize))
+	}
 	if vm.config.HttpBodyLimit > 0 {
 		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
 	}
@@ -1249,6 +1223,6 @@ func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
 	return lastAcceptedHeight == 0
 }
 
-func (vm *VM) PutLastAcceptedID(ID ids.ID) error {
-	return vm.acceptedBlockDB.Put(lastAcceptedKey, ID[:])
+func (vm *VM) PutLastAcceptedID(id ids.ID) error {
+	return vm.acceptedBlockDB.Put(lastAcceptedKey, id[:])
 }

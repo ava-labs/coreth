@@ -18,7 +18,7 @@ func getDependencies(packageName string) (map[string]struct{}, error) {
 	cfg := &packages.Config{Mode: packages.NeedImports | packages.NeedName}
 	pkgs, err := packages.Load(cfg, packageName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load package: %v", err)
+		return nil, fmt.Errorf("failed to load package: %w", err)
 	}
 
 	if len(pkgs) == 0 || pkgs[0].Errors != nil {
@@ -57,12 +57,12 @@ func TestMustNotImport(t *testing.T) {
 		// possible to do so for both coreth and subnet-evm, where the client may
 		// wish to connect to multiple chains.
 
-		"plugin/evm/atomic": {"core", "plugin/evm/customtypes", "core/extstate", "params"},
-		"plugin/evm/client": {"core", "plugin/evm/customtypes", "core/extstate", "params"},
-		"plugin/evm/config": {"core", "plugin/evm/customtypes", "core/extstate", "params"},
-		"plugin/evm/header": {"core", "core/extstate", "core/vm", "params"},
-		"ethclient":         {"plugin/evm/customtypes", "core/extstate", "params"},
-		"warp":              {"plugin/evm/customtypes", "core/extstate", "params"},
+		"plugin/evm/atomic":       {"core", "plugin/evm/customtypes", "core/extstate", "params"},
+		"plugin/evm/client":       {"core", "plugin/evm/customtypes", "core/extstate", "params"},
+		"plugin/evm/config":       {"core", "plugin/evm/customtypes", "core/extstate", "params"},
+		"plugin/evm/customheader": {"core", "core/extstate", "core/vm", "params"},
+		"ethclient":               {"plugin/evm/customtypes", "core/extstate", "params"},
+		"warp":                    {"plugin/evm/customtypes", "core/extstate", "params"},
 	}
 
 	for packageName, forbiddenImports := range mustNotImport {
