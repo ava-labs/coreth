@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package warp
@@ -9,14 +9,15 @@ import (
 
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
-	"github.com/ava-labs/coreth/accounts/abi"
-	"github.com/ava-labs/coreth/precompile/contract"
-	"github.com/ava-labs/coreth/vmerrs"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
 
 	_ "embed"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ava-labs/coreth/accounts/abi"
+	"github.com/ava-labs/coreth/precompile/contract"
 )
 
 const (
@@ -32,7 +33,7 @@ const (
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
 
 	GasCostPerWarpSigner            uint64 = 500
-	GasCostPerWarpMessageBytes      uint64 = 100
+	GasCostPerWarpMessageChunk      uint64 = 3_200
 	GasCostPerSignatureVerification uint64 = 200_000
 )
 
@@ -92,7 +93,7 @@ func PackGetBlockchainIDOutput(blockchainID common.Hash) ([]byte, error) {
 }
 
 // getBlockchainID returns the snow Chain Context ChainID of this blockchain.
-func getBlockchainID(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func getBlockchainID(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, _ []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	if remainingGas, err = contract.DeductGas(suppliedGas, GetBlockchainIDGasCost); err != nil {
 		return nil, 0, err
 	}
@@ -143,7 +144,7 @@ func UnpackGetVerifiedWarpBlockHashOutput(output []byte) (GetVerifiedWarpBlockHa
 	return outputStruct, err
 }
 
-func getVerifiedWarpBlockHash(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func getVerifiedWarpBlockHash(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, input []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	return handleWarpMessage(accessibleState, input, suppliedGas, blockHashHandler{})
 }
 
@@ -187,7 +188,7 @@ func UnpackGetVerifiedWarpMessageOutput(output []byte) (GetVerifiedWarpMessageOu
 
 // getVerifiedWarpMessage retrieves the pre-verified warp message from the predicate storage slots and returns
 // the expected ABI encoding of the message to the caller.
-func getVerifiedWarpMessage(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func getVerifiedWarpMessage(accessibleState contract.AccessibleState, _ common.Address, _ common.Address, input []byte, suppliedGas uint64, _ bool) (ret []byte, remainingGas uint64, err error) {
 	return handleWarpMessage(accessibleState, input, suppliedGas, addressedPayloadHandler{})
 }
 
@@ -228,7 +229,7 @@ func UnpackSendWarpMessageOutput(output []byte) (common.Hash, error) {
 
 // sendWarpMessage constructs an Avalanche Warp Message containing an AddressedPayload and emits a log to signal validators that they should
 // be willing to sign this message.
-func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Address, addr common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
+func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Address, _ common.Address, input []byte, suppliedGas uint64, readOnly bool) (ret []byte, remainingGas uint64, err error) {
 	if remainingGas, err = contract.DeductGas(suppliedGas, SendWarpMessageGasCost); err != nil {
 		return nil, 0, err
 	}
@@ -236,18 +237,18 @@ func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Add
 	// This ensures that we charge gas before we unpack the variable sized input.
 	payloadGas, overflow := math.SafeMul(SendWarpMessageGasCostPerByte, uint64(len(input)))
 	if overflow {
-		return nil, 0, vmerrs.ErrOutOfGas
+		return nil, 0, vm.ErrOutOfGas
 	}
 	if remainingGas, err = contract.DeductGas(remainingGas, payloadGas); err != nil {
 		return nil, 0, err
 	}
 	if readOnly {
-		return nil, remainingGas, vmerrs.ErrWriteProtection
+		return nil, remainingGas, vm.ErrWriteProtection
 	}
 	// unpack the arguments
 	payloadData, err := UnpackSendWarpMessageInput(input)
 	if err != nil {
-		return nil, remainingGas, fmt.Errorf("%w: %s", errInvalidSendInput, err)
+		return nil, remainingGas, fmt.Errorf("%w: %w", errInvalidSendInput, err)
 	}
 
 	var (
@@ -280,12 +281,12 @@ func sendWarpMessage(accessibleState contract.AccessibleState, caller common.Add
 	if err != nil {
 		return nil, remainingGas, err
 	}
-	accessibleState.GetStateDB().AddLog(
-		ContractAddress,
-		topics,
-		data,
-		accessibleState.GetBlockContext().Number().Uint64(),
-	)
+	accessibleState.GetStateDB().AddLog(&types.Log{
+		Address:     ContractAddress,
+		Topics:      topics,
+		Data:        data,
+		BlockNumber: accessibleState.GetBlockContext().Number().Uint64(),
+	})
 
 	packed, err := PackSendWarpMessageOutput(common.Hash(unsignedWarpMessage.ID()))
 	if err != nil {

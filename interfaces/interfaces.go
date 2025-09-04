@@ -1,30 +1,6 @@
-// (c) 2019-2020, Ava Labs, Inc.
-//
-// This file is a derived work, based on the go-ethereum library whose original
-// notices appear below.
-//
-// It is distributed under a license compatible with the licensing terms of the
-// original code from which it is derived.
-//
-// Much love to the original authors for their work.
-// **********
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 
-// Package ethereum defines interfaces for interacting with Ethereum.
 package interfaces
 
 import (
@@ -32,8 +8,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+
+	ethereum "github.com/ava-labs/libevm"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.
@@ -102,6 +80,10 @@ type ChainStateReader interface {
 	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 }
+
+// SyncProgress gives progress indications when the node is synchronising with
+// the Ethereum network.
+type SyncProgress = ethereum.SyncProgress
 
 // CallMsg contains parameters for contract calls.
 type CallMsg struct {
@@ -206,29 +188,5 @@ type AcceptedStateReader interface {
 
 // AcceptedContractCaller can be used to perform calls against the accepted state.
 type AcceptedContractCaller interface {
-	AcceptedCallContract(ctx context.Context, call CallMsg) ([]byte, error)
-}
-
-// GasEstimator wraps EstimateGas, which tries to estimate the gas needed to execute a
-// specific transaction based on the pending state. There is no guarantee that this is the
-// true gas limit requirement as other transactions may be added or removed by miners, but
-// it should provide a basis for setting a reasonable default.
-type GasEstimator interface {
-	EstimateGas(ctx context.Context, call CallMsg) (uint64, error)
-}
-
-// A PendingStateEventer provides access to real time notifications about changes to the
-// pending state.
-type PendingStateEventer interface {
-	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
-}
-
-// BlockNumberReader provides access to the current block number.
-type BlockNumberReader interface {
-	BlockNumber(ctx context.Context) (uint64, error)
-}
-
-// ChainIDReader provides access to the chain ID.
-type ChainIDReader interface {
-	ChainID(ctx context.Context) (*big.Int, error)
+	AcceptedCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error)
 }

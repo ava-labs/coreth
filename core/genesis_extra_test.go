@@ -1,4 +1,5 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -31,35 +32,47 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/triedb"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGenesisEthUpgrades(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	preEthUpgrades := &params.ChainConfig{
-		ChainID:             big.NewInt(43114), // Specifically refers to mainnet for this UT
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      false,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		NetworkUpgrades: params.NetworkUpgrades{
-			ApricotPhase1BlockTimestamp: utils.NewUint64(0),
-			ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+	preEthUpgrades := params.WithExtra(
+		&params.ChainConfig{
+			ChainID:        big.NewInt(43114), // Specifically refers to mainnet for this UT
+			HomesteadBlock: big.NewInt(0),
+			// For this test to be a proper regression test, DAOForkBlock and
+			// DAOForkSupport should be set to match the values in
+			// [params.SetEthUpgrades]. Otherwise, in case of a regression, the test
+			// would pass as there would be a mismatch at genesis, which is
+			// incorrectly considered a success.
+			DAOForkBlock:        big.NewInt(0),
+			DAOForkSupport:      true,
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+			IstanbulBlock:       big.NewInt(0),
+			MuirGlacierBlock:    big.NewInt(0),
 		},
-	}
+		&extras.ChainConfig{
+			NetworkUpgrades: extras.NetworkUpgrades{
+				ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+				ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+			},
+		},
+	)
 
 	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
 	config := *preEthUpgrades
@@ -84,7 +97,43 @@ func TestGenesisEthUpgrades(t *testing.T) {
 
 	// We should still be able to re-initialize
 	config = *preEthUpgrades
-	config.SetEthUpgrades() // New versions will set additional fields eg, LondonBlock
+	require.NoError(t, params.SetEthUpgrades(&config)) // New versions will set additional fields eg, LondonBlock
 	_, _, err = SetupGenesisBlock(db, tdb, &Genesis{Config: &config}, block.Hash(), false)
 	require.NoError(t, err)
+}
+
+func TestGenesisToBlockDecoding(t *testing.T) {
+	previousHashes := map[upgradetest.Fork]common.Hash{
+		upgradetest.NoUpgrades:        common.HexToHash("0x52e9daa2557502146c10c206edc95239d578a6a99ad19553e359e32af1df2eb2"),
+		upgradetest.ApricotPhase1:     common.HexToHash("0x52e9daa2557502146c10c206edc95239d578a6a99ad19553e359e32af1df2eb2"),
+		upgradetest.ApricotPhase2:     common.HexToHash("0x52e9daa2557502146c10c206edc95239d578a6a99ad19553e359e32af1df2eb2"),
+		upgradetest.ApricotPhase3:     common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.ApricotPhase4:     common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.ApricotPhase5:     common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.ApricotPhasePre6:  common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.ApricotPhase6:     common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.ApricotPhasePost6: common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.Banff:             common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.Cortina:           common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.Durango:           common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
+		upgradetest.Etna:              common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
+		upgradetest.Fortuna:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
+		upgradetest.Granite:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
+	}
+	for fork, chainConfig := range paramstest.ForkToChainConfig {
+		t.Run(fork.String(), func(t *testing.T) {
+			db := rawdb.NewMemoryDatabase()
+			tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+			genesis := &Genesis{
+				Config: chainConfig,
+			}
+			block, err := genesis.Commit(db, tdb)
+			require.NoError(t, err)
+
+			readHeader := rawdb.ReadHeader(db, block.Hash(), 0)
+			require.Equal(t, block.Hash(), readHeader.Hash())
+			require.Equal(t, previousHashes[fork], block.Hash())
+			require.EqualValues(t, block.Header(), readHeader)
+		})
+	}
 }

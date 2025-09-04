@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -37,13 +38,13 @@ import (
 
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/coreth/nativeasset"
+	ethereum "github.com/ava-labs/libevm"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -79,7 +80,7 @@ func (mt *mockTransactor) SuggestGasTipCap(ctx context.Context) (*big.Int, error
 	return mt.gasTipCap, nil
 }
 
-func (mt *mockTransactor) EstimateGas(ctx context.Context, call interfaces.CallMsg) (gas uint64, err error) {
+func (mt *mockTransactor) EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error) {
 	return 0, nil
 }
 
@@ -101,7 +102,7 @@ func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, block
 	return mc.codeAtBytes, mc.codeAtErr
 }
 
-func (mc *mockCaller) CallContract(ctx context.Context, call interfaces.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
 	return mc.callContractBytes, mc.callContractErr
 }
@@ -121,7 +122,7 @@ func (mc *mockAcceptedCaller) AcceptedCodeAt(ctx context.Context, contract commo
 	return mc.acceptedCodeAtBytes, mc.acceptedCodeAtErr
 }
 
-func (mc *mockAcceptedCaller) AcceptedCallContract(ctx context.Context, call interfaces.CallMsg) ([]byte, error) {
+func (mc *mockAcceptedCaller) AcceptedCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
 	mc.acceptedCallContractCalled = true
 	return mc.acceptedCallContractBytes, mc.acceptedCallContractErr
 }
@@ -141,7 +142,7 @@ func (mc *mockBlockHashCaller) CodeAtHash(ctx context.Context, contract common.A
 	return mc.codeAtHashBytes, mc.codeAtHashErr
 }
 
-func (mc *mockBlockHashCaller) CallContractAtHash(ctx context.Context, call interfaces.CallMsg, hash common.Hash) ([]byte, error) {
+func (mc *mockBlockHashCaller) CallContractAtHash(ctx context.Context, call ethereum.CallMsg, hash common.Hash) ([]byte, error) {
 	mc.callContractAtHashCalled = true
 	return mc.callContractAtHashBytes, mc.callContractAtHashErr
 }
@@ -404,8 +405,8 @@ func TestTransactNativeAssetCall(t *testing.T) {
 	nativeCallTx, err := bc.Transact(opts, methodName, arg1, arg2)
 	assert.Nil(err)
 	// verify transformations
-	assert.Equal(vm.NativeAssetCallAddr, *nativeCallTx.To())
-	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := vm.UnpackNativeAssetCallInput(nativeCallTx.Data())
+	assert.Equal(nativeasset.NativeAssetCallAddr, *nativeCallTx.To())
+	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedData, err := nativeasset.UnpackNativeAssetCallInput(nativeCallTx.Data())
 	assert.Nil(err)
 	assert.NotEmpty(unpackedData)
 	assert.Equal(unpackedData, normalCallTx.Data())

@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -33,15 +34,15 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/lru"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
 	"golang.org/x/exp/slices"
 )
 
@@ -230,7 +231,8 @@ func (oracle *Oracle) estimateNextBaseFee(ctx context.Context) (*big.Int, error)
 	// If the block does have a baseFee, calculate the next base fee
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
-	return customheader.EstimateNextBaseFee(oracle.backend.ChainConfig(), header, oracle.clock.Unix())
+	config := params.GetExtra(oracle.backend.ChainConfig())
+	return customheader.EstimateNextBaseFee(config, header, oracle.clock.Unix())
 }
 
 // SuggestPrice returns an estimated price for legacy transactions.

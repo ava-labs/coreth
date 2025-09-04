@@ -1,4 +1,4 @@
-// (c) 2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package statesync
@@ -6,19 +6,20 @@ package statesync
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/trie"
+
 	"github.com/ava-labs/coreth/sync/syncutils"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
-	_ syncTask = &mainTrieTask{}
-	_ syncTask = &storageTrieTask{}
+	_ syncTask = (*mainTrieTask)(nil)
+	_ syncTask = (*storageTrieTask)(nil)
 )
 
 type syncTask interface {
@@ -50,7 +51,7 @@ func (m *mainTrieTask) IterateLeafs(seek common.Hash) ethdb.Iterator {
 }
 
 // OnStart always returns false since the main trie task cannot be skipped.
-func (m *mainTrieTask) OnStart() (bool, error) {
+func (*mainTrieTask) OnStart() (bool, error) {
 	return false, nil
 }
 
@@ -85,7 +86,7 @@ func (m *mainTrieTask) OnLeafs(db ethdb.KeyValueWriter, keys, vals [][]byte) err
 		}
 	}
 	// Add collected code hashes to the code syncer.
-	return m.sync.codeSyncer.addCode(codeHashes)
+	return m.sync.codeSyncer.AddCode(codeHashes)
 }
 
 type storageTrieTask struct {

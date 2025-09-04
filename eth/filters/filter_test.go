@@ -1,4 +1,5 @@
-// (c) 2019-2022, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -37,14 +38,15 @@ import (
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ava-labs/coreth/triedb"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -273,7 +275,7 @@ func TestFilters(t *testing.T) {
 
 	// Set block 998 as Finalized (-3)
 	// bc.SetFinalized(chain[998].Header())
-	err = rawdb.WriteAcceptorTip(db, chain[998].Hash())
+	err = customrawdb.WriteAcceptorTip(db, chain[998].Hash())
 	require.NoError(t, err)
 
 	for i, tc := range []struct {

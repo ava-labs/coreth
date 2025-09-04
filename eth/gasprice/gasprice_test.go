@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -34,19 +35,20 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/event"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,7 +157,8 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 }
 
 func (b *testBackend) MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return customheader.EstimateRequiredTip(b.chain.Config(), header)
+	config := params.GetExtra(b.chain.Config())
+	return customheader.EstimateRequiredTip(config, header)
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
@@ -234,7 +237,7 @@ func testGenBlock(t *testing.T, tip int64, numTx int) func(int, *core.BlockGen) 
 				ChainID:   params.TestChainConfig.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
-				Gas:       params.TxGas,
+				Gas:       ethparams.TxGas,
 				GasFeeCap: feeCap,
 				GasTipCap: txTip,
 				Data:      []byte{},
@@ -293,7 +296,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 					ChainID:   params.TestChainConfig.ChainID,
 					Nonce:     b.TxNonce(addr),
 					To:        &common.Address{},
-					Gas:       params.TxGas,
+					Gas:       ethparams.TxGas,
 					GasFeeCap: feeCap,
 					GasTipCap: tip,
 					Data:      []byte{},
@@ -307,7 +310,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 					ChainID:   params.TestChainConfig.ChainID,
 					Nonce:     b.TxNonce(addr),
 					To:        &common.Address{},
-					Gas:       params.TxGas,
+					Gas:       ethparams.TxGas,
 					GasFeeCap: feeCap,
 					GasTipCap: common.Big1,
 					Data:      []byte{},
@@ -360,7 +363,7 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 			tx := types.NewTx(&types.LegacyTx{
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
-				Gas:      params.TxGas,
+				Gas:      ethparams.TxGas,
 				GasPrice: gasPrice,
 				Data:     []byte{},
 			})
@@ -402,7 +405,7 @@ func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig,
 		numBlocks:       1000,
-		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(params.TxGas)),
+		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(ethparams.TxGas)),
 		// The tip on the transaction is very large to pay the block gas cost.
 		genBlock: testGenBlock(t, 100_000, 1),
 		// The actual tip doesn't matter, we just want to ensure that the tip is

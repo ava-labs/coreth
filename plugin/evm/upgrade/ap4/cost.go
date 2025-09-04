@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 // AP4 implements the block gas cost logic activated by the Apricot Phase 4
@@ -8,8 +8,9 @@ package ap4
 import (
 	"math"
 
-	safemath "github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/coreth/utils"
+
+	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
 
 const (

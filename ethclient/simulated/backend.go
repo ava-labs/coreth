@@ -1,3 +1,14 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+//
+// This file is a derived work, based on the go-ethereum library whose original
+// notices appear below.
+//
+// It is distributed under a license compatible with the licensing terms of the
+// original code from which it is derived.
+//
+// Much love to the original authors for their work.
+// **********
 // Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -25,8 +36,6 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/ethclient"
@@ -34,7 +43,10 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
+	ethereum "github.com/ava-labs/libevm"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 var _ eth.PushGossiper = (*fakePushGossiper)(nil)
@@ -45,26 +57,26 @@ func (*fakePushGossiper) Add(*types.Transaction) {}
 
 // Client exposes the methods provided by the Ethereum RPC client.
 type Client interface {
-	interfaces.BlockNumberReader
-	interfaces.ChainReader
-	interfaces.ChainStateReader
-	interfaces.ContractCaller
-	interfaces.GasEstimator
-	interfaces.GasPricer
-	interfaces.GasPricer1559
-	interfaces.FeeHistoryReader
-	interfaces.LogFilterer
+	ethereum.BlockNumberReader
+	ethereum.ChainReader
+	ethereum.ChainStateReader
+	ethereum.ContractCaller
+	ethereum.GasEstimator
+	ethereum.GasPricer
+	ethereum.GasPricer1559
+	ethereum.FeeHistoryReader
+	ethereum.LogFilterer
 	interfaces.AcceptedStateReader
 	interfaces.AcceptedContractCaller
-	interfaces.TransactionReader
-	interfaces.TransactionSender
-	interfaces.ChainIDReader
+	ethereum.TransactionReader
+	ethereum.TransactionSender
+	ethereum.ChainIDReader
 }
 
 // simClient wraps ethclient. This exists to prevent extracting ethclient.Client
 // from the Client interface returned by Backend.
 type simClient struct {
-	ethclient.Client
+	*ethclient.Client
 }
 
 // Backend is a simulated blockchain. You can use it to test your contracts or

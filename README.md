@@ -24,6 +24,23 @@ Now that AvalancheGo depends on the local version of Coreth, we can build with t
 
 Note: the C-Chain originally ran in a separate process from the main AvalancheGo process and communicated with it over a local gRPC connection. When this was the case, AvalancheGo's build script would download Coreth, compile it, and place the binary into the `avalanchego/build/plugins` directory.
 
+### Optional Dev Shell
+
+Some activities, such as collecting metrics and logs from the nodes targeted by an e2e
+test run, require binary dependencies. One way of making these dependencies available is
+to use a nix shell which will give access to the dependencies expected by the test
+tooling:
+
+ - Install [nix](https://nixos.org/). The [determinate systems
+   installer](https://github.com/DeterminateSystems/nix-installer?tab=readme-ov-file#install-nix)
+   is recommended.
+ - Use `./scripts/dev_shell.sh` to start a nix shell
+ - Execute the dependency-requiring command (e.g. `./scripts/tests.e2e.sh --start-collectors`)
+
+This repo also defines a `.envrc` file to configure [devenv](https://direnv.net/). With
+`devenv` and `nix` installed, a shell at the root of the repo will automatically start a nix
+dev shell.
+
 ## API
 
 The C-Chain supports the following API namespaces:
@@ -74,3 +91,7 @@ To support these changes, there have been a number of changes to the C-Chain blo
 * `BaseFee`: Added by EIP-1559 to represent the base fee of the block (present in Ethereum as of EIP-1559)
 * `ExtDataGasUsed`: amount of gas consumed by the atomic transactions in the block
 * `BlockGasCost`: surcharge for producing a block faster than the target rate
+
+## Releasing
+
+See [docs/releasing/README.md](docs/releasing/README.md) for the release process.

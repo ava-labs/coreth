@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -33,19 +34,23 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/triedb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ava-labs/libevm/log"
+	ethparams "github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/trie"
+	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 )
 
@@ -53,8 +58,8 @@ import (
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
-// Deprecated: use types.GenesisAccount instead.
-type GenesisAccount = types.GenesisAccount
+// Deprecated: use types.Account instead.
+type GenesisAccount = types.Account
 
 // Deprecated: use types.GenesisAlloc instead.
 type GenesisAlloc = types.GenesisAlloc
@@ -172,7 +177,9 @@ func SetupGenesisBlock(
 		rawdb.WriteChainConfig(db, stored, newcfg)
 		return newcfg, stored, nil
 	}
-	storedcfg.SetEthUpgrades()
+	if err := params.SetEthUpgrades(storedcfg); err != nil {
+		return genesis.Config, common.Hash{}, err
+	}
 	storedData, _ := json.Marshal(storedcfg)
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
@@ -220,14 +227,14 @@ func (g *Genesis) trieConfig() *triedb.Config {
 		return nil
 	}
 	return &triedb.Config{
-		PathDB:   pathdb.Defaults,
-		IsVerkle: true,
+		DBOverride: pathdb.Defaults.BackendConstructor,
+		IsVerkle:   true,
 	}
 }
 
 // TODO: migrate this function to "flush" for more similarity with upstream.
 func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+	statedb, err := state.New(types.EmptyRootHash, extstate.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
 		panic(err)
 	}
@@ -247,7 +254,8 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 	}
 
 	// Configure any stateful precompiles that should be enabled in the genesis.
-	err = ApplyPrecompileActivations(g.Config, nil, types.NewBlockWithHeader(head), statedb)
+	blockContext := NewBlockContext(head.Number, head.Time)
+	err = ApplyPrecompileActivations(g.Config, nil, blockContext, statedb)
 	if err != nil {
 		panic(fmt.Sprintf("unable to configure precompiles in genesis block: %v", err))
 	}
@@ -259,28 +267,42 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
-		if account.MCBalance != nil {
-			for coinID, value := range account.MCBalance {
-				statedb.AddBalanceMultiCoin(addr, coinID, value)
-			}
-		}
 	}
 	root := statedb.IntermediateRoot(false)
 	head.Root = root
 
 	if g.GasLimit == 0 {
-		head.GasLimit = params.GenesisGasLimit
+		head.GasLimit = ethparams.GenesisGasLimit
 	}
 	if g.Difficulty == nil {
-		head.Difficulty = params.GenesisDifficulty
+		head.Difficulty = ethparams.GenesisDifficulty
+	}
+	if g.ExtraData == nil {
+		head.Extra = []byte{}
 	}
 	if conf := g.Config; conf != nil {
 		num := new(big.Int).SetUint64(g.Number)
-		if conf.IsApricotPhase3(g.Timestamp) {
+		confExtra := params.GetExtra(conf)
+		if confExtra.IsApricotPhase3(g.Timestamp) {
 			if g.BaseFee != nil {
 				head.BaseFee = g.BaseFee
 			} else {
 				head.BaseFee = big.NewInt(ap3.InitialBaseFee)
+			}
+		}
+		headerExtra := customtypes.GetHeaderExtra(head)
+
+		// When Etna/Cancun is active, `BlockGasCost` and `ExtDataGasUsed` are decoded to 0 if it's nil.
+		// This is because these fields come before the other optional Cancun fields in RLP order.
+		// This only occurs with a serialized and written genesis block, and then reading it back.
+		// While this does not affect anything (because we don't use `ToBlock` to retrieve the genesis block),
+		// it's still confusing and breaking few tests. So we set it here to 0 to make it consistent.
+		if confExtra.IsEtna(g.Timestamp) {
+			if headerExtra.ExtDataGasUsed == nil {
+				headerExtra.ExtDataGasUsed = new(big.Int)
+			}
+			if headerExtra.BlockGasCost == nil {
+				headerExtra.BlockGasCost = new(big.Int)
 			}
 		}
 		if conf.IsCancun(num, g.Timestamp) {
@@ -300,14 +322,20 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 		}
 	}
 
-	statedb.Commit(0, false)
+	// Create the genesis block to use the block hash
+	block := types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+	triedbOpt := stateconf.WithTrieDBUpdatePayload(common.Hash{}, block.Hash())
+
+	if _, err := statedb.Commit(0, false, stateconf.WithTrieDBUpdateOpts(triedbOpt)); err != nil {
+		panic(fmt.Sprintf("unable to commit genesis block to statedb: %v", err))
+	}
 	// Commit newly generated states into disk if it's not empty.
 	if root != types.EmptyRootHash {
 		if err := triedb.Commit(root, true); err != nil {
 			panic(fmt.Sprintf("unable to commit genesis block: %v", err))
 		}
 	}
-	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
+	return block
 }
 
 // Commit writes the block and state of a genesis specification to the database.

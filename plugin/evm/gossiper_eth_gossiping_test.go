@@ -1,4 +1,4 @@
-// (c) 2019-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
@@ -15,17 +15,16 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/set"
-
-	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/vmtest"
+
+	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
 
 func fundAddressByGenesis(addrs []common.Address) (string, error) {
@@ -34,9 +33,9 @@ func fundAddressByGenesis(addrs []common.Address) (string, error) {
 		Difficulty: common.Big0,
 		GasLimit:   uint64(5000000),
 	}
-	funds := make(map[common.Address]types.GenesisAccount)
+	funds := make(map[common.Address]types.Account)
 	for _, addr := range addrs {
-		funds[addr] = types.GenesisAccount{
+		funds[addr] = types.Account{
 			Balance: balance,
 		}
 	}
@@ -83,7 +82,10 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
 	assert.NoError(err)
 
-	_, vm, _, _, sender := GenesisVM(t, true, genesisJSON, "", "")
+	vm := newDefaultTestVM()
+	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		GenesisJSON: genesisJSON,
+	})
 	defer func() {
 		err := vm.Shutdown(context.Background())
 		assert.NoError(err)
@@ -95,13 +97,13 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 		wg          sync.WaitGroup
 		txRequested bool
 	)
-	sender.CantSendAppGossip = false
-	sender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
+	tvm.AppSender.CantSendAppGossip = false
+	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		txRequested = true
 		return nil
 	}
 	wg.Add(1)
-	sender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
+	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
 		wg.Done()
 		return nil
 	}

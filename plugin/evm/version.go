@@ -1,17 +1,15 @@
-// (c) 2019-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package evm
 
-import (
-	"fmt"
-)
+import "fmt"
 
 var (
 	// GitCommit is set by the build script
 	GitCommit string
 	// Version is the version of Coreth
-	Version string = "v0.14.1"
+	Version string = "v0.15.4"
 )
 
 func init() {
