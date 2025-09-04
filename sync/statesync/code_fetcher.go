@@ -173,6 +173,15 @@ func (q *CodeFetcherQueue) addCode(codeHashes []common.Hash) error {
 
 func (q *CodeFetcherQueue) enqueue(codeHashes []common.Hash) error {
 	for _, codeHash := range codeHashes {
+		// Abort immediately if shutting down, even if the channel has space.
+		// This enables the behaviour of "never enqueue after shutdown".
+		select {
+		case <-q.done:
+			return errFailedToAddCodeHashesToQueue
+		default:
+		}
+
+		// Then attempt to send, still respecting shutdown while blocked.
 		select {
 		case q.codeHashes <- codeHash:
 		case <-q.done:

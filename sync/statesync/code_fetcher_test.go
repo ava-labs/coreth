@@ -68,8 +68,8 @@ func TestCodeFetcherQueue_Init_ResumeFromDB(t *testing.T) {
 	// Init should surface the pre-seeded DB marker.
 	require.NoError(t, fetcher.Init())
 
-	got := <-fetcher.CodeHashes()
-	require.Equal(t, want, got)
+	result := <-fetcher.CodeHashes()
+	require.Equal(t, want, result)
 
 	fetcher.Finalize()
 	_, ok := <-fetcher.CodeHashes()
@@ -93,9 +93,16 @@ func TestCodeFetcherQueue_Init_AddCodeBlocks(t *testing.T) {
 	default:
 	}
 
-	// Ensure AddCode blocks pre-Init.
+	// Ensure AddCode blocks pre-Init (synchronize start to avoid race).
 	addedCh := make(chan error, 1)
-	go func() { addedCh <- fetcher.AddCode([]common.Hash{want}) }()
+	called := make(chan struct{})
+	go func() {
+		close(called)
+		addedCh <- fetcher.AddCode([]common.Hash{want})
+	}()
+	<-called
+
+	// Verify AddCode is blocked.
 	select {
 	case err := <-addedCh:
 		t.Fatalf("AddCode returned before Init: %v", err)
@@ -106,8 +113,8 @@ func TestCodeFetcherQueue_Init_AddCodeBlocks(t *testing.T) {
 	require.NoError(t, fetcher.Init())
 	require.NoError(t, <-addedCh)
 
-	got := <-fetcher.CodeHashes()
-	require.Equal(t, want, got)
+	result := <-fetcher.CodeHashes()
+	require.Equal(t, want, result)
 
 	fetcher.Finalize()
 	_, ok := <-fetcher.CodeHashes()
@@ -167,8 +174,8 @@ func TestCodeFetcherQueue_AddCode_Duplicates(t *testing.T) {
 
 	require.NoError(t, fetcher.AddCode([]common.Hash{h, h}))
 
-	got := <-fetcher.CodeHashes()
-	require.Equal(t, h, got)
+	result := <-fetcher.CodeHashes()
+	require.Equal(t, h, result)
 
 	select {
 	case <-fetcher.CodeHashes():
