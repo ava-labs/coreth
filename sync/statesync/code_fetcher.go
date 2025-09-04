@@ -36,6 +36,9 @@ type CodeFetcherQueue struct {
 	// Set when Finalize has been called which disallows further AddCode.
 	finalized atomic.Bool
 
+	// Tracks in-flight AddCode calls to coordinate clean shutdown.
+	addWG sync.WaitGroup
+
 	// Channel of code hashes to be consumed by the code syncer.
 	codeHashes chan common.Hash
 
@@ -123,9 +126,12 @@ func (q *CodeFetcherQueue) Init() error {
 // Blocks until the queue is initialized via Init.
 func (q *CodeFetcherQueue) AddCode(codeHashes []common.Hash) error {
 	<-q.open
+	q.addWG.Add(1)
+	defer q.addWG.Done()
 	if q.finalized.Load() {
 		return errFailedToAddCodeHashesToQueue
 	}
+
 	if len(codeHashes) == 0 {
 		return nil
 	}
@@ -137,6 +143,8 @@ func (q *CodeFetcherQueue) AddCode(codeHashes []common.Hash) error {
 func (q *CodeFetcherQueue) Finalize() {
 	<-q.open
 	q.finalized.Store(true)
+	// Wait for any in-flight AddCode calls to complete before closing the channel.
+	q.addWG.Wait()
 	close(q.codeHashes)
 }
 

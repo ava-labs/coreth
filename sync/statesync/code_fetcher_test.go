@@ -168,7 +168,7 @@ func TestCodeFetcherQueue_AddCode_Duplicates(t *testing.T) {
 	fetcher, err := NewCodeFetcherQueue(db, make(chan struct{}))
 	require.NoError(t, err)
 
-	// Prepare a sample hash and submit duplicates; expect single enqueue.
+	// Prepare a sample hash and submit duplicates - expect single enqueue.
 	codeBytes := utils.RandomBytes(33)
 	h := crypto.Keccak256Hash(codeBytes)
 
@@ -223,7 +223,7 @@ func TestCodeFetcherQueue_AddCode_MultipleHashes(t *testing.T) {
 	require.False(t, ok)
 }
 
-// Test that Finalize closes the channel; and no further sends happen.
+// Test that Finalize closes the channel and no further sends happen.
 func TestCodeFetcherQueue_FinalizeCloses(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	fetcher, err := NewCodeFetcherQueue(db, make(chan struct{}))
@@ -265,4 +265,57 @@ func TestCodeFetcherQueue_ShutdownDuringEnqueue(t *testing.T) {
 	codeHash2 := crypto.Keccak256Hash(codeBytes2)
 	err = fetcher.AddCode([]common.Hash{codeHash2})
 	require.ErrorIs(t, err, errFailedToAddCodeHashesToQueue)
+}
+
+// Test that Finalize waits for in-flight AddCode calls to complete before closing the channel.
+func TestCodeFetcherQueue_FinalizeWaitsForInflightAddCodeCalls(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	fetcher, err := NewCodeFetcherQueue(db, make(chan struct{}), WithMaxOutstandingCodeHashes(1))
+	require.NoError(t, err)
+
+	numHashes := 3
+
+	// Prepare multiple distinct hashes to exceed the buffer and cause AddCode to block on enqueue.
+	hashes := make([]common.Hash, 0, numHashes)
+	for i := 0; i < numHashes; i++ {
+		hashes = append(hashes, crypto.Keccak256Hash([]byte(fmt.Sprintf("code-%d", i))))
+	}
+
+	addDone := make(chan error, 1)
+	go func() {
+		addDone <- fetcher.AddCode(hashes)
+	}()
+
+	// Read the first enqueued hash to ensure AddCode is actively enqueuing and will block on the next send.
+	first := <-fetcher.CodeHashes()
+
+	// Call Finalize concurrently - it should block until AddCode returns.
+	finalized := make(chan struct{}, 1)
+	go func() {
+		fetcher.Finalize()
+		close(finalized)
+	}()
+
+	// Finalize should not complete yet because AddCode is still enqueuing (buffer=1 and we haven't drained).
+	select {
+	case <-finalized:
+		t.Fatal("Finalize returned before in-flight AddCode completed")
+	default:
+	}
+
+	// Drain remaining enqueued hashes; this will unblock AddCode so it can finish.
+	result := make([]common.Hash, 0, numHashes)
+	result = append(result, first)
+	for i := 1; i < len(hashes); i++ {
+		result = append(result, <-fetcher.CodeHashes())
+	}
+	require.Equal(t, hashes, result)
+
+	// Now AddCode should complete without error, and Finalize should return and close the channel.
+	require.NoError(t, <-addDone)
+
+	// Wait for finalize to complete and close the channel.
+	<-finalized
+	_, ok := <-fetcher.CodeHashes()
+	require.False(t, ok)
 }
