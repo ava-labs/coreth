@@ -2,7 +2,11 @@
 
 set -euo pipefail
 
-go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.1 "${@}"
+if [[ $# -gt 0 ]]; then
+  go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.1 "$@"
+else
+  go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.1
+fi
 
 echo "Checking use of scripts/* in GitHub Actions workflows..."
 SCRIPT_USAGE=
