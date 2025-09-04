@@ -85,43 +85,39 @@ var PrecompiledContractsGranite = map[common.Address]vm.PrecompiledContract{
 	P256VerifyAddress:                  vm.PrecompiledContractsP256Verify[P256VerifyAddress],
 }
 
-// ActivePrecompiles implements the RulesHooks interface
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
-	addresses, _, _ := r.ActivePrecompilesWithContract(existing, nil)
+	var addresses []common.Address
+	addresses = slices.AppendSeq(addresses, maps.Keys(r.currentPrecompiles()))
+	addresses = append(addresses, existing...)
 	return addresses
 }
 
-// ActivePrecompiles specifies precompiles that were activated prior to the
-// dynamic precompile activation registry.
-func (r RulesExtra) ActivePrecompilesWithContract(existing []common.Address, addr *common.Address) ([]common.Address, libevm.PrecompiledContract, bool) {
-	var precompiles map[common.Address]vm.PrecompiledContract
+func (r RulesExtra) currentPrecompiles() map[common.Address]vm.PrecompiledContract {
 	switch {
 	case r.IsGranite:
-		precompiles = PrecompiledContractsGranite
+		return PrecompiledContractsGranite
 	case r.IsBanff:
-		precompiles = PrecompiledContractsBanff
+		return PrecompiledContractsBanff
 	case r.IsApricotPhase6:
-		precompiles = PrecompiledContractsApricotPhase6
+		return PrecompiledContractsApricotPhase6
 	case r.IsApricotPhasePre6:
-		precompiles = PrecompiledContractsApricotPhasePre6
+		return PrecompiledContractsApricotPhasePre6
 	case r.IsApricotPhase2:
-		precompiles = PrecompiledContractsApricotPhase2
+		return PrecompiledContractsApricotPhase2
+	}
+	return make(map[common.Address]vm.PrecompiledContract)
+}
+
+// precompileOverrideBuiltin specifies precompiles that were activated prior to the
+// dynamic precompile activation registry.
+// These were only active historically and are not active in the current network.
+func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
+	precompile, ok := r.currentPrecompiles()[addr]
+	if !ok {
+		return nil, false
 	}
 
-	var addresses []common.Address
-	addresses = slices.AppendSeq(addresses, maps.Keys(precompiles))
-	addresses = append(addresses, existing...)
-
-	var precompile libevm.PrecompiledContract
-	var ok bool
-	if addr != nil {
-		precompile, ok = precompiles[*addr]
-		if !ok {
-			return addresses, nil, false
-		}
-	}
-
-	return addresses, precompile, true
+	return precompile, true
 }
 
 func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.PrecompiledContract {
@@ -162,7 +158,7 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 }
 
 func (r RulesExtra) PrecompileOverride(addr common.Address) (libevm.PrecompiledContract, bool) {
-	if _, p, ok := r.ActivePrecompilesWithContract(nil, &addr); ok {
+	if p, ok := r.precompileOverrideBuiltin(addr); ok {
 		return p, true
 	}
 
