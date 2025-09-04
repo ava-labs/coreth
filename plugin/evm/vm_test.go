@@ -1752,14 +1752,12 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 		err error
 	)
 	for i := uint64(0); i < 2; i++ {
-		tx := types.NewTx(
-			&types.LegacyTx{
-				Nonce:    i,
-				Value:    big.NewInt(0),
-				Gas:      acp176.MinMaxCapacity,
-				GasPrice: big.NewInt(ap0.MinGasPrice),
-				Data:     []byte{0xfe}, // invalid opcode consumes all gas
-			},
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			acp176.MinMaxCapacity,
+			big.NewInt(ap0.MinGasPrice),
+			[]byte{0xfe}, // invalid opcode consumes all gas
 		)
 		txs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
 		require.NoError(err)
@@ -1821,14 +1819,12 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 	maxSizeTxs := make([]*types.Transaction, 2)
 	for i := uint64(0); i < 2; i++ {
-		tx := types.NewTx(
-			&types.LegacyTx{
-				Nonce:    i,
-				Value:    big.NewInt(0),
-				Gas:      acp176.MinMaxCapacity,
-				GasPrice: highGasPrice,
-				Data:     []byte{0xfe}, // invalid opcode consumes all gas
-			},
+		tx := types.NewContractCreation(
+			i,
+			big.NewInt(0),
+			acp176.MinMaxCapacity,
+			highGasPrice,
+			[]byte{0xfe}, // invalid opcode consumes all gas
 		)
 		var err error
 		maxSizeTxs[i], err = types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
@@ -1847,15 +1843,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 
 	// Build a smaller transaction that consumes less gas at a lower price. Block building should
 	// fail and enforce waiting for more capacity to avoid starving the larger transaction.
-	tx := types.NewTx(
-		&types.LegacyTx{
-			Nonce:    0,
-			Value:    big.NewInt(0),
-			Gas:      2_000_000,
-			GasPrice: lowGasPrice,
-			Data:     []byte{0xfe}, // invalid opcode consumes all gas
-		},
-	)
+	tx := types.NewContractCreation(0, big.NewInt(0), 2_000_000, lowGasPrice, []byte{0xfe})
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[1].ToECDSA())
 	require.NoError(err)
 	_, err = vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
