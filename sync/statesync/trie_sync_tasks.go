@@ -116,7 +116,8 @@ func (s *storageTrieTask) OnStart() (bool, error) {
 		firstAccount = s.accounts[0]
 	}
 	storageTrie, err := trie.New(trie.StorageTrieID(s.sync.root, s.root, firstAccount), s.sync.trieDB)
-	if err != nil { // the storage trie does not exist, so it should be rerequested
+	if err != nil {
+		return false, nil //nolint:nilerr // the storage trie does not exist, so it should be rerequested
 		return false, nil //nolint:nilerr
 	}
 
