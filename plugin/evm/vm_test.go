@@ -2179,7 +2179,10 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: vmtest.InitialBaseFee,
 			txGasPrice:     vmtest.InitialBaseFee,
 			setTime: func(vm *VM) {
-				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix+1, 0)) // Set to after the delegate cutoff
+				if now := vm.clock.Time().Unix(); now <= params.InvalidateDelegateUnix {
+					delta := time.Duration(params.InvalidateDelegateUnix-now+1) * time.Second
+					vm.clock.Set(vm.clock.Time().Add(delta))
+				}
 			},
 			refillCapacityFortuna: false,
 			wantIncluded:          true,
