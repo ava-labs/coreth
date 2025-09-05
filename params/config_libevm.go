@@ -33,7 +33,7 @@ var payloads ethparams.ExtraPayloads[*extras.ChainConfig, RulesExtra]
 // method. Its primary purpose is to construct the extra payload for the
 // [params.Rules] but it MAY also modify the [params.Rules].
 //
-//nolint:revive
+//nolint:revive // General-purpose types lose the meaning of args if unused ones are removed
 func constructRulesExtra(c *ethparams.ChainConfig, r *ethparams.Rules, cEx *extras.ChainConfig, blockNum *big.Int, isMerge bool, timestamp uint64) RulesExtra {
 	var rules RulesExtra
 	if cEx == nil {
