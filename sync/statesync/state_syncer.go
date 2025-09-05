@@ -130,12 +130,12 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fe
 
 	ss.codeFetcher = fetcher
 
-	var err error
 	ss.trieQueue = NewTrieQueue(db)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
 		return nil, err
 	}
 
+	var err error
 	// create a trieToSync for the main trie and mark it as in progress.
 	ss.mainTrie, err = NewTrieToSync(ss, ss.root, common.Hash{}, NewMainTrieTask(ss))
 	if err != nil {

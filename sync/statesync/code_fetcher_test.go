@@ -235,13 +235,13 @@ func TestCodeFetcherQueue_FinalizeCloses(t *testing.T) {
 
 	// After finalize, AddCode with empty input should return an error.
 	err = fetcher.AddCode(nil)
-	require.ErrorIs(t, err, errFailedToAddCodeHashesToQueue)
+	require.ErrorIs(t, err, errAddCodeAfterFinalize)
 
 	// After finalize, AddCode with non-empty input should return an error and enqueue nothing.
 	codeBytes := utils.RandomBytes(8)
 	h := crypto.Keccak256Hash(codeBytes)
 	err = fetcher.AddCode([]common.Hash{h})
-	require.ErrorIs(t, err, errFailedToAddCodeHashesToQueue)
+	require.ErrorIs(t, err, errAddCodeAfterFinalize)
 }
 
 // Test that shutdown during enqueue returns the expected error.
@@ -317,5 +317,65 @@ func TestCodeFetcherQueue_FinalizeWaitsForInflightAddCodeCalls(t *testing.T) {
 	// Wait for finalize to complete and close the channel.
 	<-finalized
 	_, ok := <-fetcher.CodeHashes()
+	require.False(t, ok)
+}
+
+// Test that if hashes are added and the process shuts down abruptly, the
+// "to-fetch" markers remain in the DB and are recovered on restart.
+func TestCodeFetcherQueue_PersistsMarkersAcrossRestart(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+
+	// First run: add a handful of hashes and do not finalize or consume.
+	fetcher1, err := NewCodeFetcherQueue(db, make(chan struct{}))
+	require.NoError(t, err)
+
+	num := 5
+	inputs := make([]common.Hash, 0, num)
+	for i := 0; i < num; i++ {
+		inputs = append(inputs, crypto.Keccak256Hash([]byte(fmt.Sprintf("persist-%d", i))))
+	}
+	require.NoError(t, fetcher1.AddCode(inputs))
+
+	// Assert markers exist in the DB.
+	it := customrawdb.NewCodeToFetchIterator(db)
+	defer it.Release()
+
+	seen := make(map[common.Hash]struct{}, num)
+	for it.Next() {
+		h := common.BytesToHash(it.Key()[len(customrawdb.CodeToFetchPrefix):])
+		seen[h] = struct{}{}
+	}
+	require.NoError(t, it.Error())
+
+	for _, h := range inputs {
+		if _, ok := seen[h]; !ok {
+			t.Fatalf("missing marker for hash %v", h)
+		}
+	}
+
+	// Restart: construct a new fetcher over the same DB. It should recover
+	// the outstanding markers and enqueue them on Init.
+	//
+	// NOTE: This actually simulates a restart at the component level by discarding the first
+	// CodeFetcherQueue (which holds all in-memory state: channels, outstanding, etc.)
+	// and constructing a new one over the same DB handle. Given that the DB is the single source
+	// of truth for the "to-fetch" markers, the new fetcher immediately recovers the markers and
+	// enqueues them on Init.
+	fetcher2, err := NewCodeFetcherQueue(db, make(chan struct{}))
+	require.NoError(t, err)
+
+	recovered := make(map[common.Hash]struct{}, num)
+	for i := 0; i < num; i++ {
+		recovered[<-fetcher2.CodeHashes()] = struct{}{}
+	}
+
+	for _, h := range inputs {
+		if _, ok := recovered[h]; !ok {
+			t.Fatalf("missing recovered hash %v", h)
+		}
+	}
+
+	fetcher2.Finalize()
+	_, ok := <-fetcher2.CodeHashes()
 	require.False(t, ok)
 }

@@ -5,7 +5,6 @@ package statesync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/ava-labs/libevm/common"
@@ -22,20 +21,17 @@ import (
 
 const defaultNumCodeFetchingWorkers = 5
 
-var (
-	_ synccommon.Syncer = (*CodeSyncer)(nil)
-
-	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
-)
+var _ synccommon.Syncer = (*CodeSyncer)(nil)
 
 // CodeSyncer syncs code bytes from the network in a separate thread.
 // Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
 type CodeSyncer struct {
-	db         ethdb.Database
-	client     statesyncclient.Client
-	codeHashes <-chan common.Hash // Channel of incoming code hash requests provided by the fetcher
+	db     ethdb.Database
+	client statesyncclient.Client
+	// Channel of incoming code hash requests provided by the fetcher.
+	codeHashes <-chan common.Hash
 
-	// runtime knobs
+	// Config options.
 	numWorkers          int
 	maxCodeHashesPerReq int
 }

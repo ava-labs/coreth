@@ -67,5 +67,7 @@ type CodeFetcher interface {
 	// producer (e.g., after the account trie has been fully scanned). After
 	// this call, the fetcher should complete any outstanding work and then
 	// return from [Syncer.Sync] without waiting for additional input.
-	Finalize()
+	// Returns a non-nil error if the fetcher is shutting down or if persisting
+	// enqueue markers fails.
+	Finalize() error
 }
