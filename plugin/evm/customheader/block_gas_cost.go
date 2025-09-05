@@ -23,7 +23,7 @@ var (
 	errBlockGasCostNil            = errors.New("block gas cost is nil")
 	errExtDataGasUsedNil          = errors.New("extDataGasUsed is nil")
 	errNoGasUsed                  = errors.New("no gas used")
-	errInvalidBlockGasCostGranite = errors.New("invalid block gas cost in Granite")
+	errNonZeroBlockGasCostGranite = errors.New("non-zero block gas cost in Granite - must be 0")
 	ErrInsufficientBlockGas       = errors.New("insufficient gas to cover the block cost")
 )
 
@@ -147,7 +147,7 @@ func VerifyBlockFee(
 	switch {
 	case rules.IsGranite:
 		if !utils.BigEqual(requiredBlockGasCost, common.Big0) {
-			return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, requiredBlockGasCost)
+			return fmt.Errorf("%w: have %d, expected 0", errNonZeroBlockGasCostGranite, requiredBlockGasCost)
 		}
 		return nil
 	case !rules.IsApricotPhase4:

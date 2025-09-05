@@ -500,7 +500,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: nil,
-			expectedErrMsg:         errInvalidBlockGasCostGranite.Error(),
+			expectedErrMsg:         errNonZeroBlockGasCostGranite.Error(),
 			overrideBlockGasCost:   big.NewInt(1),
 			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Granite),
 		},

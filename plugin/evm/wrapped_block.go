@@ -47,7 +47,7 @@ var (
 	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
 	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
 	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
-	errInvalidBlockGasCostGranite    = errors.New("invalid block gas cost in Granite")
+	errNonZeroBlockGasCostGranite    = errors.New("non zero block gas cost in Granite - must be 0")
 
 	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
@@ -400,7 +400,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 		// In Granite, block gas cost must be exactly 0.
 		if rulesExtra.IsGranite {
 			if !utils.BigEqual(headerExtra.BlockGasCost, common.Big0) {
-				return fmt.Errorf("%w: have %d, expected 0", errInvalidBlockGasCostGranite, headerExtra.BlockGasCost)
+				return fmt.Errorf("%w: have %d, expected 0", errNonZeroBlockGasCostGranite, headerExtra.BlockGasCost)
 			}
 		}
 	}
