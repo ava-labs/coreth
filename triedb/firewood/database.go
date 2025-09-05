@@ -460,7 +460,6 @@ func (db *Database) dereference(pCtx *ProposalContext) {
 	// the proposalMap will be nil if the database is closing so we can skip doing
 	// unnecessary work removing the proposals from the map one-by-one.
 	if db.proposalMap != nil {
-		// Remove the proposal from the map.
 		db.removeProposalFromMap(pCtx)
 	}
 
