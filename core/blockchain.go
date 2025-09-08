@@ -1916,6 +1916,13 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 		}
 		roots = append(roots, root)
 
+		// Write any unsaved indices to disk
+		if writeIndices {
+			if err := bc.writeBlockAcceptedIndices(current); err != nil {
+				return fmt.Errorf("%w: failed to process accepted block indices", err)
+			}
+		}
+
 		// Flatten snapshot if initialized, holding a reference to the state root until the next block
 		// is processed.
 		if err := bc.flattenSnapshot(func() error {
@@ -1926,13 +1933,6 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 			return nil
 		}, current.Hash()); err != nil {
 			return err
-		}
-
-		// Write any unsaved indices to disk
-		if writeIndices {
-			if err := bc.writeBlockAcceptedIndices(current); err != nil {
-				return fmt.Errorf("%w: failed to process accepted block indices", err)
-			}
 		}
 	}
 
