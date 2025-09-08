@@ -45,7 +45,7 @@ import (
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -360,7 +360,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction, coinb
 
 	rulesExtra := params.GetRulesExtra(env.rules)
 	if rulesExtra.IsDurango {
-		results, err := core.CheckPredicates(env.rules, env.predicateContext, tx)
+		results, err := core.CheckTxPredicates(env.rules, env.predicateContext, tx)
 		if err != nil {
 			log.Debug("Transaction predicate failed verification in miner", "tx", tx.Hash(), "err", err)
 			return nil, err

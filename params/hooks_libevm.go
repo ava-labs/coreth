@@ -19,11 +19,11 @@ import (
 
 	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -149,7 +149,8 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			}
 		}
 
-		return contract.Run(accessibleState, env.Addresses().Caller, env.Addresses().Self, input, suppliedGas, env.ReadOnly())
+		// EVM semantic addresses are used here to maintain consistency with prior behavior as present in AvalancheGo 1.13.0.
+		return contract.Run(accessibleState, env.Addresses().EVMSemantic.Caller, env.Addresses().EVMSemantic.Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
 }
