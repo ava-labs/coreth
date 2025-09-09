@@ -17,15 +17,15 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
-	synccommon "github.com/ava-labs/coreth/sync"
+	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
 var (
-	_ synccommon.Syncer = (*mockSyncer)(nil)
-	_ synccommon.Syncer = (*funcSyncer)(nil)
+	_ syncpkg.Syncer = (*mockSyncer)(nil)
+	_ syncpkg.Syncer = (*funcSyncer)(nil)
 )
 
-// mockSyncer implements [synccommon.Syncer] for testing.
+// mockSyncer implements [syncpkg.Syncer] for testing.
 type mockSyncer struct {
 	name      string
 	syncError error
