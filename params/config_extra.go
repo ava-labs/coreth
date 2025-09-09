@@ -50,7 +50,6 @@ func SetEthUpgrades(c *ChainConfig) error {
 	extra := GetExtra(c)
 	// Because Fuji and Mainnet have already accepted the Berlin and London
 	// blocks, it is assumed that they are scheduled for activation.
-
 	switch {
 	case c.ChainID != nil && AvalancheFujiChainID.Cmp(c.ChainID) == 0:
 		c.BerlinBlock = big.NewInt(184985) // https://testnet.snowtrace.io/block/184985?chainid=43113, AP2 activation block
