@@ -2153,10 +2153,11 @@ func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 }
 
 func TestGraniteInvalidBlockGasCost(t *testing.T) {
-	fork := upgradetest.Granite
 	vm := newDefaultTestVM()
+	// Cannot take the address of a constant - assign to a local variable first.
+	fork := upgradetest.Granite
 	_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-		Fork: &upgradetest.Granite,
+		Fork: &fork,
 	})
 
 	defer vm.Shutdown(context.Background())
