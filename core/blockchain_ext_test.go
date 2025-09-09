@@ -6,6 +6,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
@@ -1702,7 +1703,7 @@ func ReexecBlocksTest(t *testing.T, create ReexecTestFunc) {
 		}
 
 		// We should confirm all transactions can now be queried
-		for _, tx := range foundTxs {
+		for _, tx := range allTxs {
 			txLookup, _, _ := bc.GetTransactionLookup(tx)
 			if txLookup == nil {
 				t.Fatalf("missing transaction: %v", tx)
@@ -1834,7 +1835,7 @@ func ReexecMaxBlocksTest(t *testing.T, create ReexecTestFunc) {
 		}
 
 		// We should confirm all transactions can now be queried
-		for _, tx := range foundTxs {
+		for _, tx := range allTxs {
 			txLookup, _, _ := bc.GetTransactionLookup(tx)
 			if txLookup == nil {
 				t.Fatalf("missing transaction: %v", tx)

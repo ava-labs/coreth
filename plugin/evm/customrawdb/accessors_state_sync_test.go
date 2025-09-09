@@ -4,6 +4,7 @@
 package customrawdb
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
