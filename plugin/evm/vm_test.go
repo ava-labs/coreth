@@ -2156,7 +2156,7 @@ func TestGraniteInvalidBlockGasCost(t *testing.T) {
 	fork := upgradetest.Granite
 	vm := newDefaultTestVM()
 	_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-		Fork: &fork, // Granite
+		Fork: &upgradetest.Granite,
 	})
 
 	defer vm.Shutdown(context.Background())
