@@ -208,7 +208,7 @@ func TestCancelSync(t *testing.T) {
 
 	testSync(t, syncTest{
 		ctx: ctx,
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return rawdb.NewMemoryDatabase(), serverDB, serverTrieDB, root
 		},
 		expectedError: context.Canceled,
@@ -250,7 +250,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		interruptAfter: 1,
 	}
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 		expectedError:     errInterrupted,
@@ -260,7 +260,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 	require.EqualValues(t, 2, intercept.numRequests)
 
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 	})
@@ -284,7 +284,7 @@ func TestResumeSyncLargeStorageTrieInterrupted(t *testing.T) {
 		interruptAfter: 1,
 	}
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 		expectedError:     errInterrupted,
@@ -292,7 +292,7 @@ func TestResumeSyncLargeStorageTrieInterrupted(t *testing.T) {
 	})
 
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 	})
@@ -323,7 +323,7 @@ func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
 		interruptAfter: 1,
 	}
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root1
 		},
 		expectedError:     errInterrupted,
@@ -333,7 +333,7 @@ func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
 	<-snapshot.WipeSnapshot(clientDB, false)
 
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root2
 		},
 	})
@@ -357,7 +357,7 @@ func TestResumeSyncLargeStorageTrieWithConsecutiveDuplicatesInterrupted(t *testi
 		interruptAfter: 1,
 	}
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 		expectedError:     errInterrupted,
@@ -365,7 +365,7 @@ func TestResumeSyncLargeStorageTrieWithConsecutiveDuplicatesInterrupted(t *testi
 	})
 
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 	})
@@ -388,7 +388,7 @@ func TestResumeSyncLargeStorageTrieWithSpreadOutDuplicatesInterrupted(t *testing
 		interruptAfter: 1,
 	}
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 		expectedError:     errInterrupted,
@@ -396,7 +396,7 @@ func TestResumeSyncLargeStorageTrieWithSpreadOutDuplicatesInterrupted(t *testing
 	})
 
 	testSync(t, syncTest{
-		prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 			return clientDB, serverDB, serverTrieDB, root
 		},
 	})
@@ -484,12 +484,12 @@ func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(*testing.T, 
 
 	testSyncResumes(t, []syncTest{
 		{
-			prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+			prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 				return clientDB, serverDB, serverTrieDB, root1
 			},
 		},
 		{
-			prepareForTest: func(_ *testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
+			prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
 				return clientDB, serverDB, serverTrieDB, root2
 			},
 		},
