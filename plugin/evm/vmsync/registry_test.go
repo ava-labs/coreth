@@ -15,15 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync/synctest"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
 	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
-var (
-	_ syncpkg.Syncer = (*mockSyncer)(nil)
-	_ syncpkg.Syncer = (*funcSyncer)(nil)
-)
+var _ syncpkg.Syncer = (*mockSyncer)(nil)
 
 // mockSyncer implements [syncpkg.Syncer] for testing.
 type mockSyncer struct {
@@ -39,65 +37,6 @@ func newMockSyncer(name string, syncError error) *mockSyncer {
 func (m *mockSyncer) Sync(context.Context) error {
 	m.started = true
 	return m.syncError
-}
-
-// funcSyncer adapts a function to the simple Syncer shape used in tests. It is
-// useful for defining small, behavior-driven syncers inline.
-type funcSyncer struct {
-	fn func(ctx context.Context) error
-}
-
-// Sync calls the wrapped function and returns its result.
-func (f funcSyncer) Sync(ctx context.Context) error { return f.fn(ctx) }
-
-// newBarrierSyncer returns a syncer that, upon entering Sync, calls wg.Done() to
-// signal it has started, then blocks until either:
-//   - `releaseCh` is closed, returning nil; or
-//   - `ctx` is canceled, returning ctx.Err.
-//
-// This acts as a barrier to coordinate test goroutines.
-func newBarrierSyncer(wg *sync.WaitGroup, releaseCh <-chan struct{}) funcSyncer {
-	return funcSyncer{fn: func(ctx context.Context) error {
-		wg.Done()
-		select {
-		case <-releaseCh:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}}
-}
-
-// newErrorSyncer returns a syncer that waits until either `trigger` is closed
-// (then returns `errToReturn`) or `ctx` is canceled (then returns ctx.Err).
-func newErrorSyncer(trigger <-chan struct{}, errToReturn error) funcSyncer {
-	return funcSyncer{fn: func(ctx context.Context) error {
-		select {
-		case <-trigger:
-			return errToReturn
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}}
-}
-
-// newCancelAwareSyncer closes `started` as soon as Sync begins, then waits for
-// either:
-//   - `ctx` cancellation: closes `canceled` and returns ctx.Err; or
-//   - `timeout` elapsing: returns an error indicating a timeout.
-//
-// Useful for asserting that cancellation propagates to the syncer under test.
-func newCancelAwareSyncer(started, canceled chan struct{}, timeout time.Duration) funcSyncer {
-	return funcSyncer{fn: func(ctx context.Context) error {
-		close(started)
-		select {
-		case <-ctx.Done():
-			close(canceled)
-			return ctx.Err()
-		case <-time.After(timeout):
-			return errors.New("syncer timed out waiting for cancellation")
-		}
-	}}
 }
 
 // syncerConfig describes a test syncer setup for RunSyncerTasks table tests.
@@ -264,7 +203,7 @@ func TestSyncerRegistry_ConcurrentStart(t *testing.T) {
 
 	for i := 0; i < numBarrierSyncers; i++ {
 		name := fmt.Sprintf("BarrierSyncer-%d", i)
-		syncer := newBarrierSyncer(&allStartedWG, releaseCh)
+		syncer := synctest.NewBarrierSyncer(&allStartedWG, releaseCh)
 		require.NoError(t, registry.Register(name, syncer))
 	}
 
@@ -288,7 +227,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 	// Error syncer
 	trigger := make(chan struct{})
 	errFirst := errors.New("test error")
-	require.NoError(t, registry.Register("ErrorSyncer-0", newErrorSyncer(trigger, errFirst)))
+	require.NoError(t, registry.Register("ErrorSyncer-0", synctest.NewErrorSyncer(trigger, errFirst)))
 
 	// Cancel-aware syncers to verify cancellation propagation
 	const numCancelSyncers = 2
@@ -302,7 +241,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 		startedChans = append(startedChans, startedCh)
 		name := fmt.Sprintf("CancelSyncer-%d", i)
 
-		require.NoError(t, registry.Register(name, newCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)))
+		require.NoError(t, registry.Register(name, synctest.NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)))
 	}
 
 	doneCh := make(chan error, 1)
@@ -344,7 +283,7 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 			errFirst = errInstance
 		}
 		name := fmt.Sprintf("ErrorSyncer-%d", i)
-		require.NoError(t, registry.Register(name, newErrorSyncer(trigger, errInstance)))
+		require.NoError(t, registry.Register(name, synctest.NewErrorSyncer(trigger, errInstance)))
 	}
 
 	doneCh := make(chan error, 1)
