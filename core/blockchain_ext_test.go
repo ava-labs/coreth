@@ -1690,7 +1690,7 @@ func ReexecBlocksTest(t *testing.T, create ReexecTestFunc) {
 
 	newChain, restartedChain := checkBlockChainState(t, blockchain, gspec, chainDB, checkCreate, checkState)
 
-	foundTxs = append(foundTxs, missingTxs...)
+	allTxs := slices.Concat(foundTxs, missingTxs)
 	for _, bc := range []*BlockChain{newChain, restartedChain} {
 		// We should confirm that snapshots were properly initialized
 		if bc.snaps == nil && bc.cacheConfig.SnapshotLimit > 0 {
