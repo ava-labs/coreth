@@ -19,12 +19,15 @@ import (
 )
 
 var (
-	errBaseFeeNil                 = errors.New("base fee is nil")
-	errBlockGasCostNil            = errors.New("block gas cost is nil")
-	errExtDataGasUsedNil          = errors.New("extDataGasUsed is nil")
-	errNoGasUsed                  = errors.New("no gas used")
-	errNonZeroBlockGasCostGranite = errors.New("non-zero block gas cost in Granite - must be 0")
-	ErrInsufficientBlockGas       = errors.New("insufficient gas to cover the block cost")
+	errBaseFeeNil                               = errors.New("base fee is nil")
+	errBlockGasCostNil                          = errors.New("block gas cost is nil")
+	errExtDataGasUsedNil                        = errors.New("extDataGasUsed is nil")
+	errNoGasUsed                                = errors.New("no gas used")
+	errNonZeroBlockGasCostGranite               = errors.New("non-zero block gas cost in Granite - must be 0")
+	ErrInsufficientBlockGas                     = errors.New("insufficient gas to cover the block cost")
+	errInvalidExtraStateChangeContribution      = errors.New("invalid extra state change contribution")
+	errInvalidBaseFeeApricotPhase4              = errors.New("invalid base fee in apricot phase 4")
+	errInvalidRequiredBlockGasCostApricotPhase4 = errors.New("invalid block gas cost in apricot phase 4")
 )
 
 // BlockGasCost calculates the required block gas cost based on the parent
@@ -155,10 +158,10 @@ func VerifyBlockFee(
 	}
 
 	if baseFee == nil || baseFee.Sign() <= 0 {
-		return fmt.Errorf("invalid base fee (%d) in apricot phase 4", baseFee)
+		return fmt.Errorf("%w: %d", errInvalidBaseFeeApricotPhase4, baseFee)
 	}
 	if requiredBlockGasCost == nil || !requiredBlockGasCost.IsUint64() {
-		return fmt.Errorf("invalid block gas cost (%d) in apricot phase 4", requiredBlockGasCost)
+		return fmt.Errorf("%w: %d", errInvalidRequiredBlockGasCostApricotPhase4, requiredBlockGasCost)
 	}
 
 	var (
@@ -170,7 +173,7 @@ func VerifyBlockFee(
 	// Add in the external contribution
 	if extraStateChangeContribution != nil {
 		if extraStateChangeContribution.Cmp(common.Big0) < 0 {
-			return fmt.Errorf("invalid extra state change contribution: %d", extraStateChangeContribution)
+			return fmt.Errorf("%w: %d", errInvalidExtraStateChangeContribution, extraStateChangeContribution)
 		}
 		totalBlockFee.Add(totalBlockFee, extraStateChangeContribution)
 	}
