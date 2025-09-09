@@ -232,7 +232,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			ctx, cancel := utilstest.NewTestContext(t)
 			t.Cleanup(cancel)
 
-			err := registry.RunSyncerTasks(ctx, getTestClientSummary(t))
+			err := registry.RunSyncerTasks(ctx, newTestClientSummary(t))
 
 			if tt.expectedError != "" {
 				require.Error(t, err)
@@ -269,7 +269,7 @@ func TestSyncerRegistry_ConcurrentStart(t *testing.T) {
 	}
 
 	doneCh := make(chan error, 1)
-	go func() { doneCh <- registry.RunSyncerTasks(ctx, getTestClientSummary(t)) }()
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
 
 	utilstest.WaitGroupWithTimeout(t, &allStartedWG, 2*time.Second, "timed out waiting for barrier syncers to start")
 	close(releaseCh)
@@ -306,7 +306,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 	}
 
 	doneCh := make(chan error, 1)
-	go func() { doneCh <- registry.RunSyncerTasks(ctx, getTestClientSummary(t)) }()
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
 
 	// Ensure cancel-aware syncers are running before triggering the error
 	for i, started := range startedChans {
@@ -348,7 +348,7 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 	}
 
 	doneCh := make(chan error, 1)
-	go func() { doneCh <- registry.RunSyncerTasks(ctx, getTestClientSummary(t)) }()
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
 
 	// Trigger only the first error; others should return due to cancellation
 	close(triggers[0])
@@ -364,10 +364,10 @@ func TestSyncerRegistry_NoSyncersRegistered(t *testing.T) {
 	ctx, cancel := utilstest.NewTestContext(t)
 	t.Cleanup(cancel)
 
-	require.NoError(t, registry.RunSyncerTasks(ctx, getTestClientSummary(t)))
+	require.NoError(t, registry.RunSyncerTasks(ctx, newTestClientSummary(t)))
 }
 
-func getTestClientSummary(t *testing.T) message.Syncable {
+func newTestClientSummary(t *testing.T) message.Syncable {
 	t.Helper()
 	summary, err := message.NewBlockSyncSummary(common.HexToHash("0xdeadbeef"), 1000, common.HexToHash("0xdeadbeef"))
 	require.NoError(t, err)
