@@ -82,7 +82,7 @@ var PrecompiledContractsGranite = map[common.Address]vm.PrecompiledContract{
 	nativeasset.GenesisContractAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
 	nativeasset.NativeAssetBalanceAddr: makePrecompile(&nativeasset.DeprecatedContract{}),
 	nativeasset.NativeAssetCallAddr:    makePrecompile(&nativeasset.DeprecatedContract{}),
-	P256VerifyAddress:                  vm.PrecompiledContractsP256Verify[P256VerifyAddress],
+	P256VerifyAddress:                  &vm.P256Verify{},
 }
 
 func (r RulesExtra) ActivePrecompiles(existing []common.Address) []common.Address {
