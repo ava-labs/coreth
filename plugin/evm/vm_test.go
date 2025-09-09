@@ -2089,6 +2089,14 @@ func TestCreateHandlers(t *testing.T) {
 	}
 }
 
+// TestGraniteDeactivatesBlockGasCost verifies block gas cost semantics across
+// the Fortuna -> Granite fork boundary:
+//   - Under Fortuna, attempting to build a second block too quickly should fail
+//     with ErrInsufficientBlockGas.
+//   - Under Granite, block gas cost is disabled, building succeeds and the
+//     header extra's BlockGasCost is 0.
+//
+// This guards against regressions in block gas charging behavior after Granite.
 func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 	tests := []struct {
 		fork                 upgradetest.Fork
@@ -2152,6 +2160,12 @@ func TestGraniteDeactivatesBlockGasCost(t *testing.T) {
 	}
 }
 
+// TestGraniteInvalidBlockGasCost ensures that the Granite fork deactivates
+// the per-block gas cost: blocks built under Granite must have a
+// BlockGasCost of 0, and any block whose header encodes a non-zero
+// BlockGasCost is rejected during verification. This guards the fork
+// boundary (Fortuna enforces block gas cost, but Granite turns it off).
+// This will prevent regressions.
 func TestGraniteInvalidBlockGasCost(t *testing.T) {
 	vm := newDefaultTestVM()
 	// Cannot take the address of a constant - assign to a local variable first.
