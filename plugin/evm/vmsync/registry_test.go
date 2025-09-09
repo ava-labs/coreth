@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/sync/synctest"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
 	syncpkg "github.com/ava-labs/coreth/sync"
@@ -203,7 +202,7 @@ func TestSyncerRegistry_ConcurrentStart(t *testing.T) {
 
 	for i := 0; i < numBarrierSyncers; i++ {
 		name := fmt.Sprintf("BarrierSyncer-%d", i)
-		syncer := synctest.NewBarrierSyncer(&allStartedWG, releaseCh)
+		syncer := NewBarrierSyncer(&allStartedWG, releaseCh)
 		require.NoError(t, registry.Register(name, syncer))
 	}
 
@@ -227,7 +226,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 	// Error syncer
 	trigger := make(chan struct{})
 	errFirst := errors.New("test error")
-	require.NoError(t, registry.Register("ErrorSyncer-0", synctest.NewErrorSyncer(trigger, errFirst)))
+	require.NoError(t, registry.Register("ErrorSyncer-0", NewErrorSyncer(trigger, errFirst)))
 
 	// Cancel-aware syncers to verify cancellation propagation
 	const numCancelSyncers = 2
@@ -241,7 +240,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 		startedChans = append(startedChans, startedCh)
 		name := fmt.Sprintf("CancelSyncer-%d", i)
 
-		require.NoError(t, registry.Register(name, synctest.NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)))
+		require.NoError(t, registry.Register(name, NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)))
 	}
 
 	doneCh := make(chan error, 1)
@@ -283,7 +282,7 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 			errFirst = errInstance
 		}
 		name := fmt.Sprintf("ErrorSyncer-%d", i)
-		require.NoError(t, registry.Register(name, synctest.NewErrorSyncer(trigger, errInstance)))
+		require.NoError(t, registry.Register(name, NewErrorSyncer(trigger, errInstance)))
 	}
 
 	doneCh := make(chan error, 1)
