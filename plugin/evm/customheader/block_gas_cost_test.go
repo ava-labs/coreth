@@ -318,7 +318,6 @@ func TestVerifyBlockFee(t *testing.T) {
 		receipts               []*types.Receipt
 		extraStateContribution *big.Int
 		rules                  extras.AvalancheRules
-		overrideBlockGasCost   *big.Int
 		expectedErrMsg         string
 		expectedErr            error
 	}{
@@ -480,17 +479,6 @@ func TestVerifyBlockFee(t *testing.T) {
 			expectedErr:            errInvalidBaseFeeApricotPhase4,
 			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
 		},
-		"ap4 invalid required block gas cost (not uint64)": {
-			baseFee:                big.NewInt(100),
-			parentBlockGasCost:     big.NewInt(0),
-			timeElapsed:            0,
-			txs:                    nil,
-			receipts:               nil,
-			extraStateContribution: nil,
-			expectedErr:            errInvalidRequiredBlockGasCostApricotPhase4,
-			overrideBlockGasCost:   new(big.Int).Exp(big.NewInt(2), big.NewInt(65), nil),
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
-		},
 	}
 
 	for name, test := range tests {
@@ -503,16 +491,13 @@ func TestVerifyBlockFee(t *testing.T) {
 					BlockGasCost: test.parentBlockGasCost,
 				},
 			)
-			blockGasCost := test.overrideBlockGasCost
-			if blockGasCost == nil {
-				blockGasCost = BlockGasCost(
-					test.rules,
-					parent,
-					test.timeElapsed,
-				)
-			}
+			requiredBlockGasCost := BlockGasCost(
+				test.rules,
+				parent,
+				test.timeElapsed,
+			)
 
-			err := VerifyBlockFee(test.baseFee, blockGasCost, test.txs, test.receipts, test.extraStateContribution)
+			err := VerifyBlockFee(test.baseFee, requiredBlockGasCost, test.txs, test.receipts, test.extraStateContribution)
 			if test.expectedErr != nil {
 				require.ErrorIs(t, err, test.expectedErr)
 			}
@@ -524,6 +509,14 @@ func TestVerifyBlockFee(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Additional focused test for invalid required block gas cost (not uint64).
+func TestVerifyBlockFee_InvalidRequiredBlockGasCost(t *testing.T) {
+	// requiredBlockGasCost > max uint64 to trigger validation error.
+	required := new(big.Int).Exp(big.NewInt(2), big.NewInt(65), nil)
+	err := VerifyBlockFee(big.NewInt(100), required, nil, nil, nil)
+	require.ErrorIs(t, err, errInvalidRequiredBlockGasCostApricotPhase4)
 }
 
 func toWrappedErrorMsg(err error, msg string) string {
