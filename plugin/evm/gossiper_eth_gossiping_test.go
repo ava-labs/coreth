@@ -87,8 +87,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 		GenesisJSON: genesisJSON,
 	})
 	defer func() {
-		err := vm.Shutdown(context.Background())
-		require.NoError(err)
+		require.NoError(vm.Shutdown(context.Background()))
 	}()
 	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
@@ -113,8 +112,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 
 	// Txs must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
-	err = vm.eth.APIBackend.SendTx(context.Background(), tx)
-	require.NoError(err)
+	require.NoError(vm.eth.APIBackend.SendTx(context.Background(), tx))
 	require.False(txRequested, "tx should not be requested")
 
 	// wait for transaction to be re-gossiped

@@ -65,10 +65,8 @@ func FillTrie(t *testing.T, start, numKeys int, keySize int, trieDB *triedb.Data
 	// Commit the root to [trieDB]
 	nextRoot, nodes, err := testTrie.Commit(false)
 	require.NoError(t, err)
-	err = trieDB.Update(nextRoot, root, 0, trienode.NewWithNodeSet(nodes), nil)
-	require.NoError(t, err)
-	err = trieDB.Commit(nextRoot, false)
-	require.NoError(t, err)
+	require.NoError(t, trieDB.Update(nextRoot, root, 0, trienode.NewWithNodeSet(nodes), nil))
+	require.NoError(t, trieDB.Commit(nextRoot, false))
 
 	return nextRoot, keys, values
 }

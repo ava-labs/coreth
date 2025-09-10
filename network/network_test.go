@@ -531,11 +531,21 @@ func TestHandleInvalidMessages(t *testing.T) {
 	require.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), garbageResponse))
 	require.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), emptyResponse))
 	require.NoError(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), nilResponse))
-	require.ErrorIs(t, p2p.ErrUnrequestedResponse, clientNetwork.AppResponse(context.Background(), nodeID, requestID, gossipMsg))
-	require.ErrorIs(t, p2p.ErrUnrequestedResponse, clientNetwork.AppResponse(context.Background(), nodeID, requestID, requestMessage))
-	require.ErrorIs(t, p2p.ErrUnrequestedResponse, clientNetwork.AppResponse(context.Background(), nodeID, requestID, garbageResponse))
-	require.ErrorIs(t, p2p.ErrUnrequestedResponse, clientNetwork.AppResponse(context.Background(), nodeID, requestID, emptyResponse))
-	require.ErrorIs(t, p2p.ErrUnrequestedResponse, clientNetwork.AppResponse(context.Background(), nodeID, requestID, nilResponse))
+
+	err = clientNetwork.AppResponse(context.Background(), nodeID, requestID, gossipMsg)
+	require.ErrorIs(t, err, p2p.ErrUnrequestedResponse)
+
+	err = clientNetwork.AppResponse(context.Background(), nodeID, requestID, requestMessage)
+	require.ErrorIs(t, err, p2p.ErrUnrequestedResponse)
+
+	err = clientNetwork.AppResponse(context.Background(), nodeID, requestID, garbageResponse)
+	require.ErrorIs(t, err, p2p.ErrUnrequestedResponse)
+
+	err = clientNetwork.AppResponse(context.Background(), nodeID, requestID, emptyResponse)
+	require.ErrorIs(t, err, p2p.ErrUnrequestedResponse)
+
+	err = clientNetwork.AppResponse(context.Background(), nodeID, requestID, nilResponse)
+	require.ErrorIs(t, err, p2p.ErrUnrequestedResponse)
 }
 
 func TestNetworkPropagatesRequestHandlerError(t *testing.T) {

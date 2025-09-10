@@ -38,7 +38,7 @@ func TestIteratorCanIterate(t *testing.T) {
 
 	lastCommittedHash1, lastCommittedHeight1 := atomicTrie1.LastCommitted()
 	require.NoError(t, err)
-	require.NotEqual(t, common.Hash{}, lastCommittedHash1)
+	require.NotZero(t, lastCommittedHash1)
 	require.EqualValues(t, 1000, lastCommittedHeight1)
 
 	verifyOperations(t, atomicTrie1, atomictest.TestTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
@@ -50,7 +50,7 @@ func TestIteratorCanIterate(t *testing.T) {
 	atomicTrie2 := atomicBackend2.AtomicTrie()
 	lastCommittedHash2, lastCommittedHeight2 := atomicTrie2.LastCommitted()
 	require.NoError(t, err)
-	require.NotEqual(t, common.Hash{}, lastCommittedHash2)
+	require.NotZero(t, lastCommittedHash2)
 	require.EqualValues(t, 1000, lastCommittedHeight2)
 
 	verifyOperations(t, atomicTrie2, atomictest.TestTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
@@ -77,7 +77,7 @@ func TestIteratorHandlesInvalidData(t *testing.T) {
 	atomicTrie := atomicBackend.AtomicTrie()
 
 	lastCommittedHash, lastCommittedHeight := atomicTrie.LastCommitted()
-	require.NotEqual(common.Hash{}, lastCommittedHash)
+	require.NotZero(t, lastCommittedHash)
 	require.EqualValues(1000, lastCommittedHeight)
 
 	verifyOperations(t, atomicTrie, atomictest.TestTxCodec, lastCommittedHash, 1, 1000, operationsMap)

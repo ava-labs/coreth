@@ -42,8 +42,7 @@ func addTxs(t testing.TB, codec codec.Manager, acceptedAtomicTxDB database.Datab
 			packer.PackLong(height)
 			packer.PackBytes(txBytes)
 			txID := tx.ID()
-			err = acceptedAtomicTxDB.Put(txID[:], packer.Bytes)
-			require.NoError(t, err)
+			require.NoError(t, acceptedAtomicTxDB.Put(txID[:], packer.Bytes))
 		}
 		// save this to the map (if non-nil) for verifying expected results in verifyTxs
 		if txMap != nil {
@@ -145,7 +144,6 @@ func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.NoError(t, err)
 	verifyTxs(t, repo, txMap)
 
 	writeTxs(t, repo, 100, 150, constTxsPerHeight(1), txMap, nil)
@@ -170,7 +168,6 @@ func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.NoError(t, err)
 	verifyTxs(t, repo, txMap)
 
 	writeTxs(t, repo, 200, 300, constTxsPerHeight(10), txMap, nil)
@@ -191,7 +188,6 @@ func benchAtomicRepositoryIndex10_000(b *testing.B, maxHeight uint64, txsPerHeig
 	if err != nil {
 		b.Fatal(err)
 	}
-	require.NoError(b, err)
 	verifyTxs(b, repo, txMap)
 }
 
