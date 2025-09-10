@@ -18,7 +18,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
@@ -72,15 +72,15 @@ func getValidEthTxs(key *ecdsa.PrivateKey, count int, gasPrice *big.Int) []*type
 // show that a geth tx discovered from gossip is requested to the same node that
 // gossiped it
 func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
-	assert := assert.New(t)
+	require := require.New(t)
 
 	key, err := crypto.GenerateKey()
-	assert.NoError(err)
+	require.NoError(err)
 
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	genesisJSON, err := fundAddressByGenesis([]common.Address{addr})
-	assert.NoError(err)
+	require.NoError(err)
 
 	vm := newDefaultTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
@@ -88,7 +88,7 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	})
 	defer func() {
 		err := vm.Shutdown(context.Background())
-		assert.NoError(err)
+		require.NoError(err)
 	}()
 	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
@@ -114,8 +114,8 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	// Txs must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	err = vm.eth.APIBackend.SendTx(context.Background(), tx)
-	assert.NoError(err)
-	assert.False(txRequested, "tx should not be requested")
+	require.NoError(err)
+	require.False(txRequested, "tx should not be requested")
 
 	// wait for transaction to be re-gossiped
 	attemptAwait(t, &wg, 5*time.Second)

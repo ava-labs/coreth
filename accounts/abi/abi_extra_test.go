@@ -88,7 +88,7 @@ func TestUnpackInputIntoInterface(t *testing.T) {
 					require.NoError(t, err)
 					// Verify unpacked values match input
 					require.Equal(t, v.Amount, input.Amount)
-					require.EqualValues(t, v.Amount, input.Amount)
+					require.Equal(t, v.Amount, input.Amount)
 					require.True(t, bytes.Equal(v.Memo, input.Memo))
 				}
 			})

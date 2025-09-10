@@ -77,7 +77,7 @@ linters:
     - spancheck
     # - staticcheck
     - tagalign
-    # - testifylint
+    - testifylint
     - unconvert
     - unparam
     - unused

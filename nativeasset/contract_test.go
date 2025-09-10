@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	// Force import core to register the VM hooks.
 	// This allows testing the precompiles by exercising the EVM.
@@ -48,11 +49,11 @@ func TestPackNativeAssetCallInput(t *testing.T) {
 	input := PackNativeAssetCallInput(addr, assetID, assetAmount, callData)
 
 	unpackedAddr, unpackedAssetID, unpackedAssetAmount, unpackedCallData, err := UnpackNativeAssetCallInput(input)
-	assert.NoError(t, err)
-	assert.Equal(t, addr, unpackedAddr, "address")
-	assert.Equal(t, assetID, unpackedAssetID, "assetID")
-	assert.Equal(t, assetAmount, unpackedAssetAmount, "assetAmount")
-	assert.Equal(t, callData, unpackedCallData, "callData")
+	require.NoError(t, err)
+	require.Equal(t, addr, unpackedAddr, "address")
+	require.Equal(t, assetID, unpackedAssetID, "assetID")
+	require.Equal(t, assetAmount, unpackedAssetAmount, "assetAmount")
+	require.Equal(t, callData, unpackedCallData, "callData")
 }
 
 func TestStatefulPrecompile(t *testing.T) {
@@ -254,10 +255,10 @@ func TestStatefulPrecompile(t *testing.T) {
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
 				expectedBalance := big.NewInt(50)
-				assert.Equal(t, u256Hundred, user1Balance, "user 1 balance")
-				assert.Equal(t, big0, user2Balance, "user 2 balance")
-				assert.Equal(t, expectedBalance, user1AssetBalance, "user 1 asset balance")
-				assert.Equal(t, expectedBalance, user2AssetBalance, "user 2 asset balance")
+				require.Equal(t, u256Hundred, user1Balance, "user 1 balance")
+				require.Equal(t, big0, user2Balance, "user 2 balance")
+				require.Equal(t, expectedBalance, user1AssetBalance, "user 1 asset balance")
+				require.Equal(t, expectedBalance, user2AssetBalance, "user 2 asset balance")
 			},
 		},
 		{
@@ -290,11 +291,11 @@ func TestStatefulPrecompile(t *testing.T) {
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 				expectedBalance := big.NewInt(50)
 
-				assert.Equal(t, uint256.NewInt(51), user1Balance, "user 1 balance")
-				assert.Equal(t, big0, user2Balance, "user 2 balance")
-				assert.Equal(t, uint256.NewInt(49), nativeAssetCallAddrBalance, "native asset call addr balance")
-				assert.Equal(t, expectedBalance, user1AssetBalance, "user 1 asset balance")
-				assert.Equal(t, expectedBalance, user2AssetBalance, "user 2 asset balance")
+				require.Equal(t, uint256.NewInt(51), user1Balance, "user 1 balance")
+				require.Equal(t, big0, user2Balance, "user 2 balance")
+				require.Equal(t, uint256.NewInt(49), nativeAssetCallAddrBalance, "native asset call addr balance")
+				require.Equal(t, expectedBalance, user1AssetBalance, "user 1 asset balance")
+				require.Equal(t, expectedBalance, user2AssetBalance, "user 2 asset balance")
 			},
 		},
 		{
@@ -325,10 +326,10 @@ func TestStatefulPrecompile(t *testing.T) {
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
-				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
-				assert.Equal(t, big0, user2Balance, "user 2 balance")
-				assert.Equal(t, big.NewInt(51), user1AssetBalance, "user 1 asset balance")
-				assert.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
+				require.Equal(t, bigHundred, user1Balance, "user 1 balance")
+				require.Equal(t, big0, user2Balance, "user 2 balance")
+				require.Equal(t, big.NewInt(51), user1AssetBalance, "user 1 asset balance")
+				require.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
 			},
 		},
 		{
@@ -359,10 +360,10 @@ func TestStatefulPrecompile(t *testing.T) {
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
-				assert.Equal(t, big.NewInt(50), user1Balance, "user 1 balance")
-				assert.Equal(t, big0, user2Balance, "user 2 balance")
-				assert.Equal(t, big.NewInt(50), user1AssetBalance, "user 1 asset balance")
-				assert.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
+				require.Equal(t, big.NewInt(50), user1Balance, "user 1 balance")
+				require.Equal(t, big0, user2Balance, "user 2 balance")
+				require.Equal(t, big.NewInt(50), user1AssetBalance, "user 1 asset balance")
+				require.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
 			},
 		},
 		{
@@ -415,10 +416,10 @@ func TestStatefulPrecompile(t *testing.T) {
 				user1AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr1, assetID)
 				user2AssetBalance := wrappedStateDB.GetBalanceMultiCoin(userAddr2, assetID)
 
-				assert.Equal(t, bigHundred, user1Balance, "user 1 balance")
-				assert.Equal(t, big0, user2Balance, "user 2 balance")
-				assert.Equal(t, bigHundred, user1AssetBalance, "user 1 asset balance")
-				assert.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
+				require.Equal(t, bigHundred, user1Balance, "user 1 balance")
+				require.Equal(t, big0, user2Balance, "user 2 balance")
+				require.Equal(t, bigHundred, user1AssetBalance, "user 1 asset balance")
+				require.Equal(t, big0, user2AssetBalance, "user 2 asset balance")
 			},
 		},
 		{
@@ -473,14 +474,14 @@ func TestStatefulPrecompile(t *testing.T) {
 			evm := vm.NewEVM(vmCtx, vm.TxContext{}, stateDB, params.TestApricotPhase5Config, vm.Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
 			ret, gasRemaining, err := evm.Call(vm.AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
 			// Place gas remaining check before error check, so that it is not skipped when there is an error
-			assert.Equalf(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining (%d of %d)", gasRemaining, test.gasInput)
+			require.Equalf(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining (%d of %d)", gasRemaining, test.gasInput)
 
 			if test.expectedErr != nil {
-				assert.Equal(t, test.expectedErr, err, "expected error to match")
+				require.Equal(t, test.expectedErr, err, "expected error to match")
 				return
 			}
 			if assert.NoError(t, err, "EVM Call produced unexpected error") {
-				assert.Equal(t, test.expectedResult, ret, "unexpected return value")
+				require.Equal(t, test.expectedResult, ret, "unexpected return value")
 				if test.stateDBCheck != nil {
 					test.stateDBCheck(t, stateDB)
 				}

@@ -15,7 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/atomictest"
@@ -33,7 +33,7 @@ func addTxs(t testing.TB, codec codec.Manager, acceptedAtomicTxDB database.Datab
 			tx := atomictest.NewTestTx()
 			txs = append(txs, tx)
 			txBytes, err := codec.Marshal(atomic.CodecVersion, tx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Write atomic transactions to the [acceptedAtomicTxDB]
 			// in the format handled prior to the migration to the atomic
@@ -43,7 +43,7 @@ func addTxs(t testing.TB, codec codec.Manager, acceptedAtomicTxDB database.Datab
 			packer.PackBytes(txBytes)
 			txID := tx.ID()
 			err = acceptedAtomicTxDB.Put(txID[:], packer.Bytes)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		// save this to the map (if non-nil) for verifying expected results in verifyTxs
 		if txMap != nil {
@@ -86,22 +86,22 @@ func writeTxs(t testing.TB, repo *AtomicRepository, fromHeight uint64, toHeight 
 	}
 }
 
-// verifyTxs asserts [repo] can find all txs in [txMap] by height and txID
+// verifyTxs requires [repo] can find all txs in [txMap] by height and txID
 func verifyTxs(t testing.TB, repo *AtomicRepository, txMap map[uint64][]*atomic.Tx) {
 	// We should be able to fetch indexed txs by height:
 	for height, expectedTxs := range txMap {
 		txs, err := repo.GetByHeight(height)
-		assert.NoErrorf(t, err, "unexpected error on GetByHeight at height=%d", height)
-		assert.Lenf(t, txs, len(expectedTxs), "wrong len of txs at height=%d", height)
+		require.NoErrorf(t, err, "unexpected error on GetByHeight at height=%d", height)
+		require.Lenf(t, txs, len(expectedTxs), "wrong len of txs at height=%d", height)
 		// txs should be stored in order of txID
 		utils.Sort(expectedTxs)
 
 		txIDs := set.Set[ids.ID]{}
 		for i := 0; i < len(txs); i++ {
-			assert.Equalf(t, expectedTxs[i].ID().Hex(), txs[i].ID().Hex(), "wrong txID at height=%d idx=%d", height, i)
+			require.Equalf(t, expectedTxs[i].ID().Hex(), txs[i].ID().Hex(), "wrong txID at height=%d idx=%d", height, i)
 			txIDs.Add(txs[i].ID())
 		}
-		assert.Equalf(t, len(txs), txIDs.Len(), "incorrect number of unique transactions in slice at height %d, expected %d, found %d", height, len(txs), txIDs.Len())
+		require.Equalf(t, len(txs), txIDs.Len(), "incorrect number of unique transactions in slice at height %d, expected %d, found %d", height, len(txs), txIDs.Len())
 	}
 }
 
@@ -145,7 +145,7 @@ func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	verifyTxs(t, repo, txMap)
 
 	writeTxs(t, repo, 100, 150, constTxsPerHeight(1), txMap, nil)
@@ -170,7 +170,7 @@ func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	verifyTxs(t, repo, txMap)
 
 	writeTxs(t, repo, 200, 300, constTxsPerHeight(10), txMap, nil)
@@ -191,7 +191,7 @@ func benchAtomicRepositoryIndex10_000(b *testing.B, maxHeight uint64, txsPerHeig
 	if err != nil {
 		b.Fatal(err)
 	}
-	assert.NoError(b, err)
+	require.NoError(b, err)
 	verifyTxs(b, repo, txMap)
 }
 

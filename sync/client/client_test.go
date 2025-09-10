@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"strings"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -17,7 +16,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/triedb"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
@@ -119,19 +118,19 @@ func TestGetCode(t *testing.T) {
 			}
 
 			codeBytes, err := stateSyncClient.GetCode(ctx, codeHashes)
-			// If we expect an error, assert that one occurred and return
+			// If we expect an error, require that one occurred and return
 			if test.expectedErr != nil {
-				assert.ErrorIs(t, err, test.expectedErr)
-				assert.EqualValues(t, 2, testNetClient.numCalls)
+				require.ErrorIs(t, err, test.expectedErr)
+				require.EqualValues(t, 2, testNetClient.numCalls)
 				return
 			}
-			// Otherwise, assert there was no error and that the result is as expected
-			assert.NoError(t, err)
-			assert.Equal(t, len(codeBytes), len(expectedCode))
+			// Otherwise, require there was no error and that the result is as expected
+			require.NoError(t, err)
+			require.Len(t, codeBytes, len(expectedCode))
 			for i, code := range codeBytes {
-				assert.Equal(t, expectedCode[i], code)
+				require.Equal(t, expectedCode[i], code)
 			}
-			assert.Equal(t, uint(1), testNetClient.numCalls)
+			require.Equal(t, uint(1), testNetClient.numCalls)
 		})
 	}
 }
@@ -152,7 +151,7 @@ func TestGetBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal("unexpected error when generating test blockchain", err)
 	}
-	assert.Equal(t, numBlocks, len(blocks))
+	require.Len(t, blocks, numBlocks)
 
 	// Construct client
 	testNetClient := &testNetwork{}
@@ -181,10 +180,10 @@ func TestGetBlocks(t *testing.T) {
 		return blockBytes
 	}
 	tests := map[string]struct {
-		request        message.BlockRequest
-		getResponse    func(t *testing.T, request message.BlockRequest) []byte
-		assertResponse func(t *testing.T, response []*types.Block)
-		expectedErr    string
+		request         message.BlockRequest
+		getResponse     func(t *testing.T, request message.BlockRequest) []byte
+		requireResponse func(t *testing.T, response []*types.Block)
+		expectedErr     string
 	}{
 		"normal resonse": {
 			request: message.BlockRequest{
@@ -204,8 +203,8 @@ func TestGetBlocks(t *testing.T) {
 
 				return response
 			},
-			assertResponse: func(t *testing.T, response []*types.Block) {
-				assert.Equal(t, 16, len(response))
+			requireResponse: func(t *testing.T, response []*types.Block) {
+				require.Len(t, response, 16)
 			},
 		},
 		"fewer than requested blocks": {
@@ -228,8 +227,8 @@ func TestGetBlocks(t *testing.T) {
 				return response
 			},
 			// If the server returns fewer than requested blocks, we should consider it valid
-			assertResponse: func(t *testing.T, response []*types.Block) {
-				assert.Equal(t, 11, len(response))
+			requireResponse: func(t *testing.T, response []*types.Block) {
+				require.Len(t, response, 11)
 			},
 		},
 		"gibberish response": {
@@ -382,14 +381,14 @@ func TestGetBlocks(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error: %s, but found no error", test.expectedErr)
 				}
-				assert.ErrorContains(t, err, test.expectedErr)
+				require.ErrorContains(t, err, test.expectedErr)
 				return
 			}
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			test.assertResponse(t, blockResponse)
+			test.requireResponse(t, blockResponse)
 		})
 	}
 }
@@ -426,10 +425,10 @@ func TestGetLeafs(t *testing.T) {
 	})
 
 	tests := map[string]struct {
-		request        message.LeafsRequest
-		getResponse    func(t *testing.T, request message.LeafsRequest) []byte
-		assertResponse func(t *testing.T, response message.LeafsResponse)
-		expectedErr    error
+		request         message.LeafsRequest
+		getResponse     func(t *testing.T, request message.LeafsRequest) []byte
+		requireResponse func(t *testing.T, response message.LeafsResponse)
+		expectedErr     error
 	}{
 		"full response for small (single request) trie": {
 			request: message.LeafsRequest{
@@ -450,10 +449,10 @@ func TestGetLeafs(t *testing.T) {
 
 				return response
 			},
-			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				assert.False(t, response.More)
-				assert.Equal(t, leafsLimit, len(response.Keys))
-				assert.Equal(t, leafsLimit, len(response.Vals))
+			requireResponse: func(t *testing.T, response message.LeafsResponse) {
+				require.False(t, response.More)
+				require.Len(t, response.Keys, leafsLimit)
+				require.Len(t, response.Vals, leafsLimit)
 			},
 		},
 		"too many leaves in response": {
@@ -498,10 +497,10 @@ func TestGetLeafs(t *testing.T) {
 
 				return response
 			},
-			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				assert.True(t, response.More)
-				assert.Equal(t, leafsLimit, len(response.Keys))
-				assert.Equal(t, leafsLimit, len(response.Vals))
+			requireResponse: func(t *testing.T, response message.LeafsResponse) {
+				require.True(t, response.More)
+				require.Len(t, response.Keys, leafsLimit)
+				require.Len(t, response.Vals, leafsLimit)
 			},
 		},
 		"partial response to request for middle range of trie (full leaf limit)": {
@@ -523,10 +522,10 @@ func TestGetLeafs(t *testing.T) {
 				}
 				return response
 			},
-			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				assert.True(t, response.More)
-				assert.Equal(t, leafsLimit, len(response.Keys))
-				assert.Equal(t, leafsLimit, len(response.Vals))
+			requireResponse: func(t *testing.T, response message.LeafsResponse) {
+				require.True(t, response.More)
+				require.Len(t, response.Keys, leafsLimit)
+				require.Len(t, response.Vals, leafsLimit)
 			},
 		},
 		"full response from near end of trie to end of trie (less than leaf limit)": {
@@ -547,10 +546,10 @@ func TestGetLeafs(t *testing.T) {
 				}
 				return response
 			},
-			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				assert.False(t, response.More)
-				assert.Equal(t, 30, len(response.Keys))
-				assert.Equal(t, 30, len(response.Vals))
+			requireResponse: func(t *testing.T, response message.LeafsResponse) {
+				require.False(t, response.More)
+				require.Len(t, response.Keys, 30)
+				require.Len(t, response.Vals, 30)
 			},
 		},
 		"full response for intermediate range of trie (less than leaf limit)": {
@@ -572,10 +571,10 @@ func TestGetLeafs(t *testing.T) {
 
 				return response
 			},
-			assertResponse: func(t *testing.T, response message.LeafsResponse) {
-				assert.True(t, response.More)
-				assert.Equal(t, 100, len(response.Keys))
-				assert.Equal(t, 100, len(response.Vals))
+			requireResponse: func(t *testing.T, response message.LeafsResponse) {
+				require.True(t, response.More)
+				require.Len(t, response.Keys, 100)
+				require.Len(t, response.Vals, 100)
 			},
 		},
 		"removed first key in response": {
@@ -775,7 +774,7 @@ func TestGetLeafs(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error: %s, but found no error", test.expectedErr)
 				}
-				assert.True(t, strings.Contains(err.Error(), test.expectedErr.Error()))
+				require.Contains(t, err.Error(), test.expectedErr.Error())
 				return
 			}
 
@@ -787,7 +786,7 @@ func TestGetLeafs(t *testing.T) {
 			if !ok {
 				t.Fatalf("parseLeafsResponse returned incorrect type %T", response)
 			}
-			test.assertResponse(t, leafsResponse)
+			test.requireResponse(t, leafsResponse)
 		})
 	}
 }
@@ -821,15 +820,15 @@ func TestGetLeafsRetries(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	goodResponse, responseErr := handler.OnLeafsRequest(ctx, ids.GenerateTestNodeID(), 1, request)
-	assert.NoError(t, responseErr)
+	require.NoError(t, responseErr)
 	testNetClient.testResponse(1, nil, goodResponse)
 
 	res, err := client.GetLeafs(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 1024, len(res.Keys))
-	assert.Equal(t, 1024, len(res.Vals))
+	require.Len(t, res.Keys, 1024)
+	require.Len(t, res.Vals, 1024)
 
 	// Succeeds within the allotted number of attempts
 	invalidResponse := []byte("invalid response")
@@ -839,8 +838,8 @@ func TestGetLeafsRetries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 1024, len(res.Keys))
-	assert.Equal(t, 1024, len(res.Vals))
+	require.Len(t, res.Keys, 1024)
+	require.Len(t, res.Vals, 1024)
 
 	// Test that GetLeafs stops after the context is cancelled
 	numAttempts := 0
@@ -851,8 +850,8 @@ func TestGetLeafsRetries(t *testing.T) {
 		}
 	}, invalidResponse)
 	_, err = client.GetLeafs(ctx, request)
-	assert.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), context.Canceled.Error()))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), context.Canceled.Error())
 }
 
 func TestStateSyncNodes(t *testing.T) {
@@ -884,12 +883,12 @@ func TestStateSyncNodes(t *testing.T) {
 
 	// send some request, doesn't matter what it is because we're testing the interaction with state sync nodes here
 	response, err := client.GetLeafs(ctx, message.LeafsRequest{})
-	assert.Error(t, err)
-	assert.Empty(t, response)
+	require.Error(t, err)
+	require.Empty(t, response)
 
-	// assert all nodes were called
-	assert.Contains(t, testNetClient.nodesRequested, stateSyncNodes[0])
-	assert.Contains(t, testNetClient.nodesRequested, stateSyncNodes[1])
-	assert.Contains(t, testNetClient.nodesRequested, stateSyncNodes[2])
-	assert.Contains(t, testNetClient.nodesRequested, stateSyncNodes[3])
+	// require all nodes were called
+	require.Contains(t, testNetClient.nodesRequested, stateSyncNodes[0])
+	require.Contains(t, testNetClient.nodesRequested, stateSyncNodes[1])
+	require.Contains(t, testNetClient.nodesRequested, stateSyncNodes[2])
+	require.Contains(t, testNetClient.nodesRequested, stateSyncNodes[3])
 }

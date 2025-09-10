@@ -451,7 +451,7 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 	require.NoError(err)
 	unmarshalResults := make(map[string]interface{})
 	require.NoError(json.Unmarshal(blockTxTraceResultBytes, &unmarshalResults))
-	require.Equal("", unmarshalResults["returnValue"])
+	require.Empty(unmarshalResults["returnValue"])
 
 	txTraceResult, err := tracerAPI.TraceTransaction(context.Background(), tx.Hash(), nil)
 	require.NoError(err)
@@ -890,7 +890,6 @@ func testSignatureRequestsToVM(t *testing.T, scheme string) {
 
 			tvm.AppSender.SendAppErrorF = func(context.Context, ids.NodeID, uint32, int32, string) error {
 				calledSendAppErrorFn = true
-				require.ErrorIs(t, test.err, test.err)
 				return nil
 			}
 
@@ -902,7 +901,7 @@ func testSignatureRequestsToVM(t *testing.T, scheme string) {
 			// Send the app request and verify the response
 			deadline := time.Now().Add(60 * time.Second)
 			appErr := vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, msg)
-			require.Nil(t, appErr)
+			require.NoError(t, appErr)
 
 			if test.err != nil {
 				require.True(t, calledSendAppErrorFn)

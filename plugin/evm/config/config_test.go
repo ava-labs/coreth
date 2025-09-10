@@ -11,7 +11,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/libevm/common"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -120,11 +119,11 @@ func TestUnmarshalConfig(t *testing.T) {
 			var tmp Config
 			err := json.Unmarshal(tt.givenJSON, &tmp)
 			if tt.expectedErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				tmp.deprecate()
-				assert.Equal(t, tt.expected, tmp)
+				require.Equal(t, tt.expected, tmp)
 			}
 		})
 	}
@@ -143,7 +142,7 @@ func TestGetConfig(t *testing.T) {
 			configJSON: []byte(`{"rpc-tx-fee-cap": 11,"eth-apis": ["debug"]}`),
 			networkID:  constants.TestnetID,
 			expected: func(t *testing.T, config Config) {
-				require.Equal(t, float64(11), config.RPCTxFeeCap, "Tx Fee Cap should be set")
+				require.InDelta(t, float64(11), config.RPCTxFeeCap, 0.001, "Tx Fee Cap should be set")
 				require.Equal(t, []string{"debug"}, config.EthAPIs(), "EnabledEthAPIs should be set")
 			},
 		},
@@ -154,7 +153,7 @@ func TestGetConfig(t *testing.T) {
 			expected: func(t *testing.T, config Config) {
 				defaultConfig := NewDefaultConfig()
 				require.Equal(t, defaultConfig.PriceOptionMaxTip, config.PriceOptionMaxTip)
-				require.Equal(t, float64(11), config.RPCTxFeeCap)
+				require.InDelta(t, float64(11), config.RPCTxFeeCap, 0.001)
 				require.Equal(t, []string{"debug"}, config.EthAPIs())
 				require.Equal(t, uint64(100), config.TxPoolPriceLimit)
 			},
