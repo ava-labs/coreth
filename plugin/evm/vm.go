@@ -410,7 +410,6 @@ func (vm *VM) Initialize(
 		}
 	}
 	if vm.ethConfig.StateScheme == rawdb.PathScheme {
-		log.Error("path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
 		return errors.New("path state scheme is not supported")
 	}
 
