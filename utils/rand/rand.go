@@ -50,13 +50,3 @@ func SecureIntRange(min, max int) int {
 	}
 	return min + SecureIntn(max-min)
 }
-
-// SecureByte generates a secure random byte.
-// If crypto/rand fails, it returns 0 as a fallback.
-func SecureByte() byte {
-	b := make([]byte, 1)
-	if _, err := rand.Read(b); err != nil {
-		return 0
-	}
-	return b[0]
-}

@@ -9,8 +9,6 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
-
-	cryptorand "crypto/rand"
 )
 
 // TestMarshalCodeRequest asserts that the structure or serialization logic hasn't changed, primarily to
@@ -35,17 +33,12 @@ func TestMarshalCodeRequest(t *testing.T) {
 // TestMarshalCodeResponse asserts that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalCodeResponse(t *testing.T) {
-	// generate some random code data
-	codeData := make([]byte, 50)
-	_, err := cryptorand.Read(codeData)
-	assert.NoError(t, err)
-
+	codeData := deterministicBytes("code", 50)
 	codeResponse := CodeResponse{
 		Data: [][]byte{codeData},
 	}
 
-	base64CodeResponse := "AAAAAAABAAAAMlL9/AchgmVPFj9fD5piHXKVZsdNEAN8TXu7BAfR4sZJgYVa2GgdDYbR6R4AFnk5y2aU"
-
+	base64CodeResponse := "AAAAAAABAAAAMqWkzsbJB88MjA9jmA3E46NFQ4OcMsZ29w75hOzrBZKYUb1mOf7XwLSCavbAa/5PTM46"
 	codeResponseBytes, err := Codec.Marshal(Version, codeResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, base64CodeResponse, base64.StdEncoding.EncodeToString(codeResponseBytes))
