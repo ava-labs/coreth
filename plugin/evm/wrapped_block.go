@@ -41,13 +41,7 @@ var (
 )
 
 var (
-	errInvalidBlock                  = errors.New("invalid block")
-	errInvalidNonce                  = errors.New("invalid nonce")
-	errUnclesUnsupported             = errors.New("uncles unsupported")
-	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
-	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
-	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
-	errNonZeroBlockGasCostGranite    = errors.New("non zero block gas cost in Granite - must be 0")
+	errNonZeroBlockGasCostGranite = errors.New("non zero block gas cost in Granite - must be 0")
 
 	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
