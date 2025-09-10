@@ -6,7 +6,7 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -26,7 +26,6 @@ import (
 )
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
-	rand.Seed(1)
 	testHandlerStats := &statstest.TestHandlerStats{}
 	memdb := rawdb.NewMemoryDatabase()
 	trieDB := triedb.NewDatabase(memdb, nil)

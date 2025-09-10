@@ -5,11 +5,14 @@ package message
 
 import (
 	"encoding/base64"
-	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ava-labs/coreth/utils/rand"
+
+	cryptorand "crypto/rand"
 )
 
 // TestMarshalBlockRequest asserts that the structure or serialization logic hasn't changed, primarily to
@@ -39,12 +42,12 @@ func TestMarshalBlockRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalBlockResponse(t *testing.T) {
 	// create some random bytes
-	// set seed to ensure deterministic random behaviour
-	rand.Seed(1)
 	blocksBytes := make([][]byte, 32)
 	for i := range blocksBytes {
-		blocksBytes[i] = make([]byte, rand.Intn(32)+32) // min 32 length, max 64
-		_, err := rand.Read(blocksBytes[i])
+		// Generate random size between 32 and 64 bytes
+		size := rand.SecureIntRange(32, 65) // min 32, max 64
+		blocksBytes[i] = make([]byte, size)
+		_, err := cryptorand.Read(blocksBytes[i])
 		assert.NoError(t, err)
 	}
 

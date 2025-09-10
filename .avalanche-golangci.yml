@@ -61,7 +61,7 @@ linters:
     - goconst
     - gocritic
     - goprintffuncname
-    # - gosec
+    - gosec
     - govet
     - importas
     - ineffassign

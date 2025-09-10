@@ -5,27 +5,28 @@ package message
 
 import (
 	"encoding/base64"
-	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ava-labs/coreth/utils/rand"
+
+	cryptorand "crypto/rand"
 )
 
 // TestMarshalLeafsRequest asserts that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalLeafsRequest(t *testing.T) {
 	// generate some random code data
-	// set random seed for deterministic random
-	rand.Seed(1)
 
 	startBytes := make([]byte, common.HashLength)
 	endBytes := make([]byte, common.HashLength)
 
-	_, err := rand.Read(startBytes)
+	_, err := cryptorand.Read(startBytes)
 	assert.NoError(t, err)
 
-	_, err = rand.Read(endBytes)
+	_, err = cryptorand.Read(endBytes)
 	assert.NoError(t, err)
 
 	leafsRequest := LeafsRequest{
@@ -56,30 +57,31 @@ func TestMarshalLeafsRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalLeafsResponse(t *testing.T) {
 	// generate some random code data
-	// set random seed for deterministic random
-	rand.Seed(1)
 
 	keysBytes := make([][]byte, 16)
 	valsBytes := make([][]byte, 16)
 	for i := range keysBytes {
 		keysBytes[i] = make([]byte, common.HashLength)
-		valsBytes[i] = make([]byte, rand.Intn(8)+8) // min 8 bytes, max 16 bytes
+		// Generate random size between 8 and 16 bytes
+		size := rand.SecureIntRange(8, 17) // min 8, max 16
+		valsBytes[i] = make([]byte, size)
 
-		_, err := rand.Read(keysBytes[i])
+		_, err := cryptorand.Read(keysBytes[i])
 		assert.NoError(t, err)
-		_, err = rand.Read(valsBytes[i])
+		_, err = cryptorand.Read(valsBytes[i])
 		assert.NoError(t, err)
 	}
 
 	nextKey := make([]byte, common.HashLength)
-	_, err := rand.Read(nextKey)
+	_, err := cryptorand.Read(nextKey)
 	assert.NoError(t, err)
 
 	proofVals := make([][]byte, 4)
 	for i := range proofVals {
-		proofVals[i] = make([]byte, rand.Intn(8)+8) // min 8 bytes, max 16 bytes
+		size := rand.SecureIntRange(8, 17) // min 8, max 16
+		proofVals[i] = make([]byte, size)
 
-		_, err = rand.Read(proofVals[i])
+		_, err = cryptorand.Read(proofVals[i])
 		assert.NoError(t, err)
 	}
 

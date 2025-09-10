@@ -5,11 +5,12 @@ package message
 
 import (
 	"encoding/base64"
-	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/assert"
+
+	cryptorand "crypto/rand"
 )
 
 // TestMarshalCodeRequest asserts that the structure or serialization logic hasn't changed, primarily to
@@ -35,10 +36,8 @@ func TestMarshalCodeRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalCodeResponse(t *testing.T) {
 	// generate some random code data
-	// set random seed for deterministic random
-	rand.Seed(1)
 	codeData := make([]byte, 50)
-	_, err := rand.Read(codeData)
+	_, err := cryptorand.Read(codeData)
 	assert.NoError(t, err)
 
 	codeResponse := CodeResponse{
