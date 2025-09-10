@@ -31,7 +31,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
-	"github.com/ava-labs/coreth/utils"
 )
 
 var (
@@ -41,8 +40,6 @@ var (
 )
 
 var (
-	errNonZeroBlockGasCostGranite = errors.New("non zero block gas cost in Granite - must be 0")
-
 	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )
@@ -389,13 +386,6 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return errNilBlockGasCostApricotPhase4
 		case !headerExtra.BlockGasCost.IsUint64():
 			return fmt.Errorf("too large blockGasCost: %d", headerExtra.BlockGasCost)
-		}
-
-		// In Granite, block gas cost must be exactly 0.
-		if rulesExtra.IsGranite {
-			if !utils.BigEqual(headerExtra.BlockGasCost, common.Big0) {
-				return fmt.Errorf("%w: have %d, expected 0", errNonZeroBlockGasCostGranite, headerExtra.BlockGasCost)
-			}
 		}
 	}
 

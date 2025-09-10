@@ -32,8 +32,6 @@ var (
 	errUnclesUnsupported      = errors.New("uncles unsupported")
 	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
 	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
-	errInvalidBlockGasCost    = errors.New("invalid blockGasCost")
-	errInvalidExtDataGasUsed  = errors.New("invalid extDataGasUsed")
 )
 
 type Mode struct {
@@ -172,7 +170,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 
 	// Enforce BlockGasCost constraints
 	expectedBlockGasCost := customheader.BlockGasCost(
-		config.GetAvalancheRules(header.Time),
+		config,
 		parent,
 		header.Time,
 	)
@@ -311,39 +309,40 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 	timestamp := block.Time()
 	// Verify the BlockGasCost set in the header matches the expected value.
 	blockGasCost := customtypes.BlockGasCost(block)
-	rules := config.GetAvalancheRules(timestamp)
 	expectedBlockGasCost := customheader.BlockGasCost(
-		rules,
+		config,
 		parent,
 		timestamp,
 	)
-
 	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("%w: have %d, want %d", errInvalidBlockGasCost, blockGasCost, expectedBlockGasCost)
+		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
 	}
-	if rules.IsApricotPhase4 {
-		// Validate extDataGasUsed matches expectations
+	if config.IsApricotPhase4(timestamp) {
+		// Validate extDataGasUsed and BlockGasCost match expectations
 		//
 		// NOTE: This is a duplicate check of what is already performed in
 		// blockValidator but is done here for symmetry with FinalizeAndAssemble.
 		if extDataGasUsed == nil {
 			extDataGasUsed = new(big.Int).Set(common.Big0)
 		}
-
 		if blockExtDataGasUsed := customtypes.BlockExtDataGasUsed(block); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
-			return fmt.Errorf("%w: have %d, want %d", errInvalidExtDataGasUsed, blockExtDataGasUsed, extDataGasUsed)
+			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
+		}
+
+		// Verify the block fee was paid.
+		if !eng.consensusMode.ModeSkipBlockFee {
+			if err := customheader.VerifyBlockFee(
+				block.BaseFee(),
+				blockGasCost,
+				block.Transactions(),
+				receipts,
+				contribution,
+			); err != nil {
+				return err
+			}
 		}
 	}
 
-	if rules.IsApricotPhase4 {
-		return customheader.VerifyBlockFee(
-			block.BaseFee(),
-			blockGasCost,
-			block.Transactions(),
-			receipts,
-			contribution,
-		)
-	}
 	return nil
 }
 
@@ -364,31 +363,30 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 
 	configExtra := params.GetExtra(chain.Config())
 	headerExtra := customtypes.GetHeaderExtra(header)
-	rules := configExtra.GetAvalancheRules(header.Time)
 	// Calculate the required block gas cost for this block.
 	headerExtra.BlockGasCost = customheader.BlockGasCost(
-		rules,
+		configExtra,
 		parent,
 		header.Time,
 	)
-	if rules.IsApricotPhase4 {
+	if configExtra.IsApricotPhase4(header.Time) {
 		headerExtra.ExtDataGasUsed = extDataGasUsed
 		if headerExtra.ExtDataGasUsed == nil {
 			headerExtra.ExtDataGasUsed = new(big.Int)
 		}
-	}
 
-	if !eng.consensusMode.ModeSkipBlockFee && rules.IsApricotPhase4 {
-		err = customheader.VerifyBlockFee(
-			header.BaseFee,
-			headerExtra.BlockGasCost,
-			txs,
-			receipts,
-			contribution,
-		)
-	}
-	if err != nil {
-		return nil, err
+		// Verify that this block covers the block fee.
+		if !eng.consensusMode.ModeSkipBlockFee {
+			if err := customheader.VerifyBlockFee(
+				header.BaseFee,
+				headerExtra.BlockGasCost,
+				txs,
+				receipts,
+				contribution,
+			); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// finalize the header.Extra

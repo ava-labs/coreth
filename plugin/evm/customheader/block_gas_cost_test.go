@@ -4,11 +4,9 @@
 package customheader
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
@@ -16,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -89,7 +86,7 @@ func TestBlockGasCost(t *testing.T) {
 			)
 
 			assert.Equal(t, test.expected, BlockGasCost(
-				config.GetAvalancheRules(test.timestamp),
+				config,
 				parent,
 				test.timestamp,
 			))
@@ -317,9 +314,7 @@ func TestVerifyBlockFee(t *testing.T) {
 		txs                    []*types.Transaction
 		receipts               []*types.Receipt
 		extraStateContribution *big.Int
-		rules                  extras.AvalancheRules
-		expectedErrMsg         string
-		expectedErr            error
+		shouldErr              bool
 	}{
 		"tx only base fee": {
 			baseFee:            big.NewInt(100),
@@ -332,9 +327,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 1000},
 			},
 			extraStateContribution: nil,
-			expectedErrMsg:         toWrappedErrorMsg(ErrInsufficientBlockGas, "expected 100000 but got 0"),
-			expectedErr:            ErrInsufficientBlockGas,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              true,
 		},
 		"tx covers exactly block fee": {
 			baseFee:            big.NewInt(100),
@@ -347,7 +340,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: nil,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"txs share block fee": {
 			baseFee:            big.NewInt(100),
@@ -362,7 +355,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: nil,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"txs split block fee": {
 			baseFee:            big.NewInt(100),
@@ -377,7 +370,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: nil,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"split block fee with extra state contribution": {
 			baseFee:            big.NewInt(100),
@@ -390,7 +383,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: big.NewInt(5_000_000),
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"extra state contribution insufficient": {
 			baseFee:                big.NewInt(100),
@@ -399,9 +392,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(9_999_999),
-			expectedErrMsg:         toWrappedErrorMsg(ErrInsufficientBlockGas, "expected 100000 but got 99999"),
-			expectedErr:            ErrInsufficientBlockGas,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              true,
 		},
 		"negative extra state contribution": {
 			baseFee:                big.NewInt(100),
@@ -410,9 +401,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(-1),
-			expectedErrMsg:         toWrappedErrorMsg(errInvalidExtraStateChangeContribution, "-1"),
-			expectedErr:            errInvalidExtraStateChangeContribution,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              true,
 		},
 		"extra state contribution covers block fee": {
 			baseFee:                big.NewInt(100),
@@ -421,7 +410,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(10_000_000),
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"extra state contribution covers more than block fee": {
 			baseFee:                big.NewInt(100),
@@ -430,7 +419,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(10_000_001),
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"tx only base fee after full time window": {
 			baseFee:            big.NewInt(100),
@@ -443,7 +432,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 1000},
 			},
 			extraStateContribution: nil,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 		"tx only base fee after large time window": {
 			baseFee:            big.NewInt(100),
@@ -456,69 +445,28 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 1000},
 			},
 			extraStateContribution: nil,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
-		},
-		"fortuna minimum base fee should fail": {
-			baseFee:                big.NewInt(1),
-			parentBlockGasCost:     big.NewInt(0),
-			timeElapsed:            0,
-			txs:                    nil,
-			receipts:               nil,
-			extraStateContribution: nil,
-			expectedErrMsg:         toWrappedErrorMsg(ErrInsufficientBlockGas, "expected 400000 but got 0"),
-			expectedErr:            ErrInsufficientBlockGas,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Fortuna),
-		},
-		"ap4 invalid base fee (zero)": {
-			baseFee:                big.NewInt(0),
-			parentBlockGasCost:     big.NewInt(0),
-			timeElapsed:            0,
-			txs:                    nil,
-			receipts:               nil,
-			extraStateContribution: nil,
-			expectedErr:            errInvalidBaseFeeApricotPhase4,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.ApricotPhase4),
+			shouldErr:              false,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			parent := customtypes.WithHeaderExtra(
-				&types.Header{
-					Time: 0, // uses timeElapsed to calculate block gas cost
-				},
-				&customtypes.HeaderExtra{
-					BlockGasCost: test.parentBlockGasCost,
-				},
-			)
-			requiredBlockGasCost := BlockGasCost(
-				test.rules,
-				parent,
+			blockGasCost := BlockGasCostWithStep(
+				test.parentBlockGasCost,
+				ap4.BlockGasCostStep,
 				test.timeElapsed,
 			)
+			bigBlockGasCost := new(big.Int).SetUint64(blockGasCost)
 
-			err := VerifyBlockFee(test.baseFee, requiredBlockGasCost, test.txs, test.receipts, test.extraStateContribution)
-			if test.expectedErr != nil {
-				require.ErrorIs(t, err, test.expectedErr)
-			}
-			if test.expectedErrMsg != "" {
-				require.ErrorContains(t, err, test.expectedErrMsg)
-			}
-			if test.expectedErr == nil && test.expectedErrMsg == "" {
-				require.NoError(t, err)
+			if err := VerifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution); err != nil {
+				if !test.shouldErr {
+					t.Fatalf("Unexpected error: %s", err)
+				}
+			} else {
+				if test.shouldErr {
+					t.Fatal("Should have failed verification")
+				}
 			}
 		})
 	}
-}
-
-// Additional focused test for invalid required block gas cost (not uint64).
-func TestVerifyBlockFee_InvalidRequiredBlockGasCost(t *testing.T) {
-	// requiredBlockGasCost > max uint64 to trigger validation error.
-	required := new(big.Int).Exp(big.NewInt(2), big.NewInt(65), nil)
-	err := VerifyBlockFee(big.NewInt(100), required, nil, nil, nil)
-	require.ErrorIs(t, err, errInvalidRequiredBlockGasCostApricotPhase4)
-}
-
-func toWrappedErrorMsg(err error, msg string) string {
-	return fmt.Errorf("%w: %s", err, msg).Error()
 }
