@@ -76,7 +76,7 @@ var Defaults = Config{
 	ReadCacheStrategy:    ffi.CacheAllReads,
 }
 
-func (c Config) BackendConstructor(_ ethdb.Database) triedb.DBOverride {
+func (c Config) BackendConstructor(ethdb.Database) triedb.DBOverride {
 	return New(&c)
 }
 
@@ -135,16 +135,17 @@ func validatePath(path string) error {
 
 	// Check that the directory exists
 	dir := filepath.Dir(path)
-	_, err := os.Stat(dir)
-	if err == nil {
-		return nil // Directory exists
-	}
-	if !os.IsNotExist(err) {
+	switch info, err := os.Stat(dir); {
+	case os.IsNotExist(err):
+		log.Info("Database directory not found, creating", "path", dir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("error creating database directory: %w", err)
+		}
+		return nil
+	case err != nil:
 		return fmt.Errorf("error checking database directory: %w", err)
-	}
-	log.Info("Database directory not found, creating", "path", dir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("error creating database directory: %w", err)
+	case !info.IsDir():
+		return fmt.Errorf("database directory path is not a directory: %s", dir)
 	}
 	return nil
 }
