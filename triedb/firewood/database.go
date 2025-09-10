@@ -155,7 +155,11 @@ func validateConfig(config *Config) error {
 		return errors.New("revisions must be at least 2")
 	}
 
-	if config.ReadCacheStrategy >= ffi.CacheAllReads+1 {
+	switch config.ReadCacheStrategy {
+	case ffi.CacheAllReads:
+	case ffi.CacheBranchReads:
+	case ffi.OnlyCacheWrites:
+	default:
 		return fmt.Errorf("invalid ReadCacheStrategy: %d", config.ReadCacheStrategy)
 	}
 
