@@ -65,7 +65,7 @@ func TestBlockGasCost(t *testing.T) {
 			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
 		},
 		{
-			name:       "granite",
+			name:       "granite_returns_zero",
 			upgrades:   extras.TestGraniteChainConfig.NetworkUpgrades,
 			parentTime: 10,
 			parentCost: big.NewInt(ap4.MaxBlockGasCost),
@@ -470,36 +470,6 @@ func TestVerifyBlockFee(t *testing.T) {
 			expectedErr:            ErrInsufficientBlockGas,
 			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Fortuna),
 		},
-		"granite minimum base fee should not fail ": {
-			baseFee:                big.NewInt(1),
-			parentBlockGasCost:     big.NewInt(0),
-			timeElapsed:            0,
-			txs:                    nil,
-			receipts:               nil,
-			extraStateContribution: nil,
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Granite),
-		},
-		"granite block gas cost = 0 should not fail": {
-			baseFee:                big.NewInt(1),
-			parentBlockGasCost:     big.NewInt(0),
-			timeElapsed:            0,
-			txs:                    nil,
-			receipts:               nil,
-			extraStateContribution: nil,
-			overrideBlockGasCost:   big.NewInt(0),
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Granite),
-		},
-		"granite block gas cost > 0 should fail": {
-			baseFee:                big.NewInt(1),
-			parentBlockGasCost:     big.NewInt(0),
-			timeElapsed:            0,
-			txs:                    nil,
-			receipts:               nil,
-			extraStateContribution: nil,
-			expectedErr:            errNonZeroBlockGasCostGranite,
-			overrideBlockGasCost:   big.NewInt(1),
-			rules:                  extrastest.GetAvalancheRulesFromFork(upgradetest.Granite),
-		},
 		"ap4 invalid base fee (zero)": {
 			baseFee:                big.NewInt(0),
 			parentBlockGasCost:     big.NewInt(0),
@@ -542,18 +512,16 @@ func TestVerifyBlockFee(t *testing.T) {
 				)
 			}
 
-			err := VerifyBlockFee(test.baseFee, blockGasCost, test.txs, test.receipts, test.extraStateContribution, test.rules)
+			err := VerifyBlockFee(test.baseFee, blockGasCost, test.txs, test.receipts, test.extraStateContribution)
 			if test.expectedErr != nil {
 				require.ErrorIs(t, err, test.expectedErr)
-				return
 			}
-
-			if test.expectedErrMsg == "" {
+			if test.expectedErrMsg != "" {
+				require.ErrorContains(t, err, test.expectedErrMsg)
+			}
+			if test.expectedErr == nil && test.expectedErrMsg == "" {
 				require.NoError(t, err)
-				return
 			}
-
-			require.ErrorContains(t, err, test.expectedErrMsg)
 		})
 	}
 }

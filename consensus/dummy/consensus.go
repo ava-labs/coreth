@@ -32,6 +32,8 @@ var (
 	errUnclesUnsupported      = errors.New("uncles unsupported")
 	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
 	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	errInvalidBlockGasCost    = errors.New("invalid blockGasCost")
+	errInvalidExtDataGasUsed  = errors.New("invalid extDataGasUsed")
 )
 
 type Mode struct {
@@ -315,8 +317,9 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		parent,
 		timestamp,
 	)
+
 	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("invalid blockGasCost: have %d, want %d", blockGasCost, expectedBlockGasCost)
+		return fmt.Errorf("%w: have %d, want %d", errInvalidBlockGasCost, blockGasCost, expectedBlockGasCost)
 	}
 	if rules.IsApricotPhase4 {
 		// Validate extDataGasUsed matches expectations
@@ -326,13 +329,10 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		if extDataGasUsed == nil {
 			extDataGasUsed = new(big.Int).Set(common.Big0)
 		}
-		if blockExtDataGasUsed := customtypes.BlockExtDataGasUsed(block); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
-			return fmt.Errorf("invalid extDataGasUsed: have %d, want %d", blockExtDataGasUsed, extDataGasUsed)
-		}
-	}
 
-	if eng.consensusMode.ModeSkipBlockFee {
-		return nil
+		if blockExtDataGasUsed := customtypes.BlockExtDataGasUsed(block); blockExtDataGasUsed == nil || !blockExtDataGasUsed.IsUint64() || blockExtDataGasUsed.Cmp(extDataGasUsed) != 0 {
+			return fmt.Errorf("%w: have %d, want %d", errInvalidExtDataGasUsed, blockExtDataGasUsed, extDataGasUsed)
+		}
 	}
 
 	return customheader.VerifyBlockFee(
@@ -341,7 +341,6 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		block.Transactions(),
 		receipts,
 		contribution,
-		rules,
 	)
 }
 
@@ -376,18 +375,22 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		}
 	}
 
-	if !eng.consensusMode.ModeSkipBlockFee {
-		// Verify that this block covers the block fee.
-		if err := customheader.VerifyBlockFee(
+	if eng.consensusMode.ModeSkipBlockFee {
+		return nil, nil
+	}
+
+	// Verify that this block covers the block fee (AP4+ only).
+	if rules.IsApricotPhase4 {
+		err = customheader.VerifyBlockFee(
 			header.BaseFee,
 			headerExtra.BlockGasCost,
 			txs,
 			receipts,
 			contribution,
-			rules,
-		); err != nil {
-			return nil, err
-		}
+		)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// finalize the header.Extra

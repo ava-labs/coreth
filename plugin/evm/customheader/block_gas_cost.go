@@ -15,7 +15,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/ava-labs/coreth/utils"
 )
 
 var (
@@ -23,7 +22,6 @@ var (
 	errBlockGasCostNil                          = errors.New("block gas cost is nil")
 	errExtDataGasUsedNil                        = errors.New("extDataGasUsed is nil")
 	errNoGasUsed                                = errors.New("no gas used")
-	errNonZeroBlockGasCostGranite               = errors.New("non-zero block gas cost in Granite - must be 0")
 	ErrInsufficientBlockGas                     = errors.New("insufficient gas to cover the block cost")
 	errInvalidExtraStateChangeContribution      = errors.New("invalid extra state change contribution")
 	errInvalidBaseFeeApricotPhase4              = errors.New("invalid base fee in apricot phase 4")
@@ -145,18 +143,7 @@ func VerifyBlockFee(
 	txs []*types.Transaction,
 	receipts []*types.Receipt,
 	extraStateChangeContribution *big.Int,
-	rules extras.AvalancheRules,
 ) error {
-	switch {
-	case rules.IsGranite:
-		if !utils.BigEqual(requiredBlockGasCost, common.Big0) {
-			return fmt.Errorf("%w: have %d, expected 0", errNonZeroBlockGasCostGranite, requiredBlockGasCost)
-		}
-		return nil
-	case !rules.IsApricotPhase4:
-		return nil
-	}
-
 	if baseFee == nil || baseFee.Sign() <= 0 {
 		return fmt.Errorf("%w: %d", errInvalidBaseFeeApricotPhase4, baseFee)
 	}
