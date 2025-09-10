@@ -710,7 +710,7 @@ func BenchmarkAtomicTrieIterate(b *testing.B) {
 
 	hash, height := atomicTrie.LastCommitted()
 	require.Equal(b, lastAcceptedHeight, height)
-	require.NotEqual(b, common.Hash{}, hash)
+	require.NotZero(b, hash)
 
 	b.ReportAllocs()
 	b.ResetTimer()
