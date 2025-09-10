@@ -75,7 +75,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 
 	require.False(txRequested, "tx should not have been requested")
 	txGossipedLock.Lock()
-	require.Equal(0, txGossiped, "tx should not have been gossiped")
+	require.Zero(txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 	require.True(vm.AtomicMempool.Has(tx.ID()))
 
@@ -87,7 +87,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	vm.Ctx.Lock.Lock()
 
 	txGossipedLock.Lock()
-	require.Equal(0, txGossiped, "tx should not have been gossiped")
+	require.Zero(txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 
 	// show that conflicting tx is not added to mempool
@@ -105,7 +105,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 
 	require.False(txRequested, "tx should not have been requested")
 	txGossipedLock.Lock()
-	require.Equal(0, txGossiped, "tx should not have been gossiped")
+	require.Zero(txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
 	require.False(vm.AtomicMempool.Has(conflictingTx.ID()), "conflicting tx should not be in the atomic mempool")
 }
