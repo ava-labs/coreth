@@ -175,7 +175,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 		header.Time,
 	)
 	if !utils.BigEqual(headerExtra.BlockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("%w: have %d, want %d", ErrInvalidBlockGasCost, headerExtra.BlockGasCost, expectedBlockGasCost)
+		return fmt.Errorf("invalid block gas cost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
 	}
 
 	// Verify ExtDataGasUsed not present before AP4
