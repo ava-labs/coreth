@@ -119,12 +119,18 @@ func (lrh *leafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.N
 
 	var leafsResponse message.LeafsResponse
 	// pool response's key/val allocations
-	leafsResponse.Keys = *lrh.pool.Get().(*[][]byte)
-	leafsResponse.Vals = *lrh.pool.Get().(*[][]byte)
+	// Reset lengths to 0 on checkout to avoid stale elements from prior uses
+	keysSlicePtr := lrh.pool.Get().(*[][]byte)
+	valsSlicePtr := lrh.pool.Get().(*[][]byte)
+	leafsResponse.Keys = (*keysSlicePtr)[:0]
+	leafsResponse.Vals = (*valsSlicePtr)[:0]
 	defer func() {
-		for i := range leafsResponse.Keys {
-			// clear out slices before returning them to the pool
-			// to avoid memory leak.
+		// clear out slices before returning them to the pool to avoid memory leaks
+		n := len(leafsResponse.Keys)
+		if len(leafsResponse.Vals) < n {
+			n = len(leafsResponse.Vals)
+		}
+		for i := 0; i < n; i++ {
 			leafsResponse.Keys[i] = nil
 			leafsResponse.Vals[i] = nil
 		}
