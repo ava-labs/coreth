@@ -95,16 +95,13 @@ func BlockGasCostWithStep(
 // transactions. The only correctness check performed is that the sum of all
 // tips is >= the required block fee.
 //
-// This function will return nil for all return values prior to Apricot Phase 4,
-// and 0 for all return values in Granite.
+// This function will return nil for all return values prior to Apricot Phase 4.
 func EstimateRequiredTip(
 	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
 	extra := customtypes.GetHeaderExtra(header)
 	switch {
-	case config.IsGranite(header.Time):
-		return big.NewInt(0), nil
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:
