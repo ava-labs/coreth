@@ -99,11 +99,17 @@ func New(config *Config) *Database {
 		log.Crit("firewood: config must be provided")
 	}
 
-	err := validatePath(config.FilePath)
+	err := validateConfig(config)
 	if err != nil {
 		log.Crit("firewood: error validating config", "error", err)
 	}
 
+	return newWithValidConfig(config)
+}
+
+// newWithValidConfig creates a new Firewood database with a validated config.
+// The config is guaranteed to be non-nil and valid.
+func newWithValidConfig(config *Config) *Database {
 	fw, err := ffi.New(config.FilePath, &ffi.Config{
 		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		FreeListCacheEntries: config.FreeListCacheEntries,
@@ -126,6 +132,34 @@ func New(config *Config) *Database {
 			Root: common.Hash(currentRoot),
 		},
 	}
+}
+
+func validateConfig(config *Config) error {
+	if config == nil {
+		return errors.New("config must be provided")
+	}
+
+	if err := validatePath(config.FilePath); err != nil {
+		return fmt.Errorf("invalid file path: %w", err)
+	}
+
+	if config.CleanCacheSize <= 0 {
+		return errors.New("cleanCacheSize must be greater than 0")
+	}
+
+	if config.FreeListCacheEntries == 0 {
+		return errors.New("freeListCacheEntries must be greater than 0")
+	}
+
+	if config.Revisions < 2 {
+		return errors.New("revisions must be at least 2")
+	}
+
+	if config.ReadCacheStrategy >= ffi.CacheAllReads+1 {
+		return fmt.Errorf("invalid ReadCacheStrategy: %d", config.ReadCacheStrategy)
+	}
+
+	return nil
 }
 
 func validatePath(path string) error {

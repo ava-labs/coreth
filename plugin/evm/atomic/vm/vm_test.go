@@ -150,10 +150,6 @@ func testImportMissingUTXOs(t *testing.T, scheme string) {
 
 	// make another VM which is missing the UTXO in shared memory
 	vm2 := newAtomicTestVM()
-	tvm = vmtest.SetupTestVM(t, vm2, vmtest.TestVMConfig{
-		Fork:   &fork,
-		Scheme: scheme,
-	})
 	defer func() {
 		require.NoError(t, vm2.Shutdown(context.Background()))
 	}()

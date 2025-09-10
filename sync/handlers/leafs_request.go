@@ -64,7 +64,10 @@ func NewLeafsRequestHandler(trieDB *triedb.Database, trieKeyLength int, snapshot
 		stats:            syncerStats,
 		trieKeyLength:    trieKeyLength,
 		pool: sync.Pool{
-			New: func() interface{} { return make([][]byte, 0, maxLeavesLimit) },
+			New: func() interface{} {
+				slice := make([][]byte, 0, maxLeavesLimit)
+				return &slice
+			},
 		},
 	}
 }
@@ -116,8 +119,8 @@ func (lrh *leafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.N
 
 	var leafsResponse message.LeafsResponse
 	// pool response's key/val allocations
-	leafsResponse.Keys = lrh.pool.Get().([][]byte)
-	leafsResponse.Vals = lrh.pool.Get().([][]byte)
+	leafsResponse.Keys = *lrh.pool.Get().(*[][]byte)
+	leafsResponse.Vals = *lrh.pool.Get().(*[][]byte)
 	defer func() {
 		for i := range leafsResponse.Keys {
 			// clear out slices before returning them to the pool
@@ -125,8 +128,8 @@ func (lrh *leafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.N
 			leafsResponse.Keys[i] = nil
 			leafsResponse.Vals[i] = nil
 		}
-		lrh.pool.Put(leafsResponse.Keys[:0])
-		lrh.pool.Put(leafsResponse.Vals[:0])
+		lrh.pool.Put(&leafsResponse.Keys)
+		lrh.pool.Put(&leafsResponse.Vals)
 	}()
 
 	responseBuilder := &responseBuilder{
