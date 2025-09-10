@@ -245,10 +245,8 @@ func TestCheckPrecompilesCompatible(t *testing.T) {
 				if tt.expectedErrContains != "" {
 					assert.Contains(t, err.Error(), tt.expectedErrContains, "Error message should contain expected text")
 				}
-			} else {
-				if err != nil {
-					t.Errorf("Expected no error for test case %s, but got: %v", tt.name, err)
-				}
+			} else if err != nil {
+				t.Errorf("Expected no error for test case %s, but got: %v", tt.name, err)
 			}
 		})
 	}
