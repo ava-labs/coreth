@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"testing"
@@ -108,7 +109,7 @@ func TestCodeRequestHandler(t *testing.T) {
 				t.Fatalf("Unexpected length of code data expected %d != %d", len(expectedResponse), len(response.Data))
 			}
 			for i, code := range expectedResponse {
-				// require.True(t, bytes.Equal(code, response.Data[i]), "code bytes mismatch at index %d", i)
+				require.True(t, bytes.Equal(code, response.Data[i]), "code bytes mismatch at index %d", i)
 				require.Equal(t, code, response.Data[i], "code bytes mismatch at index %d", i)
 			}
 			test.verifyStats(t)

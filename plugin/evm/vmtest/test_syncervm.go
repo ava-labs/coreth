@@ -493,7 +493,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	require.NoError(err)
 	require.Equal(commonEng.StateSyncDone, msg)
 
-	// If the test is expected to error, require the correct error is returned and finish the test.
+	// If the test is expected to error, require that the correct error is returned and finish the test.
 	err = syncerVM.SyncerClient().Error()
 	if test.expectedErr != nil {
 		require.ErrorIs(err, test.expectedErr)

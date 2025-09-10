@@ -476,10 +476,10 @@ func TestStatefulPrecompile(t *testing.T) {
 			// Place gas remaining check before error check, so that it is not skipped when there is an error
 			require.Equalf(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining (%d of %d)", gasRemaining, test.gasInput)
 
-require.ErrorIs(t, test.expectedErr, err, "expected error to match")
+			require.ErrorIs(t, test.expectedErr, err, "expected error to match")
 
-// If there was no error, check results
-if err != nil {
+			// If there was no error, check results
+			if err != nil {
 				require.Equal(t, test.expectedResult, ret, "unexpected return value")
 				require.Equal(t, test.expectedErr, err, "expected error to match")
 				return

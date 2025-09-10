@@ -118,14 +118,13 @@ func TestGetCode(t *testing.T) {
 			}
 
 			codeBytes, err := stateSyncClient.GetCode(ctx, codeHashes)
+			require.ErrorIs(t, err, test.expectedErr)
 			// If we expect an error, require that one occurred and return
 			if test.expectedErr != nil {
-				require.ErrorIs(t, err, test.expectedErr)
 				require.EqualValues(t, 2, testNetClient.numCalls)
 				return
 			}
-			// Otherwise, require there was no error and that the result is as expected
-			require.NoError(t, err)
+			// Otherwise, require that the result is as expected
 			require.Len(t, codeBytes, len(expectedCode))
 			for i, code := range codeBytes {
 				require.Equal(t, expectedCode[i], code)

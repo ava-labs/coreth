@@ -472,7 +472,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 			require.NoError(t, backend.ApplyToSharedMemory(test.lastAcceptedHeight))
 
 			testOps := func() {
-				// require ops were applied as expected
+				// require that ops were applied as expected
 				for height, ops := range operationsMap {
 					if test.expectOpsApplied(height) {
 						sharedMemories.AssertOpsApplied(t, ops)
@@ -491,7 +491,7 @@ func TestApplyToSharedMemory(t *testing.T) {
 			// reinitialize the atomic trie
 			_, err = NewAtomicBackend(sharedMemories.ThisChain, nil, repo, test.lastAcceptedHeight, common.Hash{}, test.commitInterval)
 			require.NoError(t, err)
-			// require ops were applied as expected
+			// require that ops were applied as expected
 			testOps()
 		})
 	}
