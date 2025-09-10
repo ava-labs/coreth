@@ -32,7 +32,7 @@ var (
 	errUnclesUnsupported      = errors.New("uncles unsupported")
 	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
 	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
-	errInvalidBlockGasCost    = errors.New("invalid blockGasCost")
+	ErrInvalidBlockGasCost    = errors.New("invalid blockGasCost")
 	errInvalidExtDataGasUsed  = errors.New("invalid extDataGasUsed")
 )
 
@@ -177,7 +177,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 		header.Time,
 	)
 	if !utils.BigEqual(headerExtra.BlockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("invalid block gas cost: have %d, want %d", headerExtra.BlockGasCost, expectedBlockGasCost)
+		return fmt.Errorf("%w: have %d, want %d", ErrInvalidBlockGasCost, headerExtra.BlockGasCost, expectedBlockGasCost)
 	}
 
 	// Verify ExtDataGasUsed not present before AP4
@@ -319,7 +319,7 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 	)
 
 	if !utils.BigEqual(blockGasCost, expectedBlockGasCost) {
-		return fmt.Errorf("%w: have %d, want %d", errInvalidBlockGasCost, blockGasCost, expectedBlockGasCost)
+		return fmt.Errorf("%w: have %d, want %d", ErrInvalidBlockGasCost, blockGasCost, expectedBlockGasCost)
 	}
 	if rules.IsApricotPhase4 {
 		// Validate extDataGasUsed matches expectations

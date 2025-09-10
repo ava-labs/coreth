@@ -2211,7 +2211,7 @@ func TestGraniteInvalidBlockGasCost(t *testing.T) {
 	require.NoError(t, err)
 
 	err = modifiedBlk.Verify(context.Background())
-	require.ErrorIs(t, err, errNonZeroBlockGasCostGranite)
+	require.ErrorIs(t, err, dummy.ErrInvalidBlockGasCost)
 }
 
 // newSignedLegacyTx builds a legacy transaction and signs it using the

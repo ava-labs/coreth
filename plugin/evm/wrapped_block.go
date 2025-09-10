@@ -40,8 +40,6 @@ var (
 )
 
 var (
-	errNonZeroBlockGasCostGranite = errors.New("non zero block gas cost in Granite - must be 0")
-
 	ap0MinGasPrice = big.NewInt(ap0.MinGasPrice)
 	ap1MinGasPrice = big.NewInt(ap1.MinGasPrice)
 )

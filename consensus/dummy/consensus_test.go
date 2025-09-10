@@ -51,7 +51,7 @@ func TestGraniteEnforcesZeroBlockGasCost(t *testing.T) {
 		{
 			name:         "non zero block gas cost should error",
 			blockGasCost: big.NewInt(1),
-			expectedErr:  errInvalidBlockGasCost,
+			expectedErr:  ErrInvalidBlockGasCost,
 		},
 	}
 
