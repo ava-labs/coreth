@@ -134,7 +134,7 @@ func (m *Mempool) checkConflictTx(tx *atomic.Tx) (uint256.Int, ids.ID, []*atomic
 	var (
 		highestGasPrice             uint256.Int
 		highestGasPriceConflictTxID ids.ID
-		conflictingTxs              = make([]*atomic.Tx, 0, len(utxoSet))
+		conflictingTxs              []*atomic.Tx //nolint:prealloc
 	)
 	for utxoID := range utxoSet {
 		// Get current gas price of the existing tx in the mempool
