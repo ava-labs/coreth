@@ -335,13 +335,16 @@ func (eng *DummyEngine) Finalize(chain consensus.ChainHeaderReader, block *types
 		}
 	}
 
-	return customheader.VerifyBlockFee(
-		block.BaseFee(),
-		blockGasCost,
-		block.Transactions(),
-		receipts,
-		contribution,
-	)
+	if rules.IsApricotPhase4 {
+		return customheader.VerifyBlockFee(
+			block.BaseFee(),
+			blockGasCost,
+			block.Transactions(),
+			receipts,
+			contribution,
+		)
+	}
+	return nil
 }
 
 func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, state *state.StateDB, txs []*types.Transaction,
@@ -375,12 +378,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		}
 	}
 
-	if eng.consensusMode.ModeSkipBlockFee {
-		return nil, nil
-	}
-
-	// Verify that this block covers the block fee (AP4+ only).
-	if rules.IsApricotPhase4 {
+	if !eng.consensusMode.ModeSkipBlockFee && rules.IsApricotPhase4 {
 		err = customheader.VerifyBlockFee(
 			header.BaseFee,
 			headerExtra.BlockGasCost,

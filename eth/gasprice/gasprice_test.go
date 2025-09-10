@@ -381,6 +381,16 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// NOTE: [Oracle.SuggestTipCap] does NOT simply return the "required" (minimum) tip.
+// The oracle computes a percentile of recent on-chain tips within a time/blocks lookback
+// window and applies a small floor (e.g., 1 wei in tests):
+//
+//	suggested = max(floor, recent-percentile, required-minimum)
+//
+// Therefore, even when the required minimum is 0 (e.g., Granite where
+// BlockGasCost is 0), the suggested tip is still at least the floor, and can be
+// higher if recent tips are higher. The cases below exercise behavior across
+// forks using the same percentile logic and floor.
 func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 	cases := []struct {
 		chainConfig *params.ChainConfig
