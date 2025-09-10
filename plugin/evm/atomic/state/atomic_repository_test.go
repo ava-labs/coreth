@@ -107,9 +107,7 @@ func verifyTxs(t testing.TB, repo *AtomicRepository, txMap map[uint64][]*atomic.
 func TestAtomicRepositoryReadWriteSingleTx(t *testing.T) {
 	db := versiondb.New(memdb.New())
 	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	txMap := make(map[uint64][]*atomic.Tx)
 
 	writeTxs(t, repo, 1, 100, constTxsPerHeight(1), txMap, nil)
@@ -119,9 +117,7 @@ func TestAtomicRepositoryReadWriteSingleTx(t *testing.T) {
 func TestAtomicRepositoryReadWriteMultipleTxs(t *testing.T) {
 	db := versiondb.New(memdb.New())
 	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	txMap := make(map[uint64][]*atomic.Tx)
 
 	writeTxs(t, repo, 1, 100, constTxsPerHeight(10), txMap, nil)
@@ -134,16 +130,12 @@ func TestAtomicRepositoryPreAP5Migration(t *testing.T) {
 	acceptedAtomicTxDB := prefixdb.New(atomicTxIDDBPrefix, db)
 	txMap := make(map[uint64][]*atomic.Tx)
 	addTxs(t, atomictest.TestTxCodec, acceptedAtomicTxDB, 1, 100, 1, txMap)
-	if err := db.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Commit())
 
 	// Ensure the atomic repository can correctly migrate the transactions
 	// from the old accepted atomic tx DB to add the height index.
 	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, 100)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	verifyTxs(t, repo, txMap)
 
 	writeTxs(t, repo, 100, 150, constTxsPerHeight(1), txMap, nil)
@@ -158,16 +150,12 @@ func TestAtomicRepositoryPostAP5Migration(t *testing.T) {
 	txMap := make(map[uint64][]*atomic.Tx)
 	addTxs(t, atomictest.TestTxCodec, acceptedAtomicTxDB, 1, 100, 1, txMap)
 	addTxs(t, atomictest.TestTxCodec, acceptedAtomicTxDB, 100, 200, 10, txMap)
-	if err := db.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, db.Commit())
 
 	// Ensure the atomic repository can correctly migrate the transactions
 	// from the old accepted atomic tx DB to add the height index.
 	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, 200)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	verifyTxs(t, repo, txMap)
 
 	writeTxs(t, repo, 200, 300, constTxsPerHeight(10), txMap, nil)
@@ -181,13 +169,9 @@ func benchAtomicRepositoryIndex10_000(b *testing.B, maxHeight uint64, txsPerHeig
 	txMap := make(map[uint64][]*atomic.Tx)
 
 	addTxs(b, atomictest.TestTxCodec, acceptedAtomicTxDB, 0, maxHeight, txsPerHeight, txMap)
-	if err := db.Commit(); err != nil {
-		b.Fatal(err)
-	}
+	require.NoError(b, db.Commit())
 	repo, err := NewAtomicTxRepository(db, atomictest.TestTxCodec, maxHeight)
-	if err != nil {
-		b.Fatal(err)
-	}
+	require.NoError(b, err)
 	verifyTxs(b, repo, txMap)
 }
 
