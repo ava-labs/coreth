@@ -180,10 +180,10 @@ func TestGetBlocks(t *testing.T) {
 		return blockBytes
 	}
 	tests := map[string]struct {
-		request         message.BlockRequest
-		getResponse     func(t *testing.T, request message.BlockRequest) []byte
-		requireResponse func(t *testing.T, response []*types.Block)
-		expectedErr     string
+		request        message.BlockRequest
+		getResponse    func(t *testing.T, request message.BlockRequest) []byte
+		assertResponse func(t *testing.T, response []*types.Block)
+		expectedErr    string
 	}{
 		"normal resonse": {
 			request: message.BlockRequest{
@@ -203,7 +203,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return response
 			},
-			requireResponse: func(t *testing.T, response []*types.Block) {
+			assertResponse: func(t *testing.T, response []*types.Block) {
 				require.Len(t, response, 16)
 			},
 		},
@@ -227,7 +227,7 @@ func TestGetBlocks(t *testing.T) {
 				return response
 			},
 			// If the server returns fewer than requested blocks, we should consider it valid
-			requireResponse: func(t *testing.T, response []*types.Block) {
+			assertResponse: func(t *testing.T, response []*types.Block) {
 				require.Len(t, response, 11)
 			},
 		},
@@ -388,7 +388,7 @@ func TestGetBlocks(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			test.requireResponse(t, blockResponse)
+			test.assertResponse(t, blockResponse)
 		})
 	}
 }
