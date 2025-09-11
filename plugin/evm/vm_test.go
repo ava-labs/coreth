@@ -2173,8 +2173,8 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 		fork                  upgradetest.Fork
 		deployGasPrice        *big.Int
 		txGasPrice            *big.Int
-		preDeployTime         *int64
-		setTime               *int64
+		preDeployTime         int64
+		setTime               int64
 		refillCapacityFortuna bool
 		wantIncluded          bool
 		wantReceiptStatus     uint64
@@ -2194,7 +2194,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			fork:                  upgradetest.Fortuna,
 			deployGasPrice:        big.NewInt(ap0.MinGasPrice),
 			txGasPrice:            big.NewInt(ap0.MinGasPrice),
-			setTime:               &[]int64{params.InvalidateDelegateUnix + 1}[0],
+			setTime:               params.InvalidateDelegateUnix + 1,
 			refillCapacityFortuna: true,
 			wantIncluded:          false,
 		},
@@ -2203,7 +2203,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			fork:                  upgradetest.Fortuna,
 			deployGasPrice:        big.NewInt(ap0.MinGasPrice),
 			txGasPrice:            big.NewInt(ap0.MinGasPrice),
-			preDeployTime:         &[]int64{params.InvalidateDelegateUnix - acp176.TimeToFillCapacity - 1}[0],
+			preDeployTime:         params.InvalidateDelegateUnix - acp176.TimeToFillCapacity - 1,
 			refillCapacityFortuna: true,
 			wantIncluded:          true,
 			wantReceiptStatus:     types.ReceiptStatusSuccessful,
@@ -2218,14 +2218,14 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			})
 			defer vm.Shutdown(ctx)
 
-			if tt.preDeployTime != nil {
-				vm.clock.Set(time.Unix(*tt.preDeployTime, 0))
+			if tt.preDeployTime != 0 {
+				vm.clock.Set(time.Unix(tt.preDeployTime, 0))
 			}
 
 			contractAddr := deployContract(t, ctx, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
 
-			if tt.setTime != nil {
-				vm.clock.Set(time.Unix(*tt.setTime, 0))
+			if tt.setTime != 0 {
+				vm.clock.Set(time.Unix(tt.setTime, 0))
 			}
 
 			if tt.refillCapacityFortuna {
