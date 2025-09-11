@@ -129,6 +129,10 @@ func BlockGasCost(b *ethtypes.Block) *big.Int {
 	return new(big.Int).Set(cost)
 }
 
+func BlockTimeMilliseconds(b *ethtypes.Block) *uint64 {
+	return GetHeaderExtra(b.Header()).TimeMilliseconds
+}
+
 func CalcExtDataHash(extdata []byte) common.Hash {
 	if len(extdata) == 0 {
 		return EmptyExtDataHash

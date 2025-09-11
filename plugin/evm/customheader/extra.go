@@ -7,20 +7,30 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 )
 
 var (
-	errInvalidExtraPrefix = errors.New("invalid header.Extra prefix")
-	errIncorrectFeeState  = errors.New("incorrect fee state")
-	errInvalidExtraLength = errors.New("invalid header.Extra length")
+	// Max time from current time allowed for blocks, before they're considered future blocks
+	// and fail verification
+	MaxFutureBlockTime = 10 * time.Second
+
+	ErrBlockTooFarInFuture           = errors.New("block timestamp is too far in the future")
+	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
+	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
+	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
+	errInvalidExtraPrefix            = errors.New("invalid header.Extra prefix")
+	errIncorrectFeeState             = errors.New("incorrect fee state")
+	errInvalidExtraLength            = errors.New("invalid header.Extra length")
 )
 
 // ExtraPrefix returns what the prefix of the header's Extra field should be
@@ -160,6 +170,35 @@ func VerifyExtra(rules extras.AvalancheRules, extra []byte) error {
 				ap0.MaximumExtraDataSize,
 				extraLen,
 			)
+		}
+	}
+	return nil
+}
+
+func VerifyTime(extraConfig *extras.ChainConfig, header *types.Header, currentTime time.Time) error {
+	// Make sure the block isn't too far in the future
+	if maxBlockTime := uint64(currentTime.Add(MaxFutureBlockTime).Unix()); header.Time > maxBlockTime {
+		return fmt.Errorf("%w: %d > allowed %d", ErrBlockTooFarInFuture, header.Time, maxBlockTime)
+	}
+
+	// Validate TimeMilliseconds field
+	headerExtra := customtypes.GetHeaderExtra(header)
+	switch {
+	case extraConfig.IsGranite(header.Time):
+		if headerExtra.TimeMilliseconds == nil {
+			return ErrTimeMillisecondsRequired
+		}
+		if header.Time != *headerExtra.TimeMilliseconds/1000 {
+			return fmt.Errorf("%w: header.Time (%d) != TimeMilliseconds/1000 = (%d)",
+				ErrTimeMillisecondsMismatched,
+				header.Time,
+				*headerExtra.TimeMilliseconds/1000,
+			)
+		}
+	default:
+		// Before Granite, TimeMilliseconds should be nil
+		if headerExtra.TimeMilliseconds != nil {
+			return ErrTimeMillisecondsBeforeGranite
 		}
 	}
 	return nil

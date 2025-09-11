@@ -46,6 +46,7 @@ import (
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customheader"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -183,6 +184,13 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
 		header.ParentBeaconRoot = w.beaconRoot
+	}
+
+	// Add TimeMilliseconds if Granite is active.
+	if chainExtra.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		timeMilliseconds := uint64(tstart.UnixMilli())
+		headerExtra.TimeMilliseconds = &timeMilliseconds
 	}
 
 	if w.coinbase == (common.Address{}) {
