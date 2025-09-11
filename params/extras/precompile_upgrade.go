@@ -10,7 +10,6 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 
-	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/utils"
@@ -190,9 +189,7 @@ func (c *ChainConfig) checkPrecompilesCompatible(precompileUpgrades []Precompile
 // Upgrades that have already gone into effect cannot be modified or absent from [precompileUpgrades].
 func (c *ChainConfig) checkPrecompileCompatible(address common.Address, precompileUpgrades []PrecompileUpgrade, time uint64) *ethparams.ConfigCompatError {
 	// All active upgrades (from nil to [lastTimestamp]) must match.
-	storedUpgrades := append([]PrecompileUpgrade{}, c.PrecompileUpgrades...)
-	storedUpgrades = append(storedUpgrades, c.implicitPrecompileUpgrades()...)
-	activeUpgrades := c.GetActivatingPrecompileConfigs(address, nil, time, storedUpgrades)
+	activeUpgrades := c.GetActivatingPrecompileConfigs(address, nil, time, c.PrecompileUpgrades)
 	newUpgrades := c.GetActivatingPrecompileConfigs(address, nil, time, precompileUpgrades)
 
 	// Check activated upgrades are still present.
@@ -225,19 +222,6 @@ func (c *ChainConfig) checkPrecompileCompatible(address common.Address, precompi
 	}
 
 	return nil
-}
-
-// implicitPrecompileUpgrades returns any precompile upgrades that are implied by
-// the network upgrade schedule but are not serialized in the stored chain config.
-// This ensures compatibility checks consider defaults that were in effect on chain
-// even if not present in the persisted config payload.
-func (c *ChainConfig) implicitPrecompileUpgrades() []PrecompileUpgrade {
-	var upgrades []PrecompileUpgrade
-	// If Durango is scheduled, Warp is enabled by default at Durango.
-	if c.DurangoBlockTimestamp != nil {
-		upgrades = append(upgrades, PrecompileUpgrade{Config: warpcontract.NewDefaultConfig(c.DurangoBlockTimestamp)})
-	}
-	return upgrades
 }
 
 // EnabledStatefulPrecompiles returns current stateful precompile configs that are enabled at [blockTimestamp].

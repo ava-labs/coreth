@@ -105,9 +105,10 @@ type AvalancheContext struct {
 type ChainConfig struct {
 	NetworkUpgrades // Config for timestamps that enable network upgrades.
 
+	// TODO: determine why this isn't serialized - it seems like it should be
 	AvalancheContext `json:"-"` // Avalanche specific context set during VM initialization. Not serialized.
 
-	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Not serialized.
+	UpgradeConfig // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles).
 }
 
 //nolint:revive // General-purpose types lose the meaning of args if unused ones are removed
