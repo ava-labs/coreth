@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/upgrade"
-	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
@@ -612,11 +610,6 @@ func TestVerifyExtra(t *testing.T) {
 			require.ErrorIs(t, err, test.expected)
 		})
 	}
-}
-
-func getAvalancheRulesFromFork(fork upgradetest.Fork) extras.AvalancheRules {
-	upgrades := extras.GetNetworkUpgrades(upgradetest.GetConfig(fork))
-	return upgrades.GetAvalancheRules(uint64(upgrade.InitiallyActiveTime.Unix()))
 }
 
 func TestVerifyTime(t *testing.T) {

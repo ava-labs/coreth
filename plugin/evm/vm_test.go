@@ -2054,7 +2054,8 @@ func TestTimeSemanticVerify(t *testing.T) {
 			require.NoError(t, err)
 
 			vm.clock.Set(timestamp) // set current time to base for time checks
-			require.ErrorIs(t, modifiedBlk.Verify(context.Background()), test.expectedError)
+			err = modifiedBlk.Verify(context.Background())
+			require.ErrorIs(t, err, test.expectedError)
 		})
 	}
 }

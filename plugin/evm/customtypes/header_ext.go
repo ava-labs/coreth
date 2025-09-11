@@ -219,7 +219,7 @@ type HeaderSerializable struct {
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
-	// TimeMilliseconds was added by Grainte and is ignored in legacy headers.
+	// TimeMilliseconds was added by Granite and is ignored in legacy headers.
 	TimeMilliseconds *uint64 `json:"timeMilliseconds" rlp:"optional"`
 }
 
