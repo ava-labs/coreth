@@ -322,14 +322,12 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 		}
 		// Granite: set TimeMilliseconds
 		if confExtra.IsGranite(g.Timestamp) {
-			fmt.Println("Setting TimeMilliseconds in genesis block")
 			headerExtra.TimeMilliseconds = new(uint64)
 		}
 	}
 
 	// Create the genesis block to use the block hash
 	block := types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil))
-	fmt.Println("Block hash:", block.Hash().Hex())
 	triedbOpt := stateconf.WithTrieDBUpdatePayload(common.Hash{}, block.Hash())
 
 	if _, err := statedb.Commit(0, false, stateconf.WithTrieDBUpdateOpts(triedbOpt)); err != nil {

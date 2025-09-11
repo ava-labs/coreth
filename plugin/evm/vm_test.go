@@ -1271,6 +1271,101 @@ func testAcceptReorg(t *testing.T, scheme string) {
 	}
 }
 
+func TestTimeSemanticVerify(t *testing.T) {
+	timestamp := time.Unix(1714339200, 123_456_789)
+	cases := []struct {
+		name             string
+		fork             upgradetest.Fork
+		timeSeconds      uint64
+		timeMilliseconds *uint64
+		expectedError    error
+	}{
+		{
+			name:             "Fortuna without TimeMilliseconds",
+			fork:             upgradetest.Fortuna,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: nil,
+		},
+		{
+			name:             "Granite with TimeMilliseconds",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli())),
+		},
+		{
+			name:             "Fortuna with TimeMilliseconds",
+			fork:             upgradetest.Fortuna,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli())),
+			expectedError:    customheader.ErrTimeMillisecondsBeforeGranite,
+		},
+		{
+			name:             "Granite without TimeMilliseconds",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: nil,
+			expectedError:    customheader.ErrTimeMillisecondsRequired,
+		},
+		{
+			name:             "Granite with mismatched TimeMilliseconds",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli()) + 1000),
+			expectedError:    customheader.ErrTimeMillisecondsMismatched,
+		},
+		{
+			name:             "Block too far in the future",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Add(2 * time.Hour).Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.Add(2 * time.Hour).UnixMilli())),
+			expectedError:    customheader.ErrBlockTooFarInFuture,
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			vm := newDefaultTestVM()
+			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &test.fork,
+			})
+
+			defer func() {
+				require.NoError(t, vm.Shutdown(context.Background()))
+			}()
+
+			// Create a block
+			signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
+			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+			require.NoError(t, err)
+
+			// Modify the header to have the desired time values
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			modifiedHeader := types.CopyHeader(ethBlk.Header())
+			modifiedHeader.Time = test.timeSeconds
+			modifiedExtra := customtypes.GetHeaderExtra(modifiedHeader)
+			modifiedExtra.TimeMilliseconds = test.timeMilliseconds
+
+			// Build new block with modified header
+			receipts := vm.blockChain.GetReceiptsByHash(ethBlk.Hash())
+			modifiedBlock := customtypes.NewBlockWithExtData(
+				modifiedHeader,
+				ethBlk.Transactions(),
+				nil,
+				receipts,
+				trie.NewStackTrie(nil),
+				customtypes.BlockExtData(ethBlk),
+				false,
+			)
+			modifiedBlk, err := wrapBlock(modifiedBlock, vm)
+			require.NoError(t, err)
+
+			vm.clock.Set(timestamp) // set current time to base for time checks
+			err = modifiedBlk.Verify(context.Background())
+			require.ErrorIs(t, err, test.expectedError)
+		})
+	}
+}
+
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {
@@ -1954,109 +2049,6 @@ func TestCreateHandlers(t *testing.T) {
 	// All other elements should have an error indicating there's no response
 	for _, elem := range batch[1:] {
 		require.ErrorIs(t, elem.Error, rpc.ErrMissingBatchResponse)
-	}
-}
-
-func TestTimeSemanticVerify(t *testing.T) {
-	timestamp := time.Unix(1714339200, 123_456_789)
-	cases := []struct {
-		name             string
-		fork             upgradetest.Fork
-		timeSeconds      uint64
-		timeMilliseconds *uint64
-		expectedError    error
-	}{
-		{
-			name:             "Fortuna without TimeMilliseconds",
-			fork:             upgradetest.Fortuna,
-			timeSeconds:      uint64(timestamp.Unix()),
-			timeMilliseconds: nil,
-		},
-		{
-			name:             "Granite with TimeMilliseconds",
-			fork:             upgradetest.Granite,
-			timeSeconds:      uint64(timestamp.Unix()),
-			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli())),
-		},
-		{
-			name:             "Fortuna with TimeMilliseconds",
-			fork:             upgradetest.Fortuna,
-			timeSeconds:      uint64(timestamp.Unix()),
-			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli())),
-			expectedError:    customheader.ErrTimeMillisecondsBeforeGranite,
-		},
-		{
-			name:             "Granite without TimeMilliseconds",
-			fork:             upgradetest.Granite,
-			timeSeconds:      uint64(timestamp.Unix()),
-			timeMilliseconds: nil,
-			expectedError:    customheader.ErrTimeMillisecondsRequired,
-		},
-		{
-			name:             "Granite with mismatched TimeMilliseconds",
-			fork:             upgradetest.Granite,
-			timeSeconds:      uint64(timestamp.Unix()),
-			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli()) + 1000),
-			expectedError:    customheader.ErrTimeMillisecondsMismatched,
-		},
-		{
-			name:             "Block too far in the future",
-			fork:             upgradetest.Granite,
-			timeSeconds:      uint64(timestamp.Add(2 * time.Hour).Unix()),
-			timeMilliseconds: utils.NewUint64(uint64(timestamp.Add(2 * time.Hour).UnixMilli())),
-			expectedError:    customheader.ErrBlockTooFarInFuture,
-		},
-	}
-
-	for _, test := range cases {
-		t.Run(test.name, func(t *testing.T) {
-			vm := newDefaultTestVM()
-			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-				Fork: &test.fork,
-			})
-
-			defer vm.Shutdown(context.Background())
-
-			// Create a block
-			signedTx := newSignedLegacyTx(
-				t,
-				vm.chainConfig,
-				vmtest.TestKeys[0].ToECDSA(),
-				0,
-				&vmtest.TestEthAddrs[1],
-				big.NewInt(1),
-				21000,
-				vmtest.InitialBaseFee,
-				nil,
-			)
-			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
-			require.NoError(t, err)
-
-			// Modify the header to have the desired time values
-			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
-			modifiedHeader := types.CopyHeader(ethBlk.Header())
-			modifiedHeader.Time = test.timeSeconds
-			modifiedExtra := customtypes.GetHeaderExtra(modifiedHeader)
-			modifiedExtra.TimeMilliseconds = test.timeMilliseconds
-
-			// Build new block with modified header
-			receipts := vm.blockChain.GetReceiptsByHash(ethBlk.Hash())
-			modifiedBlock := customtypes.NewBlockWithExtData(
-				modifiedHeader,
-				ethBlk.Transactions(),
-				nil,
-				receipts,
-				trie.NewStackTrie(nil),
-				customtypes.BlockExtData(ethBlk),
-				false,
-			)
-			modifiedBlk, err := wrapBlock(modifiedBlock, vm)
-			require.NoError(t, err)
-
-			vm.clock.Set(timestamp) // set current time to base for time checks
-			err = modifiedBlk.Verify(context.Background())
-			require.ErrorIs(t, err, test.expectedError)
-		})
 	}
 }
 
