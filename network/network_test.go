@@ -58,7 +58,7 @@ func TestNetworkDoesNotConnectToItself(t *testing.T) {
 	n, err := NewNetwork(ctx, nil, nil, 1, prometheus.NewRegistry())
 	require.NoError(t, err)
 	require.NoError(t, n.Connected(context.Background(), ctx.NodeID, defaultPeerVersion))
-	require.EqualValues(t, 0, n.Size())
+	require.Zero(t, n.Size())
 }
 
 func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
