@@ -2259,3 +2259,4 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			require.Equal(t, tt.wantReceiptStatus, receipts[0].Status)
 		})
 	}
+}
