@@ -382,15 +382,14 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 }
 
 // NOTE: [Oracle.SuggestTipCap] does NOT simply return the "required" (minimum) tip.
-// The oracle computes a percentile of recent on-chain tips within a time/blocks lookback
-// window and applies a small floor (e.g., 1 wei in tests):
+// The oracle computes a percentile of recent required tips (not observed on-chain tips)
+// within a time/blocks lookback window and applies a small floor (e.g., 1 wei in tests):
 //
-//	suggested = max(floor, recent-percentile, required-minimum)
+//	suggested = max(floor, recent-required-percentile)
 //
-// Therefore, even when the required minimum is 0 (e.g., Granite where
-// BlockGasCost is 0), the suggested tip is still at least the floor, and can be
-// higher if recent tips are higher. The cases below exercise behavior across
-// forks using the same percentile logic and floor.
+// After Granite, BlockGasCost is 0 and per-block required tips are 0, so the oracle
+// suggestion equals the floor (1 wei) in steady state, regardless of high on-chain tips.
+// The cases below exercise behavior across forks using the same percentile logic and floor.
 func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 	cases := []struct {
 		chainConfig *params.ChainConfig
@@ -415,6 +414,21 @@ func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 			expectedTip:     c.expectedTip,
 		}, defaultOracleConfig())
 	}
+}
+
+// Post-Granite, even very high observed tx tips should not affect SuggestTipCap, which
+// is computed from required tips. Since required tips are 0 in Granite, the returned
+// suggestion should be the floor (1 wei).
+func TestSuggestTipCapIgnoresObservedTipsPostGranite(t *testing.T) {
+	applyGasPriceTest(t, suggestTipCapTest{
+		chainConfig:     params.TestChainConfig, // Granite active in TestChainConfig
+		numBlocks:       50,
+		extDataGasUsage: common.Big0,
+		// Generate blocks with very high on-chain tips to ensure they wouldn't bias the result
+		// if the oracle looked at observed tips. Expectation remains 1 wei.
+		genBlock:    testGenBlock(t, 100_000, 200),
+		expectedTip: big.NewInt(1),
+	}, defaultOracleConfig())
 }
 
 func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
