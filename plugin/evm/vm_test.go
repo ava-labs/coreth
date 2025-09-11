@@ -2156,7 +2156,12 @@ func deployContract(t *testing.T, ctx context.Context, vm *VM, gasPrice *big.Int
 			break
 		}
 	}
-	require.True(t, found)
+	require.True(t, found, "deployContract: expected deploy tx %s to be included in block %s (caller=%s, nonce=%d)",
+		signedTx.Hash().Hex(),
+		ethBlock.Hash().Hex(),
+		callerAddr.Hex(),
+		nonce,
+	)
 
 	return crypto.CreateAddress(callerAddr, nonce)
 }
@@ -2192,7 +2197,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: big.NewInt(ap0.MinGasPrice),
 			txGasPrice:     big.NewInt(ap0.MinGasPrice),
 			setTime: func(vm *VM) {
-				vm.clock.Set(params.InvalidateDelegateUnix+1)
+				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix+1, 0))
 			},
 			refillCapacityFortuna: true,
 			wantIncluded:          false,
@@ -2203,7 +2208,6 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: big.NewInt(ap0.MinGasPrice),
 			txGasPrice:     big.NewInt(ap0.MinGasPrice),
 			preDeploySetTime: func(vm *VM) {
-				// Ensure we are pre-cutoff before deployment and remain increasing afterwards
 				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix-acp176.TimeToFillCapacity-1, 0))
 			},
 			refillCapacityFortuna: true,
@@ -2226,13 +2230,18 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 
 			contractAddr := deployContract(t, ctx, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
 
-			if tt.refillCapacityFortuna {
-				// Refill gas capacity between blocks on Fortuna
-				vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
-			}
-
 			if tt.setTime != nil {
 				tt.setTime(vm)
+			}
+
+			if tt.refillCapacityFortuna {
+				// Ensure gas capacity is refilled relative to the parent block's timestamp
+				parent := vm.blockChain.CurrentBlock()
+				parentTime := time.Unix(int64(parent.Time), 0)
+				minRefillTime := parentTime.Add(acp176.TimeToFillCapacity * time.Second)
+				if vm.clock.Time().Before(minRefillTime) {
+					vm.clock.Set(minRefillTime)
+				}
 			}
 
 			data := crypto.Keccak256([]byte("delegateSendHello()"))[:4]
