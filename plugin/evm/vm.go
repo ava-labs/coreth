@@ -137,14 +137,19 @@ var (
 )
 
 var (
-	errInvalidBlock                  = errors.New("invalid block")
-	errInvalidNonce                  = errors.New("invalid nonce")
-	errUnclesUnsupported             = errors.New("uncles unsupported")
-	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
-	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
-	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
-	errInitializingLogger            = errors.New("failed to initialize logger")
-	errShuttingDownVM                = errors.New("shutting down VM")
+	errInvalidBlock                      = errors.New("invalid block")
+	errInvalidNonce                      = errors.New("invalid nonce")
+	errUnclesUnsupported                 = errors.New("uncles unsupported")
+	errNilBaseFeeApricotPhase3           = errors.New("nil base fee is invalid after apricotPhase3")
+	errNilBlockGasCostApricotPhase4      = errors.New("nil blockGasCost is invalid after apricotPhase4")
+	errInvalidHeaderPredicateResults     = errors.New("invalid header predicate results")
+	errInitializingLogger                = errors.New("failed to initialize logger")
+	errShuttingDownVM                    = errors.New("shutting down VM")
+	ErrFirewoodPruningRequired           = errors.New("pruning must be enabled for Firewood")
+	ErrFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
+	ErrFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
+	ErrFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
+	ErrPathStateUnsupported              = errors.New("path state scheme is not supported")
 )
 
 var originalStderr *os.File
@@ -396,22 +401,22 @@ func (vm *VM) Initialize(
 		log.Warn("This is untested in production, use at your own risk")
 		// Firewood only supports pruning for now.
 		if !vm.config.Pruning {
-			return errors.New("Pruning must be enabled for Firewood")
+			return ErrFirewoodPruningRequired
 		}
 		// Firewood does not support iterators, so the snapshot cannot be constructed
 		if vm.config.SnapshotCache > 0 {
-			return errors.New("Snapshot cache must be disabled for Firewood")
+			return ErrFirewoodSnapshotCacheDisabled
 		}
 		if vm.config.OfflinePruning {
-			return errors.New("Offline pruning is not supported for Firewood")
+			return ErrFirewoodOfflinePruningUnsupported
 		}
 		if vm.config.StateSyncEnabled == nil || *vm.config.StateSyncEnabled {
-			return errors.New("State sync is not yet supported for Firewood")
+			return ErrFirewoodStateSyncUnsupported
 		}
 	}
 	if vm.ethConfig.StateScheme == rawdb.PathScheme {
 		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
-		return errors.New("Path state scheme is not supported")
+		return ErrPathStateUnsupported
 	}
 
 	// Create directory for offline pruning

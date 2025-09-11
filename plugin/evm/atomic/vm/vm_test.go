@@ -6,7 +6,6 @@ package vm
 import (
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -434,8 +433,10 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, ErrConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", ErrConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); err != nil {
+		require.ErrorIs(t, err, ErrConflictingAtomicInputs)
+	} else {
+		t.Fatalf("Expected to fail with err: %s, but found nil", ErrConflictingAtomicInputs)
 	}
 
 	if !rules.IsApricotPhase5 {
@@ -471,8 +472,10 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 		t.Fatal(err)
 	}
 
-	if err := parsedBlock.Verify(context.Background()); !errors.Is(err, ErrConflictingAtomicInputs) {
-		t.Fatalf("Expected to fail with err: %s, but found err: %s", ErrConflictingAtomicInputs, err)
+	if err := parsedBlock.Verify(context.Background()); err != nil {
+		require.ErrorIs(t, err, ErrConflictingAtomicInputs)
+	} else {
+		t.Fatalf("Expected to fail with err: %s, but found nil", ErrConflictingAtomicInputs)
 	}
 }
 
@@ -570,8 +573,10 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 				t.Fatal(err)
 			}
 
-			if err := vm.AtomicMempool.AddLocalTx(reissuanceTx1); !errors.Is(err, txpool.ErrConflict) {
-				t.Fatalf("Expected to fail with err: %s, but found err: %s", txpool.ErrConflict, err)
+			if err := vm.AtomicMempool.AddLocalTx(reissuanceTx1); err != nil {
+				require.ErrorIs(t, err, txpool.ErrConflict)
+			} else {
+				t.Fatalf("Expected to fail with err: %s, but found nil", txpool.ErrConflict)
 			}
 
 			require.True(t, vm.AtomicMempool.Has(importTx1.ID()))
@@ -1397,8 +1402,10 @@ func testEmptyBlock(t *testing.T, scheme string) {
 	emptyBlockBytes, err := rlp.EncodeToBytes(emptyEthBlock)
 	require.NoError(t, err)
 
-	if _, err := vm.ParseBlock(context.Background(), emptyBlockBytes); !errors.Is(err, ErrEmptyBlock) {
-		t.Fatalf("VM should have failed with errEmptyBlock but got %s", err.Error())
+	if _, err := vm.ParseBlock(context.Background(), emptyBlockBytes); err != nil {
+		require.ErrorIs(t, err, ErrEmptyBlock)
+	} else {
+		t.Fatalf("VM should have failed with errEmptyBlock but got nil")
 	}
 }
 
