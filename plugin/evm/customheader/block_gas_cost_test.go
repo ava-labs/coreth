@@ -443,11 +443,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			bigBlockGasCost := new(big.Int).SetUint64(blockGasCost)
 
 			err := VerifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution)
-			if test.expectedErr != nil {
-				require.ErrorIs(t, err, test.expectedErr)
-			} else {
-				require.NoError(t, err)
-			}
+			require.ErrorIs(t, err, test.expectedErr)
 		})
 	}
 }

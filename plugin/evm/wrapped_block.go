@@ -41,15 +41,15 @@ var (
 
 // Sentinel errors for header validation in this file
 var (
-	errInvalidExcessBlobGasBeforeCancun = errors.New("invalid excessBlobGas before cancun")
-	errInvalidBlobGasUsedBeforeCancun   = errors.New("invalid blobGasUsed before cancun")
-	errInvalidParentBeaconRootBefore    = errors.New("invalid parentBeaconRoot before cancun")
-	errMissingExcessBlobGas             = errors.New("header is missing excessBlobGas")
-	errMissingBlobGasUsed               = errors.New("header is missing blobGasUsed")
-	errMissingParentBeaconRoot          = errors.New("header is missing parentBeaconRoot")
-	errParentBeaconRootNonEmpty         = errors.New("invalid non-empty parentBeaconRoot")
-	errBlobGasUsedNilInCancun           = errors.New("blob gas used must not be nil in Cancun")
-	errBlobsNotEnabled                  = errors.New("blobs not enabled on avalanche networks")
+	errInvalidExcessBlobGasBeforeCancun    = errors.New("invalid excessBlobGas before cancun")
+	errInvalidBlobGasUsedBeforeCancun      = errors.New("invalid blobGasUsed before cancun")
+	errInvalidParentBeaconRootBeforeCancun = errors.New("invalid parentBeaconRoot before cancun")
+	errMissingExcessBlobGas                = errors.New("header is missing excessBlobGas")
+	errMissingBlobGasUsed                  = errors.New("header is missing blobGasUsed")
+	errMissingParentBeaconRoot             = errors.New("header is missing parentBeaconRoot")
+	errParentBeaconRootNonEmpty            = errors.New("invalid non-empty parentBeaconRoot")
+	errBlobGasUsedNilInCancun              = errors.New("blob gas used must not be nil in Cancun")
+	errBlobsNotEnabled                     = errors.New("blobs not enabled on avalanche networks")
 )
 
 var (
@@ -417,7 +417,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 		return errMissingBlobGasUsed
 	}
 	if !cancun && ethHeader.ParentBeaconRoot != nil {
-		return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBefore, *ethHeader.ParentBeaconRoot)
+		return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
 	}
 	if cancun {
 		switch {
