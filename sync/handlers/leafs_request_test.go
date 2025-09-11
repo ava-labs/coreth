@@ -435,8 +435,9 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, _ error) {
+			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				assert.NotEmpty(t, response)
+				assert.NoError(t, err)
 
 				var leafsResponse message.LeafsResponse
 				if _, err := message.Codec.Unmarshal(response, &leafsResponse); err != nil {
