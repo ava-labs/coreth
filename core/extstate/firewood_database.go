@@ -34,7 +34,7 @@ func (*firewoodAccessorDb) OpenStorageTrie(_ common.Hash, _ common.Address, acco
 	if !ok {
 		return nil, fmt.Errorf("Invalid account trie type: %T", self)
 	}
-	return firewood.NewStorageTrie(accountTrie, accountRoot)
+	return firewood.NewStorageTrie(accountTrie)
 }
 
 // CopyTrie returns a deep copy of the given trie.

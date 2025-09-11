@@ -148,20 +148,32 @@ func TestCheckPrecompilesCompatible(t *testing.T) {
 			wantErr:        false,
 		},
 		{
-			name:           "adding upgrades to empty config - should succeed (new logic)",
+			name:           "adding upgrades to empty config retroactively - should fail",
 			storedUpgrades: []PrecompileUpgrade{},
 			newUpgrades: []PrecompileUpgrade{
 				{Config: warp.NewConfig(utils.NewUint64(50), 0, false)},
 			},
-			headTimestamp: 100, // Past the activation time, but should still succeed
-			wantErr:       false,
+			headTimestamp:       100, // Past the activation time, should fail
+			wantErr:             true,
+			expectedErrContains: "cannot retroactively enable PrecompileUpgrade[0]",
 		},
 		{
-			name:           "adding multiple upgrades to empty config - should succeed",
+			name:           "adding multiple upgrades to empty config retroactively - should fail",
 			storedUpgrades: []PrecompileUpgrade{},
 			newUpgrades: []PrecompileUpgrade{
 				{Config: warp.NewConfig(utils.NewUint64(50), 0, false)},
-				{Config: warp.NewConfig(utils.NewUint64(80), 0, true)}, // disable at 80
+				{Config: warp.NewDisableConfig(utils.NewUint64(80))}, // disable at 80
+			},
+			headTimestamp:       100,
+			wantErr:             true,
+			expectedErrContains: "cannot retroactively enable PrecompileUpgrade[0]",
+		},
+		{
+			name:           "adding multiple upgrades to empty config non-retroactively - should succeed",
+			storedUpgrades: []PrecompileUpgrade{},
+			newUpgrades: []PrecompileUpgrade{
+				{Config: warp.NewConfig(utils.NewUint64(150), 0, false)},
+				{Config: warp.NewDisableConfig(utils.NewUint64(180))}, // disable at 180
 			},
 			headTimestamp: 100,
 			wantErr:       false,
@@ -217,11 +229,11 @@ func TestCheckPrecompilesCompatible(t *testing.T) {
 			name: "identical configs - should succeed",
 			storedUpgrades: []PrecompileUpgrade{
 				{Config: warp.NewConfig(utils.NewUint64(50), 0, false)},
-				{Config: warp.NewConfig(utils.NewUint64(80), 0, true)},
+				{Config: warp.NewDisableConfig(utils.NewUint64(80))},
 			},
 			newUpgrades: []PrecompileUpgrade{
 				{Config: warp.NewConfig(utils.NewUint64(50), 0, false)},
-				{Config: warp.NewConfig(utils.NewUint64(80), 0, true)},
+				{Config: warp.NewDisableConfig(utils.NewUint64(80))},
 			},
 			headTimestamp: 100,
 			wantErr:       false,

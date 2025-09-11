@@ -213,9 +213,7 @@ func (c *ChainConfig) checkPrecompileCompatible(address common.Address, precompi
 	}
 	// Make sure newUpgrades does not have additional upgrades that are already activated as we
 	// cannot perform retroactive upgrades.
-	// However, if the stored config has no precompile upgrades at all (len(c.PrecompileUpgrades) == 0),
-	// we allow adding upgrades since this represents initial configuration rather than modification.
-	if len(newUpgrades) > len(activeUpgrades) && len(c.PrecompileUpgrades) > 0 {
+	if len(newUpgrades) > len(activeUpgrades) {
 		return ethparams.NewTimestampCompatError(
 			fmt.Sprintf("cannot retroactively enable PrecompileUpgrade[%d]", len(activeUpgrades)),
 			nil,
