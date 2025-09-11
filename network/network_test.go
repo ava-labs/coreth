@@ -478,7 +478,7 @@ func TestOnRequestHonoursDeadline(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, net.AppRequest(context.Background(), nodeID, 0, time.Now().Add(1*time.Millisecond), requestBytes))
 	// ensure the handler didn't get called (as peer.Network would've dropped the request)
-	require.EqualValues(t, 0, requestHandler.calls)
+	require.Zero(t, requestHandler.calls)
 
 	requestHandler.processingDuration = 0
 	require.NoError(t, net.AppRequest(context.Background(), nodeID, 2, time.Now().Add(250*time.Millisecond), requestBytes))
