@@ -2116,7 +2116,7 @@ func TestCreateHandlers(t *testing.T) {
 
 // deployContract deploys the provided EVM bytecode using a prefunded test account
 // and returns the created contract address. It is reusable for any contract code.
-func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common.Address {
+func deployContract(t *testing.T, ctx context.Context, vm *VM, gasPrice *big.Int, code []byte) common.Address {
 	callerAddr := vmtest.TestEthAddrs[0]
 	callerKey := vmtest.TestKeys[0]
 
@@ -2138,11 +2138,11 @@ func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common
 		require.NoError(t, err)
 	}
 
-	blk, err := vm.BuildBlock(context.Background())
+	blk, err := vm.BuildBlock(ctx)
 	require.NoError(t, err)
-	require.NoError(t, blk.Verify(context.Background()))
-	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
-	require.NoError(t, blk.Accept(context.Background()))
+	require.NoError(t, blk.Verify(ctx))
+	require.NoError(t, vm.SetPreference(ctx, blk.ID()))
+	require.NoError(t, blk.Accept(ctx))
 
 	ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 	receipts := vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
@@ -2162,6 +2162,7 @@ func deployContract(t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common
 }
 
 func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		name                  string
 		fork                  upgradetest.Fork
@@ -2224,13 +2225,13 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 				Fork: &tt.fork,
 			})
-			defer vm.Shutdown(context.Background())
+			defer vm.Shutdown(ctx)
 
 			if tt.preDeploySetTime != nil {
 				tt.preDeploySetTime(vm)
 			}
 
-			contractAddr := deployContract(t, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
+			contractAddr := deployContract(t, ctx, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
 
 			if tt.refillCapacityFortuna {
 				// Refill gas capacity between blocks on Fortuna
@@ -2252,11 +2253,11 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			blk, err := vm.BuildBlock(context.Background())
+			blk, err := vm.BuildBlock(ctx)
 			require.NoError(t, err)
-			require.NoError(t, blk.Verify(context.Background()))
-			require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
-			require.NoError(t, blk.Accept(context.Background()))
+			require.NoError(t, blk.Verify(ctx))
+			require.NoError(t, vm.SetPreference(ctx, blk.ID()))
+			require.NoError(t, blk.Accept(ctx))
 
 			ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 
