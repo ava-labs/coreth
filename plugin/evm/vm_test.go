@@ -2180,10 +2180,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: vmtest.InitialBaseFee,
 			txGasPrice:     vmtest.InitialBaseFee,
 			setTime: func(vm *VM) {
-				if now := vm.clock.Time().Unix(); now <= params.InvalidateDelegateUnix {
-					delta := time.Duration(params.InvalidateDelegateUnix-now+1) * time.Second
-					vm.clock.Set(vm.clock.Time().Add(delta))
-				}
+				// Time is irrelevant as only the fork dictates the logic
 			},
 			refillCapacityFortuna: false,
 			wantIncluded:          true,
@@ -2195,10 +2192,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			deployGasPrice: big.NewInt(ap0.MinGasPrice),
 			txGasPrice:     big.NewInt(ap0.MinGasPrice),
 			setTime: func(vm *VM) {
-				if now := vm.clock.Time().Unix(); now <= params.InvalidateDelegateUnix {
-					delta := time.Duration(params.InvalidateDelegateUnix-now+1) * time.Second
-					vm.clock.Set(vm.clock.Time().Add(delta))
-				}
+				vm.clock.Set(params.InvalidateDelegateUnix+1)
 			},
 			refillCapacityFortuna: true,
 			wantIncluded:          false,
@@ -2210,9 +2204,8 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			txGasPrice:     big.NewInt(ap0.MinGasPrice),
 			preDeploySetTime: func(vm *VM) {
 				// Ensure we are pre-cutoff before deployment and remain increasing afterwards
-				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix-10, 0))
+				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix-acp176.TimeToFillCapacity-1, 0))
 			},
-			setTime:               nil, // stay pre-cutoff
 			refillCapacityFortuna: true,
 			wantIncluded:          true,
 			wantReceiptStatus:     1,
@@ -2238,13 +2231,11 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 				vm.clock.Set(vm.clock.Time().Add(acp176.TimeToFillCapacity * time.Second))
 			}
 
-			// Set the desired block time for this test case
 			if tt.setTime != nil {
 				tt.setTime(vm)
 			}
 
-			// Call delegateSendHello(): 0x8b336b5e
-			data := common.FromHex("0x8b336b5e")
+			data := crypto.Keccak256([]byte("delegateSendHello()"))[:4]
 			nonce := vm.txPool.Nonce(vmtest.TestEthAddrs[0])
 			tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 100000, tt.txGasPrice, data)
 			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
