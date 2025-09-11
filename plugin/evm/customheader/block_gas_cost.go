@@ -18,14 +18,12 @@ import (
 )
 
 var (
-	errBaseFeeNil                               = errors.New("base fee is nil")
-	errBlockGasCostNil                          = errors.New("block gas cost is nil")
-	errExtDataGasUsedNil                        = errors.New("extDataGasUsed is nil")
-	errNoGasUsed                                = errors.New("no gas used")
-	ErrInsufficientBlockGas                     = errors.New("insufficient gas to cover the block cost")
-	errInvalidExtraStateChangeContribution      = errors.New("invalid extra state change contribution")
-	errInvalidBaseFeeApricotPhase4              = errors.New("invalid base fee in apricot phase 4")
-	errInvalidRequiredBlockGasCostApricotPhase4 = errors.New("invalid block gas cost in apricot phase 4")
+	errBaseFeeNil        = errors.New("base fee is nil")
+	errBlockGasCostNil   = errors.New("block gas cost is nil")
+	errExtDataGasUsedNil = errors.New("extDataGasUsed is nil")
+	errNoGasUsed         = errors.New("no gas used")
+
+	ErrInsufficientBlockGas = errors.New("insufficient gas to cover the block cost")
 )
 
 // BlockGasCost calculates the required block gas cost based on the parent
@@ -33,20 +31,19 @@ var (
 // Prior to AP4, the returned block gas cost will be nil.
 // In Granite, the returned block gas cost will be 0.
 func BlockGasCost(
-	rules extras.AvalancheRules,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) *big.Int {
-	var step uint64
-	switch {
-	case rules.IsGranite: // Granite does not have a block gas cost
-		return big.NewInt(0)
-	case rules.IsApricotPhase5:
-		step = ap5.BlockGasCostStep
-	case rules.IsApricotPhase4:
-		step = ap4.BlockGasCostStep
-	default: // prior to AP4, the returned block gas cost will be nil
+	if !config.IsApricotPhase4(timestamp) {
 		return nil
+	}
+	if config.IsGranite(timestamp) {
+		return big.NewInt(0)
+	}
+	step := uint64(ap4.BlockGasCostStep)
+	if config.IsApricotPhase5(timestamp) {
+		step = ap5.BlockGasCostStep
 	}
 	// Treat an invalid parent/current time combination as 0 elapsed time.
 	//
@@ -133,7 +130,6 @@ func EstimateRequiredTip(
 	return estimatedTip, nil
 }
 
-// VerifyBlockFee verifies that the total block gas cost is sufficient to cover the required block gas cost.
 func VerifyBlockFee(
 	baseFee *big.Int,
 	requiredBlockGasCost *big.Int,
@@ -142,10 +138,10 @@ func VerifyBlockFee(
 	extraStateChangeContribution *big.Int,
 ) error {
 	if baseFee == nil || baseFee.Sign() <= 0 {
-		return fmt.Errorf("%w: %d", errInvalidBaseFeeApricotPhase4, baseFee)
+		return fmt.Errorf("invalid base fee (%d) in apricot phase 4", baseFee)
 	}
 	if requiredBlockGasCost == nil || !requiredBlockGasCost.IsUint64() {
-		return fmt.Errorf("%w: %d", errInvalidRequiredBlockGasCostApricotPhase4, requiredBlockGasCost)
+		return fmt.Errorf("invalid block gas cost (%d) in apricot phase 4", requiredBlockGasCost)
 	}
 
 	var (
@@ -157,7 +153,7 @@ func VerifyBlockFee(
 	// Add in the external contribution
 	if extraStateChangeContribution != nil {
 		if extraStateChangeContribution.Cmp(common.Big0) < 0 {
-			return fmt.Errorf("%w: %d", errInvalidExtraStateChangeContribution, extraStateChangeContribution)
+			return fmt.Errorf("invalid extra state change contribution: %d", extraStateChangeContribution)
 		}
 		totalBlockFee.Add(totalBlockFee, extraStateChangeContribution)
 	}
