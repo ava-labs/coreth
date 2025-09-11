@@ -145,11 +145,11 @@ var (
 	errInvalidHeaderPredicateResults     = errors.New("invalid header predicate results")
 	errInitializingLogger                = errors.New("failed to initialize logger")
 	errShuttingDownVM                    = errors.New("shutting down VM")
-	ErrFirewoodPruningRequired           = errors.New("pruning must be enabled for Firewood")
-	ErrFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
-	ErrFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
-	ErrFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
-	ErrPathStateUnsupported              = errors.New("path state scheme is not supported")
+	errFirewoodPruningRequired           = errors.New("pruning must be enabled for Firewood")
+	errFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
+	errFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
+	errFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
+	errPathStateUnsupported              = errors.New("path state scheme is not supported")
 )
 
 var originalStderr *os.File
@@ -401,22 +401,22 @@ func (vm *VM) Initialize(
 		log.Warn("This is untested in production, use at your own risk")
 		// Firewood only supports pruning for now.
 		if !vm.config.Pruning {
-			return ErrFirewoodPruningRequired
+			return errFirewoodPruningRequired
 		}
 		// Firewood does not support iterators, so the snapshot cannot be constructed
 		if vm.config.SnapshotCache > 0 {
-			return ErrFirewoodSnapshotCacheDisabled
+			return errFirewoodSnapshotCacheDisabled
 		}
 		if vm.config.OfflinePruning {
-			return ErrFirewoodOfflinePruningUnsupported
+			return errFirewoodOfflinePruningUnsupported
 		}
 		if vm.config.StateSyncEnabled == nil || *vm.config.StateSyncEnabled {
-			return ErrFirewoodStateSyncUnsupported
+			return errFirewoodStateSyncUnsupported
 		}
 	}
 	if vm.ethConfig.StateScheme == rawdb.PathScheme {
 		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
-		return ErrPathStateUnsupported
+		return errPathStateUnsupported
 	}
 
 	// Create directory for offline pruning

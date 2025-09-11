@@ -1699,9 +1699,9 @@ func TestNoBlobsAllowed(t *testing.T) {
 	extendedBlock, err := wrapBlock(blocks[0], vm)
 	require.NoError(err)
 	_, err = vm.ParseBlock(ctx, extendedBlock.Bytes())
-	require.ErrorIs(err, ErrBlobsNotEnabled)
+	require.ErrorIs(err, errBlobsNotEnabled)
 	err = extendedBlock.Verify(ctx)
-	require.ErrorIs(err, ErrBlobsNotEnabled)
+	require.ErrorIs(err, errBlobsNotEnabled)
 }
 
 func TestBuildBlockWithInsufficientCapacity(t *testing.T) {

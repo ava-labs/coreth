@@ -41,15 +41,15 @@ var (
 
 // Sentinel errors for header validation in this file
 var (
-	ErrInvalidExcessBlobGasBeforeCancun = errors.New("invalid excessBlobGas before cancun")
-	ErrInvalidBlobGasUsedBeforeCancun   = errors.New("invalid blobGasUsed before cancun")
-	ErrInvalidParentBeaconRootBefore    = errors.New("invalid parentBeaconRoot before cancun")
-	ErrMissingExcessBlobGas             = errors.New("header is missing excessBlobGas")
-	ErrMissingBlobGasUsed               = errors.New("header is missing blobGasUsed")
-	ErrMissingParentBeaconRoot          = errors.New("header is missing parentBeaconRoot")
-	ErrParentBeaconRootNonEmpty         = errors.New("invalid non-empty parentBeaconRoot")
-	ErrBlobGasUsedNilInCancun           = errors.New("blob gas used must not be nil in Cancun")
-	ErrBlobsNotEnabled                  = errors.New("blobs not enabled on avalanche networks")
+	errInvalidExcessBlobGasBeforeCancun = errors.New("invalid excessBlobGas before cancun")
+	errInvalidBlobGasUsedBeforeCancun   = errors.New("invalid blobGasUsed before cancun")
+	errInvalidParentBeaconRootBefore    = errors.New("invalid parentBeaconRoot before cancun")
+	errMissingExcessBlobGas             = errors.New("header is missing excessBlobGas")
+	errMissingBlobGasUsed               = errors.New("header is missing blobGasUsed")
+	errMissingParentBeaconRoot          = errors.New("header is missing parentBeaconRoot")
+	errParentBeaconRootNonEmpty         = errors.New("invalid non-empty parentBeaconRoot")
+	errBlobGasUsedNilInCancun           = errors.New("blob gas used must not be nil in Cancun")
+	errBlobsNotEnabled                  = errors.New("blobs not enabled on avalanche networks")
 )
 
 var (
@@ -405,31 +405,31 @@ func (b *wrappedBlock) syntacticVerify() error {
 	// Verify the existence / non-existence of excessBlobGas
 	cancun := rules.IsCancun
 	if !cancun && ethHeader.ExcessBlobGas != nil {
-		return fmt.Errorf("%w: have %d, expected nil", ErrInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
+		return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
 	}
 	if !cancun && ethHeader.BlobGasUsed != nil {
-		return fmt.Errorf("%w: have %d, expected nil", ErrInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
+		return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
 	}
 	if cancun && ethHeader.ExcessBlobGas == nil {
-		return ErrMissingExcessBlobGas
+		return errMissingExcessBlobGas
 	}
 	if cancun && ethHeader.BlobGasUsed == nil {
-		return ErrMissingBlobGasUsed
+		return errMissingBlobGasUsed
 	}
 	if !cancun && ethHeader.ParentBeaconRoot != nil {
-		return fmt.Errorf("%w: have %x, expected nil", ErrInvalidParentBeaconRootBefore, *ethHeader.ParentBeaconRoot)
+		return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBefore, *ethHeader.ParentBeaconRoot)
 	}
 	if cancun {
 		switch {
 		case ethHeader.ParentBeaconRoot == nil:
-			return ErrMissingParentBeaconRoot
+			return errMissingParentBeaconRoot
 		case *ethHeader.ParentBeaconRoot != (common.Hash{}):
-			return fmt.Errorf("%w: have %x, expected empty hash", ErrParentBeaconRootNonEmpty, ethHeader.ParentBeaconRoot)
+			return fmt.Errorf("%w: have %x, expected empty hash", errParentBeaconRootNonEmpty, ethHeader.ParentBeaconRoot)
 		}
 		if ethHeader.BlobGasUsed == nil {
-			return ErrBlobGasUsedNilInCancun
+			return errBlobGasUsedNilInCancun
 		} else if *ethHeader.BlobGasUsed > 0 {
-			return fmt.Errorf("%w: used %d blob gas, expected 0", ErrBlobsNotEnabled, *ethHeader.BlobGasUsed)
+			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *ethHeader.BlobGasUsed)
 		}
 	}
 
