@@ -2173,8 +2173,8 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 		fork                  upgradetest.Fork
 		deployGasPrice        *big.Int
 		txGasPrice            *big.Int
-		preDeploySetTime      func(vm *VM)
-		setTime               func(vm *VM)
+		preDeployTime         *int64
+		setTime               *int64
 		refillCapacityFortuna bool
 		wantIncluded          bool
 		wantReceiptStatus     uint64
@@ -2184,32 +2184,26 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			fork:           upgradetest.Granite,
 			deployGasPrice: vmtest.InitialBaseFee,
 			txGasPrice:     vmtest.InitialBaseFee,
-			setTime: func(vm *VM) {
-				// Time is irrelevant as only the fork dictates the logic
-			},
+			// Time is irrelevant as only the fork dictates the logic
 			refillCapacityFortuna: false,
 			wantIncluded:          true,
 			wantReceiptStatus:     types.ReceiptStatusFailed,
 		},
 		{
-			name:           "fortuna_post_cutoff_should_invalidate",
-			fork:           upgradetest.Fortuna,
-			deployGasPrice: big.NewInt(ap0.MinGasPrice),
-			txGasPrice:     big.NewInt(ap0.MinGasPrice),
-			setTime: func(vm *VM) {
-				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix+1, 0))
-			},
+			name:                  "fortuna_post_cutoff_should_invalidate",
+			fork:                  upgradetest.Fortuna,
+			deployGasPrice:        big.NewInt(ap0.MinGasPrice),
+			txGasPrice:            big.NewInt(ap0.MinGasPrice),
+			setTime:               &[]int64{params.InvalidateDelegateUnix + 1}[0],
 			refillCapacityFortuna: true,
 			wantIncluded:          false,
 		},
 		{
-			name:           "fortuna_pre_cutoff_should_succeed",
-			fork:           upgradetest.Fortuna,
-			deployGasPrice: big.NewInt(ap0.MinGasPrice),
-			txGasPrice:     big.NewInt(ap0.MinGasPrice),
-			preDeploySetTime: func(vm *VM) {
-				vm.clock.Set(time.Unix(params.InvalidateDelegateUnix-acp176.TimeToFillCapacity-1, 0))
-			},
+			name:                  "fortuna_pre_cutoff_should_succeed",
+			fork:                  upgradetest.Fortuna,
+			deployGasPrice:        big.NewInt(ap0.MinGasPrice),
+			txGasPrice:            big.NewInt(ap0.MinGasPrice),
+			preDeployTime:         &[]int64{params.InvalidateDelegateUnix - acp176.TimeToFillCapacity - 1}[0],
 			refillCapacityFortuna: true,
 			wantIncluded:          true,
 			wantReceiptStatus:     types.ReceiptStatusSuccessful,
@@ -2224,14 +2218,14 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			})
 			defer vm.Shutdown(ctx)
 
-			if tt.preDeploySetTime != nil {
-				tt.preDeploySetTime(vm)
+			if tt.preDeployTime != nil {
+				vm.clock.Set(time.Unix(*tt.preDeployTime, 0))
 			}
 
 			contractAddr := deployContract(t, ctx, vm, tt.deployGasPrice, common.FromHex(delegateCallPrecompileCode))
 
 			if tt.setTime != nil {
-				tt.setTime(vm)
+				vm.clock.Set(time.Unix(*tt.setTime, 0))
 			}
 
 			if tt.refillCapacityFortuna {
