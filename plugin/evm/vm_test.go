@@ -2152,7 +2152,7 @@ func deployContract(t *testing.T, ctx context.Context, vm *VM, gasPrice *big.Int
 	for i, btx := range ethBlock.Transactions() {
 		if btx.Hash() == signedTx.Hash() {
 			found = true
-			require.Equal(t, uint64(1), receipts[i].Status) // 1 = success
+			require.Equal(t, types.ReceiptStatusSuccessful, receipts[i].Status)
 			break
 		}
 	}
@@ -2189,7 +2189,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			},
 			refillCapacityFortuna: false,
 			wantIncluded:          true,
-			wantReceiptStatus:     0,
+			wantReceiptStatus:     types.ReceiptStatusFailed,
 		},
 		{
 			name:           "fortuna_post_cutoff_should_invalidate",
@@ -2212,7 +2212,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			},
 			refillCapacityFortuna: true,
 			wantIncluded:          true,
-			wantReceiptStatus:     1,
+			wantReceiptStatus:     types.ReceiptStatusSuccessful,
 		},
 	}
 
