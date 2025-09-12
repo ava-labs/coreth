@@ -311,6 +311,7 @@ func (fs *fuzzState) deleteStorage(accountIndex int, storageIndexInput uint64) {
 func FuzzTree(f *testing.F) {
 	f.Fuzz(func(t *testing.T, randSeed int64, byteSteps []byte) {
 		fuzzState := newFuzzState(t)
+		//nolint:gosec // this isn't a good fuzz test, but it is reproducible.
 		rand := rand.New(rand.NewSource(randSeed))
 
 		for range 10 {
