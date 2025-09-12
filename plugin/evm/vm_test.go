@@ -2092,7 +2092,7 @@ func newSignedLegacyTx(
 	cfg *params.ChainConfig,
 	key *ecdsa.PrivateKey,
 	nonce uint64,
-	to common.Address,
+	to *common.Address,
 	value *big.Int,
 	gasPrice *big.Int,
 ) (*types.Transaction, error) {
