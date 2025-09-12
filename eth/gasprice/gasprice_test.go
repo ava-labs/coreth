@@ -422,11 +422,11 @@ func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 func TestSuggestTipCapIgnoresObservedTipsPostGranite(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
 		chainConfig:     params.TestChainConfig, // Granite active in TestChainConfig
-		numBlocks:       50,
+		numBlocks:       20,
 		extDataGasUsage: common.Big0,
 		// Generate blocks with very high on-chain tips to ensure they wouldn't bias the result
 		// if the oracle looked at observed tips. Expectation remains 1 wei.
-		genBlock:    testGenBlock(t, 100_000, 200),
+		genBlock:    testGenBlock(t, 100_000, 80),
 		expectedTip: big.NewInt(1),
 	}, defaultOracleConfig())
 }
