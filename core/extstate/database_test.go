@@ -5,6 +5,7 @@ package extstate
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -22,7 +23,6 @@ import (
 
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/utils/rand"
 )
 
 const (
@@ -309,8 +309,10 @@ func (fs *fuzzState) deleteStorage(accountIndex int, storageIndexInput uint64) {
 }
 
 func FuzzTree(f *testing.F) {
-	f.Fuzz(func(t *testing.T, byteSteps []byte) {
+	f.Fuzz(func(t *testing.T, randSeed int64, byteSteps []byte) {
 		fuzzState := newFuzzState(t)
+		//nolint:gosec // this isn't a good fuzz test, but it is reproducible.
+		rand := rand.New(rand.NewSource(randSeed))
 
 		for range 10 {
 			fuzzState.createAccount()
@@ -332,23 +334,23 @@ func FuzzTree(f *testing.F) {
 				fuzzState.createAccount()
 			case updateAccount:
 				if len(fuzzState.currentAddrs) > 0 {
-					fuzzState.updateAccount(rand.SecureIntn(len(fuzzState.currentAddrs)))
+					fuzzState.updateAccount(rand.Intn(len(fuzzState.currentAddrs)))
 				}
 			case deleteAccount:
 				if len(fuzzState.currentAddrs) > 0 {
-					fuzzState.deleteAccount(rand.SecureIntn(len(fuzzState.currentAddrs)))
+					fuzzState.deleteAccount(rand.Intn(len(fuzzState.currentAddrs)))
 				}
 			case addStorage:
 				if len(fuzzState.currentAddrs) > 0 {
-					fuzzState.addStorage(rand.SecureIntn(len(fuzzState.currentAddrs)))
+					fuzzState.addStorage(rand.Intn(len(fuzzState.currentAddrs)))
 				}
 			case updateStorage:
 				if len(fuzzState.currentAddrs) > 0 {
-					fuzzState.updateStorage(rand.SecureIntn(len(fuzzState.currentAddrs)), rand.SecureUint64())
+					fuzzState.updateStorage(rand.Intn(len(fuzzState.currentAddrs)), rand.Uint64())
 				}
 			case deleteStorage:
 				if len(fuzzState.currentAddrs) > 0 {
-					fuzzState.deleteStorage(rand.SecureIntn(len(fuzzState.currentAddrs)), rand.SecureUint64())
+					fuzzState.deleteStorage(rand.Intn(len(fuzzState.currentAddrs)), rand.Uint64())
 				}
 			default:
 				t.Fatalf("unknown step: %d", step)

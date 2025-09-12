@@ -11,12 +11,10 @@ import (
 func deterministicBytes(label string, n int) []byte {
 	buf := make([]byte, n)
 	off := 0
-	var ctr uint64
 	for off < n {
-		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%d", label, ctr)))
+		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%d", label, off/32)))
 		copy(buf[off:], h[:])
 		off += len(h)
-		ctr++
 	}
 	return buf
 }
