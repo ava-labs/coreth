@@ -14,7 +14,7 @@ type StorageTrie struct {
 
 // `NewStorageTrie` returns a wrapper around an `AccountTrie` since Firewood
 // does not require a separate storage trie. All changes are managed by the account trie.
-func NewStorageTrie(accountTrie *AccountTrie, _ common.Hash) (*StorageTrie, error) {
+func NewStorageTrie(accountTrie *AccountTrie) (*StorageTrie, error) {
 	return &StorageTrie{
 		AccountTrie: accountTrie,
 	}, nil

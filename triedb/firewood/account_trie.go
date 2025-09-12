@@ -89,9 +89,9 @@ func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, erro
 }
 
 // GetStorage returns the value associated with a storage key for a given account address.
-// If the storage slot has been updated, the new value is returned.
-// If the storage slot has been deleted, (nil, nil) is returned.
-// If the storage slot does not exist, (nil, nil) is returned.
+// - If the storage slot has been updated, the new value is returned.
+// - If the storage slot has been deleted, (nil, nil) is returned.
+// - If the storage slot does not exist, (nil, nil) is returned.
 func (a *AccountTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
 	// If the account has been deleted, we should return nil
 	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()

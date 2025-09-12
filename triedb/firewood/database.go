@@ -77,7 +77,11 @@ var Defaults = Config{
 }
 
 func (c Config) BackendConstructor(ethdb.Database) triedb.DBOverride {
-	return New(&c)
+	db, err := New(c)
+	if err != nil {
+		log.Crit("firewood: error creating database", "error", err)
+	}
+	return db
 }
 
 type Database struct {
@@ -94,14 +98,9 @@ type Database struct {
 
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
-func New(config *Config) *Database {
-	if config == nil {
-		log.Crit("firewood: config must be provided")
-	}
-
-	err := validatePath(config.FilePath)
-	if err != nil {
-		log.Crit("firewood: error validating config", "error", err)
+func New(config Config) (*Database, error) {
+	if err := validatePath(config.FilePath); err != nil {
+		return nil, err
 	}
 
 	fw, err := ffi.New(config.FilePath, &ffi.Config{
@@ -111,12 +110,12 @@ func New(config *Config) *Database {
 		ReadCacheStrategy:    config.ReadCacheStrategy,
 	})
 	if err != nil {
-		log.Crit("firewood: error creating firewood database", "error", err)
+		return nil, err
 	}
 
 	currentRoot, err := fw.Root()
 	if err != nil {
-		log.Crit("firewood: error getting current root", "error", err)
+		return nil, err
 	}
 
 	return &Database{
@@ -125,7 +124,7 @@ func New(config *Config) *Database {
 		proposalTree: &ProposalContext{
 			Root: common.Hash(currentRoot),
 		},
-	}
+	}, nil
 }
 
 func validatePath(path string) error {
