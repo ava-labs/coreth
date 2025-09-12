@@ -433,7 +433,7 @@ func TestRequestMinVersion(t *testing.T) {
 		},
 		requestBytes,
 	)
-	require.Equal(t, "no peers found matching version avalanchego/2.0.0 out of 1 peers", err.Error())
+	require.ErrorContains(t, err, "no peers found matching version avalanchego/2.0.0 out of 1 peers")
 	require.Nil(t, responseBytes)
 
 	// ensure version matches and the request goes through
