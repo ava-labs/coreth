@@ -8,6 +8,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -18,9 +19,17 @@ import (
 // Syncer is the common interface for all sync operations.
 // This provides a unified interface for atomic state sync and state trie sync.
 type Syncer interface {
-	// Completes the full sync operation, returning any errors encountered.
+	// Sync completes the full sync operation, returning any errors encountered.
 	// The sync will respect context cancellation.
 	Sync(ctx context.Context) error
+
+	// Name returns a human-readable name for this syncer implementation.
+	Name() string
+
+	// ID returns a stable, machine-oriented identifier (e.g., "state_block_sync", "state_code_sync",
+	// "state_evm_state_sync", "state_atomic_sync"). Implementations should ensure this is unique and
+	// stable across renames for logging/metrics/deduplication.
+	ID() string
 }
 
 // SummaryProvider is an interface for providing state summaries.
@@ -38,4 +47,27 @@ type Extender interface {
 
 	// OnFinishAfterCommit is called after committing the sync results.
 	OnFinishAfterCommit(summaryHeight uint64) error
+}
+
+// CodeRequestQueue is a minimal interface for accepting discovered code hashes
+// and signaling when no more code hashes will be produced from the account trie.
+type CodeRequestQueue interface {
+	// AddCode enqueues the provided code hashes for fetching, ignoring any
+	// hashes already present locally or already queued. Implementations may
+	// block until internally ready to accept work. Returns a non-nil error if the
+	// code queue is shutting down or if persisting enqueue markers fails.
+	AddCode(codeHashes []common.Hash) error
+
+	// CodeHashes returns a channel that yields code hashes to be fetched by the
+	// consumer. The channel should be closed when no further hashes will be
+	// produced (e.g., after Finalize and draining persisted markers).
+	CodeHashes() <-chan common.Hash
+
+	// Finalize signals that no more code hashes will be produced by the
+	// producer (e.g., after the account trie has been fully scanned). After
+	// this call, the code queue should complete any outstanding work and then
+	// return from [Syncer.Sync] without waiting for additional input.
+	// Returns a non-nil error if the code queue is shutting down or if persisting
+	// enqueue markers fails.
+	Finalize() error
 }
