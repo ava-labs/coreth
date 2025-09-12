@@ -61,6 +61,14 @@ func TestBlockGasCost(t *testing.T) {
 			timestamp:  9,
 			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
 		},
+		{
+			name:       "granite_returns_zero",
+			upgrades:   extras.TestGraniteChainConfig.NetworkUpgrades,
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   big.NewInt(0),
+		},
 	}
 
 	for _, test := range tests {
@@ -306,7 +314,7 @@ func TestVerifyBlockFee(t *testing.T) {
 		txs                    []*types.Transaction
 		receipts               []*types.Receipt
 		extraStateContribution *big.Int
-		shouldErr              bool
+		expectedErr            error
 	}{
 		"tx only base fee": {
 			baseFee:            big.NewInt(100),
@@ -319,7 +327,7 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 1000},
 			},
 			extraStateContribution: nil,
-			shouldErr:              true,
+			expectedErr:            ErrInsufficientBlockGas,
 		},
 		"tx covers exactly block fee": {
 			baseFee:            big.NewInt(100),
@@ -332,7 +340,6 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: nil,
-			shouldErr:              false,
 		},
 		"txs share block fee": {
 			baseFee:            big.NewInt(100),
@@ -347,7 +354,6 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: nil,
-			shouldErr:              false,
 		},
 		"txs split block fee": {
 			baseFee:            big.NewInt(100),
@@ -362,7 +368,6 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: nil,
-			shouldErr:              false,
 		},
 		"split block fee with extra state contribution": {
 			baseFee:            big.NewInt(100),
@@ -375,7 +380,6 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 100_000},
 			},
 			extraStateContribution: big.NewInt(5_000_000),
-			shouldErr:              false,
 		},
 		"extra state contribution insufficient": {
 			baseFee:                big.NewInt(100),
@@ -384,7 +388,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(9_999_999),
-			shouldErr:              true,
+			expectedErr:            ErrInsufficientBlockGas,
 		},
 		"negative extra state contribution": {
 			baseFee:                big.NewInt(100),
@@ -393,7 +397,7 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(-1),
-			shouldErr:              true,
+			expectedErr:            errInvalidExtraStateChangeContribution,
 		},
 		"extra state contribution covers block fee": {
 			baseFee:                big.NewInt(100),
@@ -402,7 +406,6 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(10_000_000),
-			shouldErr:              false,
 		},
 		"extra state contribution covers more than block fee": {
 			baseFee:                big.NewInt(100),
@@ -411,7 +414,6 @@ func TestVerifyBlockFee(t *testing.T) {
 			txs:                    nil,
 			receipts:               nil,
 			extraStateContribution: big.NewInt(10_000_001),
-			shouldErr:              false,
 		},
 		"tx only base fee after full time window": {
 			baseFee:            big.NewInt(100),
@@ -424,7 +426,6 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 1000},
 			},
 			extraStateContribution: nil,
-			shouldErr:              false,
 		},
 		"tx only base fee after large time window": {
 			baseFee:            big.NewInt(100),
@@ -437,7 +438,6 @@ func TestVerifyBlockFee(t *testing.T) {
 				{GasUsed: 1000},
 			},
 			extraStateContribution: nil,
-			shouldErr:              false,
 		},
 	}
 
@@ -450,15 +450,8 @@ func TestVerifyBlockFee(t *testing.T) {
 			)
 			bigBlockGasCost := new(big.Int).SetUint64(blockGasCost)
 
-			if err := VerifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution); err != nil {
-				if !test.shouldErr {
-					t.Fatalf("Unexpected error: %s", err)
-				}
-			} else {
-				if test.shouldErr {
-					t.Fatal("Should have failed verification")
-				}
-			}
+			err := VerifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution)
+			require.ErrorIs(t, err, test.expectedErr)
 		})
 	}
 }
