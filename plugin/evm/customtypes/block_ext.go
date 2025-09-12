@@ -130,7 +130,12 @@ func BlockGasCost(b *ethtypes.Block) *big.Int {
 }
 
 func BlockTimeMilliseconds(b *ethtypes.Block) *uint64 {
-	return GetHeaderExtra(b.Header()).TimeMilliseconds
+	var time *uint64
+	if t := GetHeaderExtra(b.Header()).TimeMilliseconds; t != nil {
+		time = new(uint64)
+		*time = *t
+	}
+	return time
 }
 
 func CalcExtDataHash(extdata []byte) common.Hash {

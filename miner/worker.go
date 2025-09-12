@@ -144,17 +144,23 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	tstart := w.clock.Time()
-	timestamp := uint64(tstart.Unix())
-	parent := w.chain.CurrentBlock()
+	var (
+		parent      = w.chain.CurrentBlock()
+		tstart      = w.clock.Time()
+		timestamp   = uint64(tstart.Unix())
+		timestampMS = uint64(tstart.UnixMilli())
+		chainExtra  = params.GetExtra(w.chainConfig)
+	)
 	// Note: in order to support asynchronous block production, blocks are allowed to have
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
 	if parent.Time >= timestamp {
 		timestamp = parent.Time
+		if chainExtra.IsGranite(timestamp) {
+			timestampMS = uint64(tstart.UnixMilli()) // TODO: establish minimum time
+		}
 	}
 
-	chainExtra := params.GetExtra(w.chainConfig)
 	gasLimit, err := customheader.GasLimit(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("calculating new gas limit: %w", err)
@@ -189,8 +195,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	// Add TimeMilliseconds if Granite is active.
 	if chainExtra.IsGranite(header.Time) {
 		headerExtra := customtypes.GetHeaderExtra(header)
-		timeMilliseconds := uint64(tstart.UnixMilli())
-		headerExtra.TimeMilliseconds = &timeMilliseconds
+		headerExtra.TimeMilliseconds = &timestampMS
 	}
 
 	if w.coinbase == (common.Address{}) {

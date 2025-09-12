@@ -220,7 +220,7 @@ type HeaderSerializable struct {
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
 	// TimeMilliseconds was added by Granite and is ignored in legacy headers.
-	TimeMilliseconds *uint64 `json:"timeMilliseconds" rlp:"optional"`
+	TimeMilliseconds *uint64 `json:"timestampMilliseconds" rlp:"optional"`
 }
 
 // field type overrides for gencodec

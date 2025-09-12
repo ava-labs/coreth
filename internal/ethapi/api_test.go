@@ -1760,7 +1760,6 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 	}
 
 	for i, tt := range testSuite {
-		t.Log("Running test case", i, tt.file)
 		var (
 			result map[string]interface{}
 			err    error

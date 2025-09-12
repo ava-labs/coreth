@@ -39,7 +39,7 @@ func (h HeaderSerializable) MarshalJSON() ([]byte, error) {
 		BlobGasUsed      *hexutil.Uint64  `json:"blobGasUsed" rlp:"optional"`
 		ExcessBlobGas    *hexutil.Uint64  `json:"excessBlobGas" rlp:"optional"`
 		ParentBeaconRoot *common.Hash     `json:"parentBeaconBlockRoot" rlp:"optional"`
-		TimeMilliseconds *hexutil.Uint64  `json:"timeMilliseconds" rlp:"optional"`
+		TimeMilliseconds *hexutil.Uint64  `json:"timestampMilliseconds" rlp:"optional"`
 		Hash             common.Hash      `json:"hash"`
 	}
 	var enc HeaderSerializable
@@ -95,7 +95,7 @@ func (h *HeaderSerializable) UnmarshalJSON(input []byte) error {
 		BlobGasUsed      *hexutil.Uint64   `json:"blobGasUsed" rlp:"optional"`
 		ExcessBlobGas    *hexutil.Uint64   `json:"excessBlobGas" rlp:"optional"`
 		ParentBeaconRoot *common.Hash      `json:"parentBeaconBlockRoot" rlp:"optional"`
-		TimeMilliseconds *hexutil.Uint64   `json:"timeMilliseconds" rlp:"optional"`
+		TimeMilliseconds *hexutil.Uint64   `json:"timestampMilliseconds" rlp:"optional"`
 	}
 	var dec HeaderSerializable
 	if err := json.Unmarshal(input, &dec); err != nil {

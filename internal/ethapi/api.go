@@ -1277,7 +1277,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 		result["parentBeaconBlockRoot"] = head.ParentBeaconRoot
 	}
 	if headExtra.TimeMilliseconds != nil {
-		result["timeMilliseconds"] = hexutil.Uint64(*headExtra.TimeMilliseconds)
+		result["timestampMilliseconds"] = hexutil.Uint64(*headExtra.TimeMilliseconds)
 	}
 	return result
 }
