@@ -44,6 +44,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
@@ -1291,7 +1292,7 @@ func testFutureBlock(t *testing.T, scheme string) {
 		}
 	}()
 
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, ap0.MinGasPrice, nil)
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	blkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -1370,11 +1371,11 @@ func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 5; i++ {
-		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, ap0.MinGasPrice, nil)
+		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 	for i := 5; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, ap1.MinGasPrice, nil)
+		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap1.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 	blk, err = vmtest.IssueTxsAndBuild(txs, vm)
