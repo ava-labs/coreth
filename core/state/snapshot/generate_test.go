@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -62,7 +61,6 @@ func hashData(input []byte) common.Hash {
 // Tests that snapshot generation from an empty database.
 func TestGeneration(t *testing.T) {
 	testGeneration(t, rawdb.HashScheme)
-	testGeneration(t, rawdb.PathScheme)
 }
 
 func testGeneration(t *testing.T, scheme string) {
@@ -81,7 +79,7 @@ func testGeneration(t *testing.T, scheme string) {
 
 	root, snap := helper.CommitAndGenerate() // two of which also has the same 3-slot storage trie attached.
 
-	if have, want := root, common.HexToHash("0xa819054cfef894169a5b56ccc4e5e06f14829d4a57498e8b9fb13ff21491828d"); have != want {
+	if have, want := root, common.HexToHash("0xe3712f1a226f3782caca78ca770ccc19ee000552813a9f59d479f8611db9b1fd"); have != want {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
 	select {
@@ -102,7 +100,6 @@ func testGeneration(t *testing.T, scheme string) {
 // Tests that snapshot generation with existent flat state.
 func TestGenerateExistentState(t *testing.T) {
 	testGenerateExistentState(t, rawdb.HashScheme)
-	testGenerateExistentState(t, rawdb.PathScheme)
 }
 
 func testGenerateExistentState(t *testing.T, scheme string) {
@@ -176,9 +173,7 @@ type testHelper struct {
 func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &triedb.Config{}
-	if scheme == rawdb.PathScheme {
-		config.DBOverride = pathdb.Config{}.BackendConstructor // disable caching
-	} else {
+	if scheme == rawdb.HashScheme {
 		config.DBOverride = hashdb.Config{}.BackendConstructor // disable caching
 	}
 	triedb := triedb.NewDatabase(diskdb, config)
@@ -265,7 +260,6 @@ func (t *testHelper) CommitAndGenerate() (common.Hash, *diskLayer) {
 //   - extra slots in the end
 func TestGenerateExistentStateWithWrongStorage(t *testing.T) {
 	testGenerateExistentStateWithWrongStorage(t, rawdb.HashScheme)
-	testGenerateExistentStateWithWrongStorage(t, rawdb.PathScheme)
 }
 
 func testGenerateExistentStateWithWrongStorage(t *testing.T, scheme string) {
@@ -362,7 +356,6 @@ func testGenerateExistentStateWithWrongStorage(t *testing.T, scheme string) {
 // - extra accounts
 func TestGenerateExistentStateWithWrongAccounts(t *testing.T) {
 	testGenerateExistentStateWithWrongAccounts(t, rawdb.HashScheme)
-	testGenerateExistentStateWithWrongAccounts(t, rawdb.PathScheme)
 }
 
 func testGenerateExistentStateWithWrongAccounts(t *testing.T, scheme string) {
@@ -422,7 +415,6 @@ func testGenerateExistentStateWithWrongAccounts(t *testing.T, scheme string) {
 // node in the account trie.
 func TestGenerateCorruptAccountTrie(t *testing.T) {
 	testGenerateCorruptAccountTrie(t, rawdb.HashScheme)
-	testGenerateCorruptAccountTrie(t, rawdb.PathScheme)
 }
 
 func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
@@ -437,11 +429,8 @@ func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 
 	root := helper.Commit() // Root: 0xfa04f652e8bd3938971bf7d71c3c688574af334ca8bc20e64b01ba610ae93cad
 
-	// Delete an account trie node and ensure the generator chokes
-	targetPath := []byte{0xc}
-	targetHash := common.HexToHash("0xf73118e0254ce091588d66038744a0afae5f65a194de67cff310c683ae43329e")
-
-	rawdb.DeleteTrieNode(helper.diskdb, common.Hash{}, targetPath, targetHash, scheme)
+	// Force corruption under hash scheme by deleting the root node.
+	rawdb.DeleteTrieNode(helper.diskdb, common.Hash{}, nil, root, scheme)
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, testBlockHash, root, nil)
 	select {
@@ -463,7 +452,6 @@ func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 // handled differently inside the generator.
 func TestGenerateMissingStorageTrie(t *testing.T) {
 	testGenerateMissingStorageTrie(t, rawdb.HashScheme)
-	testGenerateMissingStorageTrie(t, rawdb.PathScheme)
 }
 
 func testGenerateMissingStorageTrie(t *testing.T, scheme string) {
@@ -506,7 +494,6 @@ func testGenerateMissingStorageTrie(t *testing.T, scheme string) {
 // node in a storage trie.
 func TestGenerateCorruptStorageTrie(t *testing.T) {
 	testGenerateCorruptStorageTrie(t, rawdb.HashScheme)
-	testGenerateCorruptStorageTrie(t, rawdb.PathScheme)
 }
 
 func testGenerateCorruptStorageTrie(t *testing.T, scheme string) {
@@ -547,7 +534,6 @@ func testGenerateCorruptStorageTrie(t *testing.T, scheme string) {
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithExtraAccounts(t *testing.T) {
 	testGenerateWithExtraAccounts(t, rawdb.HashScheme)
-	testGenerateWithExtraAccounts(t, rawdb.PathScheme)
 }
 
 func testGenerateWithExtraAccounts(t *testing.T, scheme string) {
@@ -620,7 +606,6 @@ func enableLogging() {
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
 func TestGenerateWithManyExtraAccounts(t *testing.T) {
 	testGenerateWithManyExtraAccounts(t, rawdb.HashScheme)
-	testGenerateWithManyExtraAccounts(t, rawdb.PathScheme)
 }
 
 func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
@@ -681,7 +666,6 @@ func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 // But in the database, we still have the stale storage slots 0x04, 0x05. They are not iterated yet, but the procedure is finished.
 func TestGenerateWithExtraBeforeAndAfter(t *testing.T) {
 	testGenerateWithExtraBeforeAndAfter(t, rawdb.HashScheme)
-	testGenerateWithExtraBeforeAndAfter(t, rawdb.PathScheme)
 }
 
 func testGenerateWithExtraBeforeAndAfter(t *testing.T, scheme string) {
@@ -722,7 +706,6 @@ func testGenerateWithExtraBeforeAndAfter(t *testing.T, scheme string) {
 // in the snapshot database, which cannot be parsed back to an account
 func TestGenerateWithMalformedSnapdata(t *testing.T) {
 	testGenerateWithMalformedSnapdata(t, rawdb.HashScheme)
-	testGenerateWithMalformedSnapdata(t, rawdb.PathScheme)
 }
 
 func testGenerateWithMalformedSnapdata(t *testing.T, scheme string) {
@@ -763,7 +746,6 @@ func testGenerateWithMalformedSnapdata(t *testing.T, scheme string) {
 
 func TestGenerateFromEmptySnap(t *testing.T) {
 	testGenerateFromEmptySnap(t, rawdb.HashScheme)
-	testGenerateFromEmptySnap(t, rawdb.PathScheme)
 }
 
 func testGenerateFromEmptySnap(t *testing.T, scheme string) {
@@ -801,7 +783,6 @@ func testGenerateFromEmptySnap(t *testing.T, scheme string) {
 // which we must also add.
 func TestGenerateWithIncompleteStorage(t *testing.T) {
 	testGenerateWithIncompleteStorage(t, rawdb.HashScheme)
-	testGenerateWithIncompleteStorage(t, rawdb.PathScheme)
 }
 
 func testGenerateWithIncompleteStorage(t *testing.T, scheme string) {
@@ -904,7 +885,6 @@ func populateDangling(disk ethdb.KeyValueStore) {
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateCompleteSnapshotWithDanglingStorage(t *testing.T) {
 	testGenerateCompleteSnapshotWithDanglingStorage(t, rawdb.HashScheme)
-	testGenerateCompleteSnapshotWithDanglingStorage(t, rawdb.PathScheme)
 }
 
 func testGenerateCompleteSnapshotWithDanglingStorage(t *testing.T, scheme string) {
@@ -944,7 +924,6 @@ func testGenerateCompleteSnapshotWithDanglingStorage(t *testing.T, scheme string
 // This test will populate some dangling storages to see if they can be cleaned up.
 func TestGenerateBrokenSnapshotWithDanglingStorage(t *testing.T) {
 	testGenerateBrokenSnapshotWithDanglingStorage(t, rawdb.HashScheme)
-	testGenerateBrokenSnapshotWithDanglingStorage(t, rawdb.PathScheme)
 }
 
 func testGenerateBrokenSnapshotWithDanglingStorage(t *testing.T, scheme string) {
