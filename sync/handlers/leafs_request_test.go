@@ -437,6 +437,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			},
 			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
 				require.NotEmpty(t, response)
+				require.NoError(t, err)
 
 				var leafsResponse message.LeafsResponse
 				if _, err := message.Codec.Unmarshal(response, &leafsResponse); err != nil {
