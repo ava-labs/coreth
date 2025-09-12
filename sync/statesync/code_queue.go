@@ -41,26 +41,31 @@ var (
 // onto an internal channel consumed by the code syncer.
 type CodeQueue struct {
 	db ethdb.Database
+
 	// Guards in-memory dedupe and batch selection in addCode.
 	lock sync.Mutex
+
 	// Closed by Init to signal that the queue is ready.
 	open chan struct{}
+
 	// Closed by the owner to indicate shutdown and enqueue aborts immediately.
 	quit <-chan struct{}
+
 	// Set when Finalize has been called which disallows further AddCode.
 	finalized atomic.Bool
 
-	// Tracks in-flight AddCode calls to coordinate clean shutdown.
-	addWG sync.WaitGroup
-
 	// Consumed by the code syncer workers to fetch code hashes.
 	codeHashes chan common.Hash
+
+	// Internal channel for producers - a single forwarder owns codeHashes sends and close.
+	// All producers publish to enqueueCh - forwardEnqueues() relays to codeHashes.
+	enqueueCh chan common.Hash
 
 	// Set of code hashes enqueued in-memory to avoid duplicate sends.
 	outstanding set.Set[common.Hash]
 
 	// Ensures channels are closed exactly once from any shutdown path.
-	closeOnce sync.Once
+	enqueueCloseOnce sync.Once
 }
 
 type codeQueueOptions struct {
@@ -100,6 +105,7 @@ func NewCodeQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeQueueOpti
 	q := &CodeQueue{
 		db:          db,
 		codeHashes:  make(chan common.Hash, o.maxOutstanding),
+		enqueueCh:   make(chan common.Hash, o.maxOutstanding),
 		open:        make(chan struct{}),
 		outstanding: set.NewSet[common.Hash](0),
 		quit:        done,
@@ -121,6 +127,10 @@ func (q *CodeQueue) CodeHashes() <-chan common.Hash {
 
 // Init enqueues any persisted code markers found on disk and then marks the queue ready.
 func (q *CodeQueue) Init() error {
+	// Start forwarder that owns codeHashes sends and close.
+	// This satisfies the "single closer/sender" rule and avoids send-after-close races.
+	go q.forwardEnqueues()
+
 	// Recover any persisted code markers and enqueue them.
 	// Note: dbCodeHashes are already present as "to-fetch" markers. addCode will
 	// re-persist them, which is a trivial redundancy that happens only on resume
@@ -132,12 +142,6 @@ func (q *CodeQueue) Init() error {
 	if err := q.addCode(dbCodeHashes); err != nil {
 		return fmt.Errorf("unable to resume previous sync: %w", err)
 	}
-	// If the owner signals shutdown before Finalize is called, close the outgoing
-	// channel so consumers don't block indefinitely.
-	go func() {
-		<-q.quit
-		q.closeOutput()
-	}()
 	close(q.open)
 
 	return nil
@@ -145,15 +149,25 @@ func (q *CodeQueue) Init() error {
 
 // AddCode implements [syncpkg.CodeRequestQueue] by persisting and enqueueing new hashes.
 // Blocks until the queue is initialized via Init.
+//
+// Flow:
+//  1. Gate on open (Init) and quit (shutdown) so callers don't block forever.
+//  2. If finalized, refuse new work to ensure deterministic shutdown.
+//  3. Persist "to-fetch" markers (deduped) and publish selected hashes to enqueueCh.
+//     The forwarder goroutine owns relaying to codeHashes and closing it.
 func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
+	// If shutdown already requested, refuse immediately with shutdown sentinel.
+	select {
+	case <-q.quit:
+		return errFailedToAddCodeHashesToQueue
+	default:
+	}
+	// Block until initialized, but still respect a concurrent shutdown.
 	select {
 	case <-q.open:
 	case <-q.quit:
 		return errFailedToAddCodeHashesToQueue
 	}
-
-	q.addWG.Add(1)
-	defer q.addWG.Done()
 
 	// If finalized, refuse any new work. This ensures deterministic shutdown
 	// and prevents post-finalization enqueues caused by racy producers.
@@ -170,11 +184,11 @@ func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
 
 // Finalize implements [syncpkg.CodeRequestQueue] by signaling no further code hashes will be added.
 func (q *CodeQueue) Finalize() error {
-	// Prefer early-exit deterministically if quit is already closed.
-	// Without this we also experience test flakes because the channel is not closed immediately.
+	// If shutdown already happened, treat as early-exit. The forwarder will
+	// observe quit and close codeHashes. We just report the sentinel here.
 	select {
 	case <-q.quit:
-		q.closeOutput()
+		// Don't close enqueueCh here - forwarder will exit via quit and close codeHashes.
 		return errFailedToFinalizeCodeQueue
 	default:
 	}
@@ -183,11 +197,16 @@ func (q *CodeQueue) Finalize() error {
 	select {
 	case <-q.open:
 	case <-q.quit:
-		q.closeOutput()
 		return errFailedToFinalizeCodeQueue
 	}
 
-	q.closeOutput()
+	// Mark finalized so producers switch to errAddCodeAfterFinalize, then close
+	// the internal producer channel. The forwarder will drain remaining items (if any)
+	// and close codeHashes exactly once when enqueueCh is closed.
+	q.finalized.Store(true)
+	q.enqueueCloseOnce.Do(func() {
+		close(q.enqueueCh)
+	})
 
 	return nil
 }
@@ -233,11 +252,14 @@ func (q *CodeQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes []comm
 	return selected
 }
 
+// enqueue publishes the provided code hashes to the internal channel for the forwarder to relay to codeHashes.
 func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
+	// Publish to enqueueCh so the single forwarder can relay to codeHashes
+	// and remain the sole closer/sender on that channel.
 	for _, h := range codeHashes {
 		// Attempt to send, still respecting shutdown while potentially blocking.
 		select {
-		case q.codeHashes <- h:
+		case q.enqueueCh <- h:
 		case <-q.quit:
 			return errFailedToAddCodeHashesToQueue
 		}
@@ -246,12 +268,37 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	return nil
 }
 
-// closeOutput marks the queue finalized, waits for in-flight producers to drain,
-// and closes the outgoing channel exactly once.
-func (q *CodeQueue) closeOutput() {
-	q.finalized.Store(true)
-	q.addWG.Wait()
-	q.closeOnce.Do(func() { close(q.codeHashes) })
+// forwardEnqueues relays items from enqueueCh to codeHashes and is the sole
+// closer of codeHashes to satisfy channel-closing invariants. It also respects
+// quit by closing codeHashes as soon as shutdown is signaled.
+func (q *CodeQueue) forwardEnqueues() {
+	for {
+		select {
+		case h, ok := <-q.enqueueCh:
+			if !ok {
+				close(q.codeHashes)
+				return
+			}
+			if !q.forwardOne(h) {
+				return
+			}
+		case <-q.quit:
+			close(q.codeHashes)
+			return
+		}
+	}
+}
+
+// forwardOne attempts to forward a single hash to codeHashes while respecting quit.
+// Returns false if shutdown was observed and the caller should exit.
+func (q *CodeQueue) forwardOne(h common.Hash) bool {
+	select {
+	case q.codeHashes <- h:
+		return true
+	case <-q.quit:
+		close(q.codeHashes)
+		return false
+	}
 }
 
 // recoverUnfetchedCodeHashes cleans out any codeToFetch markers from the database that are no longer

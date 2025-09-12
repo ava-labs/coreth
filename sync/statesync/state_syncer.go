@@ -17,7 +17,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 
-	synccommon "github.com/ava-labs/coreth/sync"
+	syncpkg "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
@@ -29,8 +29,8 @@ const (
 )
 
 var (
-	_                      synccommon.Syncer = (*stateSync)(nil)
-	errCodeFetcherRequired                   = errors.New("code fetcher is required")
+	_                      syncpkg.Syncer = (*stateSync)(nil)
+	errCodeFetcherRequired                = errors.New("code fetcher is required")
 )
 
 // Name returns the human-readable name for this sync task.
@@ -77,7 +77,7 @@ type stateSync struct {
 
 	segments  chan syncclient.LeafSyncTask   // channel of tasks to sync
 	syncer    *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
-	codeQueue synccommon.CodeRequestQueue    // fetcher that manages the asynchronous download and batching of code hashes
+	codeQueue syncpkg.CodeRequestQueue       // queue that manages the asynchronous download and batching of code hashes
 	trieQueue *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
 
 	// track the main account trie specifically to commit its root at the end of the operation
@@ -94,7 +94,7 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher synccommon.CodeRequestQueue, config Config) (synccommon.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher syncpkg.CodeRequestQueue, config Config) (syncpkg.Syncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	ss := &stateSync{
