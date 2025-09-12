@@ -113,11 +113,7 @@ func (r RulesExtra) currentPrecompiles() map[common.Address]vm.PrecompiledContra
 // These were only active historically and are not active in the current network.
 func (r RulesExtra) precompileOverrideBuiltin(addr common.Address) (libevm.PrecompiledContract, bool) {
 	precompile, ok := r.currentPrecompiles()[addr]
-	if !ok {
-		return nil, false
-	}
-
-	return precompile, true
+	return precompile, ok
 }
 
 func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.PrecompiledContract {
