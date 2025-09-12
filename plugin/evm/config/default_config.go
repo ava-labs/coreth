@@ -80,6 +80,8 @@ func NewDefaultConfig() Config {
 		StateHistory:         uint64(32),
 		// Estimated block count in 24 hours with 2s block accept period
 		HistoricalProofQueryWindow: uint64(24 * time.Hour / (2 * time.Second)),
+		// Database Settings
+		BlockDatabaseEnabled: false,
 		// Price Option Defaults
 		PriceOptionSlowFeePercentage: uint64(95),
 		PriceOptionFastFeePercentage: uint64(105),
