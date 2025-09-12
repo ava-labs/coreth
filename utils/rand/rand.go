@@ -6,47 +6,39 @@ package rand
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"math"
+	"math/big"
 )
 
-// SecureIntn generates a secure random integer in the range [0, n).
-// If crypto/rand fails, it returns 0 as a fallback.
+// SecureIntn returns uniform in [0, n). For n <= 0, returns 0.
 func SecureIntn(n int) int {
 	if n <= 0 {
 		return 0
 	}
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		return 0
+	bn, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
+	if err != nil {
+		panic("crypto/rand failed: " + err.Error())
 	}
-	return int(binary.BigEndian.Uint32(b)) % n
+	return int(bn.Int64())
 }
 
-// SecureUint64 generates a secure random uint64.
-// If crypto/rand fails, it returns 0 as a fallback.
-func SecureUint64() uint64 {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return 0
-	}
-	return binary.BigEndian.Uint64(b)
-}
-
-// SecureFloat64 generates a secure random float64 in the range [0.0, 1.0).
-// If crypto/rand fails, it returns 0.5 as a fallback.
 func SecureFloat64() float64 {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return 0.5
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("crypto/rand failed: " + err.Error())
 	}
-	// Convert bytes to uint64 and normalize to [0.0, 1.0)
-	return float64(binary.BigEndian.Uint64(b)) / (1 << 64)
+	bits := binary.BigEndian.Uint64(b[:])
+	bits = (bits >> 12) | (1023 << 52) // 52-bit mantissa, exponent=1023 -> [1,2)
+	return math.Float64frombits(bits) - 1.0
 }
 
-// SecureIntRange generates a secure random integer in the range [min, max).
-// If crypto/rand fails, it returns min as a fallback.
+// SecureIntRange returns uniform in [min, max).
+// Panics if min >= max or on crypto/rand failure.
 func SecureIntRange(min, max int) int {
 	if min >= max {
-		return min
+		panic("invalid range: min >= max")
 	}
-	return min + SecureIntn(max-min)
+	// (max - min) must be representable in int64 for big.NewInt; this is safe on 64-bit.
+	width := max - min
+	return min + SecureIntn(width)
 }
