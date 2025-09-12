@@ -100,7 +100,7 @@ func New(config *Config) *Database {
 		log.Crit("firewood: config must be provided")
 	}
 
-	//nolint:staticcheck
+	//nolint:staticcheck // false positive, if config is nil then we will have exited.
 	err := validatePath(config.FilePath)
 	if err != nil {
 		log.Crit("firewood: error validating config", "error", err)
