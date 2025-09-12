@@ -83,7 +83,7 @@ func createBlocks(t *testing.T, numBlocks int) ([]*types.Block, []types.Receipts
 	}
 	engine := dummy.NewFaker()
 	signer := types.LatestSigner(params.TestChainConfig)
-	_, blocks, receipts, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 10, func(i int, gen *core.BlockGen) {
+	_, blocks, receipts, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, 10, func(_ int, gen *core.BlockGen) {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
 			Nonce:     gen.TxNonce(addr1),
@@ -260,7 +260,7 @@ func TestWrappedBlockDatabase_SameHeightWrites(t *testing.T) {
 	}
 	engine := dummy.NewFaker()
 	signer := types.LatestSigner(params.TestChainConfig)
-	_, blocks2, _, err := core.GenerateChainWithGenesis(gspec, engine, 1, 10, func(i int, gen *core.BlockGen) {
+	_, blocks2, _, err := core.GenerateChainWithGenesis(gspec, engine, 1, 10, func(_ int, gen *core.BlockGen) {
 		gen.OffsetTime(int64(5000))
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
 			ChainID:   params.TestChainConfig.ChainID,
