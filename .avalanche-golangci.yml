@@ -59,7 +59,7 @@ linters:
     - errorlint
     # - forbidigo
     - goconst
-    # - gocritic
+    - gocritic
     - goprintffuncname
     # - gosec
     - govet
@@ -71,7 +71,7 @@ linters:
     - noctx
     - nolintlint
     - perfsprint
-    # - prealloc
+    - prealloc
     # - predeclared
     - revive
     - spancheck
