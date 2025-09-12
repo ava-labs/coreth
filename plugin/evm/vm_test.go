@@ -44,7 +44,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
@@ -208,7 +207,7 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan)
 
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 	blk1, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatalf("Failed to issue txs and build block: %s", err)
@@ -225,7 +224,7 @@ func testBuildEthTxBlock(t *testing.T, scheme string) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[1].ToECDSA(), uint64(i), &vmtest.TestEthAddrs[0], big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[1].ToECDSA(), uint64(i), &vmtest.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 	blk2, err := vmtest.IssueTxsAndSetPreference(txs, vm)
@@ -359,7 +358,7 @@ func testSetPreferenceRace(t *testing.T, scheme string) {
 	newTxPoolHeadChan2 := make(chan core.NewTxPoolReorgEvent, 1)
 	vm2.txPool.SubscribeNewReorgEvent(newTxPoolHeadChan2)
 
-	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -396,7 +395,7 @@ func testSetPreferenceRace(t *testing.T, scheme string) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[1].ToECDSA(), uint64(i), &vmtest.TestEthAddrs[1], big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[1].ToECDSA(), uint64(i), &vmtest.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 
@@ -534,7 +533,7 @@ func testReorgProtection(t *testing.T, scheme string) {
 	key := vmtest.TestKeys[1].ToECDSA()
 	address := vmtest.TestEthAddrs[1]
 
-	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -579,7 +578,7 @@ func testReorgProtection(t *testing.T, scheme string) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 
@@ -667,7 +666,7 @@ func testNonCanonicalAccept(t *testing.T, scheme string) {
 	key := vmtest.TestKeys[1].ToECDSA()
 	address := vmtest.TestEthAddrs[1]
 
-	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	vm1BlkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -725,7 +724,7 @@ func testNonCanonicalAccept(t *testing.T, scheme string) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 
@@ -831,7 +830,7 @@ func testStickyPreference(t *testing.T, scheme string) {
 	key := vmtest.TestKeys[1].ToECDSA()
 	address := vmtest.TestEthAddrs[1]
 
-	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -868,7 +867,7 @@ func testStickyPreference(t *testing.T, scheme string) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 
@@ -1033,7 +1032,7 @@ func testUncleBlock(t *testing.T, scheme string) {
 	key := vmtest.TestKeys[1].ToECDSA()
 	address := vmtest.TestEthAddrs[1]
 
-	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -1068,7 +1067,7 @@ func testUncleBlock(t *testing.T, scheme string) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 
@@ -1163,7 +1162,7 @@ func testAcceptReorg(t *testing.T, scheme string) {
 	key := vmtest.TestKeys[1].ToECDSA()
 	address := vmtest.TestEthAddrs[1]
 
-	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm1.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	vm1BlkA, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm1)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -1200,7 +1199,7 @@ func testAcceptReorg(t *testing.T, scheme string) {
 	// and to be split into two separate blocks on VM2
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
-		signedTx = newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx = newSignedLegacyTx(t, vm1.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		txs[i] = signedTx
 	}
 
@@ -1292,7 +1291,7 @@ func testFutureBlock(t *testing.T, scheme string) {
 		}
 	}()
 
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 	blkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -1354,7 +1353,7 @@ func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 	key := vmtest.TestKeys[1].ToECDSA()
 	address := vmtest.TestEthAddrs[1]
 
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 	blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatal(err)
@@ -1371,11 +1370,11 @@ func testBuildApricotPhase1Block(t *testing.T, scheme string) {
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 5; i++ {
-		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap0.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, vmtest.InitialBaseFee, nil)
 		txs[i] = signedTx
 	}
 	for i := 5; i < 10; i++ {
-		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), big.NewInt(ap1.MinGasPrice))
+		signedTx := newSignedLegacyTx(t, vm.chainConfig, key, uint64(i), &address, big.NewInt(10), 21000, vmtest.InitialBaseFee, nil)
 		txs[i] = signedTx
 	}
 	blk, err = vmtest.IssueTxsAndBuild(txs, vm)
@@ -1429,7 +1428,7 @@ func testLastAcceptedBlockNumberAllow(t *testing.T, scheme string) {
 		}
 	}()
 
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), big.NewInt(ap0.MinGasPrice))
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	if err != nil {
 		t.Fatalf("Failed to build block with transaction: %s", err)
@@ -1472,7 +1471,7 @@ func TestSkipChainConfigCheckCompatible(t *testing.T) {
 
 	// Since rewinding is permitted for last accepted height of 0, we must
 	// accept one block to test the SkipUpgradeCheck functionality.
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 	blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 	require.NoError(t, err)
 	require.NoError(t, blk.Accept(context.Background()))
@@ -1561,7 +1560,7 @@ func TestParentBeaconRootBlock(t *testing.T) {
 				}
 			}()
 
-			signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+			signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 			if err != nil {
 				t.Fatalf("Failed to build block with transaction: %s", err)
@@ -1817,7 +1816,7 @@ func TestWaitForEvent(t *testing.T) {
 					require.Equal(t, commonEng.PendingTxs, msg)
 				}()
 
-				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
 					require.NoError(t, err)
 				}
@@ -1828,7 +1827,7 @@ func TestWaitForEvent(t *testing.T) {
 		{
 			name: "WaitForEvent doesn't return once a block is built and accepted",
 			testCase: func(t *testing.T, vm *VM) {
-				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 
 				for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
 					require.NoError(t, err)
@@ -1863,7 +1862,7 @@ func TestWaitForEvent(t *testing.T) {
 
 				time.Sleep(time.Second * 2) // sleep some time to let the gas capacity to refill
 
-				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				require.NoError(t, err)
 
 				for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
@@ -1895,12 +1894,12 @@ func TestWaitForEvent(t *testing.T) {
 		{
 			name: "WaitForEvent waits some time after a block is built",
 			testCase: func(t *testing.T, vm *VM) {
-				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				lastBuildBlockTime := time.Now()
 				blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 				require.NoError(t, err)
 				require.NoError(t, blk.Accept(context.Background()))
-				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[1], big.NewInt(1), vmtest.InitialBaseFee)
+				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 
 				for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
 					require.NoError(t, err)
@@ -2021,7 +2020,9 @@ func newSignedLegacyTx(
 	nonce uint64,
 	to *common.Address,
 	value *big.Int,
+	gas uint64,
 	gasPrice *big.Int,
+	data []byte,
 ) *types.Transaction {
 	t.Helper()
 
@@ -2029,8 +2030,9 @@ func newSignedLegacyTx(
 		Nonce:    nonce,
 		To:       to,
 		Value:    value,
-		Gas:      21000,
+		Gas:      gas,
 		GasPrice: gasPrice,
+		Data:     data,
 	})
 	signedTx, err := types.SignTx(tx, types.LatestSigner(cfg), key)
 	require.NoError(t, err)
@@ -2044,18 +2046,7 @@ func deployContract(ctx context.Context, t *testing.T, vm *VM, gasPrice *big.Int
 	callerKey := vmtest.TestKeys[0]
 
 	nonce := vm.txPool.Nonce(callerAddr)
-	tx := types.NewTx(
-		&types.LegacyTx{
-			Nonce:    nonce,
-			To:       nil, // contract creation
-			Value:    big.NewInt(0),
-			Gas:      1000000,
-			GasPrice: gasPrice,
-			Data:     code,
-		},
-	)
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), callerKey.ToECDSA())
-	require.NoError(t, err)
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, callerKey.ToECDSA(), nonce, nil, big.NewInt(0), 1000000, gasPrice, code)
 
 	for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
 		require.NoError(t, err)
@@ -2163,9 +2154,7 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 
 			data := crypto.Keccak256([]byte("delegateSendHello()"))[:4]
 			nonce := vm.txPool.Nonce(vmtest.TestEthAddrs[0])
-			tx := types.NewTransaction(nonce, contractAddr, big.NewInt(0), 100000, tt.txGasPrice, data)
-			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
-			require.NoError(t, err)
+			signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), nonce, &contractAddr, big.NewInt(0), 100000, tt.txGasPrice, data)
 			for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
 				require.NoError(t, err)
 			}
