@@ -25,7 +25,7 @@ import (
 	"github.com/ava-labs/coreth/sync/blocksync"
 	"github.com/ava-labs/coreth/sync/statesync"
 
-	synccommon "github.com/ava-labs/coreth/sync"
+	syncpkg "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
@@ -61,7 +61,7 @@ type ClientConfig struct {
 	Parser message.SyncableParser
 
 	// Extender is an optional extension point for the state sync process, and can be nil.
-	Extender      synccommon.Extender
+	Extender      syncpkg.Extender
 	Client        syncclient.Client
 	StateSyncDone chan struct{}
 
@@ -168,22 +168,22 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
 
-	fetcher, err := client.createCodeFetcher()
+	codeQueue, err := client.createCodeQueue()
 	if err != nil {
-		return fmt.Errorf("failed to create code fetcher: %w", err)
+		return fmt.Errorf("failed to create code queue: %w", err)
 	}
 
-	codeSyncer, err := client.createCodeSyncer(fetcher.CodeHashes())
+	codeSyncer, err := client.createCodeSyncer(codeQueue.CodeHashes())
 	if err != nil {
 		return fmt.Errorf("failed to create code syncer: %w", err)
 	}
 
-	stateSyncer, err := client.createEVMSyncer(fetcher)
+	stateSyncer, err := client.createEVMSyncer(codeQueue)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM state syncer: %w", err)
 	}
 
-	var extenderSyncer synccommon.Syncer
+	var extenderSyncer syncpkg.Syncer
 	if client.Extender != nil {
 		extenderSyncer, err = client.createExtenderSyncer()
 		if err != nil {
@@ -191,7 +191,7 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		}
 	}
 
-	syncers := []synccommon.Syncer{
+	syncers := []syncpkg.Syncer{
 		blockSyncer,
 		codeSyncer,
 		stateSyncer,
@@ -209,7 +209,7 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 	return nil
 }
 
-func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64) (synccommon.Syncer, error) {
+func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64) (syncpkg.Syncer, error) {
 	return blocksync.NewSyncer(client.Client, client.ChainDB, blocksync.Config{
 		FromHash:      fromHash,
 		FromHeight:    fromHeight,
@@ -217,7 +217,7 @@ func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64)
 	})
 }
 
-func (client *client) createEVMSyncer(fetcher synccommon.CodeFetcher) (synccommon.Syncer, error) {
+func (client *client) createEVMSyncer(fetcher syncpkg.CodeRequestQueue) (syncpkg.Syncer, error) {
 	return statesync.NewSyncer(
 		client.Client,
 		client.ChainDB,
@@ -227,18 +227,18 @@ func (client *client) createEVMSyncer(fetcher synccommon.CodeFetcher) (synccommo
 	)
 }
 
-func (client *client) createCodeFetcher() (synccommon.CodeFetcher, error) {
-	return statesync.NewCodeFetcherQueue(
+func (client *client) createCodeQueue() (syncpkg.CodeRequestQueue, error) {
+	return statesync.NewCodeQueue(
 		client.ChainDB,
 		client.StateSyncDone,
 	)
 }
 
-func (client *client) createCodeSyncer(codeHashes <-chan common.Hash) (synccommon.Syncer, error) {
+func (client *client) createCodeSyncer(codeHashes <-chan common.Hash) (syncpkg.Syncer, error) {
 	return statesync.NewCodeSyncer(client.Client, client.ChainDB, codeHashes)
 }
 
-func (client *client) createExtenderSyncer() (synccommon.Syncer, error) {
+func (client *client) createExtenderSyncer() (syncpkg.Syncer, error) {
 	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
 }
 

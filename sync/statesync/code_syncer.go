@@ -32,8 +32,8 @@ type CodeSyncer struct {
 	codeHashes <-chan common.Hash
 
 	// Config options.
-	numWorkers          int
-	maxCodeHashesPerReq int
+	numWorkers       int
+	codeHashesPerReq int // best-effort target size; final batch may be smaller
 }
 
 // Name returns the human-readable name for this sync task.
@@ -54,11 +54,13 @@ func WithNumCodeFetchingWorkers(n int) CodeSyncerOption {
 	}
 }
 
-// WithMaxCodeHashesPerRequest overrides the batching size per request.
-func WithMaxCodeHashesPerRequest(n int) CodeSyncerOption {
+// WithCodeHashesPerRequest sets the best-effort target batch size per request.
+// The final batch may contain fewer than the configured number if insufficient
+// hashes remain when the channel is closed.
+func WithCodeHashesPerRequest(n int) CodeSyncerOption {
 	return func(c *CodeSyncer) {
 		if n > 0 {
-			c.maxCodeHashesPerReq = n
+			c.codeHashesPerReq = n
 		}
 	}
 }
@@ -67,11 +69,11 @@ func WithMaxCodeHashesPerRequest(n int) CodeSyncerOption {
 // that consumes hashes from a provided fetcher queue.
 func NewCodeSyncer(client statesyncclient.Client, db ethdb.Database, codeHashes <-chan common.Hash, opts ...CodeSyncerOption) (*CodeSyncer, error) {
 	c := &CodeSyncer{
-		db:                  db,
-		client:              client,
-		codeHashes:          codeHashes,
-		numWorkers:          defaultNumCodeFetchingWorkers,
-		maxCodeHashesPerReq: message.MaxCodeHashesPerRequest,
+		db:               db,
+		client:           client,
+		codeHashes:       codeHashes,
+		numWorkers:       defaultNumCodeFetchingWorkers,
+		codeHashesPerReq: message.MaxCodeHashesPerRequest,
 	}
 
 	for _, opt := range opts {
@@ -88,7 +90,7 @@ func (c *CodeSyncer) Sync(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	// Start NumCodeFetchingWorkers threads to fetch code from the network.
-	for i := 0; i < c.numWorkers; i++ {
+	for range c.numWorkers {
 		eg.Go(func() error { return c.work(egCtx) })
 	}
 
@@ -115,9 +117,8 @@ func (c *CodeSyncer) work(ctx context.Context) error {
 			}
 
 			codeHashes = append(codeHashes, codeHash)
-			// Try to wait for at least [maxCodeHashesPerReq] code hashes to batch into a single request
-			// if there's more work remaining.
-			if len(codeHashes) < c.maxCodeHashesPerReq {
+			// Try to batch up to [codeHashesPerReq] code hashes into a single request when more work remains.
+			if len(codeHashes) < c.codeHashesPerReq {
 				continue
 			}
 			if err := c.fulfillCodeRequest(ctx, codeHashes); err != nil {

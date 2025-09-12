@@ -86,7 +86,7 @@ func (m *mainTrieTask) OnLeafs(db ethdb.KeyValueWriter, keys, vals [][]byte) err
 		}
 	}
 	// Add collected code hashes to the code fetcher.
-	return m.sync.codeFetcher.AddCode(codeHashes)
+	return m.sync.codeQueue.AddCode(codeHashes)
 }
 
 type storageTrieTask struct {

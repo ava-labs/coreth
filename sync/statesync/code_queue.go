@@ -16,7 +16,7 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 
-	synccommon "github.com/ava-labs/coreth/sync"
+	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
 const (
@@ -25,10 +25,10 @@ const (
 )
 
 var (
-	_ synccommon.CodeFetcher = (*CodeFetcherQueue)(nil)
+	_ syncpkg.CodeRequestQueue = (*CodeQueue)(nil)
 
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
-	errFailedToFinalizeCodeFetcher  = errors.New("failed to finalize code fetcher")
+	errFailedToFinalizeCodeQueue    = errors.New("failed to finalize code queue")
 
 	// errAddCodeAfterFinalize is returned when [AddCode] is called after [Finalize] has been called.
 	// has permanently closed the queue to new work which guards against racy producers
@@ -36,10 +36,10 @@ var (
 	errAddCodeAfterFinalize = errors.New("cannot add code hashes after finalize")
 )
 
-// CodeFetcherQueue implements the producer side of code fetching.
+// CodeQueue implements the producer side of code fetching.
 // It accepts code hashes, persists "to-fetch" markers, and enqueues hashes
 // onto an internal channel consumed by the code syncer.
-type CodeFetcherQueue struct {
+type CodeQueue struct {
 	db ethdb.Database
 	// Guards in-memory dedupe and batch selection in addCode.
 	lock sync.Mutex
@@ -59,37 +59,37 @@ type CodeFetcherQueue struct {
 	// Set of code hashes enqueued in-memory to avoid duplicate sends.
 	outstanding set.Set[common.Hash]
 
-	// Any persisted code markers found on startup to re-enqueue when initialized.
-	dbCodeHashes []common.Hash
+	// Ensures channels are closed exactly once from any shutdown path.
+	closeOnce sync.Once
 }
 
-type codeFetcherOptions struct {
+type codeQueueOptions struct {
 	autoInit       bool
 	maxOutstanding int
 }
 
-type CodeFetcherOption func(*codeFetcherOptions)
+type CodeQueueOption func(*codeQueueOptions)
 
 // WithAutoInit toggles whether Init is called in the constructor.
-func WithAutoInit(autoInit bool) CodeFetcherOption {
-	return func(o *codeFetcherOptions) {
+func WithAutoInit(autoInit bool) CodeQueueOption {
+	return func(o *codeQueueOptions) {
 		o.autoInit = autoInit
 	}
 }
 
 // WithMaxOutstandingCodeHashes overrides the queue capacity.
-func WithMaxOutstandingCodeHashes(n int) CodeFetcherOption {
-	return func(o *codeFetcherOptions) {
+func WithMaxOutstandingCodeHashes(n int) CodeQueueOption {
+	return func(o *codeQueueOptions) {
 		if n > 0 {
 			o.maxOutstanding = n
 		}
 	}
 }
 
-// NewCodeFetcherQueue creates a new code fetcher queue applying optional functional options.
-func NewCodeFetcherQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeFetcherOption) (*CodeFetcherQueue, error) {
+// NewCodeQueue creates a new code queue applying optional functional options.
+func NewCodeQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeQueueOption) (*CodeQueue, error) {
 	// Apply defaults then options.
-	o := codeFetcherOptions{
+	o := codeQueueOptions{
 		autoInit:       defaultAutoInit,
 		maxOutstanding: defaultMaxOutstandingCodeHashes,
 	}
@@ -97,18 +97,12 @@ func NewCodeFetcherQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeFe
 		opt(&o)
 	}
 
-	dbCodeHashes, err := recoverUnfetchedCodeHashes(db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add code hashes to queue: %w", err)
-	}
-
-	q := &CodeFetcherQueue{
-		db:           db,
-		codeHashes:   make(chan common.Hash, o.maxOutstanding),
-		open:         make(chan struct{}),
-		outstanding:  set.NewSet[common.Hash](0),
-		dbCodeHashes: dbCodeHashes,
-		quit:         done,
+	q := &CodeQueue{
+		db:          db,
+		codeHashes:  make(chan common.Hash, o.maxOutstanding),
+		open:        make(chan struct{}),
+		outstanding: set.NewSet[common.Hash](0),
+		quit:        done,
 	}
 
 	if o.autoInit {
@@ -121,27 +115,37 @@ func NewCodeFetcherQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeFe
 }
 
 // CodeHashes returns the receive-only channel of code hashes to consume.
-func (q *CodeFetcherQueue) CodeHashes() <-chan common.Hash {
+func (q *CodeQueue) CodeHashes() <-chan common.Hash {
 	return q.codeHashes
 }
 
-// Init enqueues any persisted code markers found on disk and then marks the fetcher ready.
-func (q *CodeFetcherQueue) Init() error {
+// Init enqueues any persisted code markers found on disk and then marks the queue ready.
+func (q *CodeQueue) Init() error {
+	// Recover any persisted code markers and enqueue them.
 	// Note: dbCodeHashes are already present as "to-fetch" markers. addCode will
 	// re-persist them, which is a trivial redundancy that happens only on resume
 	// (e.g., after restart). We accept this to keep the code simple.
-	if err := q.addCode(q.dbCodeHashes); err != nil {
+	dbCodeHashes, err := recoverUnfetchedCodeHashes(q.db)
+	if err != nil {
+		return fmt.Errorf("unable to recover previous sync state: %w", err)
+	}
+	if err := q.addCode(dbCodeHashes); err != nil {
 		return fmt.Errorf("unable to resume previous sync: %w", err)
 	}
-	q.dbCodeHashes = nil
+	// If the owner signals shutdown before Finalize is called, close the outgoing
+	// channel so consumers don't block indefinitely.
+	go func() {
+		<-q.quit
+		q.closeOutput()
+	}()
 	close(q.open)
 
 	return nil
 }
 
-// AddCode implements [synccommon.CodeFetcher] by persisting and enqueueing new hashes.
+// AddCode implements [syncpkg.CodeRequestQueue] by persisting and enqueueing new hashes.
 // Blocks until the queue is initialized via Init.
-func (q *CodeFetcherQueue) AddCode(codeHashes []common.Hash) error {
+func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
 	select {
 	case <-q.open:
 	case <-q.quit:
@@ -164,23 +168,31 @@ func (q *CodeFetcherQueue) AddCode(codeHashes []common.Hash) error {
 	return q.addCode(codeHashes)
 }
 
-// Finalize implements [synccommon.CodeFetcher] by signaling no further code hashes will be added.
-func (q *CodeFetcherQueue) Finalize() error {
+// Finalize implements [syncpkg.CodeRequestQueue] by signaling no further code hashes will be added.
+func (q *CodeQueue) Finalize() error {
+	// Prefer early-exit deterministically if quit is already closed.
+	// Without this we also experience test flakes because the channel is not closed immediately.
+	select {
+	case <-q.quit:
+		q.closeOutput()
+		return errFailedToFinalizeCodeQueue
+	default:
+	}
+
+	// Ensure initialization is complete, still respecting shutdown if it happens now.
 	select {
 	case <-q.open:
 	case <-q.quit:
-		return errFailedToFinalizeCodeFetcher
+		q.closeOutput()
+		return errFailedToFinalizeCodeQueue
 	}
 
-	q.finalized.Store(true)
-	// Wait for any in-flight AddCode calls to complete before closing the channel.
-	q.addWG.Wait()
-	close(q.codeHashes)
+	q.closeOutput()
 
 	return nil
 }
 
-func (q *CodeFetcherQueue) addCode(codeHashes []common.Hash) error {
+func (q *CodeQueue) addCode(codeHashes []common.Hash) error {
 	if len(codeHashes) == 0 {
 		return nil
 	}
@@ -202,7 +214,7 @@ func (q *CodeFetcherQueue) addCode(codeHashes []common.Hash) error {
 // filterHashesToFetch returns the subset of codeHashes that should be enqueued and
 // persists their "to-fetch" markers into the provided batch. This method acquires
 // q.lock and is safe to call concurrently from multiple AddCode calls.
-func (q *CodeFetcherQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes []common.Hash) []common.Hash {
+func (q *CodeQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes []common.Hash) []common.Hash {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -221,7 +233,7 @@ func (q *CodeFetcherQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes
 	return selected
 }
 
-func (q *CodeFetcherQueue) enqueue(codeHashes []common.Hash) error {
+func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	for _, h := range codeHashes {
 		// Attempt to send, still respecting shutdown while potentially blocking.
 		select {
@@ -232,6 +244,14 @@ func (q *CodeFetcherQueue) enqueue(codeHashes []common.Hash) error {
 	}
 
 	return nil
+}
+
+// closeOutput marks the queue finalized, waits for in-flight producers to drain,
+// and closes the outgoing channel exactly once.
+func (q *CodeQueue) closeOutput() {
+	q.finalized.Store(true)
+	q.addWG.Wait()
+	q.closeOnce.Do(func() { close(q.codeHashes) })
 }
 
 // recoverUnfetchedCodeHashes cleans out any codeToFetch markers from the database that are no longer

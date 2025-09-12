@@ -49,13 +49,13 @@ type Extender interface {
 	OnFinishAfterCommit(summaryHeight uint64) error
 }
 
-// CodeFetcher is a minimal interface for accepting discovered code hashes
+// CodeRequestQueue is a minimal interface for accepting discovered code hashes
 // and signaling when no more code hashes will be produced from the account trie.
-type CodeFetcher interface {
+type CodeRequestQueue interface {
 	// AddCode enqueues the provided code hashes for fetching, ignoring any
 	// hashes already present locally or already queued. Implementations may
 	// block until internally ready to accept work. Returns a non-nil error if the
-	// fetcher is shutting down or if persisting enqueue markers fails.
+	// code queue is shutting down or if persisting enqueue markers fails.
 	AddCode(codeHashes []common.Hash) error
 
 	// CodeHashes returns a channel that yields code hashes to be fetched by the
@@ -65,9 +65,9 @@ type CodeFetcher interface {
 
 	// Finalize signals that no more code hashes will be produced by the
 	// producer (e.g., after the account trie has been fully scanned). After
-	// this call, the fetcher should complete any outstanding work and then
+	// this call, the code queue should complete any outstanding work and then
 	// return from [Syncer.Sync] without waiting for additional input.
-	// Returns a non-nil error if the fetcher is shutting down or if persisting
+	// Returns a non-nil error if the code queue is shutting down or if persisting
 	// enqueue markers fails.
 	Finalize() error
 }

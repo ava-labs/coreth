@@ -75,10 +75,10 @@ type stateSync struct {
 	snapshot  snapshot.SnapshotIterable // used to access the database we are syncing as a snapshot.
 	batchSize uint                      // write batches when they reach this size
 
-	segments    chan syncclient.LeafSyncTask   // channel of tasks to sync
-	syncer      *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
-	codeFetcher synccommon.CodeFetcher         // fetcher that manages the asynchronous download and batching of code hashes
-	trieQueue   *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
+	segments  chan syncclient.LeafSyncTask   // channel of tasks to sync
+	syncer    *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
+	codeQueue synccommon.CodeRequestQueue    // fetcher that manages the asynchronous download and batching of code hashes
+	trieQueue *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
 
 	// track the main account trie specifically to commit its root at the end of the operation
 	mainTrie *trieToSync
@@ -94,7 +94,7 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher synccommon.CodeFetcher, config Config) (synccommon.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher synccommon.CodeRequestQueue, config Config) (synccommon.Syncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	ss := &stateSync{
@@ -128,7 +128,7 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fe
 		return nil, errCodeFetcherRequired
 	}
 
-	ss.codeFetcher = fetcher
+	ss.codeQueue = fetcher
 
 	ss.trieQueue = NewTrieQueue(db)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
@@ -171,7 +171,7 @@ func (t *stateSync) onStorageTrieFinished(root common.Hash) error {
 
 // onMainTrieFinished is called after the main trie finishes syncing.
 func (t *stateSync) onMainTrieFinished() error {
-	t.codeFetcher.Finalize()
+	t.codeQueue.Finalize()
 
 	// count the number of storage tries we need to sync for eta purposes.
 	numStorageTries, err := t.trieQueue.countTries()

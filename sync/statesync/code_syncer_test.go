@@ -54,10 +54,9 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		clientDB = rawdb.NewMemoryDatabase()
 	}
 
-	fetcher, err := NewCodeFetcherQueue(
+	codeQueue, err := NewCodeQueue(
 		clientDB,
 		make(chan struct{}),
-		WithAutoInit(true),
 		WithMaxOutstandingCodeHashes(test.queueCapacity),
 	)
 	require.NoError(t, err)
@@ -65,16 +64,16 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	codeSyncer, err := NewCodeSyncer(
 		mockClient,
 		clientDB,
-		fetcher.CodeHashes(),
+		codeQueue.CodeHashes(),
 	)
 	require.NoError(t, err)
 	go func() {
 		for _, codeHashes := range test.codeRequestHashes {
-			if err := fetcher.AddCode(codeHashes); err != nil {
+			if err := codeQueue.AddCode(codeHashes); err != nil {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		fetcher.Finalize()
+		codeQueue.Finalize()
 	}()
 
 	ctx, cancel := utilstest.NewTestContext(t)
