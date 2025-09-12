@@ -105,7 +105,7 @@ func (r RulesExtra) currentPrecompiles() map[common.Address]vm.PrecompiledContra
 	case r.IsApricotPhase2:
 		return PrecompiledContractsApricotPhase2
 	}
-	return make(map[common.Address]vm.PrecompiledContract)
+	return nil
 }
 
 // precompileOverrideBuiltin specifies precompiles that were activated prior to the
