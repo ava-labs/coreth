@@ -2109,7 +2109,7 @@ func newSignedLegacyTx(
 
 // deployContract deploys the provided EVM bytecode using a prefunded test account
 // and returns the created contract address. It is reusable for any contract code.
-func deployContract(t *testing.T, ctx context.Context, vm *VM, gasPrice *big.Int, code []byte) common.Address {
+func deployContract(ctx context.Context, t *testing.T, vm *VM, gasPrice *big.Int, code []byte) common.Address {
 	callerAddr := vmtest.TestEthAddrs[0]
 	callerKey := vmtest.TestKeys[0]
 
