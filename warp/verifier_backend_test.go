@@ -120,7 +120,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 
 				// If the expected response is empty, assert that the handler returns an empty response and return early.
 				if len(expectedResponse) == 0 {
-					require.Len(t, responseBytes, 0, "expected response to be empty")
+					require.Empty(t, responseBytes, "expected response to be empty")
 					return
 				}
 				// check cache is populated
@@ -237,7 +237,7 @@ func TestBlockSignatures(t *testing.T) {
 
 				// If the expected response is empty, assert that the handler returns an empty response and return early.
 				if len(expectedResponse) == 0 {
-					require.Len(t, responseBytes, 0, "expected response to be empty")
+					require.Empty(t, responseBytes, "expected response to be empty")
 					return
 				}
 				// check cache is populated

@@ -29,6 +29,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -1797,8 +1798,8 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, err, context.DeadlineExceeded)
-					require.Zero(t, msg)
+					assert.ErrorIs(t, err, context.DeadlineExceeded)
+					assert.Zero(t, msg)
 				}()
 
 				wg.Wait()
@@ -1813,8 +1814,8 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(context.Background())
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
+					assert.NoError(t, err)
+					assert.Equal(t, commonEng.PendingTxs, msg)
 				}()
 
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
@@ -1853,8 +1854,8 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, err, context.DeadlineExceeded)
-					require.Zero(t, msg)
+					assert.ErrorIs(t, err, context.DeadlineExceeded)
+					assert.Zero(t, msg)
 				}()
 
 				wg.Wait()
@@ -1874,8 +1875,8 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(context.Background())
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
+					assert.NoError(t, err)
+					assert.Equal(t, commonEng.PendingTxs, msg)
 				}()
 
 				wg.Wait()
@@ -1911,9 +1912,9 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(context.Background())
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
-					require.GreaterOrEqual(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
+					assert.NoError(t, err)
+					assert.Equal(t, commonEng.PendingTxs, msg)
+					assert.GreaterOrEqual(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
 				}()
 
 				wg.Wait()

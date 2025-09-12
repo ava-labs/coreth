@@ -35,7 +35,7 @@ func TestIncrOne(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			output := common.CopyBytes(test.input)
 			IncrOne(output)
-			assert.Equal(t, output, test.expected)
+			assert.Equal(t, test.expected, output)
 		})
 	}
 }
