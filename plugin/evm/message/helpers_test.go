@@ -14,12 +14,8 @@ func deterministicBytes(label string, n int) []byte {
 	var ctr uint64
 	for off < n {
 		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%d", label, ctr)))
-		toCopy := n - off
-		if toCopy > len(h) {
-			toCopy = len(h)
-		}
-		copy(buf[off:], h[:toCopy])
-		off += toCopy
+		copy(buf[off:], h[:])
+		off += len(h)
 		ctr++
 	}
 	return buf
