@@ -29,7 +29,9 @@ func (db *firewoodAccessorDB) OpenTrie(root common.Hash) (state.Trie, error) {
 }
 
 // OpenStorageTrie opens a wrapped version of the account trie.
-func (*firewoodAccessorDB) OpenStorageTrie(_ common.Hash, _ common.Address, accountRoot common.Hash, self state.Trie) (state.Trie, error) {
+//
+//nolint:revive // removing names loses context.
+func (*firewoodAccessorDB) OpenStorageTrie(stateRoot common.Hash, addr common.Address, accountRoot common.Hash, self state.Trie) (state.Trie, error) {
 	accountTrie, ok := self.(*firewood.AccountTrie)
 	if !ok {
 		return nil, fmt.Errorf("invalid account trie type: %T", self)
