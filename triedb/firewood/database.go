@@ -103,6 +103,7 @@ func New(config Config) (*Database, error) {
 		return nil, err
 	}
 
+	//nolint:staticcheck // false positive, if config is nil then we will have exited.
 	fw, err := ffi.New(config.FilePath, &ffi.Config{
 		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		FreeListCacheEntries: config.FreeListCacheEntries,
