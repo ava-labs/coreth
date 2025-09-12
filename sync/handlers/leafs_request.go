@@ -6,7 +6,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"sync"
 	"time"
 
 	"github.com/ava-labs/avalanchego/codec"
@@ -52,7 +51,6 @@ type leafsRequestHandler struct {
 	snapshotProvider SnapshotProvider
 	codec            codec.Manager
 	stats            stats.LeafsRequestHandlerStats
-	pool             sync.Pool
 	trieKeyLength    int
 }
 
@@ -63,12 +61,6 @@ func NewLeafsRequestHandler(trieDB *triedb.Database, trieKeyLength int, snapshot
 		codec:            codec,
 		stats:            syncerStats,
 		trieKeyLength:    trieKeyLength,
-		pool: sync.Pool{
-			New: func() interface{} {
-				slice := make([][]byte, 0, maxLeavesLimit)
-				return &slice
-			},
-		},
 	}
 }
 
@@ -118,25 +110,8 @@ func (lrh *leafsRequestHandler) OnLeafsRequest(ctx context.Context, nodeID ids.N
 	}
 
 	var leafsResponse message.LeafsResponse
-	// pool response's key/val allocations
-	// Reset lengths to 0 on checkout to avoid stale elements from prior uses
-	keysSlicePtr := lrh.pool.Get().(*[][]byte)
-	valsSlicePtr := lrh.pool.Get().(*[][]byte)
-	leafsResponse.Keys = (*keysSlicePtr)[:0]
-	leafsResponse.Vals = (*valsSlicePtr)[:0]
-	defer func() {
-		// clear out slices before returning them to the pool to avoid memory leaks
-		n := len(leafsResponse.Keys)
-		if len(leafsResponse.Vals) < n {
-			n = len(leafsResponse.Vals)
-		}
-		for i := 0; i < n; i++ {
-			leafsResponse.Keys[i] = nil
-			leafsResponse.Vals[i] = nil
-		}
-		lrh.pool.Put(&leafsResponse.Keys)
-		lrh.pool.Put(&leafsResponse.Vals)
-	}()
+	leafsResponse.Keys = make([][]byte, 0, limit)
+	leafsResponse.Vals = make([][]byte, 0, limit)
 
 	responseBuilder := &responseBuilder{
 		request:   &leafsRequest,

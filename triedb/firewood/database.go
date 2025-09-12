@@ -95,7 +95,7 @@ type Database struct {
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
 func New(config *Config) *Database {
-	//nolint:staticcheck
+	//nolint:staticcheck // this nolint is required for the config.* nolints to work.
 	if config == nil {
 		log.Crit("firewood: config must be provided")
 	}
