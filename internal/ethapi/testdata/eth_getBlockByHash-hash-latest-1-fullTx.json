@@ -23,7 +23,7 @@
   "size": "0x2c3",
   "stateRoot": "0x0079c4f658ca6481223860cbe48a032a7b54de44ef980b1aa9b6be2859663fa4",
   "timestamp": "0x5a",
-  "timeMilliseconds": "0x15f90",
+  "timestampMilliseconds": "0x15f90",
   "totalDifficulty": "0x9",
   "transactions": [
     {

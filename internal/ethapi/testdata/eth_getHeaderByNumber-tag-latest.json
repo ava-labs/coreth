@@ -18,7 +18,7 @@
   "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
   "stateRoot": "0x94868d1188e9d742248c280a147aac1fe9540029a00ac03f38d255c8701ef09a",
   "timestamp": "0x64",
-  "timeMilliseconds": "0x186a0",
+  "timestampMilliseconds": "0x186a0",
   "totalDifficulty": "0xa",
   "transactionsRoot": "0x4022accb18056de5994cfb85f3c2721a86c9b1de72ef02f3b224e9c913a18a10",
   "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",

@@ -23,5 +23,5 @@
   "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "excessBlobGas": "0x0",
   "blobGasUsed": "0x0",
-  "timeMilliseconds": "0x0"
+  "timestampMilliseconds": "0x0"
 }
