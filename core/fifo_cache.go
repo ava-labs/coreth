@@ -15,6 +15,7 @@ var (
 type FIFOCache[K comparable, V any] interface {
 	Put(K, V)
 	Get(K) (V, bool)
+	Remove(K) error
 }
 
 // NewFIFOCache creates a new First-In-First-Out cache of size [limit].
@@ -29,7 +30,7 @@ func NewFIFOCache[K comparable, V any](limit int) FIFOCache[K, V] {
 	c := &BufferFIFOCache[K, V]{
 		m: make(map[K]V, limit),
 	}
-	c.buffer = NewBoundedBuffer(limit, c.remove)
+	c.buffer = NewBoundedBuffer(limit, c.Remove)
 	return c
 }
 
@@ -58,7 +59,10 @@ func (f *BufferFIFOCache[K, V]) Get(key K) (V, bool) {
 
 // remove is used as the callback in [BoundedBuffer]. It is assumed that the
 // [WriteLock] is held when this is accessed.
-func (f *BufferFIFOCache[K, V]) remove(key K) error {
+func (f *BufferFIFOCache[K, V]) Remove(key K) error {
+	f.l.Lock()
+	defer f.l.Unlock()
+
 	delete(f.m, key)
 	return nil
 }
@@ -69,3 +73,4 @@ func (*NoOpFIFOCache[K, V]) Put(K, V) {}
 func (*NoOpFIFOCache[K, V]) Get(K) (V, bool) {
 	return *new(V), false
 }
+func (_ *NoOpFIFOCache[K, V]) Remove(_ K) error { return nil }

@@ -272,6 +272,12 @@ func TestFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Persist headers/bodies for test backend lookups. The test backend resolves
+	// headers directly from the database via hash->number and header reads, and
+	// our insert path does not write headers for unaccepted blocks.
+	for _, block := range chain {
+		rawdb.WriteBlock(db, block)
+	}
 
 	// Set block 998 as Finalized (-3)
 	// bc.SetFinalized(chain[998].Header())
