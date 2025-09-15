@@ -2351,6 +2351,13 @@ func TestBlockGasValidation(t *testing.T) {
 		header.Extra, err = customheader.ExtraPrefix(configExtra, parent, header, nil)
 		require.NoError(err)
 
+		// Set TimeMilliseconds for Granite blocks
+		if configExtra.IsGranite(timestamp) {
+			headerExtra := customtypes.GetHeaderExtra(header)
+			timeMilliseconds := timestamp * 1000
+			headerExtra.TimeMilliseconds = &timeMilliseconds
+		}
+
 		// Set the gasUsed after calculating the extra prefix to support large
 		// claimed gas used values.
 		header.GasUsed = claimedGasUsed
