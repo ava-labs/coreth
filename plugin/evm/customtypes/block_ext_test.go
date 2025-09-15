@@ -368,8 +368,8 @@ func TestBlockGetters(t *testing.T) {
 			blockGasCost := BlockGasCost(block)
 			assert.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
 
-			timestampMilliseconds := BlockTimeMilliseconds(block)
-			assert.Equal(t, test.wantTimeMilliseconds, timestampMilliseconds, "BlockTimestampMilliseconds()")
+			timeMilliseconds := BlockTimeMilliseconds(block)
+			assert.Equal(t, test.wantTimeMilliseconds, timeMilliseconds, "BlockTimeMilliseconds()")
 		})
 	}
 }

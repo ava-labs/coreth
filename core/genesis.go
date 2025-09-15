@@ -322,7 +322,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		// add TimestampMilliseconds
+		// add TimeMilliseconds
 		rulesExtra := params.GetRulesExtra(conf.Rules(num, params.IsMergeTODO, g.Timestamp))
 		genesisTime := time.Unix(int64(head.Time), 0)
 		headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, genesisTime)

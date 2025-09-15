@@ -1366,24 +1366,24 @@ func TestTimeSemanticVerify(t *testing.T) {
 	}
 }
 
-func TestBuildTimestampMilliseconds(t *testing.T) {
+func TestBuildTimeMilliseconds(t *testing.T) {
 	cases := []struct {
-		name                          string
-		fork                          upgradetest.Fork
-		buildTime                     time.Time
-		expectedTimestampMilliseconds *uint64
+		name                     string
+		fork                     upgradetest.Fork
+		buildTime                time.Time
+		expectedTimeMilliseconds *uint64
 	}{
 		{
-			name:                          "fortuna_should_not_have_timestamp_milliseconds",
-			fork:                          upgradetest.Fortuna,
-			buildTime:                     time.Unix(1714339200, 123_456_789),
-			expectedTimestampMilliseconds: nil,
+			name:                     "fortuna_should_not_have_timestamp_milliseconds",
+			fork:                     upgradetest.Fortuna,
+			buildTime:                time.Unix(1714339200, 123_456_789),
+			expectedTimeMilliseconds: nil,
 		},
 		{
-			name:                          "granite_should_have_timestamp_milliseconds",
-			fork:                          upgradetest.Granite,
-			buildTime:                     time.Unix(1714339200, 123_456_789),
-			expectedTimestampMilliseconds: utils.NewUint64(1714339200123),
+			name:                     "granite_should_have_timestamp_milliseconds",
+			fork:                     upgradetest.Granite,
+			buildTime:                time.Unix(1714339200, 123_456_789),
+			expectedTimeMilliseconds: utils.NewUint64(1714339200123),
 		},
 	}
 
@@ -1404,7 +1404,7 @@ func TestBuildTimestampMilliseconds(t *testing.T) {
 			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 			require.NoError(t, err)
 			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
-			require.Equal(t, test.expectedTimestampMilliseconds, customtypes.BlockTimeMilliseconds(ethBlk))
+			require.Equal(t, test.expectedTimeMilliseconds, customtypes.BlockTimeMilliseconds(ethBlk))
 		})
 	}
 }

@@ -173,7 +173,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		BaseFee:    baseFee,
 	}
 
-	// Add TimestampMilliseconds
+	// Add TimeMilliseconds
 	headerExtra := customtypes.GetHeaderExtra(header)
 	rulesExtra := params.GetRulesExtra(w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time))
 	headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, tstart)

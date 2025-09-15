@@ -38,8 +38,8 @@ func TestTimeMilliseconds(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			rules := extrastest.GetAvalancheRulesFromFork(test.fork)
-			timestampMilliseconds := TimeMilliseconds(rules, test.tstart)
-			require.Equal(t, test.expected, timestampMilliseconds)
+			timeMilliseconds := TimeMilliseconds(rules, test.tstart)
+			require.Equal(t, test.expected, timeMilliseconds)
 		})
 	}
 }
