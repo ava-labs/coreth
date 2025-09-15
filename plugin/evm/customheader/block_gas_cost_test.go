@@ -4,11 +4,11 @@
 package customheader
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,6 +60,14 @@ func TestBlockGasCost(t *testing.T) {
 			parentCost: big.NewInt(ap4.MinBlockGasCost),
 			timestamp:  9,
 			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
+		},
+		{
+			name:       "granite_returns_zero",
+			upgrades:   extras.TestGraniteChainConfig.NetworkUpgrades,
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   big.NewInt(0),
 		},
 	}
 
@@ -429,6 +437,14 @@ func TestVerifyBlockFee(t *testing.T) {
 			receipts: []*types.Receipt{
 				{GasUsed: 1000},
 			},
+			extraStateContribution: nil,
+		},
+		"zero block gas cost": {
+			baseFee:                big.NewInt(100),
+			parentBlockGasCost:     big.NewInt(0),
+			timeElapsed:            ap4.TargetBlockRate + 1,
+			txs:                    nil,
+			receipts:               nil,
 			extraStateContribution: nil,
 		},
 	}
