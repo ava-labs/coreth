@@ -143,24 +143,19 @@ func (w *worker) setEtherbase(addr common.Address) {
 func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateContext) (*types.Block, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-
 	var (
-		parent      = w.chain.CurrentBlock()
-		tstart      = w.clock.Time()
-		timestamp   = uint64(tstart.Unix())
-		timestampMS = uint64(tstart.UnixMilli())
-		chainExtra  = params.GetExtra(w.chainConfig)
+		parent    = w.chain.CurrentBlock()
+		tstart    = w.clock.Time()
+		timestamp = uint64(tstart.Unix())
 	)
 	// Note: in order to support asynchronous block production, blocks are allowed to have
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
 	if parent.Time >= timestamp {
 		timestamp = parent.Time
-		if chainExtra.IsGranite(timestamp) {
-			timestampMS = uint64(tstart.UnixMilli()) // TODO: establish minimum time
-		}
 	}
 
+	chainExtra := params.GetExtra(w.chainConfig)
 	gasLimit, err := customheader.GasLimit(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("calculating new gas limit: %w", err)
@@ -178,6 +173,11 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		BaseFee:    baseFee,
 	}
 
+	// Add TimestampMilliseconds
+	headerExtra := customtypes.GetHeaderExtra(header)
+	rulesExtra := params.GetRulesExtra(w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time))
+	headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, tstart)
+
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
@@ -190,12 +190,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
 		header.ParentBeaconRoot = w.beaconRoot
-	}
-
-	// Add TimeMilliseconds if Granite is active.
-	if chainExtra.IsGranite(header.Time) {
-		headerExtra := customtypes.GetHeaderExtra(header)
-		headerExtra.TimeMilliseconds = &timestampMS
 	}
 
 	if w.coinbase == (common.Address{}) {

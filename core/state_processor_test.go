@@ -31,6 +31,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"testing"
+	gotime "time"
 
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/coreth/consensus"
@@ -424,6 +425,12 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 
 		header.ParentBeaconRoot = new(common.Hash)
 	}
+
+	headerExtra := customtypes.GetHeaderExtra(header)
+	headerTime := gotime.Unix(int64(header.Time), 0)
+	rulesExtra := params.GetRulesExtra(config.Rules(header.Number, params.IsMergeTODO, header.Time))
+	headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, headerTime)
+
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

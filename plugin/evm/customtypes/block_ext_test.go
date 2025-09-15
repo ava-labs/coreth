@@ -10,6 +10,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/google/go-cmp/cmp"
@@ -312,33 +313,37 @@ func TestBlockGetters(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name               string
-		headerExtra        *HeaderExtra
-		blockExtra         *BlockBodyExtra
-		wantExtDataGasUsed *big.Int
-		wantBlockGasCost   *big.Int
-		wantVersion        uint32
-		wantExtData        []byte
+		name                 string
+		headerExtra          *HeaderExtra
+		blockExtra           *BlockBodyExtra
+		wantExtDataGasUsed   *big.Int
+		wantBlockGasCost     *big.Int
+		wantVersion          uint32
+		wantExtData          []byte
+		wantTimeMilliseconds *uint64
 	}{
 		{
-			name:        "empty",
-			headerExtra: &HeaderExtra{},
-			blockExtra:  &BlockBodyExtra{},
+			name:                 "empty",
+			headerExtra:          &HeaderExtra{},
+			blockExtra:           &BlockBodyExtra{},
+			wantTimeMilliseconds: nil,
 		},
 		{
 			name: "fields_set",
 			headerExtra: &HeaderExtra{
-				ExtDataGasUsed: big.NewInt(1),
-				BlockGasCost:   big.NewInt(2),
+				ExtDataGasUsed:   big.NewInt(1),
+				BlockGasCost:     big.NewInt(2),
+				TimeMilliseconds: utils.NewUint64(3),
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
 				ExtData: &[]byte{4},
 			},
-			wantExtDataGasUsed: big.NewInt(1),
-			wantBlockGasCost:   big.NewInt(2),
-			wantVersion:        3,
-			wantExtData:        []byte{4},
+			wantExtDataGasUsed:   big.NewInt(1),
+			wantBlockGasCost:     big.NewInt(2),
+			wantVersion:          3,
+			wantExtData:          []byte{4},
+			wantTimeMilliseconds: utils.NewUint64(3),
 		},
 	}
 
@@ -362,6 +367,9 @@ func TestBlockGetters(t *testing.T) {
 
 			blockGasCost := BlockGasCost(block)
 			assert.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
+
+			timestampMilliseconds := BlockTimeMilliseconds(block)
+			assert.Equal(t, test.wantTimeMilliseconds, timestampMilliseconds, "BlockTimestampMilliseconds()")
 		})
 	}
 }

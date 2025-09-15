@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/libevm/core/types"
@@ -19,17 +18,9 @@ import (
 )
 
 var (
-	// Max time from current time allowed for blocks, before they're considered future blocks
-	// and fail verification
-	MaxFutureBlockTime = 10 * time.Second
-
-	ErrBlockTooFarInFuture           = errors.New("block timestamp is too far in the future")
-	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
-	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
-	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
-	errInvalidExtraPrefix            = errors.New("invalid header.Extra prefix")
-	errIncorrectFeeState             = errors.New("incorrect fee state")
-	errInvalidExtraLength            = errors.New("invalid header.Extra length")
+	errInvalidExtraPrefix = errors.New("invalid header.Extra prefix")
+	errIncorrectFeeState  = errors.New("incorrect fee state")
+	errInvalidExtraLength = errors.New("invalid header.Extra length")
 )
 
 // ExtraPrefix returns what the prefix of the header's Extra field should be

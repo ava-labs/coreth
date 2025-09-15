@@ -33,9 +33,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -320,11 +322,10 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		// Granite: set TimeMilliseconds
-		if confExtra.IsGranite(g.Timestamp) {
-			headerExtra.TimeMilliseconds = new(uint64)
-			*headerExtra.TimeMilliseconds = g.Timestamp * 1000
-		}
+		// add TimestampMilliseconds
+		rulesExtra := params.GetRulesExtra(conf.Rules(num, params.IsMergeTODO, g.Timestamp))
+		genesisTime := time.Unix(int64(head.Time), 0)
+		headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, genesisTime)
 	}
 
 	// Create the genesis block to use the block hash
