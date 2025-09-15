@@ -30,7 +30,6 @@ package core
 import (
 	"fmt"
 	"math/big"
-	gotime "time"
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/extstate"
@@ -413,10 +412,11 @@ func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.S
 		header.ParentBeaconRoot = new(common.Hash)
 	}
 
-	headerExtra := customtypes.GetHeaderExtra(header)
-	headerTime := gotime.Unix(int64(header.Time), 0)
-	rulesExtra := params.GetRulesExtra(cm.config.Rules(header.Number, params.IsMergeTODO, header.Time))
-	headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, headerTime)
+	if config.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		timeMilliseconds := header.Time * 1000 // convert to milliseconds
+		headerExtra.TimeMilliseconds = &timeMilliseconds
+	}
 	return header
 }
 

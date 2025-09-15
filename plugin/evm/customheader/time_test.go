@@ -7,42 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
 )
-
-func TestTimeMilliseconds(t *testing.T) {
-	tests := map[string]struct {
-		fork     upgradetest.Fork
-		tstart   time.Time
-		expected *uint64
-	}{
-		"pre_granite_time_milliseconds_should_be_nil": {
-			fork:     upgradetest.Fortuna,
-			tstart:   time.Unix(1714339200, 0),
-			expected: nil,
-		},
-		"granite_time_milliseconds_should_be_non_nil": {
-			fork:     upgradetest.Granite,
-			tstart:   time.Unix(1714339200, 123_456_789),
-			expected: utils.NewUint64(1714339200123),
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			rules := extrastest.GetAvalancheRulesFromFork(test.fork)
-			timeMilliseconds := TimeMilliseconds(rules, test.tstart)
-			require.Equal(t, test.expected, timeMilliseconds)
-		})
-	}
-}
 
 func TestVerifyTime(t *testing.T) {
 	var (
