@@ -394,10 +394,8 @@ func TestCodeQueue_EarlyQuitClosesOutput(t *testing.T) {
 	// CodeHashes channel should close eventually; non-blocking poll until closed or timeout.
 	done := make(chan struct{})
 	go func() {
-		_, ok := <-q.CodeHashes()
-		// If closed, ok should be false. We just signal completion; assertions below.
-		if ok {
-			// put back token or ignore; channel was open with a value which shouldn't happen here.
+		// Drain until channel closes to observe closure on early quit.
+		for range q.CodeHashes() {
 		}
 		close(done)
 	}()
