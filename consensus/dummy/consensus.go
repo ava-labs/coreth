@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
@@ -26,9 +25,6 @@ import (
 )
 
 var (
-	allowedFutureBlockTime = 10 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
-
-	errInvalidBlockTime                    = errors.New("timestamp less than parent's")
 	errUnclesUnsupported                   = errors.New("uncles unsupported")
 	errExtDataGasUsedNil                   = errors.New("extDataGasUsed is nil")
 	errExtDataGasUsedTooLarge              = errors.New("extDataGasUsed is not uint64")
@@ -224,15 +220,6 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		return err
 	}
 
-	// Verify the header's timestamp
-	if header.Time > uint64(eng.clock.Time().Add(allowedFutureBlockTime).Unix()) {
-		return consensus.ErrFutureBlock
-	}
-	// Verify the header's timestamp is not earlier than parent's
-	// it does include equality(==), so multiple blocks per second is ok
-	if header.Time < parent.Time {
-		return errInvalidBlockTime
-	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
