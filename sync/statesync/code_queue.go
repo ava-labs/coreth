@@ -42,8 +42,8 @@ var (
 type CodeQueue struct {
 	db ethdb.Database
 
-	// Guards in-memory dedupe and batch selection in addCode.
-	lock sync.Mutex
+	// Protects in-memory dedupe (outstanding) and batch selection in addCode.
+	dedupeMu sync.Mutex
 
 	// Closed by Init to signal that the queue is ready.
 	open chan struct{}
@@ -66,6 +66,11 @@ type CodeQueue struct {
 
 	// Ensures channels are closed exactly once from any shutdown path.
 	enqueueCloseOnce sync.Once
+
+	// Synchronize producers with closing of enqueueCh to avoid send-after-close
+	// races detected by the race detector. Producers take RLock during sends.
+	// Finalize takes Lock before closing enqueueCh.
+	sendMu sync.RWMutex
 }
 
 type codeQueueOptions struct {
@@ -205,6 +210,8 @@ func (q *CodeQueue) Finalize() error {
 	// and close codeHashes exactly once when enqueueCh is closed.
 	q.finalized.Store(true)
 	q.enqueueCloseOnce.Do(func() {
+		q.sendMu.Lock()
+		defer q.sendMu.Unlock()
 		close(q.enqueueCh)
 	})
 
@@ -234,8 +241,8 @@ func (q *CodeQueue) addCode(codeHashes []common.Hash) error {
 // persists their "to-fetch" markers into the provided batch. This method acquires
 // q.lock and is safe to call concurrently from multiple AddCode calls.
 func (q *CodeQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes []common.Hash) []common.Hash {
-	q.lock.Lock()
-	defer q.lock.Unlock()
+	q.dedupeMu.Lock()
+	defer q.dedupeMu.Unlock()
 
 	selected := make([]common.Hash, 0, len(codeHashes))
 	for _, codeHash := range codeHashes {
@@ -256,6 +263,8 @@ func (q *CodeQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes []comm
 func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	// Publish to enqueueCh so the single forwarder can relay to codeHashes
 	// and remain the sole closer/sender on that channel.
+	q.sendMu.RLock()
+	defer q.sendMu.RUnlock()
 	for _, h := range codeHashes {
 		// Attempt to send, still respecting shutdown while potentially blocking.
 		select {
