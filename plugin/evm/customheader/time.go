@@ -25,15 +25,6 @@ var (
 	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
 )
 
-func TimeMilliseconds(rulesExtra extras.AvalancheRules, now time.Time) *uint64 {
-	if !rulesExtra.IsGranite {
-		return nil
-	}
-	// Extract milliseconds portion from given time
-	timeMilliseconds := uint64(now.UnixMilli())
-	return &timeMilliseconds
-}
-
 // VerifyTime verifies that the header's Time and TimeMilliseconds fields are
 // consistent with the given rules and the current time.
 // This includes:

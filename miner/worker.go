@@ -144,18 +144,26 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	var (
-		parent    = w.chain.CurrentBlock()
-		tstart    = w.clock.Time()
-		timestamp = uint64(tstart.Unix())
+		parent      = w.chain.CurrentBlock()
+		tstart      = w.clock.Time()
+		timestamp   = uint64(tstart.Unix())
+		timestampMS = uint64(tstart.UnixMilli())
+		chainExtra  = params.GetExtra(w.chainConfig)
 	)
 	// Note: in order to support asynchronous block production, blocks are allowed to have
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
 	if parent.Time >= timestamp {
 		timestamp = parent.Time
+		// If the parent has a TimeMilliseconds, use it. Otherwise, use the parent time * 1000.
+		parentExtra := customtypes.GetHeaderExtra(parent)
+		if parentExtra.TimeMilliseconds != nil {
+			timestampMS = *parentExtra.TimeMilliseconds
+		} else {
+			timestampMS = parent.Time * 1000 // TODO: establish minimum time
+		}
 	}
 
-	chainExtra := params.GetExtra(w.chainConfig)
 	gasLimit, err := customheader.GasLimit(chainExtra, parent, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("calculating new gas limit: %w", err)
@@ -173,11 +181,6 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		BaseFee:    baseFee,
 	}
 
-	// Add TimeMilliseconds
-	headerExtra := customtypes.GetHeaderExtra(header)
-	rulesExtra := params.GetRulesExtra(w.chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time))
-	headerExtra.TimeMilliseconds = customheader.TimeMilliseconds(rulesExtra.AvalancheRules, tstart)
-
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
@@ -190,6 +193,12 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		header.BlobGasUsed = new(uint64)
 		header.ExcessBlobGas = &excessBlobGas
 		header.ParentBeaconRoot = w.beaconRoot
+	}
+
+	// Add TimeMilliseconds if Granite is active.
+	if chainExtra.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		headerExtra.TimeMilliseconds = &timestampMS
 	}
 
 	if w.coinbase == (common.Address{}) {
