@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
@@ -102,10 +101,6 @@ var (
 )
 
 const (
-	// Max time from current time allowed for blocks, before they're considered future blocks
-	// and fail verification
-	maxFutureBlockTime = 10 * time.Second
-
 	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB
 	missingCacheSize       = 50
@@ -156,7 +151,7 @@ var originalStderr *os.File
 
 // legacyApiNames maps pre geth v1.10.20 api names to their updated counterparts.
 // used in attachEthService for backward configuration compatibility.
-var legacyApiNames = map[string]string{
+var legacyAPINames = map[string]string{
 	"internal-public-eth":              "internal-eth",
 	"internal-public-blockchain":       "internal-blockchain",
 	"internal-public-transaction-pool": "internal-transaction",
@@ -1053,8 +1048,8 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	if vm.config.BatchRequestLimit > 0 && vm.config.BatchResponseMaxSize > 0 {
 		handler.SetBatchLimits(int(vm.config.BatchRequestLimit), int(vm.config.BatchResponseMaxSize))
 	}
-	if vm.config.HttpBodyLimit > 0 {
-		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
+	if vm.config.HTTPBodyLimit > 0 {
+		handler.SetHTTPBodyLimit(int(vm.config.HTTPBodyLimit))
 	}
 
 	enabledAPIs := vm.config.EthAPIs()
@@ -1188,7 +1183,7 @@ func attachEthService(handler *rpc.Server, apis []rpc.API, names []string) error
 	for _, ns := range names {
 		// handle pre geth v1.10.20 api names as aliases for their updated values
 		// to allow configurations to be backwards compatible.
-		if newName, isLegacy := legacyApiNames[ns]; isLegacy {
+		if newName, isLegacy := legacyAPINames[ns]; isLegacy {
 			log.Info("deprecated api name referenced in configuration.", "deprecated", ns, "new", newName)
 			enabledServicesSet[newName] = struct{}{}
 			continue
