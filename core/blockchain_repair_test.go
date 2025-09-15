@@ -35,15 +35,21 @@ import (
 	"math/big"
 	"testing"
 
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/ethdb"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
@@ -510,12 +516,28 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
-			testRepairWithScheme(t, tt, snapshots, scheme)
+			testRepairWithScheme(t, tt, snapshots, scheme, false)
+		})
+		t.Run(scheme+"- blockdb", func(t *testing.T) {
+			testRepairWithScheme(t, tt, snapshots, scheme, true)
 		})
 	}
 }
 
-func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string) {
+func useWrappedBlockDatabase(t *testing.T, kvdb avalanchedatabase.Database, chaindb ethdb.Database, datadir string) ethdb.Database {
+	config := blockdb.DefaultConfig().WithDir(datadir).WithSyncToDisk(false)
+	blockDatabase, err := blockdb.New(config, logging.NoLog{})
+	if err != nil {
+		t.Fatalf("Failed to create block database: %v", err)
+	}
+	wrappedBlockDatabase, err := database.NewWrappedBlockDatabase(kvdb, blockDatabase, chaindb, true)
+	if err != nil {
+		t.Fatalf("Failed to create wrapped block database: %v", err)
+	}
+	return wrappedBlockDatabase
+}
+
+func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string, useBlockDB bool) {
 	// It's hard to follow the test case, visualize the input
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
@@ -534,6 +556,11 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
+	kvdb := memdb.New()
+	if useBlockDB {
+		db = useWrappedBlockDatabase(t, kvdb, db, datadir)
+	}
+
 	defer db.Close() // Might double close, should be fine
 
 	// Initialize a fresh chain
@@ -627,8 +654,10 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
+	if useBlockDB {
+		db = useWrappedBlockDatabase(t, kvdb, db, datadir)
+	}
 	defer db.Close()
-
 	newChain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
@@ -638,8 +667,11 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	// Iterate over all the remaining blocks and ensure there are no gaps
 	verifyNoGaps(t, newChain, true, canonblocks)
 	verifyNoGaps(t, newChain, false, sideblocks)
-	verifyCutoff(t, newChain, true, canonblocks, tt.expCanonicalBlocks)
-	verifyCutoff(t, newChain, false, sideblocks, tt.expSidechainBlocks)
+	// Only accepted (committed) blocks are persisted after restart.
+	cutoffHead := int(newChain.LastAcceptedBlock().NumberU64())
+	verifyCutoff(t, newChain, true, canonblocks, cutoffHead)
+	// Sidechain blocks are not persisted after restart; expect absence.
+	verifyCutoff(t, newChain, false, sideblocks, 0)
 
 	if head := newChain.CurrentHeader(); head.Number.Uint64() != tt.expHeadBlock {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, tt.expHeadBlock)
