@@ -50,24 +50,23 @@ type Extender interface {
 }
 
 // CodeRequestQueue is a minimal interface for accepting discovered code hashes
-// and signaling when no more code hashes will be produced from the account trie.
+// and signaling when no more code hashes will be produced.
 type CodeRequestQueue interface {
 	// AddCode enqueues the provided code hashes for fetching, ignoring any
 	// hashes already present locally or already queued. Implementations may
 	// block until internally ready to accept work. Returns a non-nil error if the
-	// code queue is shutting down or if persisting enqueue markers fails.
+	// queue is shutting down, has been finalized, or if persisting enqueue markers fails.
 	AddCode(codeHashes []common.Hash) error
 
 	// CodeHashes returns a channel that yields code hashes to be fetched by the
 	// consumer. The channel should be closed when no further hashes will be
-	// produced (e.g., after Finalize and draining persisted markers).
+	// produced (e.g., after Finalize and draining any outstanding items).
 	CodeHashes() <-chan common.Hash
 
 	// Finalize signals that no more code hashes will be produced by the
 	// producer (e.g., after the account trie has been fully scanned). After
-	// this call, the code queue should complete any outstanding work and then
-	// return from [Syncer.Sync] without waiting for additional input.
-	// Returns a non-nil error if the code queue is shutting down or if persisting
-	// enqueue markers fails.
+	// this call, the queue should complete any outstanding work and then
+	// close the CodeHashes channel. Returns a non-nil error if the queue is
+	// shutting down.
 	Finalize() error
 }

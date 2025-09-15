@@ -97,7 +97,7 @@ func WithMaxOutstandingCodeHashes(n int) CodeQueueOption {
 }
 
 // NewCodeQueue creates a new code queue applying optional functional options.
-func NewCodeQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeQueueOption) (*CodeQueue, error) {
+func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOption) (*CodeQueue, error) {
 	// Apply defaults then options.
 	o := codeQueueOptions{
 		autoInit:       defaultAutoInit,
@@ -113,7 +113,7 @@ func NewCodeQueue(db ethdb.Database, done <-chan struct{}, opts ...CodeQueueOpti
 		enqueueCh:   make(chan common.Hash, o.maxOutstanding),
 		open:        make(chan struct{}),
 		outstanding: set.NewSet[common.Hash](0),
-		quit:        done,
+		quit:        quit,
 	}
 
 	if o.autoInit {

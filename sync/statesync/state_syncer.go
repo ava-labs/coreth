@@ -29,8 +29,8 @@ const (
 )
 
 var (
-	_                      syncpkg.Syncer = (*stateSync)(nil)
-	errCodeFetcherRequired                = errors.New("code fetcher is required")
+	_                           syncpkg.Syncer = (*stateSync)(nil)
+	errCodeRequestQueueRequired                = errors.New("code request queue is required")
 )
 
 // Name returns the human-readable name for this sync task.
@@ -94,7 +94,7 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fetcher syncpkg.CodeRequestQueue, config Config) (syncpkg.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, codeQueue syncpkg.CodeRequestQueue, config Config) (syncpkg.Syncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	ss := &stateSync{
@@ -124,11 +124,11 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, fe
 		OnFailure:   ss.onSyncFailure,
 	})
 
-	if fetcher == nil {
-		return nil, errCodeFetcherRequired
+	if codeQueue == nil {
+		return nil, errCodeRequestQueueRequired
 	}
 
-	ss.codeQueue = fetcher
+	ss.codeQueue = codeQueue
 
 	ss.trieQueue = NewTrieQueue(db)
 	if err := ss.trieQueue.clearIfRootDoesNotMatch(ss.root); err != nil {
