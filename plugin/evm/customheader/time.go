@@ -19,6 +19,7 @@ var (
 	// and fail verification
 	MaxFutureBlockTime = 10 * time.Second
 
+	ErrBlockTooOld                   = errors.New("block timestamp is too old")
 	ErrBlockTooFarInFuture           = errors.New("block timestamp is too far in the future")
 	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
 	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
@@ -48,7 +49,7 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 	// Verify the header's timestamp is not earlier than parent's
 	// it does include equality(==), so multiple blocks per second is ok
 	if header.Time < parent.Time {
-		return fmt.Errorf("block time too old: %d < parent %d", header.Time, parent.Time)
+		return fmt.Errorf("%w: %d < parent %d", ErrBlockTooOld, header.Time, parent.Time)
 	}
 
 	// Validate TimeMilliseconds field isn't present prior to Granite

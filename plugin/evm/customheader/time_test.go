@@ -89,7 +89,8 @@ func TestVerifyTime(t *testing.T) {
 					TimeMilliseconds: test.timeMilliseconds,
 				},
 			)
-			err := VerifyTime(test.extraConfig, header, time)
+			parentHeader := types.CopyHeader(header)
+			err := VerifyTime(test.extraConfig, parentHeader, header, time)
 			require.ErrorIs(t, err, test.expectedErr)
 		})
 	}
