@@ -1,5 +1,3 @@
-# Coreth Configuration
-
 > **Note**: These are the configuration options available in the coreth codebase. To set these values, you need to create a configuration file at `{chain-config-dir}/C/config.json`. This file does not exist by default.
 >
 > For example if `chain-config-dir` has the default value which is `$HOME/.avalanchego/configs/chains`, then `config.json` should be placed at `$HOME/.avalanchego/configs/chains/C/config.json`.
