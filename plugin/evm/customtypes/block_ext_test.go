@@ -10,13 +10,14 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/utils"
 
 	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
 	// package so assume the presence of identifiers. A dot-import reduces PR
