@@ -378,13 +378,13 @@ func (db *Database) Close() error {
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
-	// clear the map before calling `dereference` to prevent extra work on close
-	db.proposalMap = nil
-
-	// before closing, we must deference any outstanding proposals to free the memory
+	// before closing, we must deference any outstanding proposals to free the
+	// memory owned by firewood (outside of go's memory management)
 	for _, pCtx := range db.proposalTree.Children {
 		db.dereference(pCtx)
 	}
+
+	db.proposalMap = nil
 	db.proposalTree.Children = nil
 
 	// Close the database
@@ -460,11 +460,8 @@ func (db *Database) dereference(pCtx *ProposalContext) {
 	}
 	pCtx.Children = nil
 
-	// the proposalMap will be nil if the database is closing so we can skip doing
-	// unnecessary work removing the proposals from the map one-by-one.
-	if db.proposalMap != nil {
-		db.removeProposalFromMap(pCtx)
-	}
+	// Remove the proposal from the map.
+	db.removeProposalFromMap(pCtx)
 
 	// Drop the proposal in the backend.
 	if err := pCtx.Proposal.Drop(); err != nil {
