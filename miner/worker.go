@@ -143,7 +143,6 @@ func (w *worker) setEtherbase(addr common.Address) {
 func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateContext) (*types.Block, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-
 	var (
 		parent      = w.chain.CurrentBlock()
 		tstart      = w.clock.Time()
@@ -156,8 +155,12 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	// per second.
 	if parent.Time >= timestamp {
 		timestamp = parent.Time
-		if chainExtra.IsGranite(timestamp) {
-			timestampMS = uint64(tstart.UnixMilli()) // TODO: establish minimum time
+		// If the parent has a TimeMilliseconds, use it. Otherwise, use the parent time * 1000.
+		parentExtra := customtypes.GetHeaderExtra(parent)
+		if parentExtra.TimeMilliseconds != nil {
+			timestampMS = *parentExtra.TimeMilliseconds
+		} else {
+			timestampMS = parent.Time * 1000 // TODO: establish minimum time
 		}
 	}
 

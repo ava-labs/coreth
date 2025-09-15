@@ -1366,6 +1366,49 @@ func TestTimeSemanticVerify(t *testing.T) {
 	}
 }
 
+func TestBuildTimeMilliseconds(t *testing.T) {
+	cases := []struct {
+		name                     string
+		fork                     upgradetest.Fork
+		buildTime                time.Time
+		expectedTimeMilliseconds *uint64
+	}{
+		{
+			name:                     "fortuna_should_not_have_timestamp_milliseconds",
+			fork:                     upgradetest.Fortuna,
+			buildTime:                time.Unix(1714339200, 123_456_789),
+			expectedTimeMilliseconds: nil,
+		},
+		{
+			name:                     "granite_should_have_timestamp_milliseconds",
+			fork:                     upgradetest.Granite,
+			buildTime:                time.Unix(1714339200, 123_456_789),
+			expectedTimeMilliseconds: utils.NewUint64(1714339200123),
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			vm := newDefaultTestVM()
+			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &test.fork,
+			})
+
+			defer vm.Shutdown(context.Background())
+
+			vm.clock.Set(test.buildTime)
+			tx := types.NewTransaction(uint64(0), vmtest.TestEthAddrs[1], big.NewInt(1), 21000, common.Big1, nil)
+			signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.chainConfig.ChainID), vmtest.TestKeys[0].ToECDSA())
+			require.NoError(t, err)
+
+			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+			require.NoError(t, err)
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			require.Equal(t, test.expectedTimeMilliseconds, customtypes.BlockTimeMilliseconds(ethBlk))
+		})
+	}
+}
+
 // Regression test to ensure we can build blocks if we are starting with the
 // Apricot Phase 1 ruleset in genesis.
 func TestBuildApricotPhase1Block(t *testing.T) {

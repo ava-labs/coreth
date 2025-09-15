@@ -4,6 +4,7 @@
 package customheader
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,17 @@ import (
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+)
+
+var (
+	// Max time from current time allowed for blocks, before they're considered future blocks
+	// and fail verification
+	MaxFutureBlockTime = 10 * time.Second
+
+	ErrBlockTooFarInFuture           = errors.New("block timestamp is too far in the future")
+	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
+	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
+	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
 )
 
 // VerifyTime verifies that the header's Time and TimeMilliseconds fields are
