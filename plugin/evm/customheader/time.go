@@ -29,13 +29,12 @@ var (
 // VerifyTime verifies that the header's Time and TimeMilliseconds fields are
 // consistent with the given rules and the current time.
 // This includes:
-// - Time is not too far in the future
 // - TimeMilliseconds is nil before Granite activation
 // - TimeMilliseconds is non-nil after Granite activation
 // - Time matches TimeMilliseconds/1000 after Granite activation
-// - (TODO) Time is strictly increasing if parent is also after Granite activation
+// - Time/TimeMilliseconds is not too far in the future
+// - Time/TimeMilliseconds is non-decreasing
 // - (TODO) Minimum block delay is enforced
-// - (TODO) More time-related checks from dummy.VerifyHeader
 func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *types.Header, now time.Time) error {
 	var (
 		headerExtra = customtypes.GetHeaderExtra(header)
