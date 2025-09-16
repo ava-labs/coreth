@@ -142,7 +142,8 @@ func TestVerifyTime(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// if parentHeader is nil, copy the current header
+			// Unless the parentHeader is explicitly set, make it a copy of the header.
+			// parentHeader == header will pass if and only if header is correct.
 			parentHeader := test.parentHeader
 			if test.parentHeader == nil {
 				parentHeader = types.CopyHeader(test.header)
