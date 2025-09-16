@@ -9,7 +9,6 @@
 //
 // Much love to the original authors for their work.
 // **********
-
 package main
 
 import (
