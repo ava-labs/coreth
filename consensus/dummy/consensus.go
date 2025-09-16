@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/consensus/misc/eip4844"
@@ -74,7 +73,6 @@ type (
 
 	DummyEngine struct {
 		cb                  ConsensusCallbacks
-		clock               *mockable.Clock
 		consensusMode       Mode
 		desiredTargetExcess *gas.Gas
 	}
@@ -83,12 +81,10 @@ type (
 func NewDummyEngine(
 	cb ConsensusCallbacks,
 	mode Mode,
-	clock *mockable.Clock,
 	desiredTargetExcess *gas.Gas,
 ) *DummyEngine {
 	return &DummyEngine{
 		cb:                  cb,
-		clock:               clock,
 		consensusMode:       mode,
 		desiredTargetExcess: desiredTargetExcess,
 	}
@@ -96,56 +92,35 @@ func NewDummyEngine(
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
-		clock:         &mockable.Clock{},
 		consensusMode: Mode{ModeSkipBlockFee: true},
 	}
 }
 
 func NewFaker() *DummyEngine {
-	return &DummyEngine{
-		clock: &mockable.Clock{},
-	}
-}
-
-func NewFakerWithClock(cb ConsensusCallbacks, clock *mockable.Clock) *DummyEngine {
-	return &DummyEngine{
-		cb:    cb,
-		clock: clock,
-	}
+	return &DummyEngine{}
 }
 
 func NewFakerWithCallbacks(cb ConsensusCallbacks) *DummyEngine {
 	return &DummyEngine{
-		cb:    cb,
-		clock: &mockable.Clock{},
+		cb: cb,
 	}
 }
 
 func NewFakerWithMode(cb ConsensusCallbacks, mode Mode) *DummyEngine {
 	return &DummyEngine{
 		cb:            cb,
-		clock:         &mockable.Clock{},
-		consensusMode: mode,
-	}
-}
-
-func NewFakerWithModeAndClock(mode Mode, clock *mockable.Clock) *DummyEngine {
-	return &DummyEngine{
-		clock:         clock,
 		consensusMode: mode,
 	}
 }
 
 func NewCoinbaseFaker() *DummyEngine {
 	return &DummyEngine{
-		clock:         &mockable.Clock{},
 		consensusMode: Mode{ModeSkipCoinbase: true},
 	}
 }
 
 func NewFullFaker() *DummyEngine {
 	return &DummyEngine{
-		clock:         &mockable.Clock{},
 		consensusMode: Mode{ModeSkipHeader: true},
 	}
 }
@@ -201,7 +176,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 }
 
 // modified from consensus.go
-func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
+func verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
@@ -271,7 +246,7 @@ func (eng *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return eng.verifyHeader(chain, header, parent, false)
+	return verifyHeader(chain, header, parent, false)
 }
 
 func (*DummyEngine) VerifyUncles(_ consensus.ChainReader, block *types.Block) error {
