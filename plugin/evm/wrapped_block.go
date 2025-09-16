@@ -477,18 +477,13 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	// Verify the existence / non-existence of excessBlobGas
+	// All remaining checks are done in semanticVerify
 	if rules.IsCancun {
 		switch {
 		case ethHeader.ParentBeaconRoot == nil:
 			return errMissingParentBeaconRoot
 		case *ethHeader.ParentBeaconRoot != (common.Hash{}):
 			return fmt.Errorf("%w: have %x, expected empty hash", errParentBeaconRootNonEmpty, ethHeader.ParentBeaconRoot)
-		case ethHeader.BlobGasUsed == nil:
-			return errBlobGasUsedNilInCancun
-		case *ethHeader.BlobGasUsed > 0:
-			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *ethHeader.BlobGasUsed)
-		case ethHeader.ExcessBlobGas == nil:
-			return errMissingExcessBlobGas
 		}
 	} else {
 		switch {
