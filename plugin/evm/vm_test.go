@@ -18,15 +18,21 @@ import (
 
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
+	"github.com/ava-labs/avalanchego/vms/evm/predicate"
+	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
@@ -39,6 +45,7 @@ import (
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/paramstest"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -50,6 +57,8 @@ import (
 	"github.com/ava-labs/coreth/utils"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
+	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	ethparams "github.com/ava-labs/libevm/params"
 )
 
@@ -1270,58 +1279,136 @@ func testAcceptReorg(t *testing.T, scheme string) {
 	}
 }
 
-func TestFutureBlock(t *testing.T) {
-	for _, scheme := range vmtest.Schemes {
-		t.Run(scheme, func(t *testing.T) {
-			testFutureBlock(t, scheme)
+func TestTimeSemanticVerify(t *testing.T) {
+	timestamp := time.Unix(1714339200, 123_456_789)
+	cases := []struct {
+		name             string
+		fork             upgradetest.Fork
+		timeSeconds      uint64
+		timeMilliseconds *uint64
+		expectedError    error
+	}{
+		{
+			name:             "Fortuna without TimeMilliseconds",
+			fork:             upgradetest.Fortuna,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: nil,
+		},
+		{
+			name:             "Granite with TimeMilliseconds",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli())),
+		},
+		{
+			name:             "Fortuna with TimeMilliseconds",
+			fork:             upgradetest.Fortuna,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli())),
+			expectedError:    customheader.ErrTimeMillisecondsBeforeGranite,
+		},
+		{
+			name:             "Granite without TimeMilliseconds",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: nil,
+			expectedError:    customheader.ErrTimeMillisecondsRequired,
+		},
+		{
+			name:             "Granite with mismatched TimeMilliseconds",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.UnixMilli()) + 1000),
+			expectedError:    customheader.ErrTimeMillisecondsMismatched,
+		},
+		{
+			name:             "Block too far in the future",
+			fork:             upgradetest.Granite,
+			timeSeconds:      uint64(timestamp.Add(2 * time.Hour).Unix()),
+			timeMilliseconds: utils.NewUint64(uint64(timestamp.Add(2 * time.Hour).UnixMilli())),
+			expectedError:    customheader.ErrBlockTooFarInFuture,
+		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			vm := newDefaultTestVM()
+			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &test.fork,
+			})
+
+			defer func() {
+				require.NoError(t, vm.Shutdown(context.Background()))
+			}()
+
+			// Create a block
+			signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
+			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+			require.NoError(t, err)
+
+			// Modify the header to have the desired time values
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			modifiedHeader := types.CopyHeader(ethBlk.Header())
+			modifiedHeader.Time = test.timeSeconds
+			modifiedExtra := customtypes.GetHeaderExtra(modifiedHeader)
+			modifiedExtra.TimeMilliseconds = test.timeMilliseconds
+
+			// Build new block with modified header
+			receipts := vm.blockChain.GetReceiptsByHash(ethBlk.Hash())
+			modifiedBlock := customtypes.NewBlockWithExtData(
+				modifiedHeader,
+				ethBlk.Transactions(),
+				nil,
+				receipts,
+				trie.NewStackTrie(nil),
+				customtypes.BlockExtData(ethBlk),
+				false,
+			)
+			modifiedBlk, err := wrapBlock(modifiedBlock, vm)
+			require.NoError(t, err)
+
+			vm.clock.Set(timestamp) // set current time to base for time checks
+			err = modifiedBlk.Verify(context.Background())
+			require.ErrorIs(t, err, test.expectedError)
 		})
 	}
 }
 
-func testFutureBlock(t *testing.T, scheme string) {
-	fork := upgradetest.NoUpgrades
-	vm := newDefaultTestVM()
-	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
-		Fork:   &fork,
-		Scheme: scheme,
-	})
-
-	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, big.NewInt(ap0.MinGasPrice), nil)
-	blkA, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
-	if err != nil {
-		t.Fatalf("Failed to build block with transaction: %s", err)
+func TestBuildTimeMilliseconds(t *testing.T) {
+	buildTime := time.Unix(1714339200, 123_456_789)
+	cases := []struct {
+		name                     string
+		fork                     upgradetest.Fork
+		expectedTimeMilliseconds *uint64
+	}{
+		{
+			name:                     "fortuna_should_not_have_timestamp_milliseconds",
+			fork:                     upgradetest.Fortuna,
+			expectedTimeMilliseconds: nil,
+		},
+		{
+			name:                     "granite_should_have_timestamp_milliseconds",
+			fork:                     upgradetest.Granite,
+			expectedTimeMilliseconds: utils.NewUint64(uint64(buildTime.UnixMilli())),
+		},
 	}
 
-	// Create empty block from blkA
-	internalBlkA := blkA.(*chain.BlockWrapper).Block.(*wrappedBlock)
-	modifiedHeader := types.CopyHeader(internalBlkA.ethBlock.Header())
-	// Set the VM's clock to the time of the produced block
-	vm.clock.Set(time.Unix(int64(modifiedHeader.Time), 0))
-	// Set the modified time to exceed the allowed future time
-	modifiedTime := modifiedHeader.Time + uint64(maxFutureBlockTime.Seconds()+1)
-	modifiedHeader.Time = modifiedTime
-	modifiedBlock := customtypes.NewBlockWithExtData(
-		modifiedHeader,
-		nil,
-		nil,
-		nil,
-		new(trie.Trie),
-		customtypes.BlockExtData(internalBlkA.ethBlock),
-		false,
-	)
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			vm := newDefaultTestVM()
+			_ = vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+				Fork: &test.fork,
+			})
 
-	futureBlock, err := wrapBlock(modifiedBlock, vm)
-	require.NoError(t, err)
-	if err := futureBlock.Verify(context.Background()); err == nil {
-		t.Fatal("Future block should have failed verification due to block timestamp too far in the future")
-	} else if !strings.Contains(err.Error(), "block timestamp is too far in the future") {
-		t.Fatalf("Expected error to be block timestamp too far in the future but found %s", err)
+			defer vm.Shutdown(context.Background())
+
+			vm.clock.Set(buildTime)
+			signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
+			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+			require.NoError(t, err)
+			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
+			require.Equal(t, test.expectedTimeMilliseconds, customtypes.BlockTimeMilliseconds(ethBlk))
+		})
 	}
 }
 
@@ -2176,6 +2263,161 @@ func TestDelegatePrecompile_BehaviorAcrossUpgrades(t *testing.T) {
 			receipts := vm.blockChain.GetReceiptsByHash(ethBlock.Hash())
 			require.Len(t, receipts, 1)
 			require.Equal(t, tt.wantReceiptStatus, receipts[0].Status)
+		})
+	}
+}
+
+// TestBlockGasValidation tests the two validation checks:
+// 1. invalid gas used relative to capacity
+// 2. total intrinsic gas cost is greater than claimed gas used
+func TestBlockGasValidation(t *testing.T) {
+	newBlock := func(
+		t *testing.T,
+		vm *VM,
+		claimedGasUsed uint64,
+	) *types.Block {
+		require := require.New(t)
+
+		chainExtra := params.GetExtra(vm.chainConfig)
+		parent := vm.eth.APIBackend.CurrentBlock()
+		const timeDelta = acp176.TimeToFillCapacity
+		timestamp := parent.Time + timeDelta
+		gasLimit, err := customheader.GasLimit(chainExtra, parent, timestamp)
+		require.NoError(err)
+		baseFee, err := customheader.BaseFee(chainExtra, parent, timestamp)
+		require.NoError(err)
+
+		callPayload, err := payload.NewAddressedCall(nil, nil)
+		require.NoError(err)
+		unsignedMessage, err := avalancheWarp.NewUnsignedMessage(
+			1,
+			ids.Empty,
+			callPayload.Bytes(),
+		)
+		require.NoError(err)
+		signersBitSet := set.NewBits()
+		warpSignature := &avalancheWarp.BitSetSignature{
+			Signers: signersBitSet.Bytes(),
+		}
+		signedMessage, err := avalancheWarp.NewMessage(
+			unsignedMessage,
+			warpSignature,
+		)
+		require.NoError(err)
+
+		// 9401 is the maximum number of predicates so that the block is less
+		// than 2 MiB.
+		const numPredicates = 9401
+		accessList := make(types.AccessList, 0, numPredicates)
+		predicate := predicate.New(signedMessage.Bytes())
+		for range numPredicates {
+			accessList = append(accessList, types.AccessTuple{
+				Address:     warpcontract.ContractAddress,
+				StorageKeys: predicate,
+			})
+		}
+
+		tx, err := types.SignTx(
+			types.NewTx(&types.DynamicFeeTx{
+				ChainID:    vm.chainConfig.ChainID,
+				Nonce:      1,
+				To:         &vmtest.TestEthAddrs[0],
+				Gas:        acp176.MinMaxCapacity,
+				GasFeeCap:  baseFee,
+				GasTipCap:  baseFee,
+				Value:      common.Big0,
+				AccessList: accessList,
+			}),
+			types.LatestSigner(vm.chainConfig),
+			vmtest.TestKeys[0].ToECDSA(),
+		)
+		require.NoError(err)
+
+		header := &types.Header{
+			ParentHash:       parent.Hash(),
+			Coinbase:         constants.BlackholeAddr,
+			Difficulty:       new(big.Int).Add(parent.Difficulty, common.Big1),
+			Number:           new(big.Int).Add(parent.Number, common.Big1),
+			GasLimit:         gasLimit,
+			GasUsed:          0,
+			Time:             timestamp,
+			BaseFee:          baseFee,
+			BlobGasUsed:      new(uint64),
+			ExcessBlobGas:    new(uint64),
+			ParentBeaconRoot: &common.Hash{},
+		}
+
+		configExtra := params.GetExtra(vm.chainConfig)
+		header.Extra, err = customheader.ExtraPrefix(configExtra, parent, header, nil)
+		require.NoError(err)
+
+		// Set TimeMilliseconds for Granite blocks
+		if configExtra.IsGranite(timestamp) {
+			headerExtra := customtypes.GetHeaderExtra(header)
+			timeMilliseconds := timestamp * 1000
+			headerExtra.TimeMilliseconds = &timeMilliseconds
+		}
+
+		// Set the gasUsed after calculating the extra prefix to support large
+		// claimed gas used values.
+		header.GasUsed = claimedGasUsed
+		return customtypes.NewBlockWithExtData(
+			header,
+			[]*types.Transaction{tx},
+			nil,
+			nil,
+			trie.NewStackTrie(nil),
+			nil,
+			true,
+		)
+	}
+
+	tests := []struct {
+		name    string
+		gasUsed uint64
+		want    error
+	}{
+		{
+			name:    "gas_used_over_capacity",
+			gasUsed: math.MaxUint64,
+			want:    errInvalidGasUsedRelativeToCapacity,
+		},
+		{
+			name:    "intrinsic_gas_over_gas_used",
+			gasUsed: 0,
+			want:    errTotalIntrinsicGasCostExceedsClaimed,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require := require.New(t)
+			ctx := context.Background()
+
+			vm := newDefaultTestVM()
+			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{})
+			defer func() {
+				require.NoError(vm.Shutdown(ctx))
+			}()
+
+			blk := newBlock(t, vm, test.gasUsed)
+			blkBytes, err := rlp.EncodeToBytes(blk)
+			require.NoError(err)
+
+			parsedBlk, err := vm.ParseBlock(ctx, blkBytes)
+			require.NoError(err)
+
+			parsedBlkWithContext, ok := parsedBlk.(block.WithVerifyContext)
+			require.True(ok)
+
+			shouldVerify, err := parsedBlkWithContext.ShouldVerifyWithContext(ctx)
+			require.NoError(err)
+			require.True(shouldVerify)
+
+			err = parsedBlkWithContext.VerifyWithContext(
+				ctx,
+				&block.Context{},
+			)
+			require.ErrorIs(err, test.want)
 		})
 	}
 }
