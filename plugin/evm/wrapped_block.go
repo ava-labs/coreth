@@ -16,6 +16,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
@@ -51,7 +52,6 @@ var (
 	errInvalidParent                       = errors.New("parent header not found")
 	errInvalidParentBeaconRootBeforeCancun = errors.New("invalid parentBeaconRoot before cancun")
 	errMissingExcessBlobGas                = errors.New("header is missing excessBlobGas")
-	errMissingBlobGasUsed                  = errors.New("header is missing blobGasUsed")
 	errMissingParentBeaconRoot             = errors.New("header is missing parentBeaconRoot")
 	errParentBeaconRootNonEmpty            = errors.New("invalid non-empty parentBeaconRoot")
 	errBlobGasUsedNilInCancun              = errors.New("blob gas used must not be nil in Cancun")
@@ -348,13 +348,24 @@ func (b *wrappedBlock) verifyIntrinsicGas() error {
 func (b *wrappedBlock) semanticVerify() error {
 	extraConfig := params.GetExtra(b.vm.chainConfig)
 	parent := b.vm.blockChain.GetHeader(b.ethBlock.ParentHash(), b.ethBlock.NumberU64()-1)
+	header := b.ethBlock.Header()
 	if parent == nil {
 		return fmt.Errorf("%w: %s at height %d", errInvalidParent, b.ethBlock.ParentHash(), b.ethBlock.NumberU64()-1)
 	}
 
 	// Ensure Time and TimeMilliseconds are consistent with rules.
-	if err := customheader.VerifyTime(extraConfig, parent, b.ethBlock.Header(), b.vm.clock.Time()); err != nil {
+	if err := customheader.VerifyTime(extraConfig, parent, header, b.vm.clock.Time()); err != nil {
 		return err
+	}
+
+	// Verify the existence / non-existence of excessBlobGas
+	if b.vm.chainConfig.IsCancun(header.Number, header.Time) {
+		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
+			return err
+		}
+		if *header.BlobGasUsed > 0 { // VerifyEIP4844Header ensures BlobGasUsed is non-nil
+			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *header.BlobGasUsed)
+		}
 	}
 
 	if b.extension != nil {
@@ -466,33 +477,27 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	// Verify the existence / non-existence of excessBlobGas
-	cancun := rules.IsCancun
-	if !cancun && ethHeader.ExcessBlobGas != nil {
-		return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
-	}
-	if !cancun && ethHeader.BlobGasUsed != nil {
-		return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
-	}
-	if cancun && ethHeader.ExcessBlobGas == nil {
-		return errMissingExcessBlobGas
-	}
-	if cancun && ethHeader.BlobGasUsed == nil {
-		return errMissingBlobGasUsed
-	}
-	if !cancun && ethHeader.ParentBeaconRoot != nil {
-		return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
-	}
-	if cancun {
+	if rules.IsCancun {
 		switch {
 		case ethHeader.ParentBeaconRoot == nil:
 			return errMissingParentBeaconRoot
 		case *ethHeader.ParentBeaconRoot != (common.Hash{}):
 			return fmt.Errorf("%w: have %x, expected empty hash", errParentBeaconRootNonEmpty, ethHeader.ParentBeaconRoot)
-		}
-		if ethHeader.BlobGasUsed == nil {
+		case ethHeader.BlobGasUsed == nil:
 			return errBlobGasUsedNilInCancun
-		} else if *ethHeader.BlobGasUsed > 0 {
+		case *ethHeader.BlobGasUsed > 0:
 			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *ethHeader.BlobGasUsed)
+		case ethHeader.ExcessBlobGas == nil:
+			return errMissingExcessBlobGas
+		}
+	} else {
+		switch {
+		case ethHeader.ExcessBlobGas != nil:
+			return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
+		case ethHeader.BlobGasUsed != nil:
+			return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
+		case ethHeader.ParentBeaconRoot != nil:
+			return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
 		}
 	}
 
