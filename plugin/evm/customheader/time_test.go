@@ -33,13 +33,11 @@ func TestVerifyTime(t *testing.T) {
 		timeMillis  = uint64(now.UnixMilli())
 	)
 	tests := []struct {
-		name             string
-		header           *types.Header
-		parentHeader     *types.Header
-		timeSeconds      uint64
-		timeMilliseconds *uint64
-		extraConfig      *extras.ChainConfig
-		expectedErr      error
+		name         string
+		header       *types.Header
+		parentHeader *types.Header
+		extraConfig  *extras.ChainConfig
+		expectedErr  error
 	}{
 		{
 			name:        "pre_granite_time_milliseconds_should_fail",
