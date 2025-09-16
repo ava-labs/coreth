@@ -51,7 +51,6 @@ var (
 	errInvalidBlobGasUsedBeforeCancun      = errors.New("invalid blobGasUsed before cancun")
 	errInvalidParent                       = errors.New("parent header not found")
 	errInvalidParentBeaconRootBeforeCancun = errors.New("invalid parentBeaconRoot before cancun")
-	errMissingExcessBlobGas                = errors.New("header is missing excessBlobGas")
 	errMissingParentBeaconRoot             = errors.New("header is missing parentBeaconRoot")
 	errParentBeaconRootNonEmpty            = errors.New("invalid non-empty parentBeaconRoot")
 	errBlobGasUsedNilInCancun              = errors.New("blob gas used must not be nil in Cancun")
@@ -484,6 +483,10 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return errMissingParentBeaconRoot
 		case *ethHeader.ParentBeaconRoot != (common.Hash{}):
 			return fmt.Errorf("%w: have %x, expected empty hash", errParentBeaconRootNonEmpty, ethHeader.ParentBeaconRoot)
+		case ethHeader.BlobGasUsed == nil:
+			return errBlobGasUsedNilInCancun
+		case *ethHeader.BlobGasUsed > 0:
+			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *ethHeader.BlobGasUsed)
 		}
 	} else {
 		switch {
