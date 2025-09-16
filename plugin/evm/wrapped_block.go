@@ -466,7 +466,23 @@ func (b *wrappedBlock) syntacticVerify() error {
 	}
 
 	// Verify the existence / non-existence of excessBlobGas
-	if rules.IsCancun {
+	cancun := rules.IsCancun
+	if !cancun && ethHeader.ExcessBlobGas != nil {
+		return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
+	}
+	if !cancun && ethHeader.BlobGasUsed != nil {
+		return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
+	}
+	if cancun && ethHeader.ExcessBlobGas == nil {
+		return errMissingExcessBlobGas
+	}
+	if cancun && ethHeader.BlobGasUsed == nil {
+		return errMissingBlobGasUsed
+	}
+	if !cancun && ethHeader.ParentBeaconRoot != nil {
+		return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
+	}
+	if cancun {
 		switch {
 		case ethHeader.ParentBeaconRoot == nil:
 			return errMissingParentBeaconRoot
@@ -478,20 +494,6 @@ func (b *wrappedBlock) syntacticVerify() error {
 		} else if *ethHeader.BlobGasUsed > 0 {
 			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *ethHeader.BlobGasUsed)
 		}
-	} else {
-		switch {
-		case ethHeader.ExcessBlobGas != nil:
-			return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
-		case ethHeader.BlobGasUsed != nil:
-			return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
-		case ethHeader.ExcessBlobGas == nil:
-			return errMissingExcessBlobGas
-		case ethHeader.BlobGasUsed == nil:
-			return errMissingBlobGasUsed
-		case ethHeader.ParentBeaconRoot != nil:
-			return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
-		}
-
 	}
 
 	if b.extension != nil {
