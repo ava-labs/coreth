@@ -32,13 +32,13 @@ func SecureFloat64() float64 {
 	return math.Float64frombits(bits) - 1.0
 }
 
-// SecureIntRange returns uniform in [min, max).
+// SecureIntRange returns uniform in [low, high).
 // Panics if min >= max or on crypto/rand failure.
-func SecureIntRange(min, max int) int {
-	if min >= max {
-		panic("invalid range: min >= max")
+func SecureIntRange(low, high int) int {
+	if low >= high {
+		panic("invalid range: low >= high")
 	}
 	// (max - min) must be representable in int64 for big.NewInt; this is safe on 64-bit.
-	width := max - min
-	return min + SecureIntn(width)
+	width := high - low
+	return low + SecureIntn(width)
 }
