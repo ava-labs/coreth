@@ -849,8 +849,7 @@ func TestGetLeafsRetries(t *testing.T) {
 		}
 	}, invalidResponse)
 	_, err = client.GetLeafs(ctx, request)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), context.Canceled.Error())
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestStateSyncNodes(t *testing.T) {
@@ -882,7 +881,7 @@ func TestStateSyncNodes(t *testing.T) {
 
 	// send some request, doesn't matter what it is because we're testing the interaction with state sync nodes here
 	response, err := client.GetLeafs(ctx, message.LeafsRequest{})
-	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, response)
 
 	// require all nodes were called

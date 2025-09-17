@@ -568,7 +568,7 @@ func TestNetworkPropagatesRequestHandlerError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that if the request handler returns an error, it is propagated as a fatal error.
-	require.Error(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), requestMessage))
+	require.ErrorContains(t, clientNetwork.AppRequest(context.Background(), nodeID, requestID, time.Now().Add(time.Second), requestMessage), "fail")
 }
 
 func TestNetworkAppRequestAfterShutdown(t *testing.T) {

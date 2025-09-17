@@ -141,9 +141,9 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 
 	// Verify the signature cannot be fetched before the block is accepted
 	_, err = vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMessage)
-	require.Error(err)
+	require.ErrorContains(err, "unknown payload type")
 	_, err = vm.warpBackend.GetBlockSignature(context.TODO(), blk.ID())
-	require.Error(err)
+	require.ErrorContains(err, "failed to get block")
 
 	require.NoError(vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(blk.Accept(context.Background()))
