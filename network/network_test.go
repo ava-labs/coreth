@@ -483,7 +483,7 @@ func TestOnRequestHonoursDeadline(t *testing.T) {
 	requestHandler.processingDuration = 0
 	require.NoError(t, net.AppRequest(context.Background(), nodeID, 2, time.Now().Add(250*time.Millisecond), requestBytes))
 	require.True(t, responded)
-	require.EqualValues(t, 1, requestHandler.calls)
+	require.Equal(t, 1, requestHandler.calls)
 }
 
 func TestHandleInvalidMessages(t *testing.T) {
