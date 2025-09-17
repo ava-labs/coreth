@@ -284,6 +284,26 @@ func (client *client) acceptSyncSummary(proposedSummary message.Syncable) (block
 	return block.StateSyncStatic, nil
 }
 
+func (client *Client) UpdateSyncTarget(t T/* per block info */) error {
+	client.lock.Lock()
+	defer client.lock.Unlock()
+	if !currentlySyncing {
+		return err
+	}
+	if currentlyFinalizing {
+		return nil 
+		// will only work if we tell the engine where to bootstrap from
+		// Otherwise, we add to queue
+	}
+	If t.Height % interval  == 0 {
+		client.t == t
+		return registry.UpdateTarget(t)
+	}
+	
+	return nil
+}
+
+
 func (client *client) Shutdown() error {
 	if client.cancel != nil {
 		client.cancel()

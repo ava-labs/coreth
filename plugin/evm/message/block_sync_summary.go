@@ -21,6 +21,7 @@ type BlockSyncSummary struct {
 	BlockNumber uint64      `serialize:"true"`
 	BlockHash   common.Hash `serialize:"true"`
 	BlockRoot   common.Hash `serialize:"true"`
+	// ADD A FIELD FOR FIREWOOD IF NEEDED
 
 	summaryID  ids.ID
 	bytes      []byte

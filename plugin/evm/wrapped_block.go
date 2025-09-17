@@ -94,6 +94,9 @@ func (b *wrappedBlock) ID() ids.ID { return b.id }
 // Accept implements the snowman.Block interface
 func (b *wrappedBlock) Accept(context.Context) error {
 	vm := b.vm
+	if currentlyDynamicSyncing() {
+		return vm.client.UpdateSyncTarget( /* WHAT IS THIS*/ )
+	}
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
@@ -248,6 +251,9 @@ func (b *wrappedBlock) VerifyWithContext(_ context.Context, proposerVMBlockCtx *
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
+	if currentlyDynamicSyncing() {
+		return nil
+	}
 	if predicateContext.ProposerVMBlockCtx != nil {
 		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
 	} else {
