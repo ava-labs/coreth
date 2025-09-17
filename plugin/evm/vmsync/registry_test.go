@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package vm
+package vmsync
 
 import (
 	"context"
@@ -11,15 +11,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/sync/synctest"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
-	synccommon "github.com/ava-labs/coreth/sync"
+	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
-// mockSyncer implements synccommon.Syncer for testing.
+var _ syncpkg.Syncer = (*mockSyncer)(nil)
+
+// mockSyncer implements [syncpkg.Syncer] for testing.
 type mockSyncer struct {
 	name      string
 	syncError error
@@ -41,7 +44,7 @@ func (m *mockSyncer) ID() string   { return m.name }
 // namedSyncer adapts an existing syncer with a provided name to satisfy Syncer with Name().
 type namedSyncer struct {
 	name   string
-	syncer synccommon.Syncer
+	syncer syncpkg.Syncer
 }
 
 func (n *namedSyncer) Sync(ctx context.Context) error { return n.syncer.Sync(ctx) }
@@ -177,7 +180,10 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				require.NoError(t, registry.Register(mockSyncer))
 			}
 
-			err := registry.RunSyncerTasks(context.Background(), &client{})
+			ctx, cancel := utilstest.NewTestContext(t)
+			t.Cleanup(cancel)
+
+			err := registry.RunSyncerTasks(ctx, newTestClientSummary(t))
 
 			if tt.expectedError != "" {
 				require.Error(t, err)
@@ -209,12 +215,12 @@ func TestSyncerRegistry_ConcurrentStart(t *testing.T) {
 
 	for i := 0; i < numBarrierSyncers; i++ {
 		name := fmt.Sprintf("BarrierSyncer-%d", i)
-		s := &namedSyncer{name: name, syncer: synctest.NewBarrierSyncer(&allStartedWG, releaseCh)}
+		s := &namedSyncer{name: name, syncer: NewBarrierSyncer(&allStartedWG, releaseCh)}
 		require.NoError(t, registry.Register(s))
 	}
 
 	doneCh := make(chan error, 1)
-	go func() { doneCh <- registry.RunSyncerTasks(ctx, &client{}) }()
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
 
 	utilstest.WaitGroupWithTimeout(t, &allStartedWG, 2*time.Second, "timed out waiting for barrier syncers to start")
 	close(releaseCh)
@@ -233,7 +239,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 	// Error syncer
 	trigger := make(chan struct{})
 	errFirst := errors.New("test error")
-	require.NoError(t, registry.Register(&namedSyncer{name: "ErrorSyncer-0", syncer: synctest.NewErrorSyncer(trigger, errFirst)}))
+	require.NoError(t, registry.Register(&namedSyncer{name: "ErrorSyncer-0", syncer: NewErrorSyncer(trigger, errFirst)}))
 
 	// Cancel-aware syncers to verify cancellation propagation
 	const numCancelSyncers = 2
@@ -246,11 +252,11 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 		cancelChans = append(cancelChans, canceledCh)
 		startedChans = append(startedChans, startedCh)
 		name := fmt.Sprintf("CancelSyncer-%d", i)
-		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: synctest.NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)}))
+		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)}))
 	}
 
 	doneCh := make(chan error, 1)
-	go func() { doneCh <- registry.RunSyncerTasks(ctx, &client{}) }()
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
 
 	// Ensure cancel-aware syncers are running before triggering the error
 	for i, started := range startedChans {
@@ -288,11 +294,11 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 			errFirst = errInstance
 		}
 		name := fmt.Sprintf("ErrorSyncer-%d", i)
-		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: synctest.NewErrorSyncer(trigger, errInstance)}))
+		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: NewErrorSyncer(trigger, errInstance)}))
 	}
 
 	doneCh := make(chan error, 1)
-	go func() { doneCh <- registry.RunSyncerTasks(ctx, &client{}) }()
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
 
 	// Trigger only the first error; others should return due to cancellation
 	close(triggers[0])
@@ -308,5 +314,13 @@ func TestSyncerRegistry_NoSyncersRegistered(t *testing.T) {
 	ctx, cancel := utilstest.NewTestContext(t)
 	t.Cleanup(cancel)
 
-	require.NoError(t, registry.RunSyncerTasks(ctx, &client{}))
+	require.NoError(t, registry.RunSyncerTasks(ctx, newTestClientSummary(t)))
+}
+
+func newTestClientSummary(t *testing.T) message.Syncable {
+	t.Helper()
+	summary, err := message.NewBlockSyncSummary(common.HexToHash("0xdeadbeef"), 1000, common.HexToHash("0xdeadbeef"))
+	require.NoError(t, err)
+
+	return summary
 }
