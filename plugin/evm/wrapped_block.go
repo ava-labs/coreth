@@ -472,7 +472,7 @@ func (b *wrappedBlock) syntacticVerify() error {
 			return fmt.Errorf("%w: have %x, expected empty hash", errParentBeaconRootNonEmpty, ethHeader.ParentBeaconRoot)
 		case ethHeader.BlobGasUsed == nil:
 			return errBlobGasUsedNilInCancun
-		case *ethHeader.BlobGasUsed > 0:
+		case *ethHeader.BlobGasUsed != 0:
 			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *ethHeader.BlobGasUsed)
 		case ethHeader.ExcessBlobGas == nil:
 			return fmt.Errorf("%w: have nil, expected 0", errInvalidExcessBlobGas)
