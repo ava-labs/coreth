@@ -9,12 +9,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
-	"github.com/ava-labs/avalanchego/vms/components/gas"
 
-	safemath "github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/common"
 )
 
 const (
@@ -30,7 +28,16 @@ const (
 	maxTargetDelayExcess = 46_516_320 // TargetConversion * ln(MaxUint64 / MinTargetDelayMilliseconds) + 1
 )
 
-var ErrStateInsufficientLength = errors.New("insufficient length for block delay state")
+var (
+	params = common.TargetExcessParams{
+		MinTarget:        MinTargetDelayMilliseconds,
+		TargetConversion: TargetConversion,
+		MaxExcessDiff:    MaxTargetDelayExcessDiff,
+		MaxExcess:        maxTargetDelayExcess,
+	}
+
+	ErrStateInsufficientLength = errors.New("insufficient length for block delay state")
+)
 
 // TargetDelayExcess represents the target excess for delay calculation in the dynamic minimum block delay mechanism.
 type TargetDelayExcess uint64
@@ -61,38 +68,17 @@ func (t TargetDelayExcess) Bytes() []byte {
 //
 // TargetDelay = MinTargetDelayMilliseconds * e^(TargetDelayExcess / TargetConversion)
 func (t TargetDelayExcess) TargetDelay() uint64 {
-	return uint64(gas.CalculatePrice(
-		MinTargetDelayMilliseconds,
-		gas.Gas(t),
-		TargetConversion,
-	))
+	return params.CalculateTarget(uint64(t))
 }
 
 // UpdateTargetDelayExcess updates the targetDelayExcess to be as close as possible to the
 // desiredTargetDelayExcess without exceeding the maximum targetDelayExcess change.
 func (t *TargetDelayExcess) UpdateTargetDelayExcess(desiredTargetDelayExcess uint64) {
-	*t = TargetDelayExcess(targetDelayExcess(uint64(*t), desiredTargetDelayExcess))
+	*t = TargetDelayExcess(params.TargetExcess(uint64(*t), desiredTargetDelayExcess))
 }
 
 // DesiredTargetDelayExcess calculates the optimal desiredTargetDelayExcess given the
 // desired target delay.
 func DesiredTargetDelayExcess(desiredTargetDelayExcess uint64) uint64 {
-	// This could be solved directly by calculating D * ln(desiredTarget / M)
-	// using floating point math. However, it introduces inaccuracies. So, we
-	// use a binary search to find the closest integer solution.
-	return uint64(sort.Search(maxTargetDelayExcess, func(targetDelayExcessGuess int) bool {
-		excess := TargetDelayExcess(targetDelayExcessGuess)
-		return excess.TargetDelay() >= desiredTargetDelayExcess
-	}))
-}
-
-// targetDelayExcess calculates the optimal new targetDelayExcess for a block proposer to
-// include given the current and desired excess values.
-func targetDelayExcess(excess, desired uint64) uint64 {
-	change := safemath.AbsDiff(excess, desired)
-	change = min(change, MaxTargetDelayExcessDiff)
-	if excess < desired {
-		return excess + change
-	}
-	return excess - change
+	return params.DesiredTargetExcess(desiredTargetDelayExcess)
 }
