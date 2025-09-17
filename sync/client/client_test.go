@@ -119,7 +119,7 @@ func TestGetCode(t *testing.T) {
 
 			codeBytes, err := stateSyncClient.GetCode(ctx, codeHashes)
 			require.ErrorIs(t, err, test.expectedErr)
-			// If we expect an error, require that one occurred and return
+			// If we expected an error, verify retry behavior and return
 			if test.expectedErr != nil {
 				require.EqualValues(t, 2, testNetClient.numCalls)
 				return
@@ -770,10 +770,7 @@ func TestGetLeafs(t *testing.T) {
 
 			response, _, err := parseLeafsResponse(client.codec, test.request, responseBytes)
 			if test.expectedErr != nil {
-				if err == nil {
-					t.Fatalf("Expected error: %s, but found no error", test.expectedErr)
-				}
-				require.Contains(t, err.Error(), test.expectedErr.Error())
+				require.ErrorIs(t, err, test.expectedErr)
 				return
 			}
 

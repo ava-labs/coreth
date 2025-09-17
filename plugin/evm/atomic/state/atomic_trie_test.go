@@ -391,7 +391,7 @@ func TestIndexingNilShouldNotImpactTrie(t *testing.T) {
 	require.NotZero(t, root2)
 	require.Equal(t, uint64(testCommitInterval), height2)
 
-	// key requireion of the test
+	// key requirement of the test
 	require.Equal(t, root1, root2)
 }
 
