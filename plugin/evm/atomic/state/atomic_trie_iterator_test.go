@@ -39,7 +39,7 @@ func TestIteratorCanIterate(t *testing.T) {
 	lastCommittedHash1, lastCommittedHeight1 := atomicTrie1.LastCommitted()
 	require.NoError(t, err)
 	require.NotZero(t, lastCommittedHash1)
-	require.EqualValues(t, 1000, lastCommittedHeight1)
+	require.Equal(t, 1000, lastCommittedHeight1)
 
 	verifyOperations(t, atomicTrie1, atomictest.TestTxCodec, lastCommittedHash1, 1, 1000, operationsMap)
 
