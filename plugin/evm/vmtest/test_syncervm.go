@@ -1,5 +1,6 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
+
 package vmtest
 
 import (
@@ -38,6 +39,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/vmsync"
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
@@ -45,7 +47,6 @@ import (
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	vmsync "github.com/ava-labs/coreth/sync/vm"
 )
 
 type SyncerVMTest struct {
