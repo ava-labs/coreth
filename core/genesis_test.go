@@ -62,7 +62,7 @@ func setupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Gene
 }
 
 func TestGenesisBlockForTesting(t *testing.T) {
-	genesisBlockForTestingHash := common.HexToHash("0xb378f22ccd9ad52c6c42f5d46ef2aad6d6866cfcb778ea97a0b6dfde13387330")
+	genesisBlockForTestingHash := common.HexToHash("0x6f567194d04b72aaa0bcae14dc2faead19c3c7ee31c99665eb0543e53a0c9461")
 	block := GenesisBlockForTesting(rawdb.NewMemoryDatabase(), common.Address{1}, big.NewInt(1))
 	if block.Hash() != genesisBlockForTestingHash {
 		t.Errorf("wrong testing genesis hash, got %v, want %v", block.Hash(), genesisBlockForTestingHash)

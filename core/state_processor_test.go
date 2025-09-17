@@ -37,8 +37,8 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
@@ -424,6 +424,13 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 
 		header.ParentBeaconRoot = new(common.Hash)
 	}
+
+	if configExtra.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		headerExtra.TimeMilliseconds = new(uint64)
+		*headerExtra.TimeMilliseconds = header.Time * 1000
+	}
+
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

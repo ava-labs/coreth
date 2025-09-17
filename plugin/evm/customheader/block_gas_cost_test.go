@@ -1,12 +1,14 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package header
+package customheader
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,6 +60,14 @@ func TestBlockGasCost(t *testing.T) {
 			parentCost: big.NewInt(ap4.MinBlockGasCost),
 			timestamp:  9,
 			expected:   big.NewInt(ap4.MinBlockGasCost + ap4.BlockGasCostStep*ap4.TargetBlockRate),
+		},
+		{
+			name:       "granite_returns_zero",
+			upgrades:   extras.TestGraniteChainConfig.NetworkUpgrades,
+			parentTime: 10,
+			parentCost: big.NewInt(ap4.MaxBlockGasCost),
+			timestamp:  10 + ap4.TargetBlockRate + 1,
+			expected:   big.NewInt(0),
 		},
 	}
 
@@ -291,6 +301,165 @@ func TestEstimateRequiredTip(t *testing.T) {
 			requiredTip, err := EstimateRequiredTip(config, test.header)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, requiredTip)
+		})
+	}
+}
+
+func TestVerifyBlockFee(t *testing.T) {
+	testAddr := common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8")
+	tests := map[string]struct {
+		baseFee                *big.Int
+		parentBlockGasCost     *big.Int
+		timeElapsed            uint64
+		txs                    []*types.Transaction
+		receipts               []*types.Receipt
+		extraStateContribution *big.Int
+		expectedErr            error
+	}{
+		"tx only base fee": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(0),
+			timeElapsed:        0,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100, big.NewInt(100), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 1000},
+			},
+			extraStateContribution: nil,
+			expectedErr:            ErrInsufficientBlockGas,
+		},
+		"tx covers exactly block fee": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(0),
+			timeElapsed:        0,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(200), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 100_000},
+			},
+			extraStateContribution: nil,
+		},
+		"txs share block fee": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(0),
+			timeElapsed:        0,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(200), nil),
+				types.NewTransaction(1, testAddr, big.NewInt(0), 100_000, big.NewInt(100), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 100_000},
+				{GasUsed: 100_000},
+			},
+			extraStateContribution: nil,
+		},
+		"txs split block fee": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(0),
+			timeElapsed:        0,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(150), nil),
+				types.NewTransaction(1, testAddr, big.NewInt(0), 100_000, big.NewInt(150), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 100_000},
+				{GasUsed: 100_000},
+			},
+			extraStateContribution: nil,
+		},
+		"split block fee with extra state contribution": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(0),
+			timeElapsed:        0,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100_000, big.NewInt(150), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 100_000},
+			},
+			extraStateContribution: big.NewInt(5_000_000),
+		},
+		"extra state contribution insufficient": {
+			baseFee:                big.NewInt(100),
+			parentBlockGasCost:     big.NewInt(0),
+			timeElapsed:            0,
+			txs:                    nil,
+			receipts:               nil,
+			extraStateContribution: big.NewInt(9_999_999),
+			expectedErr:            ErrInsufficientBlockGas,
+		},
+		"negative extra state contribution": {
+			baseFee:                big.NewInt(100),
+			parentBlockGasCost:     big.NewInt(0),
+			timeElapsed:            0,
+			txs:                    nil,
+			receipts:               nil,
+			extraStateContribution: big.NewInt(-1),
+			expectedErr:            errInvalidExtraStateChangeContribution,
+		},
+		"extra state contribution covers block fee": {
+			baseFee:                big.NewInt(100),
+			parentBlockGasCost:     big.NewInt(0),
+			timeElapsed:            0,
+			txs:                    nil,
+			receipts:               nil,
+			extraStateContribution: big.NewInt(10_000_000),
+		},
+		"extra state contribution covers more than block fee": {
+			baseFee:                big.NewInt(100),
+			parentBlockGasCost:     big.NewInt(0),
+			timeElapsed:            0,
+			txs:                    nil,
+			receipts:               nil,
+			extraStateContribution: big.NewInt(10_000_001),
+		},
+		"tx only base fee after full time window": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(500_000),
+			timeElapsed:        ap4.TargetBlockRate + 10,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100, big.NewInt(100), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 1000},
+			},
+			extraStateContribution: nil,
+		},
+		"tx only base fee after large time window": {
+			baseFee:            big.NewInt(100),
+			parentBlockGasCost: big.NewInt(100_000),
+			timeElapsed:        math.MaxUint64,
+			txs: []*types.Transaction{
+				types.NewTransaction(0, testAddr, big.NewInt(0), 100, big.NewInt(100), nil),
+			},
+			receipts: []*types.Receipt{
+				{GasUsed: 1000},
+			},
+			extraStateContribution: nil,
+		},
+		"zero block gas cost": {
+			baseFee:                big.NewInt(100),
+			parentBlockGasCost:     big.NewInt(0),
+			timeElapsed:            ap4.TargetBlockRate + 1,
+			txs:                    nil,
+			receipts:               nil,
+			extraStateContribution: nil,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			blockGasCost := BlockGasCostWithStep(
+				test.parentBlockGasCost,
+				ap4.BlockGasCostStep,
+				test.timeElapsed,
+			)
+			bigBlockGasCost := new(big.Int).SetUint64(blockGasCost)
+
+			err := VerifyBlockFee(test.baseFee, bigBlockGasCost, test.txs, test.receipts, test.extraStateContribution)
+			require.ErrorIs(t, err, test.expectedErr)
 		})
 	}
 }

@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/coreth/eth/tracers"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/precompile/contract"
@@ -49,7 +50,6 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	avagoUtils "github.com/ava-labs/avalanchego/utils"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 )
 
@@ -152,7 +152,7 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 	// Verify the message signature after accepting the block.
 	rawSignatureBytes, err := vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMessage)
 	require.NoError(err)
-	blsSignature, err := bls.SignatureFromBytes(rawSignatureBytes[:])
+	blsSignature, err := bls.SignatureFromBytes(rawSignatureBytes)
 	require.NoError(err)
 
 	select {
@@ -169,7 +169,7 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 	// Verify the blockID will now be signed by the backend and produces a valid signature.
 	rawSignatureBytes, err = vm.warpBackend.GetBlockSignature(context.TODO(), blk.ID())
 	require.NoError(err)
-	blsSignature, err = bls.SignatureFromBytes(rawSignatureBytes[:])
+	blsSignature, err = bls.SignatureFromBytes(rawSignatureBytes)
 	require.NoError(err)
 
 	blockHashPayload, err := payload.NewHash(blk.ID())
@@ -340,7 +340,7 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 
 	vm.ctx.ValidatorState = &validatorstest.State{
 		// TODO: test both Primary Network / C-Chain and non-Primary Network
-		GetSubnetIDF: func(_ context.Context, _ ids.ID) (ids.ID, error) {
+		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
 		},
 		GetValidatorSetF: func(_ context.Context, height uint64, _ ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
@@ -639,7 +639,7 @@ func testReceiveWarpMessage(
 	getValidatorSetTestErr := errors.New("can't get validator set test error")
 
 	vm.ctx.ValidatorState = &validatorstest.State{
-		GetSubnetIDF: func(_ context.Context, _ ids.ID) (ids.ID, error) {
+		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			if msgFrom == fromPrimary {
 				return constants.PrimaryNetworkID, nil
 			}
@@ -888,7 +888,7 @@ func testSignatureRequestsToVM(t *testing.T, scheme string) {
 				return nil
 			}
 
-			tvm.AppSender.SendAppErrorF = func(_ context.Context, _ ids.NodeID, _ uint32, _ int32, _ string) error {
+			tvm.AppSender.SendAppErrorF = func(context.Context, ids.NodeID, uint32, int32, string) error {
 				calledSendAppErrorFn = true
 				require.ErrorIs(t, test.err, test.err)
 				return nil

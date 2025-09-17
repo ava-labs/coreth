@@ -1,5 +1,6 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
+
 package vmtest
 
 import (
@@ -34,10 +35,12 @@ import (
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/coretest"
+	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
+	"github.com/ava-labs/coreth/plugin/evm/vmsync"
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
@@ -45,7 +48,6 @@ import (
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
-	vmsync "github.com/ava-labs/coreth/sync/vm"
 )
 
 type SyncerVMTest struct {
@@ -165,7 +167,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	}
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
-	genesisJSON := []byte(GenesisJSON(ForkToChainConfig[upgradetest.Latest]))
+	genesisJSON := []byte(GenesisJSON(paramstest.ForkToChainConfig[upgradetest.Latest]))
 	if err := syncDisabledVM.Initialize(
 		context.Background(),
 		testSyncVMSetup.syncerVM.SnowCtx,
@@ -321,7 +323,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 		log.Info("Shutting down server VM")
 		require.NoError(serverVM.Shutdown(context.Background()))
 	})
-	serverVmSetup := SyncVMSetup{
+	serverVMSetup := SyncVMSetup{
 		VM:                 serverVM,
 		AppSender:          serverTest.AppSender,
 		SnowCtx:            serverTest.Ctx,
@@ -331,7 +333,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	}
 	var err error
 	if testSetup.AfterInit != nil {
-		testSetup.AfterInit(t, test, serverVmSetup, true)
+		testSetup.AfterInit(t, test, serverVMSetup, true)
 	}
 	generateAndAcceptBlocks(t, serverVM, numBlocks, testSetup.GenFn, nil, cb)
 
@@ -365,7 +367,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	t.Cleanup(func() {
 		require.NoError(shutdownOnceSyncerVM.Shutdown(context.Background()))
 	})
-	syncerVmSetup := syncerVMSetup{
+	syncerVMSetup := syncerVMSetup{
 		SyncVMSetup: SyncVMSetup{
 			VM:                 syncerVM,
 			ConsensusCallbacks: syncerCB,
@@ -376,7 +378,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 		shutdownOnceSyncerVM: shutdownOnceSyncerVM,
 	}
 	if testSetup.AfterInit != nil {
-		testSetup.AfterInit(t, test, syncerVmSetup.SyncVMSetup, false)
+		testSetup.AfterInit(t, test, syncerVMSetup.SyncVMSetup, false)
 	}
 	require.NoError(syncerVM.SetState(context.Background(), snow.StateSyncing))
 	enabled, err := syncerVM.StateSyncEnabled(context.Background())
@@ -418,7 +420,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 			SnowCtx:   serverTest.Ctx,
 		},
 		fundedAccounts: accounts,
-		syncerVM:       syncerVmSetup,
+		syncerVM:       syncerVMSetup,
 	}
 }
 

@@ -18,8 +18,8 @@ import (
 
 var ErrMissingPredicateContext = errors.New("missing predicate context")
 
-// CheckBlockPredicates verifies the predicates of all txs and returns the
-// result.
+// CheckBlockPredicates verifies the predicates of a block of transactions and
+// returns the results.
 //
 // Returning an error invalidates the block.
 func CheckBlockPredicates(
@@ -30,7 +30,7 @@ func CheckBlockPredicates(
 	var results predicate.BlockResults
 	// TODO: Calculate tx predicates concurrently.
 	for _, tx := range txs {
-		txResults, err := CheckPredicates(rules, predicateContext, tx)
+		txResults, err := CheckTxPredicates(rules, predicateContext, tx)
 		if err != nil {
 			return nil, err
 		}
@@ -39,23 +39,28 @@ func CheckBlockPredicates(
 	return results, nil
 }
 
-// CheckPredicates verifies the predicates of tx and returns the result.
+// CheckTxPredicates verifies the predicates of a transaction and returns the
+// results.
 //
 // Returning an error invalidates the transaction.
-func CheckPredicates(
+func CheckTxPredicates(
 	rules params.Rules,
 	predicateContext *precompileconfig.PredicateContext,
 	tx *types.Transaction,
 ) (predicate.PrecompileResults, error) {
-	// Check that the transaction can cover its IntrinsicGas (including the gas
-	// required by the predicate) before verifying the predicate.
+	// Check that the transaction can cover its IntrinsicGas, including the gas
+	// required by the predicate, before verifying the predicate.
 	accessList := tx.AccessList()
 	intrinsicGas, err := IntrinsicGas(tx.Data(), accessList, tx.To() == nil, rules)
 	if err != nil {
 		return nil, err
 	}
-	if gasLimit := tx.Gas(); gasLimit < intrinsicGas {
-		return nil, fmt.Errorf("%w for predicate verification (%d) < intrinsic gas (%d)", ErrIntrinsicGas, gasLimit, intrinsicGas)
+	if gas := tx.Gas(); gas < intrinsicGas {
+		return nil, fmt.Errorf("%w for predicate verification (%d) < intrinsic gas (%d)",
+			ErrIntrinsicGas,
+			gas,
+			intrinsicGas,
+		)
 	}
 
 	rulesExtra := params.GetRulesExtra(rules)
@@ -67,8 +72,8 @@ func CheckPredicates(
 	// Prepare the predicate storage slots from the transaction's access list
 	predicateArguments := predicate.FromAccessList(rulesExtra, accessList)
 
-	// If there are no predicates to verify, return early and skip requiring the proposervm block
-	// context to be populated.
+	// If there are no predicates to verify, return early and skip requiring the
+	// proposervm block context to be populated.
 	if len(predicateArguments) == 0 {
 		return nil, nil
 	}
@@ -77,10 +82,14 @@ func CheckPredicates(
 		return nil, ErrMissingPredicateContext
 	}
 
-	predicateResults := make(predicate.PrecompileResults, len(predicateArguments))
+	var (
+		txHash           = tx.Hash()
+		predicateResults = make(predicate.PrecompileResults, len(predicateArguments))
+	)
 	for address, predicates := range predicateArguments {
-		// Since [address] is only added to [predicateArguments] when there's a valid predicate in the ruleset
-		// there's no need to check if the predicate exists here.
+		// Since address is only added to predicateArguments when there's a
+		// valid predicate in the ruleset there's no need to check if the
+		// predicate exists here.
 		predicaterContract := rulesExtra.Predicaters[address]
 		bitset := set.NewBits()
 		for i, predicate := range predicates {
@@ -88,7 +97,11 @@ func CheckPredicates(
 				bitset.Add(i)
 			}
 		}
-		log.Debug("predicate verify", "tx", tx.Hash(), "address", address, "res", bitset.Bytes())
+		log.Debug("predicate verify",
+			"tx", txHash,
+			"address", address,
+			"res", bitset.String(),
+		)
 		predicateResults[address] = bitset
 	}
 	return predicateResults, nil

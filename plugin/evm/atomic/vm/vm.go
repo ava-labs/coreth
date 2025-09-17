@@ -24,7 +24,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
-	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state"
@@ -38,6 +37,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
@@ -53,7 +53,6 @@ import (
 	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	atomicsync "github.com/ava-labs/coreth/plugin/evm/atomic/sync"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 )
 
 var (
@@ -94,9 +93,7 @@ type VM struct {
 	// AtomicBackend abstracts verification and processing of atomic transactions
 	AtomicBackend *atomicstate.AtomicBackend
 
-	atomicTxGossipHandler p2p.Handler
-	AtomicTxPushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
-	AtomicTxPullGossiper  avalanchegossip.Gossiper
+	AtomicTxPushGossiper *avalanchegossip.PushGossiper[*atomic.Tx]
 
 	// cancel may be nil until [snow.NormalOp] starts
 	cancel     context.CancelFunc
@@ -295,7 +292,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
 	}
 
-	vm.atomicTxGossipHandler, err = gossip.NewTxGossipHandler[*atomic.Tx](
+	atomicTxGossipHandler, err := gossip.NewTxGossipHandler[*atomic.Tx](
 		vm.Ctx.Log,
 		&atomicTxGossipMarshaller,
 		vm.AtomicMempool,
@@ -311,7 +308,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
 	}
 
-	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, vm.atomicTxGossipHandler); err != nil {
+	if err := vm.InnerVM.AddHandler(p2p.AtomicTxGossipHandlerID, atomicTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
 	}
 
@@ -324,7 +321,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.AtomicTxPullGossiper = &avalanchegossip.ValidatorGossiper{
+	atomicTxPullGossiperWhenValidator := &avalanchegossip.ValidatorGossiper{
 		Gossiper:   atomicTxPullGossiper,
 		NodeID:     vm.Ctx.NodeID,
 		Validators: vm.InnerVM.P2PValidators(),
@@ -338,7 +335,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.Ctx.Log, vm.AtomicTxPullGossiper, vm.InnerVM.Config().PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.Ctx.Log, atomicTxPullGossiperWhenValidator, vm.InnerVM.Config().PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
@@ -539,9 +536,9 @@ func (vm *VM) postBatchOnFinalizeAndAssemble(
 	var (
 		batchAtomicTxs    []*atomic.Tx
 		batchAtomicUTXOs  set.Set[ids.ID]
-		batchContribution *big.Int = new(big.Int).Set(common.Big0)
-		batchGasUsed      *big.Int = new(big.Int).Set(common.Big0)
-		rules                      = vm.rules(header.Number, header.Time)
+		batchContribution = new(big.Int).Set(common.Big0)
+		batchGasUsed      = new(big.Int).Set(common.Big0)
+		rules             = vm.rules(header.Number, header.Time)
 		size              int
 	)
 
@@ -654,10 +651,10 @@ func (vm *VM) onFinalizeAndAssemble(
 
 func (vm *VM) onExtraStateChange(block *types.Block, parent *types.Header, statedb *state.StateDB) (*big.Int, *big.Int, error) {
 	var (
-		batchContribution *big.Int = big.NewInt(0)
-		batchGasUsed      *big.Int = big.NewInt(0)
-		header                     = block.Header()
-		chainConfig                = vm.InnerVM.ChainConfig()
+		batchContribution = big.NewInt(0)
+		batchGasUsed      = big.NewInt(0)
+		header            = block.Header()
+		chainConfig       = vm.InnerVM.ChainConfig()
 		// We cannot use chain config from InnerVM since it's not available when this function is called for the first time (bc.loadLastState).
 		rules      = chainConfig.Rules(header.Number, params.IsMergeTODO, header.Time)
 		rulesExtra = *params.GetRulesExtra(rules)
@@ -783,56 +780,4 @@ func (vm *VM) GetAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, uint64, error
 	default:
 		return nil, atomic.Unknown, 0, nil
 	}
-}
-
-func (vm *VM) NewImportTx(
-	chainID ids.ID, // chain to import from
-	to common.Address, // Address of recipient
-	baseFee *big.Int, // fee to use post-AP3
-	keys []*secp256k1.PrivateKey, // Keys to import the funds
-) (*atomic.Tx, error) {
-	kc := secp256k1fx.NewKeychain()
-	for _, key := range keys {
-		kc.Add(key)
-	}
-
-	atomicUTXOs, _, _, err := avax.GetAtomicUTXOs(vm.Ctx.SharedMemory, atomic.Codec, chainID, kc.Addresses(), ids.ShortEmpty, ids.Empty, maxUTXOsToFetch)
-	if err != nil {
-		return nil, fmt.Errorf("problem retrieving atomic UTXOs: %w", err)
-	}
-
-	return atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), chainID, to, baseFee, kc, atomicUTXOs)
-}
-
-// newExportTx returns a new ExportTx
-func (vm *VM) NewExportTx(
-	assetID ids.ID, // AssetID of the tokens to export
-	amount uint64, // Amount of tokens to export
-	chainID ids.ID, // Chain to send the UTXOs to
-	to ids.ShortID, // Address of chain recipient
-	baseFee *big.Int, // fee to use post-AP3
-	keys []*secp256k1.PrivateKey, // Pay the fee and provide the tokens
-) (*atomic.Tx, error) {
-	statedb, err := vm.Ethereum().BlockChain().State()
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the transaction
-	tx, err := atomic.NewExportTx(
-		vm.Ctx,            // Context
-		vm.CurrentRules(), // VM rules
-		extstate.New(statedb),
-		assetID, // AssetID
-		amount,  // Amount
-		chainID, // ID of the chain to send the funds to
-		to,      // Address
-		baseFee,
-		keys, // Private keys
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return tx, nil
 }

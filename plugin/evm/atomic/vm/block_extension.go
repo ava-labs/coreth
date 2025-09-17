@@ -28,9 +28,10 @@ var (
 )
 
 var (
-	errNilEthBlock  = errors.New("nil ethBlock")
-	ErrMissingUTXOs = errors.New("missing UTXOs")
-	ErrEmptyBlock   = errors.New("empty block")
+	errNilEthBlock            = errors.New("nil ethBlock")
+	ErrMissingUTXOs           = errors.New("missing UTXOs")
+	ErrEmptyBlock             = errors.New("empty block")
+	errAtomicExtractionFailed = errors.New("atomic tx extraction failed")
 )
 
 type blockExtender struct {
@@ -67,7 +68,7 @@ func (be *blockExtender) NewBlockExtension(b extension.ExtendedBlock) (extension
 	isApricotPhase5 := be.vm.chainConfigExtra().IsApricotPhase5(ethBlock.Time())
 	atomicTxs, err := atomic.ExtractAtomicTxs(customtypes.BlockExtData(ethBlock), isApricotPhase5, atomic.Codec)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(errAtomicExtractionFailed, err)
 	}
 
 	return &blockExtension{
@@ -119,13 +120,11 @@ func (be *blockExtension) SyntacticVerify(rules extras.Rules) error {
 		if headerExtra.ExtDataHash != hash {
 			return fmt.Errorf("extra data hash mismatch: have %x, want %x", headerExtra.ExtDataHash, hash)
 		}
-	} else {
-		if headerExtra.ExtDataHash != (common.Hash{}) {
-			return fmt.Errorf(
-				"expected ExtDataHash to be empty but got %x",
-				headerExtra.ExtDataHash,
-			)
-		}
+	} else if headerExtra.ExtDataHash != (common.Hash{}) {
+		return fmt.Errorf(
+			"expected ExtDataHash to be empty but got %x",
+			headerExtra.ExtDataHash,
+		)
 	}
 
 	// Block must not be empty

@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
@@ -73,6 +72,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
+	"github.com/ava-labs/coreth/plugin/evm/vmsync"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/sync/client/stats"
@@ -88,7 +88,6 @@ import (
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
-	vmsync "github.com/ava-labs/coreth/sync/vm"
 	utilsrpc "github.com/ava-labs/coreth/utils/rpc"
 	ethparams "github.com/ava-labs/libevm/params"
 )
@@ -102,10 +101,6 @@ var (
 )
 
 const (
-	// Max time from current time allowed for blocks, before they're considered future blocks
-	// and fail verification
-	maxFutureBlockTime = 10 * time.Second
-
 	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB
 	missingCacheSize       = 50
@@ -137,21 +132,26 @@ var (
 )
 
 var (
-	errInvalidBlock                  = errors.New("invalid block")
-	errInvalidNonce                  = errors.New("invalid nonce")
-	errUnclesUnsupported             = errors.New("uncles unsupported")
-	errNilBaseFeeApricotPhase3       = errors.New("nil base fee is invalid after apricotPhase3")
-	errNilBlockGasCostApricotPhase4  = errors.New("nil blockGasCost is invalid after apricotPhase4")
-	errInvalidHeaderPredicateResults = errors.New("invalid header predicate results")
-	errInitializingLogger            = errors.New("failed to initialize logger")
-	errShuttingDownVM                = errors.New("shutting down VM")
+	errInvalidBlock                      = errors.New("invalid block")
+	errInvalidNonce                      = errors.New("invalid nonce")
+	errUnclesUnsupported                 = errors.New("uncles unsupported")
+	errNilBaseFeeApricotPhase3           = errors.New("nil base fee is invalid after apricotPhase3")
+	errNilBlockGasCostApricotPhase4      = errors.New("nil blockGasCost is invalid after apricotPhase4")
+	errInvalidHeaderPredicateResults     = errors.New("invalid header predicate results")
+	errInitializingLogger                = errors.New("failed to initialize logger")
+	errShuttingDownVM                    = errors.New("shutting down VM")
+	errFirewoodPruningRequired           = errors.New("pruning must be enabled for Firewood")
+	errFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
+	errFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
+	errFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
+	errPathStateUnsupported              = errors.New("path state scheme is not supported")
 )
 
 var originalStderr *os.File
 
 // legacyApiNames maps pre geth v1.10.20 api names to their updated counterparts.
 // used in attachEthService for backward configuration compatibility.
-var legacyApiNames = map[string]string{
+var legacyAPINames = map[string]string{
 	"internal-public-eth":              "internal-eth",
 	"internal-public-blockchain":       "internal-blockchain",
 	"internal-public-transaction-pool": "internal-transaction",
@@ -250,10 +250,7 @@ type VM struct {
 	// Used to serve BLS signatures of warp messages over RPC
 	warpBackend warp.Backend
 
-	// Initialize only sets these if nil so they can be overridden in tests
-	ethTxGossipHandler p2p.Handler
-	ethTxPushGossiper  avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
-	ethTxPullGossiper  avalanchegossip.Gossiper
+	ethTxPushGossiper avalancheUtils.Atomic[*avalanchegossip.PushGossiper[*GossipEthTx]]
 
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
@@ -399,22 +396,22 @@ func (vm *VM) Initialize(
 		log.Warn("This is untested in production, use at your own risk")
 		// Firewood only supports pruning for now.
 		if !vm.config.Pruning {
-			return errors.New("Pruning must be enabled for Firewood")
+			return errFirewoodPruningRequired
 		}
 		// Firewood does not support iterators, so the snapshot cannot be constructed
 		if vm.config.SnapshotCache > 0 {
-			return errors.New("Snapshot cache must be disabled for Firewood")
+			return errFirewoodSnapshotCacheDisabled
 		}
 		if vm.config.OfflinePruning {
-			return errors.New("Offline pruning is not supported for Firewood")
+			return errFirewoodOfflinePruningUnsupported
 		}
 		if vm.config.StateSyncEnabled == nil || *vm.config.StateSyncEnabled {
-			return errors.New("State sync is not yet supported for Firewood")
+			return errFirewoodStateSyncUnsupported
 		}
 	}
 	if vm.ethConfig.StateScheme == rawdb.PathScheme {
 		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
-		return errors.New("Path state scheme is not supported")
+		return errPathStateUnsupported
 	}
 
 	// Create directory for offline pruning
@@ -557,7 +554,6 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		dummy.NewDummyEngine(
 			vm.extensionConfig.ConsensusCallbacks,
 			dummy.Mode{},
-			vm.clock,
 			desiredTargetExcess,
 		),
 		vm.clock,
@@ -808,7 +804,7 @@ func (vm *VM) initBlockBuilding() error {
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
-	vm.ethTxGossipHandler, err = gossip.NewTxGossipHandler[*GossipEthTx](
+	ethTxGossipHandler, err := gossip.NewTxGossipHandler[*GossipEthTx](
 		vm.ctx.Log,
 		ethTxGossipMarshaller,
 		ethTxPool,
@@ -824,7 +820,7 @@ func (vm *VM) initBlockBuilding() error {
 		return fmt.Errorf("failed to initialize eth tx gossip handler: %w", err)
 	}
 
-	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, vm.ethTxGossipHandler); err != nil {
+	if err := vm.Network.AddHandler(p2p.TxGossipHandlerID, ethTxGossipHandler); err != nil {
 		return fmt.Errorf("failed to add eth tx gossip handler: %w", err)
 	}
 
@@ -837,7 +833,7 @@ func (vm *VM) initBlockBuilding() error {
 		config.TxGossipPollSize,
 	)
 
-	vm.ethTxPullGossiper = avalanchegossip.ValidatorGossiper{
+	ethTxPullGossiperWhenValidator := avalanchegossip.ValidatorGossiper{
 		Gossiper:   ethTxPullGossiper,
 		NodeID:     vm.ctx.NodeID,
 		Validators: vm.P2PValidators(),
@@ -850,18 +846,7 @@ func (vm *VM) initBlockBuilding() error {
 	}()
 	vm.shutdownWg.Add(1)
 	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-
-	vm.shutdownWg.Add(1)
-	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPushGossiper, vm.config.PushGossipFrequency.Duration)
-		vm.shutdownWg.Done()
-	}()
-	vm.shutdownWg.Add(1)
-	go func() {
-		avalanchegossip.Every(ctx, vm.ctx.Log, vm.ethTxPullGossiper, vm.config.PullGossipFrequency.Duration)
+		avalanchegossip.Every(ctx, vm.ctx.Log, ethTxPullGossiperWhenValidator, vm.config.PullGossipFrequency.Duration)
 		vm.shutdownWg.Done()
 	}()
 
@@ -1052,15 +1037,18 @@ func (vm *VM) GetBlockIDAtHeight(_ context.Context, height uint64) (ids.ID, erro
 	return ids.ID(hash), nil
 }
 
-func (*VM) Version(_ context.Context) (string, error) {
+func (*VM) Version(context.Context) (string, error) {
 	return Version, nil
 }
 
 // CreateHandlers makes new http handlers that can handle API calls
 func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 	handler := rpc.NewServer(vm.config.APIMaxDuration.Duration)
-	if vm.config.HttpBodyLimit > 0 {
-		handler.SetHTTPBodyLimit(int(vm.config.HttpBodyLimit))
+	if vm.config.BatchRequestLimit > 0 && vm.config.BatchResponseMaxSize > 0 {
+		handler.SetBatchLimits(int(vm.config.BatchRequestLimit), int(vm.config.BatchResponseMaxSize))
+	}
+	if vm.config.HTTPBodyLimit > 0 {
+		handler.SetHTTPBodyLimit(int(vm.config.HTTPBodyLimit))
 	}
 
 	enabledAPIs := vm.config.EthAPIs()
@@ -1142,7 +1130,7 @@ func (vm *VM) startContinuousProfiler() {
 		return
 	}
 	vm.profiler = profiler.NewContinuous(
-		filepath.Join(vm.config.ContinuousProfilerDir),
+		filepath.Clean(vm.config.ContinuousProfilerDir),
 		vm.config.ContinuousProfilerFrequency.Duration,
 		vm.config.ContinuousProfilerMaxFiles,
 	)
@@ -1194,7 +1182,7 @@ func attachEthService(handler *rpc.Server, apis []rpc.API, names []string) error
 	for _, ns := range names {
 		// handle pre geth v1.10.20 api names as aliases for their updated values
 		// to allow configurations to be backwards compatible.
-		if newName, isLegacy := legacyApiNames[ns]; isLegacy {
+		if newName, isLegacy := legacyAPINames[ns]; isLegacy {
 			log.Info("deprecated api name referenced in configuration.", "deprecated", ns, "new", newName)
 			enabledServicesSet[newName] = struct{}{}
 			continue

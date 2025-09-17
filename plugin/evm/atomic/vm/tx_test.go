@@ -27,7 +27,7 @@ func TestCalculateDynamicFee(t *testing.T) {
 		expectedErr   error
 		expectedValue uint64
 	}
-	var tests []test = []test{
+	tests := []test{
 		{
 			gas:           1,
 			baseFee:       new(big.Int).Set(atomic.X2CRate.ToBig()),
@@ -49,10 +49,8 @@ func TestCalculateDynamicFee(t *testing.T) {
 			if cost != test.expectedValue {
 				t.Fatalf("Expected value: %d, found: %d", test.expectedValue, cost)
 			}
-		} else {
-			if err != test.expectedErr {
-				t.Fatalf("Expected error: %s, found error: %s", test.expectedErr, err)
-			}
+		} else if err != test.expectedErr {
+			t.Fatalf("Expected error: %s, found error: %s", test.expectedErr, err)
 		}
 	}
 }
