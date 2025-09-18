@@ -71,7 +71,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp226"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/rpc"
@@ -543,12 +542,6 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	if vm.config.GasTarget != nil {
 		desiredTargetExcess = new(gas.Gas)
 		*desiredTargetExcess = acp176.DesiredTargetExcess(*vm.config.GasTarget)
-	}
-
-	var desiredBlockDelayExcess *uint64
-	if vm.config.MinBlockDelayTarget != nil {
-		desiredBlockDelayExcess = new(uint64)
-		*desiredBlockDelayExcess = acp226.DesiredTargetDelayExcess(*vm.config.MinBlockDelayTarget)
 	}
 
 	vm.eth, err = eth.New(

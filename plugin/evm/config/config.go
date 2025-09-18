@@ -22,10 +22,6 @@ type Duration struct {
 
 // Config ...
 type Config struct {
-	// MinBlockDelayTarget is the minimum block delay target (in milliseconds) that this node will attempt to use
-	// when creating blocks. If this config is not specified, the node will
-	// default to use the parent block's min block delay.
-	MinBlockDelayTarget *uint64 `json:"min-block-delay-target,omitempty"`
 	// GasTarget is the target gas per second that this node will attempt to use
 	// when creating blocks. If this config is not specified, the node will
 	// default to use the parent block's target gas per second.

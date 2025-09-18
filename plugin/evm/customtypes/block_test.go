@@ -194,6 +194,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 	check("BlockGasCost", BlockGasCost(&block), (*big.Int)(nil))
 	check("TimeMilliseconds", BlockTimeMilliseconds(&block), (*uint64)(nil))
 	check("MinBlockDelayExcess", BlockMinBlockDelayExcess(&block), (*uint64)(nil))
+
 	// Create legacy tx.
 	to := common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87")
 	tx1 := types.NewTx(&types.LegacyTx{
