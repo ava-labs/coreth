@@ -27,14 +27,15 @@ import (
 //
 // Note this is not concurrent safe.
 type AccountTrie struct {
-	fw           *Database
-	parentRoot   common.Hash
-	root         common.Hash
-	reader       database.Reader
-	dirtyKeys    map[string][]byte // Store dirty changes
-	updateKeys   [][]byte
-	updateValues [][]byte
-	hasChanges   bool
+	fw                *Database
+	parentRoot        common.Hash
+	root              common.Hash
+	reader            database.Reader
+	dirtyKeys         map[string][]byte // Store dirty changes
+	updateKeys        [][]byte
+	updateValues      [][]byte
+	hasChanges        bool
+	possibleProposals []*ProposalContext
 }
 
 func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
@@ -205,11 +206,12 @@ func (a *AccountTrie) Hash() common.Hash {
 func (a *AccountTrie) hash() (common.Hash, error) {
 	// If we haven't already hashed, we need to do so.
 	if a.hasChanges {
-		root, err := a.fw.getProposalHash(a.parentRoot, a.updateKeys, a.updateValues)
+		root, proposals, err := a.fw.getProposalHash(a.parentRoot, a.updateKeys, a.updateValues)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		a.root = root
+		a.possibleProposals = proposals
 		a.hasChanges = false // Avoid re-hashing until next update
 	}
 	return a.root, nil
@@ -225,15 +227,11 @@ func (a *AccountTrie) Commit(bool) (common.Hash, *trienode.NodeSet, error) {
 		return common.Hash{}, nil, err
 	}
 
-	// Create the NodeSet. This will be sent to `triedb.Update` later.
-	nodeset := trienode.NewNodeSet(common.Hash{})
-	for i, key := range a.updateKeys {
-		nodeset.AddNode(key, &trienode.Node{
-			Blob: a.updateValues[i],
-		})
-	}
+	// Send the proposals over to the database for tracking.
+	a.fw.unverifiedProposals = a.possibleProposals
+	a.possibleProposals = nil
 
-	return hash, nodeset, nil
+	return hash, nil, nil
 }
 
 // UpdateContractCode implements state.Trie.
@@ -285,4 +283,13 @@ func (a *AccountTrie) Copy() *AccountTrie {
 	}
 
 	return newTrie
+}
+
+func (a *AccountTrie) Cleanup() error {
+	for _, p := range a.possibleProposals {
+		if err := p.Proposal.Drop(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

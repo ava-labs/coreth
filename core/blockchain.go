@@ -1362,6 +1362,7 @@ func (bc *BlockChain) insertBlock(block *types.Block, writes bool) error {
 	if err != nil {
 		return err
 	}
+	defer statedb.Cleanup()
 	blockStateInitTimer.Inc(time.Since(substart).Milliseconds())
 
 	// Enable prefetching to pull in trie node paths while processing transactions

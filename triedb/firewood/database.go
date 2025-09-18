@@ -43,10 +43,9 @@ var (
 	ffiOutstandingProposals = metrics.GetOrRegisterGauge("firewood/triedb/propose/outstanding", nil)
 
 	// FFI Trie operation metrics
-	ffiHashCount = metrics.GetOrRegisterCounter("firewood/triedb/hash/count", nil)
-	ffiHashTimer = metrics.GetOrRegisterCounter("firewood/triedb/hash/time", nil)
-	ffiReadCount = metrics.GetOrRegisterCounter("firewood/triedb/read/count", nil)
-	ffiReadTimer = metrics.GetOrRegisterCounter("firewood/triedb/read/time", nil)
+	ffiPossibleProposals = metrics.GetOrRegisterGauge("firewood/triedb/propose/possible", nil)
+	ffiReadCount         = metrics.GetOrRegisterCounter("firewood/triedb/read/count", nil)
+	ffiReadTimer         = metrics.GetOrRegisterCounter("firewood/triedb/read/time", nil)
 )
 
 type proposable interface {
@@ -99,6 +98,8 @@ type Database struct {
 	// in the case of duplicate state roots.
 	// The root of the tree is stored here, and represents the top-most layer on disk.
 	proposalTree *ProposalContext
+
+	unverifiedProposals []*ProposalContext // Proposals that have been created but not yet verified.
 }
 
 // New creates a new Firewood database with the given disk database and configuration.
@@ -137,6 +138,9 @@ func New(config Config) (*Database, error) {
 		proposalMap: make(map[common.Hash][]*ProposalContext),
 		proposalTree: &ProposalContext{
 			Root: common.Hash(currentRoot),
+			Hashes: map[common.Hash]struct{}{
+				{}: {}, // genesis block has empty hash
+			},
 		},
 	}, nil
 }
@@ -201,6 +205,18 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
+	defer func() {
+		// Drop any unused proposals passed from account trie's Commit
+		// This will only occur on the error case.
+		for _, pCtx := range db.unverifiedProposals {
+			if dropErr := pCtx.Proposal.Drop(); dropErr != nil {
+				log.Error("firewood: error dropping unverified proposal", "root", pCtx.Root.Hex(), "error", dropErr)
+			}
+			ffiPossibleProposals.Dec(1)
+		}
+		db.unverifiedProposals = nil
+	}()
+
 	// Check if this proposal already exists.
 	// During reorgs, we may have already created this proposal.
 	// Additionally, we may have already created this proposal with a different block hash.
@@ -221,71 +237,45 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 		}
 	}
 
-	keys, values := arrangeKeyValuePairs(nodes) // may return nil, nil if no changes
-	return db.propose(root, parentRoot, hash, parentHash, block, keys, values)
-}
-
-// propose creates a new proposal for every possible parent with the given keys and values.
-// If the parent cannot be found, an error will be returned.
-//
-// To avoid having to create a new proposal for each valid state root, the block hashes are
-// provided to ensure uniqueness. When this method is called, we can guarantee that the proposalContext
-// must be created and tracked.
-//
-// Should only be accessed with the proposal lock held.
-func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash common.Hash, parentHash common.Hash, block uint64, keys [][]byte, values [][]byte) error {
-	// Find the parent proposal with the correct hash.
-	// We assume the number of proposals at a given root is small, so we can iterate through them.
-	for _, parentProposal := range db.proposalMap[parentRoot] {
-		// If we know this proposal cannot be the parent, we can skip it.
-		// Since the only possible block that won't have a parent hash is block 1,
-		// and that will always be proposed from the database root,
-		// we can guarantee that the parent hash will be present in one of the proposals.
-		if _, exists := parentProposal.Hashes[parentHash]; !exists {
-			continue
+	// We must use one of the unverified proposals if it exists.
+	var pCtx *ProposalContext
+	for _, possible := range db.unverifiedProposals {
+		if _, ok := possible.Parent.Hashes[parentHash]; ok {
+			pCtx = possible
+			break
 		}
-		log.Debug("firewood: proposing from parent proposal", "parent", parentProposal.Root.Hex(), "root", root.Hex(), "height", block)
-		p, err := createProposal(parentProposal.Proposal, root, keys, values)
-		if err != nil {
-			return err
-		}
-		pCtx := &ProposalContext{
-			Proposal: p,
-			Hashes:   map[common.Hash]struct{}{hash: {}},
-			Root:     root,
-			Block:    block,
-			Parent:   parentProposal,
-		}
-
-		db.proposalMap[root] = append(db.proposalMap[root], pCtx)
-		parentProposal.Children = append(parentProposal.Children, pCtx)
-		return nil
+	}
+	if pCtx == nil {
+		return fmt.Errorf("firewood: no unverified proposal found for block %d, new root %s, parent hash %s", block, root.Hex(), parentHash.Hex())
 	}
 
-	// Since we were unable to find a parent proposal with the given parent hash,
-	// we must create a new proposal from the database root.
-	// We must avoid the case in which we are reexecuting blocks upon startup, and haven't yet stored the parent block.
-	if _, exists := db.proposalTree.Hashes[parentHash]; db.proposalTree.Block != 0 && !exists {
-		return fmt.Errorf("firewood: parent hash %s not found for block %s at height %d", parentHash.Hex(), hash.Hex(), block)
-	} else if db.proposalTree.Root != parentRoot {
-		return fmt.Errorf("firewood: parent root %s does not match proposal tree root %s for root %s at height %d", parentRoot.Hex(), db.proposalTree.Root.Hex(), root.Hex(), block)
+	// Verify that the proposal context matches what we expect.
+	switch {
+	case pCtx.Root != root:
+		return fmt.Errorf("firewood: proposal root mismatch, expected %s, got %s", root.Hex(), pCtx.Root.Hex())
+	case pCtx.Parent.Root != parentRoot:
+		return fmt.Errorf("firewood: proposal parent root mismatch, expected %s, got %s", parentRoot.Hex(), pCtx.Parent.Root.Hex())
+	case pCtx.Block != block && block != 0:
+		return fmt.Errorf("firewood: proposal block mismatch, expected %d, got %d", block, pCtx.Block)
 	}
 
-	log.Debug("firewood: proposing from database root", "root", root.Hex(), "height", block)
-	p, err := createProposal(db.fwDisk, root, keys, values)
-	if err != nil {
-		return err
-	}
-	pCtx := &ProposalContext{
-		Proposal: p,
-		Hashes:   map[common.Hash]struct{}{hash: {}}, // This may be common.Hash{} for genesis blocks.
-		Root:     root,
-		Block:    block,
-		Parent:   db.proposalTree,
-	}
+	// Track the proposal context in the tree and map.
+	pCtx.Parent.Children = append(pCtx.Parent.Children, pCtx)
 	db.proposalMap[root] = append(db.proposalMap[root], pCtx)
-	db.proposalTree.Children = append(db.proposalTree.Children, pCtx)
+	pCtx.Hashes[hash] = struct{}{}
+	ffiOutstandingProposals.Inc(1)
 
+	// Clean all other unverified proposals that were not used.
+	for _, unverified := range db.unverifiedProposals {
+		if unverified != pCtx {
+			if dropErr := unverified.Proposal.Drop(); dropErr != nil {
+				log.Error("firewood: error dropping unverified proposal", "root", unverified.Root.Hex(), "error", dropErr)
+			}
+		}
+		ffiPossibleProposals.Dec(1)
+	}
+	// Clear the unverified proposals slice avoiding double freeing.
+	db.unverifiedProposals = nil
 	return nil
 }
 
@@ -304,10 +294,8 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
-	// On success, we should persist the genesis root as necessary, and dereference all children
-	// of the committed proposal.
+	// On success, we should dereference all children of the committed proposal.
 	defer func() {
-		// If we attempted to commit a proposal, but it failed, we must dereference its children.
 		if pCtx != nil {
 			db.cleanupCommittedProposal(pCtx)
 		}
@@ -404,42 +392,54 @@ func (db *Database) Close() error {
 
 // createProposal creates a new proposal from the given layer
 // If there are no changes, it will return nil.
-func createProposal(layer proposable, root common.Hash, keys, values [][]byte) (p *ffi.Proposal, err error) {
+func (db *Database) createProposal(parent *ProposalContext, keys, values [][]byte) (pCtx *ProposalContext, err error) {
+	var (
+		start = time.Now()
+		p     *ffi.Proposal
+	)
 	// If there's an error after creating the proposal, we must drop it.
 	defer func() {
 		if err != nil && p != nil {
 			if dropErr := p.Drop(); dropErr != nil {
 				// We should still return the original error.
-				log.Error("firewood: error dropping proposal after error", "root", root.Hex(), "error", dropErr)
+				log.Error("firewood: error dropping proposal after error", "root", pCtx.Root.Hex(), "error", dropErr)
 			}
-			p = nil
+			pCtx = nil
 		}
 	}()
 
-	if len(keys) != len(values) {
-		return nil, fmt.Errorf("firewood: keys and values must have the same length, got %d keys and %d values", len(keys), len(values))
+	if parent.Proposal == nil {
+		p, err = db.fwDisk.Propose(keys, values)
+	} else {
+		p, err = parent.Proposal.Propose(keys, values)
 	}
-
-	start := time.Now()
-	p, err = layer.Propose(keys, values)
 	if err != nil {
-		return nil, fmt.Errorf("firewood: unable to create proposal for root %s: %w", root.Hex(), err)
+		return nil, fmt.Errorf("firewood: unable to create proposal from parent root %s: %w", parent.Root.Hex(), err)
 	}
 	ffiProposeCount.Inc(1)
 	ffiProposeTimer.Inc(time.Since(start).Milliseconds())
-	ffiOutstandingProposals.Inc(1)
+	ffiPossibleProposals.Inc(1)
 
 	currentRootBytes, err := p.Root()
 	if err != nil {
-		return nil, fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
+		return nil, fmt.Errorf("firewood: error getting root of proposals: %w", err)
 	}
-	currentRoot := common.BytesToHash(currentRootBytes)
-	if root != currentRoot {
-		return nil, fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+	root := common.BytesToHash(currentRootBytes)
+
+	block := parent.Block + 1
+	// Edge case: genesis block
+	if _, ok := parent.Hashes[common.Hash{}]; ok && parent.Root == types.EmptyRootHash {
+		block = 0
 	}
 
-	// Store the proposal context.
-	return p, nil
+	pCtx = &ProposalContext{
+		Proposal: p,
+		Root:     root,
+		Hashes:   make(map[common.Hash]struct{}),
+		Parent:   parent,
+		Block:    block,
+	}
+	return pCtx, nil
 }
 
 // cleanupCommittedProposal dereferences the proposal and removes it from the proposal map.
@@ -449,6 +449,7 @@ func (db *Database) cleanupCommittedProposal(pCtx *ProposalContext) {
 	oldChildren := db.proposalTree.Children
 	db.proposalTree = pCtx
 	db.proposalTree.Parent = nil
+	db.proposalTree.Proposal = nil // The proposals has been committed.
 
 	db.removeProposalFromMap(pCtx)
 
@@ -531,77 +532,62 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 
 // getProposalHash calculates the hash if the set of keys and values are
 // proposed from the given parent root.
-func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byte) (common.Hash, error) {
+func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byte) (root common.Hash, proposals []*ProposalContext, err error) {
+	if len(keys) != len(values) {
+		return common.Hash{}, nil, fmt.Errorf("firewood: keys and values must have the same length, got %d keys and %d values", len(keys), len(values))
+	}
+
 	// This function only reads from existing tracked proposals, so we can use a read lock.
 	db.proposalLock.RLock()
 	defer db.proposalLock.RUnlock()
 
-	var (
-		p   *ffi.Proposal
-		err error
-	)
-	start := time.Now()
+	defer func() {
+		// If any error is encountered, free all proposals created in this function.
+		if err != nil {
+			for _, p := range proposals {
+				if dropErr := p.Proposal.Drop(); dropErr != nil {
+					// Report the error, but we should still return the original error.
+					log.Error("firewood: error dropping proposal after error", "root", p.Root.Hex(), "error", dropErr)
+				}
+				ffiPossibleProposals.Dec(1)
+			}
+			proposals = nil
+			root = common.Hash{}
+		}
+	}()
+
+	// TODO: metrics
+	// start := time.Now()
 	if db.proposalTree.Root == parentRoot {
 		// Propose from the database root.
-		p, err = db.fwDisk.Propose(keys, values)
+		p, err := db.createProposal(db.proposalTree, keys, values)
 		if err != nil {
-			return common.Hash{}, fmt.Errorf("firewood: error proposing from root %s: %w", parentRoot.Hex(), err)
+			return common.Hash{}, proposals, fmt.Errorf("firewood: error proposing from root %s: %w", parentRoot.Hex(), err)
 		}
-	} else {
-		// Find any proposal with the given parent root.
-		// Since we are only using the proposal to find the root hash,
-		// we can use the first proposal found.
-		proposals, ok := db.proposalMap[parentRoot]
-		if !ok || len(proposals) == 0 {
-			return common.Hash{}, fmt.Errorf("firewood: no proposal found for parent root %s", parentRoot.Hex())
-		}
-		rootProposal := proposals[0].Proposal
-
-		p, err = rootProposal.Propose(keys, values)
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("firewood: error proposing from parent proposal %s: %w", parentRoot.Hex(), err)
-		}
+		proposals = append(proposals, p)
 	}
-	ffiHashCount.Inc(1)
-	ffiHashTimer.Inc(time.Since(start).Milliseconds())
 
-	// We succesffuly created a proposal, so we must drop it after use.
-	defer p.Drop()
+	// Find any proposal with the given parent root.
+	// Since we are only using the proposal to find the root hash,
+	// we can use the first proposal found.
+	for _, parent := range db.proposalMap[parentRoot] {
+		p, err := db.createProposal(parent, keys, values)
+		if err != nil {
+			return common.Hash{}, proposals, fmt.Errorf("firewood: error proposing from parent root %s: %w", parentRoot.Hex(), err)
+		}
+		proposals = append(proposals, p)
+	}
 
-	rootBytes, err := p.Root()
+	if len(proposals) == 0 {
+		return common.Hash{}, nil, fmt.Errorf("firewood: no proposals found with parent root %s", parentRoot.Hex())
+	}
+
+	// Get the root of the first proposal - they should all match.
+	rootBytes, err := proposals[0].Proposal.Root()
 	if err != nil {
-		return common.Hash{}, err
+		return common.Hash{}, proposals, fmt.Errorf("firewood: error getting root of proposal: %w", err)
 	}
-	return common.BytesToHash(rootBytes), nil
-}
+	root = common.BytesToHash(rootBytes)
 
-func arrangeKeyValuePairs(nodes *trienode.MergedNodeSet) ([][]byte, [][]byte) {
-	if nodes == nil {
-		return nil, nil // No changes to propose
-	}
-	// Create key-value pairs for the nodes in bytes.
-	var (
-		acctKeys      [][]byte
-		acctValues    [][]byte
-		storageKeys   [][]byte
-		storageValues [][]byte
-	)
-
-	flattenedNodes := nodes.Flatten()
-
-	for _, nodeset := range flattenedNodes {
-		for str, node := range nodeset {
-			if len(str) == common.HashLength {
-				// This is an account node.
-				acctKeys = append(acctKeys, []byte(str))
-				acctValues = append(acctValues, node.Blob)
-			} else {
-				storageKeys = append(storageKeys, []byte(str))
-				storageValues = append(storageValues, node.Blob)
-			}
-		}
-	}
-
-	// We need to do all storage operations first, so prefix-deletion works for accounts.
-	return append(storageKeys, acctKeys...), append(storageValues, acctValues...)
+	return root, proposals, nil
 }
