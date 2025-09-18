@@ -36,7 +36,7 @@ const (
 var (
 	errAcquiringSemaphore                      = errors.New("error acquiring semaphore")
 	errExpiredRequest                          = errors.New("expired request")
-	errNoPeersFound                            = errors.New("no peers found matching version")
+	errNoMatchingPeersFound                            = errors.New("no peers found matching version")
 	_                     Network              = (*network)(nil)
 	_                     validators.Connector = (*network)(nil)
 	_                     common.AppHandler    = (*network)(nil)
