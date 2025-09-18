@@ -36,10 +36,11 @@ func WithHeaderExtra(h *ethtypes.Header, extra *HeaderExtra) *ethtypes.Header {
 // This type uses [HeaderSerializable] to encode and decode the extra fields
 // along with the upstream type for compatibility with existing network blocks.
 type HeaderExtra struct {
-	ExtDataHash      common.Hash
-	ExtDataGasUsed   *big.Int
-	BlockGasCost     *big.Int
-	TimeMilliseconds *uint64
+	ExtDataHash         common.Hash
+	ExtDataGasUsed      *big.Int
+	BlockGasCost        *big.Int
+	TimeMilliseconds    *uint64
+	MinBlockDelayExcess *uint64
 }
 
 // EncodeRLP RLP encodes the given [ethtypes.Header] and [HeaderExtra] together
@@ -106,6 +107,10 @@ func (h *HeaderExtra) PostCopy(dst *ethtypes.Header) {
 		cpMs := *h.TimeMilliseconds
 		cp.TimeMilliseconds = &cpMs
 	}
+	if h.MinBlockDelayExcess != nil {
+		cpDelayExcess := *h.MinBlockDelayExcess
+		cp.MinBlockDelayExcess = &cpDelayExcess
+	}
 	SetHeaderExtra(dst, cp)
 }
 
@@ -158,6 +163,7 @@ func (h *HeaderSerializable) updateFromExtras(extras *HeaderExtra) {
 	h.ExtDataGasUsed = extras.ExtDataGasUsed
 	h.BlockGasCost = extras.BlockGasCost
 	h.TimeMilliseconds = extras.TimeMilliseconds
+	h.MinBlockDelayExcess = extras.MinBlockDelayExcess
 }
 
 func (h *HeaderSerializable) updateToExtras(extras *HeaderExtra) {
@@ -165,6 +171,7 @@ func (h *HeaderSerializable) updateToExtras(extras *HeaderExtra) {
 	extras.ExtDataGasUsed = h.ExtDataGasUsed
 	extras.BlockGasCost = h.BlockGasCost
 	extras.TimeMilliseconds = h.TimeMilliseconds
+	extras.MinBlockDelayExcess = h.MinBlockDelayExcess
 }
 
 // NOTE: both generators currently do not support type aliases.
@@ -221,23 +228,27 @@ type HeaderSerializable struct {
 
 	// TimeMilliseconds was added by Granite and is ignored in legacy headers.
 	TimeMilliseconds *uint64 `json:"timestampMilliseconds" rlp:"optional"`
+
+	// MinBlockDelayExcess was added by Granite and is ignored in legacy headers.
+	MinBlockDelayExcess *uint64 `json:"minBlockDelayExcess" rlp:"optional"`
 }
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty       *hexutil.Big
-	Number           *hexutil.Big
-	GasLimit         hexutil.Uint64
-	GasUsed          hexutil.Uint64
-	Time             hexutil.Uint64
-	Extra            hexutil.Bytes
-	BaseFee          *hexutil.Big
-	ExtDataGasUsed   *hexutil.Big
-	BlockGasCost     *hexutil.Big
-	Hash             common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	BlobGasUsed      *hexutil.Uint64
-	ExcessBlobGas    *hexutil.Uint64
-	TimeMilliseconds *hexutil.Uint64
+	Difficulty          *hexutil.Big
+	Number              *hexutil.Big
+	GasLimit            hexutil.Uint64
+	GasUsed             hexutil.Uint64
+	Time                hexutil.Uint64
+	Extra               hexutil.Bytes
+	BaseFee             *hexutil.Big
+	ExtDataGasUsed      *hexutil.Big
+	BlockGasCost        *hexutil.Big
+	Hash                common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	BlobGasUsed         *hexutil.Uint64
+	ExcessBlobGas       *hexutil.Uint64
+	TimeMilliseconds    *hexutil.Uint64
+	MinBlockDelayExcess *hexutil.Uint64
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its

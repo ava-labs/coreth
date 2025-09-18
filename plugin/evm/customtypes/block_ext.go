@@ -138,6 +138,15 @@ func BlockTimeMilliseconds(b *ethtypes.Block) *uint64 {
 	return time
 }
 
+func BlockMinBlockDelayExcess(b *ethtypes.Block) *uint64 {
+	var excess *uint64
+	if e := GetHeaderExtra(b.Header()).MinBlockDelayExcess; e != nil {
+		excess = new(uint64)
+		*excess = *e
+	}
+	return excess
+}
+
 func CalcExtDataHash(extdata []byte) common.Hash {
 	if len(extdata) == 0 {
 		return EmptyExtDataHash
