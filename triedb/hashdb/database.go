@@ -717,7 +717,7 @@ func (db *Database) update(root common.Hash, parent common.Hash, nodes *trienode
 // persistent database layer.
 //
 // The first return will always be 0, representing the memory stored in unbounded
-// diff layers above the dirty cache. This is only available in pathdb.
+// diff layers above the dirty cache.
 func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()

@@ -508,7 +508,7 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 }
 
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testRepairWithScheme(t, tt, snapshots, scheme)
 		})

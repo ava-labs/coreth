@@ -556,7 +556,7 @@ func testUngracefulAsyncShutdown(t *testing.T, scheme string, snapshotEnabled bo
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
 // correctly in case reorg is called.
 func TestCanonicalHashMarker(t *testing.T) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testCanonicalHashMarker(t, scheme)
 		})
