@@ -231,7 +231,7 @@ func (s *TxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	pending, queue := s.b.TxPoolContent()
 
 	// Define a formatter to flatten a transaction into a string
-	var format = func(tx *types.Transaction) string {
+	format := func(tx *types.Transaction) string {
 		if to := tx.To(); to != nil {
 			return fmt.Sprintf("%s: %v wei + %v gas × %v wei", tx.To().Hex(), tx.Value(), tx.Gas(), tx.GasPrice())
 		}
@@ -1279,8 +1279,8 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if headExtra.TimeMilliseconds != nil {
 		result["timestampMilliseconds"] = hexutil.Uint64(*headExtra.TimeMilliseconds)
 	}
-	if headExtra.MinBlockDelayExcess != nil {
-		result["minBlockDelayExcess"] = hexutil.Uint64(*headExtra.MinBlockDelayExcess)
+	if headExtra.MinDelayExcess != nil {
+		result["minDelayExcess"] = hexutil.Uint64(*headExtra.MinDelayExcess)
 	}
 	return result
 }
@@ -1974,11 +1974,11 @@ func (s *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs, g
 	matchTx := sendArgs.toTransaction()
 
 	// Before replacing the old transaction, ensure the _new_ transaction fee is reasonable.
-	var price = matchTx.GasPrice()
+	price := matchTx.GasPrice()
 	if gasPrice != nil {
 		price = gasPrice.ToInt()
 	}
-	var gas = matchTx.Gas()
+	gas := matchTx.Gas()
 	if gasLimit != nil {
 		gas = uint64(*gasLimit)
 	}

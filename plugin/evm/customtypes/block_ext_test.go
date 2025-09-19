@@ -314,41 +314,41 @@ func TestBlockGetters(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                    string
-		headerExtra             *HeaderExtra
-		blockExtra              *BlockBodyExtra
-		wantExtDataGasUsed      *big.Int
-		wantBlockGasCost        *big.Int
-		wantVersion             uint32
-		wantExtData             []byte
-		wantTimeMilliseconds    *uint64
-		wantMinBlockDelayExcess *uint64
+		name                 string
+		headerExtra          *HeaderExtra
+		blockExtra           *BlockBodyExtra
+		wantExtDataGasUsed   *big.Int
+		wantBlockGasCost     *big.Int
+		wantVersion          uint32
+		wantExtData          []byte
+		wantTimeMilliseconds *uint64
+		wantMinDelayExcess   *uint64
 	}{
 		{
-			name:                    "empty",
-			headerExtra:             &HeaderExtra{},
-			blockExtra:              &BlockBodyExtra{},
-			wantTimeMilliseconds:    nil,
-			wantMinBlockDelayExcess: nil,
+			name:                 "empty",
+			headerExtra:          &HeaderExtra{},
+			blockExtra:           &BlockBodyExtra{},
+			wantTimeMilliseconds: nil,
+			wantMinDelayExcess:   nil,
 		},
 		{
 			name: "fields_set",
 			headerExtra: &HeaderExtra{
-				ExtDataGasUsed:      big.NewInt(1),
-				BlockGasCost:        big.NewInt(2),
-				TimeMilliseconds:    utils.NewUint64(3),
-				MinBlockDelayExcess: utils.NewUint64(4),
+				ExtDataGasUsed:   big.NewInt(1),
+				BlockGasCost:     big.NewInt(2),
+				TimeMilliseconds: utils.NewUint64(3),
+				MinDelayExcess:   utils.NewUint64(4),
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
 				ExtData: &[]byte{4},
 			},
-			wantExtDataGasUsed:      big.NewInt(1),
-			wantBlockGasCost:        big.NewInt(2),
-			wantVersion:             3,
-			wantExtData:             []byte{4},
-			wantTimeMilliseconds:    utils.NewUint64(3),
-			wantMinBlockDelayExcess: utils.NewUint64(4),
+			wantExtDataGasUsed:   big.NewInt(1),
+			wantBlockGasCost:     big.NewInt(2),
+			wantVersion:          3,
+			wantExtData:          []byte{4},
+			wantTimeMilliseconds: utils.NewUint64(3),
+			wantMinDelayExcess:   utils.NewUint64(4),
 		},
 	}
 
@@ -376,8 +376,8 @@ func TestBlockGetters(t *testing.T) {
 			timeMilliseconds := BlockTimeMilliseconds(block)
 			assert.Equal(t, test.wantTimeMilliseconds, timeMilliseconds, "BlockTimeMilliseconds()")
 
-			minBlockDelayExcess := BlockMinBlockDelayExcess(block)
-			assert.Equal(t, test.wantMinBlockDelayExcess, minBlockDelayExcess, "BlockMinBlockDelayExcess()")
+			minDelayExcess := BlockMinDelayExcess(block)
+			assert.Equal(t, test.wantMinDelayExcess, minDelayExcess, "BlockMinDelayExcess()")
 		})
 	}
 }

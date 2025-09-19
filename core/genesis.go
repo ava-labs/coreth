@@ -325,8 +325,8 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			headerExtra.TimeMilliseconds = new(uint64)
 			*headerExtra.TimeMilliseconds = g.Timestamp * 1000
 
-			headerExtra.MinBlockDelayExcess = new(uint64)
-			*headerExtra.MinBlockDelayExcess = 0 // TODO: decide whether we want this to be configurable by genesis/chainconfig
+			headerExtra.MinDelayExcess = new(uint64)
+			*headerExtra.MinDelayExcess = 0 // TODO: decide whether we want this to be configurable by genesis/chainconfig
 		}
 	}
 

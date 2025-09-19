@@ -2,8 +2,11 @@
 
 package customtypes
 
-import "github.com/ava-labs/libevm/rlp"
-import "io"
+import (
+	"io"
+
+	"github.com/ava-labs/libevm/rlp"
+)
 
 func (obj *HeaderSerializable) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
@@ -45,7 +48,7 @@ func (obj *HeaderSerializable) EncodeRLP(_w io.Writer) error {
 	_tmp5 := obj.ExcessBlobGas != nil
 	_tmp6 := obj.ParentBeaconRoot != nil
 	_tmp7 := obj.TimeMilliseconds != nil
-	_tmp8 := obj.MinBlockDelayExcess != nil
+	_tmp8 := obj.MinDelayExcess != nil
 	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
@@ -105,10 +108,10 @@ func (obj *HeaderSerializable) EncodeRLP(_w io.Writer) error {
 		}
 	}
 	if _tmp8 {
-		if obj.MinBlockDelayExcess == nil {
+		if obj.MinDelayExcess == nil {
 			w.Write([]byte{0x80})
 		} else {
-			w.WriteUint64((*obj.MinBlockDelayExcess))
+			w.WriteUint64((*obj.MinDelayExcess))
 		}
 	}
 	w.ListEnd(_tmp0)

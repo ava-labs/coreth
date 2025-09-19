@@ -138,9 +138,9 @@ func BlockTimeMilliseconds(b *ethtypes.Block) *uint64 {
 	return time
 }
 
-func BlockMinBlockDelayExcess(b *ethtypes.Block) *uint64 {
+func BlockMinDelayExcess(b *ethtypes.Block) *uint64 {
 	var excess *uint64
-	if e := GetHeaderExtra(b.Header()).MinBlockDelayExcess; e != nil {
+	if e := GetHeaderExtra(b.Header()).MinDelayExcess; e != nil {
 		excess = new(uint64)
 		*excess = *e
 	}
