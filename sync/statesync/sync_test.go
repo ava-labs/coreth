@@ -173,7 +173,6 @@ func TestSimpleSyncCases(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		rand.Seed(1)
 		t.Run(name, func(t *testing.T) {
 			testSync(t, test)
 		})
@@ -453,7 +452,6 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 }
 
 func testSyncerSyncsToNewRoot(t *testing.T, deleteBetweenSyncs func(*testing.T, common.Hash, ethdb.Database)) {
-	rand.Seed(1)
 	clientDB := rawdb.NewMemoryDatabase()
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)

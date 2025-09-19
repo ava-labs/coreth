@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -82,7 +81,6 @@ var SyncerVMTests = []SyncerVMTest{
 }
 
 func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
 	test := SyncTestParams{
 		SyncableInterval:   256,
 		StateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
@@ -94,7 +92,6 @@ func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
 }
 
 func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
 	test := SyncTestParams{
 		SyncableInterval:   256,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -106,7 +103,6 @@ func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
 }
 
 func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
 	numToGen := vmsync.BlocksToFetch + uint64(32)
 	test := SyncTestParams{
 		SyncableInterval:   numToGen,
@@ -119,7 +115,6 @@ func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup
 }
 
 func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
 	var lock sync.Mutex
 	reqCount := 0
 	test := SyncTestParams{
