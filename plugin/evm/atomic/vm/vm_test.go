@@ -189,7 +189,7 @@ func testIssueAtomicTxs(t *testing.T, scheme string) {
 	utxos := map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 	}
-	addUTXOs(tvm.AtomicMemory, vm.Ctx, utxos)
+	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, utxos))
 	defer func() {
 		if err := vm.Shutdown(context.Background()); err != nil {
 			t.Fatal(err)
@@ -197,34 +197,17 @@ func testIssueAtomicTxs(t *testing.T, scheme string) {
 	}()
 
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, err)
+	require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx))
 	msg, err := vm.WaitForEvent(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, commonEng.PendingTxs, msg)
 
 	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, blk.Verify(context.Background()))
+	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+	require.NoError(t, blk.Accept(context.Background()))
 
 	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
 		t.Fatal(err)
@@ -234,36 +217,21 @@ func testIssueAtomicTxs(t *testing.T, scheme string) {
 	vm.Ethereum().BlockChain().DrainAcceptorQueue()
 
 	state, err := vm.Ethereum().BlockChain().State()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	wrappedState := extstate.New(state)
 	exportTx, err := atomic.NewExportTx(vm.Ctx, vm.CurrentRules(), wrappedState, vm.Ctx.AVAXAssetID, importAmount-(2*ap0.AtomicTxFee), vm.Ctx.XChainID, vmtest.TestShortIDAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.AtomicMempool.AddLocalTx(exportTx); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, vm.AtomicMempool.AddLocalTx(exportTx))
 
 	msg, err = vm.WaitForEvent(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, commonEng.PendingTxs, msg)
 
 	blk2, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk2.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk2.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.NoError(t, blk2.Verify(context.Background()))
+	require.NoError(t, blk2.Accept(context.Background()))
 
 	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
 		t.Fatal(err)
@@ -1066,30 +1034,18 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 
 	// Issue the first import transaction, build, and accept the block.
-	if err := vm.AtomicMempool.AddLocalTx(importTxs[0]); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, vm.AtomicMempool.AddLocalTx(importTxs[0]))
 
 	msg, err := vm.WaitForEvent(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, commonEng.PendingTxs, msg)
 
 	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, blk.Verify(context.Background()))
+	require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+	require.NoError(t, blk.Accept(context.Background()))
 
 	newHead := <-newTxPoolHeadChan
 	if newHead.Head.Hash() != common.Hash(blk.ID()) {
@@ -1098,8 +1054,8 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 
 	// Add the two conflicting transactions directly to the mempool, so that two consecutive transactions
 	// will fail verification when build block is called.
-	vm.AtomicMempool.AddRemoteTx(importTxs[1])
-	vm.AtomicMempool.AddRemoteTx(importTxs[2])
+	require.NoError(t, vm.AtomicMempool.ForceAddTx(importTxs[1]))
+	require.NoError(t, vm.AtomicMempool.ForceAddTx(importTxs[2]))
 
 	if _, err := vm.BuildBlock(context.Background()); err == nil {
 		t.Fatal("Expected build block to fail due to empty block")
@@ -1145,7 +1101,9 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 			t.Fatal("should conflict with the utxoSet in the mempool")
 		}
 		// force add the tx
-		vm.AtomicMempool.ForceAddTx(conflictTx)
+		if err := vm.AtomicMempool.ForceAddTx(conflictTx); err != nil {
+			t.Fatal(err)
+		}
 		conflictSets[index].Add(conflictTx.ID())
 	}
 	msg, err := vm.WaitForEvent(context.Background())
@@ -2111,7 +2069,7 @@ func TestWaitForEvent(t *testing.T) {
 				},
 			}}}}))
 			testCase.testCase(t, vm, address, key)
-			vm.Shutdown(context.Background())
+			require.NoError(t, vm.Shutdown(context.Background()))
 		})
 	}
 }
