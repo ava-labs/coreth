@@ -33,9 +33,11 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/params/paramstest"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -118,7 +120,7 @@ func TestGenesisToBlockDecoding(t *testing.T) {
 		upgradetest.Durango:           common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
 		upgradetest.Etna:              common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
 		upgradetest.Fortuna:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
-		upgradetest.Granite:           common.HexToHash("0x479c4950fdd50b7228808188b790fecde7e8b29776daf24e612307b0fd280365"),
+		upgradetest.Granite:           common.HexToHash("0xe870dd86820001c7ca3f2fb9a2f31e1fcfdb17743874a061db8e75425ae7fd23"),
 	}
 	for fork, chainConfig := range paramstest.ForkToChainConfig {
 		t.Run(fork.String(), func(t *testing.T) {
@@ -134,6 +136,71 @@ func TestGenesisToBlockDecoding(t *testing.T) {
 			require.Equal(t, block.Hash(), readHeader.Hash())
 			require.Equal(t, previousHashes[fork], block.Hash())
 			require.EqualValues(t, block.Header(), readHeader)
+		})
+	}
+}
+
+func TestGenesisMinDelayExcess(t *testing.T) {
+	tests := []struct {
+		name                     string
+		config                   *params.ChainConfig
+		configuredMinDelayExcess *uint64
+		expectedValue            *uint64
+	}{
+		{
+			name:                     "CustomMinDelayExcess",
+			config:                   params.TestGraniteChainConfig,
+			configuredMinDelayExcess: utils.NewUint64(1000000),
+			expectedValue:            utils.NewUint64(1000000),
+		},
+		{
+			name:                     "DefaultMinDelayExcess",
+			config:                   params.TestGraniteChainConfig,
+			configuredMinDelayExcess: nil,
+			expectedValue:            utils.NewUint64(acp226.DefaultDelayExcess),
+		},
+		{
+			name:                     "MinDelayExcessSetBeforeGranite",
+			config:                   params.TestFortunaChainConfig,
+			configuredMinDelayExcess: utils.NewUint64(1000000),
+			expectedValue:            nil,
+		},
+		{
+			name:                     "MinDelayExcessNotSetBeforeGranite",
+			config:                   params.TestFortunaChainConfig,
+			configuredMinDelayExcess: nil,
+			expectedValue:            nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := &Genesis{
+				Config:         tt.config,
+				Timestamp:      0,
+				MinDelayExcess: tt.configuredMinDelayExcess,
+				Difficulty:     big.NewInt(0),
+				Alloc:          types.GenesisAlloc{},
+			}
+
+			marshalled, err := g.MarshalJSON()
+			require.NoError(t, err)
+			var genesis Genesis
+			require.NoError(t, genesis.UnmarshalJSON(marshalled))
+			require.Equal(t, genesis.MinDelayExcess, g.MinDelayExcess)
+
+			db := rawdb.NewMemoryDatabase()
+			tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+			block, err := genesis.Commit(db, tdb)
+			require.NoError(t, err)
+
+			headerExtra := customtypes.GetHeaderExtra(block.Header())
+
+			if tt.expectedValue == nil {
+				require.Nil(t, headerExtra.MinDelayExcess)
+			} else {
+				require.Equal(t, *tt.expectedValue, *headerExtra.MinDelayExcess)
+			}
 		})
 	}
 }

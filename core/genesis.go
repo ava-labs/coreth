@@ -34,11 +34,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/triedb/pathdb"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/common/math"
@@ -67,15 +69,16 @@ type GenesisAlloc = types.GenesisAlloc
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config     *params.ChainConfig `json:"config"`
-	Nonce      uint64              `json:"nonce"`
-	Timestamp  uint64              `json:"timestamp"`
-	ExtraData  []byte              `json:"extraData"`
-	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
-	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
-	Mixhash    common.Hash         `json:"mixHash"`
-	Coinbase   common.Address      `json:"coinbase"`
-	Alloc      types.GenesisAlloc  `json:"alloc"      gencodec:"required"`
+	Config         *params.ChainConfig `json:"config"`
+	Nonce          uint64              `json:"nonce"`
+	Timestamp      uint64              `json:"timestamp"`
+	ExtraData      []byte              `json:"extraData"`
+	GasLimit       uint64              `json:"gasLimit"   gencodec:"required"`
+	Difficulty     *big.Int            `json:"difficulty" gencodec:"required"`
+	Mixhash        common.Hash         `json:"mixHash"`
+	Coinbase       common.Address      `json:"coinbase"`
+	Alloc          types.GenesisAlloc  `json:"alloc"      gencodec:"required"`
+	MinDelayExcess *uint64             `json:"minDelayExcess"` // ACP-226
 
 	// These fields are used for consensus tests. Please don't use them
 	// in actual genesis blocks.
@@ -90,17 +93,18 @@ type Genesis struct {
 // GenesisAccount is an account in the state of the genesis block.
 // field type overrides for gencodec
 type genesisSpecMarshaling struct {
-	Nonce         math.HexOrDecimal64
-	Timestamp     math.HexOrDecimal64
-	ExtraData     hexutil.Bytes
-	GasLimit      math.HexOrDecimal64
-	GasUsed       math.HexOrDecimal64
-	Number        math.HexOrDecimal64
-	Difficulty    *math.HexOrDecimal256
-	Alloc         map[common.UnprefixedAddress]types.Account
-	BaseFee       *math.HexOrDecimal256
-	ExcessBlobGas *math.HexOrDecimal64
-	BlobGasUsed   *math.HexOrDecimal64
+	Nonce          math.HexOrDecimal64
+	Timestamp      math.HexOrDecimal64
+	ExtraData      hexutil.Bytes
+	GasLimit       math.HexOrDecimal64
+	GasUsed        math.HexOrDecimal64
+	Number         math.HexOrDecimal64
+	Difficulty     *math.HexOrDecimal256
+	Alloc          map[common.UnprefixedAddress]types.Account
+	BaseFee        *math.HexOrDecimal256
+	ExcessBlobGas  *math.HexOrDecimal64
+	BlobGasUsed    *math.HexOrDecimal64
+	MinDelayExcess *math.HexOrDecimal64
 }
 
 // GenesisMismatchError is raised when trying to overwrite an existing
@@ -325,8 +329,10 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			headerExtra.TimeMilliseconds = new(uint64)
 			*headerExtra.TimeMilliseconds = g.Timestamp * 1000
 
-			headerExtra.MinDelayExcess = new(uint64)
-			*headerExtra.MinDelayExcess = 0 // TODO: decide whether we want this to be configurable by genesis/chainconfig
+			headerExtra.MinDelayExcess = g.MinDelayExcess
+			if headerExtra.MinDelayExcess == nil {
+				headerExtra.MinDelayExcess = utils.NewUint64(acp226.DefaultDelayExcess)
+			}
 		}
 	}
 
