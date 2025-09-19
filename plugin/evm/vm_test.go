@@ -2424,13 +2424,12 @@ func TestBlockGasValidation(t *testing.T) {
 }
 
 func TestInspectDatabases(t *testing.T) {
-	require := require.New(t)
-
 	var (
 		vm = newDefaultTestVM()
 		db = memdb.New()
 	)
 
 	vm.initializeDBs(db)
-	require.NoError(vm.inspectDatabases())
+	require.NoError(t, vm.inspectDatabases())
+}
 }
