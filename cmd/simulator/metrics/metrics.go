@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ava-labs/libevm/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -66,7 +67,8 @@ func (m *Metrics) Serve(ctx context.Context, metricsPort string, metricsEndpoint
 	ctx, cancel := context.WithCancel(ctx)
 	// Create a prometheus server to expose individual tx metrics
 	server := &http.Server{
-		Addr: ":" + metricsPort,
+		Addr:              ":" + metricsPort,
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	// Start up go routine to listen for SIGINT notifications to gracefully shut down server

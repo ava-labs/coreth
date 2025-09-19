@@ -5,7 +5,6 @@ package statesynctest
 
 import (
 	"encoding/binary"
-	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -19,7 +18,10 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/ava-labs/coreth/utils/rand"
 	"github.com/ava-labs/coreth/utils/utilstest"
+
+	cryptorand "crypto/rand"
 )
 
 // GenerateTrie creates a trie with [numKeys] key-value pairs inside of [trieDB].
@@ -49,11 +51,13 @@ func FillTrie(t *testing.T, start, numKeys int, keySize int, trieDB *triedb.Data
 	for i := start; i < numKeys; i++ {
 		key := make([]byte, keySize)
 		binary.BigEndian.PutUint64(key[:wrappers.LongLen], uint64(i+1))
-		_, err := rand.Read(key[wrappers.LongLen:])
+		_, err := cryptorand.Read(key[wrappers.LongLen:])
 		assert.NoError(t, err)
 
-		value := make([]byte, rand.Intn(128)+128) // min 128 bytes, max 256 bytes
-		_, err = rand.Read(value)
+		// Generate random size between 128 and 256 bytes
+		valueSize := rand.SecureIntRange(128, 257) // min 128, max 256
+		value := make([]byte, valueSize)
+		_, err = cryptorand.Read(value)
 		assert.NoError(t, err)
 
 		testTrie.MustUpdate(key, value)
@@ -160,8 +164,9 @@ func FillAccounts(
 	}
 
 	for i := 0; i < numAccounts; i++ {
+		nonce := uint64(rand.SecureIntn(maxNonce))
 		acc := types.StateAccount{
-			Nonce:    uint64(rand.Intn(maxNonce)),
+			Nonce:    nonce,
 			Balance:  new(uint256.Int).Add(minBalance, randBalance),
 			CodeHash: types.EmptyCodeHash[:],
 			Root:     types.EmptyRootHash,
