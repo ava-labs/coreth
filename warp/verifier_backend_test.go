@@ -57,8 +57,8 @@ func TestAddressedCallSignatures(t *testing.T) {
 				return msg.Bytes(), signature
 			},
 			verifyStats: func(t *testing.T, stats *verifierStats) {
-				require.EqualValues(t, 0, stats.messageParseFail.Snapshot().Count())
-				require.EqualValues(t, 0, stats.blockValidationFail.Snapshot().Count())
+				require.Zero(t, stats.messageParseFail.Snapshot().Count())
+				require.Zero(t, stats.blockValidationFail.Snapshot().Count())
 			},
 		},
 		"offchain message": {
@@ -66,8 +66,8 @@ func TestAddressedCallSignatures(t *testing.T) {
 				return offchainMessage.Bytes(), offchainSignature
 			},
 			verifyStats: func(t *testing.T, stats *verifierStats) {
-				require.EqualValues(t, 0, stats.messageParseFail.Snapshot().Count())
-				require.EqualValues(t, 0, stats.blockValidationFail.Snapshot().Count())
+				require.Zero(t, stats.messageParseFail.Snapshot().Count())
+				require.Zero(t, stats.blockValidationFail.Snapshot().Count())
 			},
 		},
 		"unknown message": {
@@ -79,8 +79,8 @@ func TestAddressedCallSignatures(t *testing.T) {
 				return unknownMessage.Bytes(), nil
 			},
 			verifyStats: func(t *testing.T, stats *verifierStats) {
-				require.EqualValues(t, 1, stats.messageParseFail.Snapshot().Count())
-				require.EqualValues(t, 0, stats.blockValidationFail.Snapshot().Count())
+				require.Equal(t, int64(1), stats.messageParseFail.Snapshot().Count())
+				require.Zero(t, stats.blockValidationFail.Snapshot().Count())
 			},
 			err: &common.AppError{Code: ParseErrCode},
 		},
@@ -110,7 +110,6 @@ func TestAddressedCallSignatures(t *testing.T) {
 				require.NoError(t, err)
 				responseBytes, appErr := handler.AppRequest(context.Background(), ids.GenerateTestNodeID(), time.Time{}, protoBytes)
 				if test.err != nil {
-					require.Error(t, appErr)
 					require.ErrorIs(t, appErr, test.err)
 				} else {
 					require.Nil(t, appErr)
@@ -120,7 +119,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 
 				// If the expected response is empty, assert that the handler returns an empty response and return early.
 				if len(expectedResponse) == 0 {
-					require.Len(t, responseBytes, 0, "expected response to be empty")
+					require.Empty(t, responseBytes, "expected response to be empty")
 					return
 				}
 				// check cache is populated
@@ -178,8 +177,8 @@ func TestBlockSignatures(t *testing.T) {
 				return toMessageBytes(knownBlkID), signature
 			},
 			verifyStats: func(t *testing.T, stats *verifierStats) {
-				require.EqualValues(t, 0, stats.blockValidationFail.Snapshot().Count())
-				require.EqualValues(t, 0, stats.messageParseFail.Snapshot().Count())
+				require.Zero(t, stats.blockValidationFail.Snapshot().Count())
+				require.Zero(t, stats.messageParseFail.Snapshot().Count())
 			},
 		},
 		"unknown block": {
@@ -188,8 +187,8 @@ func TestBlockSignatures(t *testing.T) {
 				return toMessageBytes(unknownBlockID), nil
 			},
 			verifyStats: func(t *testing.T, stats *verifierStats) {
-				require.EqualValues(t, 1, stats.blockValidationFail.Snapshot().Count())
-				require.EqualValues(t, 0, stats.messageParseFail.Snapshot().Count())
+				require.Equal(t, int64(1), stats.blockValidationFail.Snapshot().Count())
+				require.Zero(t, stats.messageParseFail.Snapshot().Count())
 			},
 			err: &common.AppError{Code: VerifyErrCode},
 		},
@@ -237,7 +236,7 @@ func TestBlockSignatures(t *testing.T) {
 
 				// If the expected response is empty, assert that the handler returns an empty response and return early.
 				if len(expectedResponse) == 0 {
-					require.Len(t, responseBytes, 0, "expected response to be empty")
+					require.Empty(t, responseBytes, "expected response to be empty")
 					return
 				}
 				// check cache is populated
