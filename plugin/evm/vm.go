@@ -643,6 +643,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 
 	// Initialize the state sync client
 	vm.Client = vmsync.NewClient(&vmsync.ClientConfig{
+		// Static or Dynamic
 		StateSyncDone: vm.stateSyncDone,
 		Chain:         vm.eth,
 		State:         vm.State,
@@ -864,7 +865,7 @@ func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 		case <-ctx.Done():
 			return 0, ctx.Err()
 		case <-vm.stateSyncDone:
-			return commonEng.StateSyncDone, nil
+			return commonEng.StateSyncDone, nil // modify to return a height/block hash
 		case <-vm.shutdownChan:
 			return commonEng.Message(0), errShuttingDownVM
 		}
