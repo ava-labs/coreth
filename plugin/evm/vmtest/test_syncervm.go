@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -333,7 +334,8 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	generateAndAcceptBlocks(t, serverVM, numBlocks, testSetup.GenFn, nil, cb)
 
 	// make some accounts
-	root, accounts := statesynctest.FillAccountsWithOverlappingStorage(t, serverVM.Ethereum().BlockChain().TrieDB(), types.EmptyRootHash, 1000, 16)
+	r := rand.New(rand.NewSource(1))
+	root, accounts := statesynctest.FillAccountsWithOverlappingStorage(t, r, serverVM.Ethereum().BlockChain().TrieDB(), types.EmptyRootHash, 1000, 16)
 
 	// patch serverVM's lastAcceptedBlock to have the new root
 	// and update the vm's state so the trie with accounts will
