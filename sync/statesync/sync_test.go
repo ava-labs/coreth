@@ -238,7 +238,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		GetLeafsIntercept: intercept.getLeafsIntercept,
 	})
 
-	require.EqualValues(t, 2, intercept.numRequests)
+	require.Equal(t, uint32(2), intercept.numRequests)
 
 	testSync(t, syncTest{
 		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {

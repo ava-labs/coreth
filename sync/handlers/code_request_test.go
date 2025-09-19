@@ -50,8 +50,8 @@ func TestCodeRequestHandler(t *testing.T) {
 				}, [][]byte{codeBytes}
 			},
 			verifyStats: func(t *testing.T) {
-				require.EqualValues(t, 1, testHandlerStats.CodeRequestCount)
-				require.EqualValues(t, len(codeBytes), testHandlerStats.CodeBytesReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.CodeRequestCount)
+				require.Equal(t, uint32(len(codeBytes)), testHandlerStats.CodeBytesReturnedSum)
 			},
 		},
 		"duplicate hashes": {
@@ -61,7 +61,7 @@ func TestCodeRequestHandler(t *testing.T) {
 				}, nil
 			},
 			verifyStats: func(t *testing.T) {
-				require.EqualValues(t, 1, testHandlerStats.DuplicateHashesRequested)
+				require.Equal(t, uint32(1), testHandlerStats.DuplicateHashesRequested)
 			},
 		},
 		"too many hashes": {
@@ -71,7 +71,7 @@ func TestCodeRequestHandler(t *testing.T) {
 				}, nil
 			},
 			verifyStats: func(t *testing.T) {
-				require.EqualValues(t, 1, testHandlerStats.TooManyHashesRequested)
+				require.Equal(t, uint32(1), testHandlerStats.TooManyHashesRequested)
 			},
 		},
 		"max size code handled": {
@@ -81,8 +81,8 @@ func TestCodeRequestHandler(t *testing.T) {
 				}, [][]byte{maxSizeCodeBytes}
 			},
 			verifyStats: func(t *testing.T) {
-				require.EqualValues(t, 1, testHandlerStats.CodeRequestCount)
-				require.EqualValues(t, ethparams.MaxCodeSize, testHandlerStats.CodeBytesReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.CodeRequestCount)
+				require.Equal(t, uint32(ethparams.MaxCodeSize), testHandlerStats.CodeBytesReturnedSum)
 			},
 		},
 	}

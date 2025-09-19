@@ -121,7 +121,7 @@ func TestGetCode(t *testing.T) {
 			require.ErrorIs(t, err, test.expectedErr)
 			// If we expected an error, verify retry behavior and return
 			if test.expectedErr != nil {
-				require.EqualValues(t, 2, testNetClient.numCalls)
+				require.Equal(t, uint(2), testNetClient.numCalls)
 				return
 			}
 			// Otherwise, require that the result is as expected
