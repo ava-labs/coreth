@@ -2432,4 +2432,3 @@ func TestInspectDatabases(t *testing.T) {
 	vm.initializeDBs(db)
 	require.NoError(t, vm.inspectDatabases())
 }
-}
