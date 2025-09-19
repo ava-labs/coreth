@@ -173,8 +173,6 @@ func (*ChainConfig) GetActivatingPrecompileConfigs(address common.Address, from 
 // Assumes given timestamp is the last accepted block timestamp.
 // This ensures that as long as the node has not accepted a block with a different rule set it will allow a
 // new upgrade to be applied as long as it activates after the last accepted block.
-//
-//nolint:unused
 func (c *ChainConfig) checkPrecompilesCompatible(precompileUpgrades []PrecompileUpgrade, time uint64) *ethparams.ConfigCompatError {
 	for _, module := range modules.RegisteredModules() {
 		if err := c.checkPrecompileCompatible(module.Address, precompileUpgrades, time); err != nil {
@@ -189,8 +187,6 @@ func (c *ChainConfig) checkPrecompilesCompatible(precompileUpgrades []Precompile
 // and [precompileUpgrades] at [headTimestamp].
 // Returns an error if upgrades already activated at [headTimestamp] are missing from [precompileUpgrades].
 // Upgrades that have already gone into effect cannot be modified or absent from [precompileUpgrades].
-//
-//nolint:unused
 func (c *ChainConfig) checkPrecompileCompatible(address common.Address, precompileUpgrades []PrecompileUpgrade, time uint64) *ethparams.ConfigCompatError {
 	// All active upgrades (from nil to [lastTimestamp]) must match.
 	activeUpgrades := c.GetActivatingPrecompileConfigs(address, nil, time, c.PrecompileUpgrades)
@@ -215,8 +211,8 @@ func (c *ChainConfig) checkPrecompileCompatible(address common.Address, precompi
 			)
 		}
 	}
-	// then, make sure newUpgrades does not have additional upgrades
-	// that are already activated. (cannot perform retroactive upgrade)
+	// Make sure newUpgrades does not have additional upgrades that are already activated as we
+	// cannot perform retroactive upgrades.
 	if len(newUpgrades) > len(activeUpgrades) {
 		return ethparams.NewTimestampCompatError(
 			fmt.Sprintf("cannot retroactively enable PrecompileUpgrade[%d]", len(activeUpgrades)),
