@@ -331,7 +331,7 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 
 			headerExtra.MinDelayExcess = g.MinDelayExcess
 			if headerExtra.MinDelayExcess == nil {
-				headerExtra.MinDelayExcess = utils.NewUint64(acp226.DefaultDelayExcess)
+				headerExtra.MinDelayExcess = utils.NewUint64(acp226.InitialDelayExcess)
 			}
 		}
 	}

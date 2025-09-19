@@ -157,7 +157,7 @@ func TestGenesisMinDelayExcess(t *testing.T) {
 			name:                     "DefaultMinDelayExcess",
 			config:                   params.TestGraniteChainConfig,
 			configuredMinDelayExcess: nil,
-			expectedValue:            utils.NewUint64(acp226.DefaultDelayExcess),
+			expectedValue:            utils.NewUint64(acp226.InitialDelayExcess),
 		},
 		{
 			name:                     "MinDelayExcessSetBeforeGranite",
