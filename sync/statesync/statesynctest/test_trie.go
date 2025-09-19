@@ -159,7 +159,7 @@ func FillAccounts(
 
 	for i := 0; i < numAccounts; i++ {
 		acc := types.StateAccount{
-			Nonce:    uint64(rand.Intn(maxNonce)),
+			Nonce:    uint64(r.Intn(maxNonce)),
 			Balance:  new(uint256.Int).Add(minBalance, randBalance),
 			CodeHash: types.EmptyCodeHash[:],
 			Root:     types.EmptyRootHash,
