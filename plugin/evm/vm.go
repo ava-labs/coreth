@@ -144,7 +144,6 @@ var (
 	errFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
 	errFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
 	errFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
-	errPathStateUnsupported              = errors.New("path state scheme is not supported")
 )
 
 var originalStderr *os.File
