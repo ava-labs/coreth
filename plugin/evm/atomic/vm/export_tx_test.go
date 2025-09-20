@@ -581,8 +581,11 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			signers: [][]*secp256k1.PrivateKey{
 				{key},
 			},
-			fork:    upgradetest.ApricotPhase3,
-			wantErr: atomic.ErrWrongChainID,
+			fork: upgradetest.ApricotPhase3,
+			// While this was invalid at the time, all networks have adopted
+			// AP5, so the more relaxed verification done in AP5 is all that is
+			// performed now.
+			wantErr: nil,
 		},
 		{
 			name: "P-chain after AP5",
