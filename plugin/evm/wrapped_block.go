@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
@@ -145,11 +144,11 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 	}
 
 	// Read receipts from disk
-	receipts := rawdb.ReadReceipts(b.vm.chaindb, b.ethBlock.Hash(), b.ethBlock.NumberU64(), b.ethBlock.Time(), b.vm.chainConfig)
+	receipts := b.vm.blockChain.GetReceiptsByHash(b.ethBlock.Hash())
 	// If there are no receipts, ReadReceipts may be nil, so we check the length and confirm the ReceiptHash
 	// is empty to ensure that missing receipts results in an error on accept.
 	if len(receipts) == 0 && b.ethBlock.ReceiptHash() != types.EmptyRootHash {
-		return fmt.Errorf("failed to fetch receipts for accepted block with non-empty root hash (%s) (Block: %s, Height: %d)", b.ethBlock.ReceiptHash(), b.ethBlock.Hash(), b.ethBlock.NumberU64())
+		return fmt.Errorf("failed to fetch receipts for verified block with non-empty root hash (%s) (Block: %s, Height: %d)", b.ethBlock.ReceiptHash(), b.ethBlock.Hash(), b.ethBlock.NumberU64())
 	}
 	acceptCtx := &precompileconfig.AcceptContext{
 		SnowCtx: b.vm.ctx,
@@ -271,6 +270,7 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 	}
 
 	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+
 	// If this was not called with intention to writing to the database or
 	// got an error while inserting to blockchain, we may need to cleanup the extension.
 	// so that the extension can be garbage collected.
