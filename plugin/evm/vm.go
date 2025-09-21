@@ -129,6 +129,7 @@ var (
 	metadataPrefix  = []byte("metadata")
 	warpPrefix      = []byte("warp")
 	ethDBPrefix     = []byte("ethdb")
+	blockDBPrefix   = []byte("blockdb")
 )
 
 var (
@@ -311,7 +312,10 @@ func (vm *VM) Initialize(
 	}
 
 	// Initialize the database
-	vm.initializeDBs(db)
+	if err := vm.initializeDBs(db); err != nil {
+		return err
+	}
+
 	if vm.config.InspectDatabase {
 		if err := vm.inspectDatabases(); err != nil {
 			return err
