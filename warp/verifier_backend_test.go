@@ -42,7 +42,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 	tests := map[string]struct {
 		setup       func(backend Backend) (request []byte, expectedResponse []byte)
 		verifyStats func(t *testing.T, stats *verifierStats)
-		err         error
+		err         *common.AppError
 	}{
 		"known message": {
 			setup: func(backend Backend) (request []byte, expectedResponse []byte) {
@@ -109,13 +109,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 				protoBytes, err := proto.Marshal(protoMsg)
 				require.NoError(t, err)
 				responseBytes, appErr := handler.AppRequest(context.Background(), ids.GenerateTestNodeID(), time.Time{}, protoBytes)
-				if test.err != nil {
-					require.NotNil(t, appErr)
-					require.ErrorIs(t, test.err, appErr)
-				} else {
-					require.Nil(t, appErr)
-				}
-
+				require.ErrorIs(t, test.err, appErr)
 				test.verifyStats(t, warpBackend.(*backend).stats)
 
 				// If the expected response is empty, assert that the handler returns an empty response and return early.
@@ -165,7 +159,7 @@ func TestBlockSignatures(t *testing.T) {
 	tests := map[string]struct {
 		setup       func() (request []byte, expectedResponse []byte)
 		verifyStats func(t *testing.T, stats *verifierStats)
-		err         error
+		err         *common.AppError
 	}{
 		"known block": {
 			setup: func() (request []byte, expectedResponse []byte) {
@@ -226,12 +220,7 @@ func TestBlockSignatures(t *testing.T) {
 				protoBytes, err := proto.Marshal(protoMsg)
 				require.NoError(t, err)
 				responseBytes, appErr := handler.AppRequest(context.Background(), ids.GenerateTestNodeID(), time.Time{}, protoBytes)
-				if test.err != nil {
-					require.NotNil(t, appErr)
-					require.ErrorIs(t, test.err, appErr)
-				} else {
-					require.Nil(t, appErr)
-				}
+				require.ErrorIs(t, test.err, appErr)
 
 				test.verifyStats(t, warpBackend.(*backend).stats)
 
