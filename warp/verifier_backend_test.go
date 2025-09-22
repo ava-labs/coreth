@@ -110,7 +110,8 @@ func TestAddressedCallSignatures(t *testing.T) {
 				require.NoError(t, err)
 				responseBytes, appErr := handler.AppRequest(context.Background(), ids.GenerateTestNodeID(), time.Time{}, protoBytes)
 				if test.err != nil {
-					require.ErrorIs(t, appErr, test.err)
+					require.NotNil(t, appErr)
+					require.ErrorIs(t, test.err, appErr)
 				} else {
 					require.Nil(t, appErr)
 				}

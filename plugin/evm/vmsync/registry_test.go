@@ -102,7 +102,7 @@ func TestSyncerRegistry_Register(t *testing.T) {
 
 			// Check error expectations.
 			if tt.expectedError != "" {
-				require.Contains(t, errLast.Error(), tt.expectedError)
+				require.ErrorContains(t, errLast, tt.expectedError)
 			} else {
 				require.NoError(t, errLast)
 			}
@@ -172,7 +172,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			err := registry.RunSyncerTasks(ctx, newTestClientSummary(t))
 
 			if tt.expectedError != "" {
-				require.Contains(t, err.Error(), tt.expectedError)
+				require.ErrorContains(t, err, tt.expectedError)
 			} else {
 				require.NoError(t, err)
 			}
