@@ -17,6 +17,15 @@ import (
 	"github.com/ava-labs/libevm/triedb/database"
 )
 
+// AccountTrie implements state.Trie for managing account states.
+// There are a couple caveats to the current implementation:
+//  1. `Commit` is not used as expected in the state package. The `StorageTrie` doesn't return
+//     values, and we thus rely on the `AccountTrie`.
+//  2. The `Hash` method actually creates the proposal, since Firewood cannot calculate
+//     the hash of the trie without committing it. It is immediately dropped, and this
+//     can likely be optimized.
+//
+// Note this is not concurrent safe.
 type AccountTrie struct {
 	fw           *Database
 	parentRoot   common.Hash
@@ -28,15 +37,6 @@ type AccountTrie struct {
 	hasChanges   bool
 }
 
-// AccountTrie implements state.Trie for managing account states.
-// There are a couple caveats to the current implementation:
-//  1. `Commit` is not used as expected in the state package. The `StorageTrie` doesn't return
-//     values, and we thus rely on the `AccountTrie`.
-//  2. The `Hash` method actually creates the proposal, since Firewood cannot calculate
-//     the hash of the trie without committing it. It is immediately dropped, and this
-//     can likely be optimized.
-//
-// Note this is not concurrent safe.
 func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
 	reader, err := db.Reader(root)
 	if err != nil {
@@ -164,7 +164,6 @@ func (a *AccountTrie) UpdateStorage(addr common.Address, key []byte, value []byt
 }
 
 // DeleteAccount removes the state account associated with an address.
-// Subsequent `GetAccount` calls will return (nil, nil).
 func (a *AccountTrie) DeleteAccount(addr common.Address) error {
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 	// Queue the key for deletion
@@ -176,7 +175,6 @@ func (a *AccountTrie) DeleteAccount(addr common.Address) error {
 }
 
 // DeleteStorage removes the value associated with a storage key for a given account address.
-// Subsequent `GetStorage` calls will return (nil, nil).
 func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
 	var combinedKey [2 * common.HashLength]byte
 	accountKey := crypto.Keccak256Hash(addr.Bytes()).Bytes()
