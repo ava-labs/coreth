@@ -514,12 +514,12 @@ func (vm *VM) initializeMetrics() error {
 	}
 
 	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == customrawdb.FirewoodScheme {
-		if err := ffi.StartMetrics(); err != nil {
+		if err := ffi.StartMetricsWithExporter(3000); err != nil {
 			return fmt.Errorf("failed to start firewood metrics collection: %w", err)
 		}
-		if err := vm.ctx.Metrics.Register("firewood", ffi.Gatherer{}); err != nil {
-			return fmt.Errorf("failed to register firewood metrics: %w", err)
-		}
+		// if err := vm.ctx.Metrics.Register("firewood", ffi.Gatherer{}); err != nil {
+		// 	return fmt.Errorf("failed to register firewood metrics: %w", err)
+		// }
 	}
 	return vm.ctx.Metrics.Register(sdkMetricsPrefix, vm.sdkMetrics)
 }
