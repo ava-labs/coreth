@@ -52,9 +52,9 @@ func NewAccountTrie(root common.Hash, db *Database) (*AccountTrie, error) {
 }
 
 // GetAccount returns the state account associated with an address.
-// If the account has been updated, the new value is returned.
-// If the account has been deleted, (nil, nil) is returned.
-// If the account does not exist, (nil, nil) is returned.
+// - If the account has been updated, the new value is returned.
+// - If the account has been deleted, (nil, nil) is returned.
+// - If the account does not exist, (nil, nil) is returned.
 func (a *AccountTrie) GetAccount(addr common.Address) (*types.StateAccount, error) {
 	key := crypto.Keccak256Hash(addr.Bytes()).Bytes()
 
