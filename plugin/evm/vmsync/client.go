@@ -183,9 +183,9 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		return fmt.Errorf("failed to create EVM state syncer: %w", err)
 	}
 
-	var extenderSyncer syncpkg.Syncer
+	var atomicSyncer syncpkg.Syncer
 	if client.Extender != nil {
-		extenderSyncer, err = client.createExtenderSyncer()
+		atomicSyncer, err = client.createAtomicSyncer()
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
@@ -196,8 +196,8 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 		codeSyncer,
 		stateSyncer,
 	}
-	if extenderSyncer != nil {
-		syncers = append(syncers, extenderSyncer)
+	if atomicSyncer != nil {
+		syncers = append(syncers, atomicSyncer)
 	}
 
 	for _, s := range syncers {
@@ -238,7 +238,7 @@ func (client *client) createCodeSyncer(codeHashes <-chan common.Hash) (syncpkg.S
 	return statesync.NewCodeSyncer(client.Client, client.ChainDB, codeHashes)
 }
 
-func (client *client) createExtenderSyncer() (syncpkg.Syncer, error) {
+func (client *client) createAtomicSyncer() (syncpkg.Syncer, error) {
 	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
 }
 
