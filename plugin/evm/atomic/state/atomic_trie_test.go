@@ -188,9 +188,7 @@ func TestAtomicTrieInitialize(t *testing.T) {
 				require.NoError(t, repo.Write(i, txs))
 
 				atomicOps, err := mergeAtomicOps(txs)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				require.NoError(t, indexAtomicTxs(atomicTrie1, i, atomicOps))
 				operationsMap[i] = atomicOps
 			}
