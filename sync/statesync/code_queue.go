@@ -19,7 +19,6 @@ import (
 )
 
 // closeState models the lifecycle of the output channel.
-// It is intentionally minimal and used only within [CodeQueue].
 type closeState uint32
 
 const (
@@ -36,7 +35,7 @@ var (
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 	errFailedToFinalizeCodeQueue    = errors.New("failed to finalize code queue")
 
-	// errAddCodeAfterFinalize is returned when [AddCode] is called after [Finalize] has been called.
+	// errAddCodeAfterFinalize is returned when [CodeQueue.AddCode] is called after [CodeQueue.Finalize] has been called.
 	// has permanently closed the queue to new work which guards against racy producers
 	// trying to enqueue during or after shutdown.
 	errAddCodeAfterFinalize = errors.New("cannot add code hashes after finalize")
@@ -95,11 +94,11 @@ func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOpti
 	go func() {
 		<-q.quit
 		// If not already closed, mark as quit and close channel.
-		q.closed.MarkQuitAndClose(q.out)
+		q.closed.markQuitAndClose(q.out)
 	}()
 
 	// Always initialize eagerly.
-	if err := q.Init(); err != nil {
+	if err := q.init(); err != nil {
 		return nil, err
 	}
 
@@ -111,8 +110,22 @@ func (q *CodeQueue) CodeHashes() <-chan common.Hash {
 	return q.out
 }
 
-// Init enqueues any persisted code markers found on disk.
-func (q *CodeQueue) Init() error {
+// AddCode implements [syncpkg.CodeRequestQueue] by persisting and enqueueing new hashes.
+// Persists idempotent "to-fetch" markers for all inputs and enqueues them as-is.
+// Returns errAddCodeAfterFinalize after a clean finalize and errFailedToAddCodeHashesToQueue on early quit.
+func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
+	// If the queue has been closed, reject new work.
+	switch q.closed.get() {
+	case closeStateFinalized:
+		return errAddCodeAfterFinalize
+	case closeStateQuit:
+		return errFailedToAddCodeHashesToQueue
+	}
+	return q.enqueue(codeHashes)
+}
+
+// init enqueues any persisted code markers found on disk.
+func (q *CodeQueue) init() error {
 	// Recover any persisted code markers and enqueue them.
 	// Note: dbCodeHashes are already present as "to-fetch" markers. addCode will
 	// re-persist them, which is a trivial redundancy that happens only on resume
@@ -126,20 +139,6 @@ func (q *CodeQueue) Init() error {
 	}
 
 	return nil
-}
-
-// AddCode implements [syncpkg.CodeRequestQueue] by persisting and enqueueing new hashes.
-// Persists idempotent "to-fetch" markers for all inputs and enqueues them as-is.
-// Returns errAddCodeAfterFinalize after a clean finalize and errFailedToAddCodeHashesToQueue on early quit.
-func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
-	// If the queue has been closed, reject new work.
-	switch q.closed.Get() {
-	case closeStateFinalized:
-		return errAddCodeAfterFinalize
-	case closeStateQuit:
-		return errFailedToAddCodeHashesToQueue
-	}
-	return q.enqueue(codeHashes)
 }
 
 // enqueue persists markers for the provided hashes and pushes them onto the output channel.
@@ -183,11 +182,11 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 func (q *CodeQueue) Finalize() error {
 	q.enqueueWG.Wait()
 	// If already closed due to quit, report early-exit error.
-	if q.closed.Get() == closeStateQuit {
+	if q.closed.get() == closeStateQuit {
 		return errFailedToFinalizeCodeQueue
 	}
 	// Mark as finalized and close the channel (no-op if already finalized).
-	q.closed.MarkFinalizedAndClose(q.out)
+	q.closed.markFinalizedAndClose(q.out)
 	return nil
 }
 
@@ -240,22 +239,22 @@ type atomicCloseState struct {
 	v atomic.Uint32
 }
 
-func (s *atomicCloseState) Get() closeState {
+func (s *atomicCloseState) get() closeState {
 	return closeState(s.v.Load())
 }
 
-func (s *atomicCloseState) Transition(oldState, newState closeState) bool {
+func (s *atomicCloseState) transition(oldState, newState closeState) bool {
 	return s.v.CompareAndSwap(uint32(oldState), uint32(newState))
 }
 
-func (s *atomicCloseState) MarkQuitAndClose(out chan common.Hash) {
-	if s.Transition(closeStateOpen, closeStateQuit) {
+func (s *atomicCloseState) markQuitAndClose(out chan common.Hash) {
+	if s.transition(closeStateOpen, closeStateQuit) {
 		close(out)
 	}
 }
 
-func (s *atomicCloseState) MarkFinalizedAndClose(out chan common.Hash) {
-	if s.Transition(closeStateOpen, closeStateFinalized) {
+func (s *atomicCloseState) markFinalizedAndClose(out chan common.Hash) {
+	if s.transition(closeStateOpen, closeStateFinalized) {
 		close(out)
 	}
 }

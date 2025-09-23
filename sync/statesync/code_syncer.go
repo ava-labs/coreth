@@ -36,7 +36,7 @@ type CodeSyncer struct {
 
 	// Config options.
 	numWorkers       int
-	codeHashesPerReq int // best-effort target size; final batch may be smaller
+	codeHashesPerReq int // best-effort target size - final batch may be smaller
 
 	// inFlight tracks code hashes currently being processed to dedupe work
 	// across workers and across repeated queue submissions.
