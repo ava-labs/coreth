@@ -769,13 +769,9 @@ func TestGetLeafs(t *testing.T) {
 			responseBytes := test.getResponse(t, test.request)
 
 			response, _, err := parseLeafsResponse(client.codec, test.request, responseBytes)
+			require.ErrorIs(t, err, test.expectedErr)
 			if test.expectedErr != nil {
-				require.ErrorIs(t, err, test.expectedErr)
 				return
-			}
-
-			if err != nil {
-				t.Fatal(err)
 			}
 
 			leafsResponse, ok := response.(message.LeafsResponse)
