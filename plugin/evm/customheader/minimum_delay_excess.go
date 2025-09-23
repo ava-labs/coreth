@@ -8,9 +8,10 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/vms/evm/acp226"
+	"github.com/ava-labs/libevm/core/types"
+
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/libevm/core/types"
 )
 
 var (
@@ -29,7 +30,7 @@ func MinDelayExcess(
 	desiredMinDelayExcess *uint64,
 ) (*uint64, error) {
 	if config.IsGranite(header.Time) {
-		minDelayExcess, err := minDelayAfterBlock(config, parent, header, desiredMinDelayExcess)
+		minDelayExcess, err := minDelayAfterBlock(config, parent, desiredMinDelayExcess)
 		if err != nil {
 			return nil, fmt.Errorf("calculating min delay excess: %w", err)
 		}
@@ -59,7 +60,6 @@ func VerifyMinDelayExcess(
 		expectedDelayExcess, err := minDelayAfterBlock(
 			config,
 			parent,
-			header,
 			remoteDelayExcess,
 		)
 		if err != nil {
@@ -83,7 +83,6 @@ func VerifyMinDelayExcess(
 func minDelayBeforeBlock(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
 ) (acp226.DelayExcess, error) {
 	minDelayExcess := acp226.DelayExcess(acp226.InitialDelayExcess)
 	if config.IsGranite(parent.Time) {
@@ -99,16 +98,14 @@ func minDelayBeforeBlock(
 	return minDelayExcess, nil
 }
 
-// minDelayAfterBlock takes the previous header and returns the min delay excess after
-// the execution of the provided child.
+// minDelayAfterBlock takes the previous header and returns the min delay excess.
 func minDelayAfterBlock(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	header *types.Header,
 	desiredMinDelayExcess *uint64,
 ) (acp226.DelayExcess, error) {
 	// Calculate the gas state after the parent block
-	minDelayExcess, err := minDelayBeforeBlock(config, parent, header.Time)
+	minDelayExcess, err := minDelayBeforeBlock(config, parent)
 	if err != nil {
 		return 0, fmt.Errorf("calculating initial min delay excess: %w", err)
 	}
