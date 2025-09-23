@@ -1,0 +1,122 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
+
+package customheader
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	"github.com/ava-labs/libevm/core/types"
+)
+
+var (
+	errRemoteMinDelayExcessNil = errors.New("remote min delay excess should not be nil")
+	errIncorrectMinDelayExcess = errors.New("incorrect min delay excess")
+	errParentMinDelayExcessNil = errors.New("parent min delay excess should not be nil")
+)
+
+// MinDelay
+//
+// If the `desiredMinDelayExcess` is nil, the parent's delay excess is used.
+func MinDelayExcess(
+	config *extras.ChainConfig,
+	parent *types.Header,
+	header *types.Header,
+	desiredMinDelayExcess *uint64,
+) (*uint64, error) {
+	if config.IsGranite(header.Time) {
+		minDelayExcess, err := minDelayAfterBlock(config, parent, header, desiredMinDelayExcess)
+		if err != nil {
+			return nil, fmt.Errorf("calculating min delay excess: %w", err)
+		}
+		minDelayExcessU64 := uint64(minDelayExcess)
+		return &minDelayExcessU64, nil
+	} else { // Prior to Granite there was no expected min delay excess.
+		return nil, nil
+	}
+}
+
+// VerifyMinDelayExcess verifies that the min delay excess in header is consistent.
+func VerifyMinDelayExcess(
+	config *extras.ChainConfig,
+	parent *types.Header,
+	header *types.Header,
+) error {
+	if config.IsGranite(header.Time) {
+		remoteDelayExcess := customtypes.GetHeaderExtra(header).MinDelayExcess
+		if remoteDelayExcess == nil {
+			return fmt.Errorf("%w: %s", errRemoteMinDelayExcessNil, header.Hash())
+		}
+		// By passing in the claimed excess, we ensure that the expected
+		// excess is equal to the claimed excess if it is possible
+		// to have correctly set it to that value. Otherwise, the resulting
+		// value will be as close to the claimed value as possible, but would
+		// not be equal.
+		expectedDelayExcess, err := minDelayAfterBlock(
+			config,
+			parent,
+			header,
+			remoteDelayExcess,
+		)
+		if err != nil {
+			return fmt.Errorf("calculating expected min delay excess: %w", err)
+		}
+
+		if *remoteDelayExcess != uint64(expectedDelayExcess) {
+			return fmt.Errorf("%w: expected %+v, found %+v",
+				errIncorrectMinDelayExcess,
+				expectedDelayExcess,
+				remoteDelayExcess,
+			)
+		}
+	}
+	return nil
+}
+
+// minDelayBeforeBlock takes the previous header and the timestamp of its child
+// block and calculates the minimum delay before the child block is executed.
+// Should only be called with timestamp in Granite.
+func minDelayBeforeBlock(
+	config *extras.ChainConfig,
+	parent *types.Header,
+	timestamp uint64,
+) (acp226.DelayExcess, error) {
+	minDelayExcess := acp226.DelayExcess(acp226.InitialDelayExcess)
+	if config.IsGranite(parent.Time) {
+		// If the parent block was running with ACP-226, we start with the
+		// resulting min delay excess from the parent block.
+		parentMinDelayExcess := customtypes.GetHeaderExtra(parent).MinDelayExcess
+		if parentMinDelayExcess == nil {
+			return 0, fmt.Errorf("%w: %s", errParentMinDelayExcessNil, parent.Hash())
+		}
+		minDelayExcess = acp226.DelayExcess(*parentMinDelayExcess)
+	}
+
+	return minDelayExcess, nil
+}
+
+// minDelayAfterBlock takes the previous header and returns the min delay excess after
+// the execution of the provided child.
+func minDelayAfterBlock(
+	config *extras.ChainConfig,
+	parent *types.Header,
+	header *types.Header,
+	desiredMinDelayExcess *uint64,
+) (acp226.DelayExcess, error) {
+	// Calculate the gas state after the parent block
+	minDelayExcess, err := minDelayBeforeBlock(config, parent, header.Time)
+	if err != nil {
+		return 0, fmt.Errorf("calculating initial min delay excess: %w", err)
+	}
+
+	// If the desired min delay excess is specified, move the min delay excess as much
+	// as possible toward that desired value.
+	if desiredMinDelayExcess != nil {
+		minDelayExcess.UpdateDelayExcess(*desiredMinDelayExcess)
+	}
+	return minDelayExcess, nil
+}

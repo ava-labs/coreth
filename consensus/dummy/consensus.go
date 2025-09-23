@@ -68,6 +68,7 @@ type (
 		cb                  ConsensusCallbacks
 		consensusMode       Mode
 		desiredTargetExcess *gas.Gas
+		desiredDelayExcess  *uint64
 	}
 )
 
@@ -75,11 +76,13 @@ func NewDummyEngine(
 	cb ConsensusCallbacks,
 	mode Mode,
 	desiredTargetExcess *gas.Gas,
+	desiredDelayExcess *uint64,
 ) *DummyEngine {
 	return &DummyEngine{
 		cb:                  cb,
 		consensusMode:       mode,
 		desiredTargetExcess: desiredTargetExcess,
+		desiredDelayExcess:  desiredDelayExcess,
 	}
 }
 
@@ -333,6 +336,18 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	}
 	header.Extra = append(extraPrefix, header.Extra...)
+
+	// Set the min delay excess
+	minDelayExcess, err := customheader.MinDelayExcess(
+		configExtra,
+		parent,
+		header,
+		eng.desiredDelayExcess,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate min delay excess: %w", err)
+	}
+	headerExtra.MinDelayExcess = minDelayExcess
 
 	// commit the final state root
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))

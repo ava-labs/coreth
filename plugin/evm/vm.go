@@ -83,6 +83,7 @@ import (
 	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	avalancheUtils "github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	avalanchegoprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
 	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
@@ -544,6 +545,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		*desiredTargetExcess = acp176.DesiredTargetExcess(*vm.config.GasTarget)
 	}
 
+	var desiredDelayExcess *uint64
+	if vm.config.MinDelayTarget != nil {
+		desiredDelayExcess = new(uint64)
+		*desiredDelayExcess = acp226.DesiredDelayExcess(*vm.config.MinDelayTarget)
+	}
+
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -555,6 +562,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 			vm.extensionConfig.ConsensusCallbacks,
 			dummy.Mode{},
 			desiredTargetExcess,
+			desiredDelayExcess,
 		),
 		vm.clock,
 	)
