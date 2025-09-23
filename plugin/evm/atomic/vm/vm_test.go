@@ -1163,7 +1163,7 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	blockExtension, ok := wrappedBlk.GetBlockExtension().(*blockExtension)
 	require.True(t, ok, "expected block to be a blockExtension")
 	atomicTxs := blockExtension.atomicTxs
-	require.Len(t, vmtest.TestKeys, len(atomicTxs), "Conflict transactions should be out of the batch")
+	require.Len(t, atomicTxs, len(vmtest.TestKeys), "Conflict transactions should be out of the batch")
 	atomicTxIDs := set.Set[ids.ID]{}
 	for _, tx := range atomicTxs {
 		atomicTxIDs.Add(tx.ID())

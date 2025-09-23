@@ -109,7 +109,7 @@ func TestAddressedCallSignatures(t *testing.T) {
 				protoBytes, err := proto.Marshal(protoMsg)
 				require.NoError(t, err)
 				responseBytes, appErr := handler.AppRequest(context.Background(), ids.GenerateTestNodeID(), time.Time{}, protoBytes)
-				require.ErrorIs(t, test.err, appErr)
+				require.ErrorIs(t, appErr, test.err)
 				test.verifyStats(t, warpBackend.(*backend).stats)
 
 				// If the expected response is empty, assert that the handler returns an empty response and return early.
@@ -220,7 +220,7 @@ func TestBlockSignatures(t *testing.T) {
 				protoBytes, err := proto.Marshal(protoMsg)
 				require.NoError(t, err)
 				responseBytes, appErr := handler.AppRequest(context.Background(), ids.GenerateTestNodeID(), time.Time{}, protoBytes)
-				require.ErrorIs(t, test.err, appErr)
+				require.ErrorIs(t, appErr, test.err)
 
 				test.verifyStats(t, warpBackend.(*backend).stats)
 
