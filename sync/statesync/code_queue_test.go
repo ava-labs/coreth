@@ -18,29 +18,24 @@ import (
 )
 
 // Test that adding the same hash multiple times only enqueues once.
-func TestCodeQueue_DedupesEnqueues(t *testing.T) {
+func TestCodeQueue_AllowsDuplicateEnqueues(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	q, err := NewCodeQueue(db, make(chan struct{}))
 	require.NoError(t, err)
 
-	// Init first; AddCode should enqueue a single instance even with duplicates.
+	// Init first. AddCode should enqueue a single instance even with duplicates.
 	codeBytes := utils.RandomBytes(32)
 	codeHash := crypto.Keccak256Hash(codeBytes)
 
-	// Init and enqueue once despite duplicate input.
-	// auto-initialized in constructor
+	// Enqueue with duplicates. Queue should allow duplicates and preserve order.
+	// Auto-initialized in constructor.
 	require.NoError(t, q.AddCode([]common.Hash{codeHash, codeHash}))
 
-	// Should receive exactly one hash, then block until finalize.
-	got := <-q.CodeHashes()
-	require.Equal(t, codeHash, got)
-
-	// No second copy should be present immediately.
-	select {
-	case <-q.CodeHashes():
-		t.Fatal("unexpected duplicate hash enqueued")
-	default:
-	}
+	// Should receive both duplicates.
+	got1 := <-q.CodeHashes()
+	got2 := <-q.CodeHashes()
+	require.Equal(t, codeHash, got1)
+	require.Equal(t, codeHash, got2)
 
 	q.Finalize()
 	// Channel should close without more values.
@@ -109,7 +104,7 @@ func TestCodeQueue_AddCode_Empty(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestCodeQueue_AddCode_PresentCode(t *testing.T) {
+func TestCodeQueue_AddCode_PresentCode_StillEnqueues(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	q, err := NewCodeQueue(db, make(chan struct{}))
 	require.NoError(t, err)
@@ -121,18 +116,16 @@ func TestCodeQueue_AddCode_PresentCode(t *testing.T) {
 
 	require.NoError(t, q.AddCode([]common.Hash{h}))
 
-	select {
-	case <-q.CodeHashes():
-		t.Fatal("unexpected hash enqueued")
-	default:
-	}
+	// Queue now allows enqueuing even if code is already present; consumer will skip.
+	got := <-q.CodeHashes()
+	require.Equal(t, h, got)
 
 	q.Finalize()
 	_, ok := <-q.CodeHashes()
 	require.False(t, ok)
 }
 
-func TestCodeQueue_AddCode_Duplicates(t *testing.T) {
+func TestCodeQueue_AddCode_Duplicates_EnqueueBoth(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	q, err := NewCodeQueue(db, make(chan struct{}))
 	require.NoError(t, err)
@@ -143,14 +136,11 @@ func TestCodeQueue_AddCode_Duplicates(t *testing.T) {
 
 	require.NoError(t, q.AddCode([]common.Hash{h, h}))
 
-	result := <-q.CodeHashes()
-	require.Equal(t, h, result)
-
-	select {
-	case <-q.CodeHashes():
-		t.Fatal("unexpected extra hash enqueued")
-	default:
-	}
+	// Expect both duplicates in order.
+	r1 := <-q.CodeHashes()
+	r2 := <-q.CodeHashes()
+	require.Equal(t, h, r1)
+	require.Equal(t, h, r2)
 
 	q.Finalize()
 	_, ok := <-q.CodeHashes()

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
@@ -44,8 +43,10 @@ var (
 )
 
 // CodeQueue implements the producer side of code fetching.
-// It accepts code hashes, persists "to-fetch" markers, and enqueues hashes
-// onto an internal channel consumed by the code syncer.
+// It accepts code hashes, persists durable "to-fetch" markers (idempotent per hash),
+// and enqueues the hashes as-is onto an internal channel consumed by the code syncer.
+// The queue does not perform in-memory deduplication or local-code checks; the consumer
+// is responsible for deduping, skipping already-present code, and retrying.
 type CodeQueue struct {
 	db   ethdb.Database
 	quit <-chan struct{}
@@ -56,11 +57,6 @@ type CodeQueue struct {
 
 	// Indicates why/if the output channel was closed.
 	closed atomicCloseState
-
-	// Protects in-memory dedupe (outstanding) and batch selection in addCode.
-	dedupeMu sync.Mutex
-	// Set of code hashes enqueued in-memory to avoid duplicate sends.
-	outstanding set.Set[common.Hash]
 }
 
 // TODO: this will be migrated to using libevm's options pattern in a follow-up PR.
@@ -90,10 +86,9 @@ func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOpti
 	}
 
 	q := &CodeQueue{
-		db:          db,
-		out:         make(chan common.Hash, o.capacity),
-		outstanding: set.NewSet[common.Hash](0),
-		quit:        quit,
+		db:   db,
+		out:  make(chan common.Hash, o.capacity),
+		quit: quit,
 	}
 
 	// Close the output channel on early shutdown to unblock consumers.
@@ -116,7 +111,7 @@ func (q *CodeQueue) CodeHashes() <-chan common.Hash {
 	return q.out
 }
 
-// Init enqueues any persisted code markers found on disk and then marks the queue ready.
+// Init enqueues any persisted code markers found on disk.
 func (q *CodeQueue) Init() error {
 	// Recover any persisted code markers and enqueue them.
 	// Note: dbCodeHashes are already present as "to-fetch" markers. addCode will
@@ -134,13 +129,8 @@ func (q *CodeQueue) Init() error {
 }
 
 // AddCode implements [syncpkg.CodeRequestQueue] by persisting and enqueueing new hashes.
-// Blocks until the queue is initialized via Init.
-//
-// Flow:
-//  1. Gate on open (Init) and quit (shutdown) so callers don't block forever.
-//  2. If finalized, refuse new work to ensure deterministic shutdown.
-//  3. Persist "to-fetch" markers (deduped) and publish selected hashes to enqueueCh.
-//     The forwarder goroutine owns relaying to codeHashes and closing it.
+// Persists idempotent "to-fetch" markers for all inputs and enqueues them as-is.
+// Returns errAddCodeAfterFinalize after a clean finalize and errFailedToAddCodeHashesToQueue on early quit.
 func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
 	// If the queue has been closed, reject new work.
 	switch q.closed.Get() {
@@ -152,16 +142,25 @@ func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
 	return q.enqueue(codeHashes)
 }
 
+// enqueue persists markers for the provided hashes and pushes them onto the output channel.
+// No deduplication is performed. The consumer is responsible for dedupe and retry.
 func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	if len(codeHashes) == 0 {
 		return nil
 	}
 
 	batch := q.db.NewBatch()
-	selected := q.filterCodeHashesToFetch(batch, codeHashes)
-	if len(selected) == 0 {
-		return nil
+	// Persist all input hashes as to-fetch markers. Consumer will dedupe and skip
+	// already-present code. Persisting all enables consumer-side retry.
+	// Note: markers are keyed by code hash, so repeated persists overwrite the same
+	// key rather than growing DB usage. The consumer deletes the marker after
+	// fulfilling the request (or when it detects code is already present).
+	selected := make([]common.Hash, 0, len(codeHashes))
+	for _, codeHash := range codeHashes {
+		customrawdb.AddCodeToFetch(batch, codeHash)
+		selected = append(selected, codeHash)
 	}
+
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to write batch of code to fetch markers due to: %w", err)
 	}
@@ -179,6 +178,8 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 }
 
 // Finalize implements [syncpkg.CodeRequestQueue] by signaling no further code hashes will be added.
+// Waits for in-flight enqueues to complete, then closes the output channel.
+// If the queue was already closed due to early quit, returns errFailedToFinalizeCodeQueue.
 func (q *CodeQueue) Finalize() error {
 	q.enqueueWG.Wait()
 	// If already closed due to quit, report early-exit error.
@@ -188,28 +189,6 @@ func (q *CodeQueue) Finalize() error {
 	// Mark as finalized and close the channel (no-op if already finalized).
 	q.closed.MarkFinalizedAndClose(q.out)
 	return nil
-}
-
-// filterHashesToFetch returns the subset of codeHashes that should be enqueued and
-// persists their "to-fetch" markers into the provided batch. This method acquires
-// q.lock and is safe to call concurrently from multiple AddCode calls.
-func (q *CodeQueue) filterCodeHashesToFetch(batch ethdb.Batch, codeHashes []common.Hash) []common.Hash {
-	q.dedupeMu.Lock()
-	defer q.dedupeMu.Unlock()
-
-	selected := make([]common.Hash, 0, len(codeHashes))
-	for _, codeHash := range codeHashes {
-		// Skip if already enqueued in-memory or already have the code locally.
-		if q.outstanding.Contains(codeHash) || rawdb.HasCode(q.db, codeHash) {
-			continue
-		}
-
-		selected = append(selected, codeHash)
-		q.outstanding.Add(codeHash)
-		customrawdb.AddCodeToFetch(batch, codeHash)
-	}
-
-	return selected
 }
 
 // recoverUnfetchedCodeHashes cleans out any codeToFetch markers from the database that are no longer

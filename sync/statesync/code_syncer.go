@@ -6,6 +6,7 @@ package statesync
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -24,7 +25,9 @@ const defaultNumCodeFetchingWorkers = 5
 var _ synccommon.Syncer = (*CodeSyncer)(nil)
 
 // CodeSyncer syncs code bytes from the network in a separate thread.
-// Tracks outstanding requests in the DB, so that it will still fulfill them if interrupted.
+// It consumes code hashes from a queue and persists code into the DB.
+// Outstanding requests are tracked via durable "to-fetch" markers in the DB for recovery.
+// The syncer performs in-flight deduplication and skips locally-present code before issuing requests.
 type CodeSyncer struct {
 	db     ethdb.Database
 	client statesyncclient.Client
@@ -34,6 +37,10 @@ type CodeSyncer struct {
 	// Config options.
 	numWorkers       int
 	codeHashesPerReq int // best-effort target size; final batch may be smaller
+
+	// inFlight tracks code hashes currently being processed to dedupe work
+	// across workers and across repeated queue submissions.
+	inFlight sync.Map // key: common.Hash, value: struct{}
 }
 
 // Name returns the human-readable name for this sync task.
@@ -116,6 +123,23 @@ func (c *CodeSyncer) work(ctx context.Context) error {
 				return nil
 			}
 
+			// Skip work already present locally.
+			if rawdb.HasCode(c.db, codeHash) {
+				// Best-effort cleanup of stale marker.
+				batch := c.db.NewBatch()
+				customrawdb.DeleteCodeToFetch(batch, codeHash)
+
+				if err := batch.Write(); err != nil {
+					return fmt.Errorf("failed to write batch for stale code marker: %w", err)
+				}
+				continue
+			}
+
+			// Deduplicate in-flight code hashes across workers.
+			if _, loaded := c.inFlight.LoadOrStore(codeHash, struct{}{}); loaded {
+				continue
+			}
+
 			codeHashes = append(codeHashes, codeHash)
 			// Try to batch up to [codeHashesPerReq] code hashes into a single request when more work remains.
 			if len(codeHashes) < c.codeHashesPerReq {
@@ -145,6 +169,8 @@ func (c *CodeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 	for i, codeHash := range codeHashes {
 		customrawdb.DeleteCodeToFetch(batch, codeHash)
 		rawdb.WriteCode(batch, codeHash, codeByteSlices[i])
+		// Mark not in-flight after persisting.
+		c.inFlight.Delete(codeHash)
 	}
 
 	if err := batch.Write(); err != nil {
