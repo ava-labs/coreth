@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"testing"
