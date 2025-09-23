@@ -20,7 +20,7 @@ import (
 // Test that adding the same hash multiple times only enqueues once.
 func TestCodeQueue_DedupesEnqueues(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-    q, err := NewCodeQueue(db, make(chan struct{}))
+	q, err := NewCodeQueue(db, make(chan struct{}))
 	require.NoError(t, err)
 
 	// Init first; AddCode should enqueue a single instance even with duplicates.
@@ -28,7 +28,7 @@ func TestCodeQueue_DedupesEnqueues(t *testing.T) {
 	codeHash := crypto.Keccak256Hash(codeBytes)
 
 	// Init and enqueue once despite duplicate input.
-    // auto-initialized in constructor
+	// auto-initialized in constructor
 	require.NoError(t, q.AddCode([]common.Hash{codeHash, codeHash}))
 
 	// Should receive exactly one hash, then block until finalize.
@@ -56,10 +56,10 @@ func TestCodeQueue_Init_ResumeFromDB(t *testing.T) {
 	want := crypto.Keccak256Hash(codeBytes)
 	customrawdb.AddCodeToFetch(db, want)
 
-    q, err := NewCodeQueue(db, make(chan struct{}))
+	q, err := NewCodeQueue(db, make(chan struct{}))
 	require.NoError(t, err)
 
-    // CodeQueue auto-inits and surfaces the pre-seeded DB marker.
+	// CodeQueue auto-inits and surfaces the pre-seeded DB marker.
 
 	result := <-q.CodeHashes()
 	require.Equal(t, want, result)
@@ -76,11 +76,11 @@ func TestCodeQueue_Init_AddCodeBlocks(t *testing.T) {
 	codeBytes := utils.RandomBytes(10)
 	want := crypto.Keccak256Hash(codeBytes)
 
-    q, err := NewCodeQueue(db, make(chan struct{}))
+	q, err := NewCodeQueue(db, make(chan struct{}))
 	require.NoError(t, err)
 
-    // With auto-init, AddCode should proceed and enqueue the hash.
-    require.NoError(t, q.AddCode([]common.Hash{want}))
+	// With auto-init, AddCode should proceed and enqueue the hash.
+	require.NoError(t, q.AddCode([]common.Hash{want}))
 
 	result := <-q.CodeHashes()
 	require.Equal(t, want, result)
@@ -219,7 +219,7 @@ func TestCodeQueue_ShutdownDuringEnqueue(t *testing.T) {
 
 	// Create a done channel we control and a very small buffer to force blocking.
 	done := make(chan struct{})
-    q, err := NewCodeQueue(db, done, WithCapacity(1))
+	q, err := NewCodeQueue(db, done, WithCapacity(1))
 	require.NoError(t, err)
 
 	// Fill the buffer with one hash so the next enqueue would block if not for done.
@@ -239,7 +239,7 @@ func TestCodeQueue_ShutdownDuringEnqueue(t *testing.T) {
 // Test that Finalize waits for in-flight AddCode calls to complete before closing the channel.
 func TestCodeQueue_FinalizeWaitsForInflightAddCodeCalls(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-    q, err := NewCodeQueue(db, make(chan struct{}), WithCapacity(1))
+	q, err := NewCodeQueue(db, make(chan struct{}), WithCapacity(1))
 	require.NoError(t, err)
 
 	numHashes := 3

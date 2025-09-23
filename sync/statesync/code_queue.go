@@ -24,11 +24,11 @@ import (
 type closeState uint32
 
 const (
-    defaultQueueCapacity = 5000
+	defaultQueueCapacity = 5000
 
-    closeStateOpen closeState = 0
-    closeStateFinalized closeState = 1
-    closeStateQuit closeState = 2
+	closeStateOpen      closeState = 0
+	closeStateFinalized closeState = 1
+	closeStateQuit      closeState = 2
 )
 
 var (
@@ -54,8 +54,8 @@ type CodeQueue struct {
 	out       chan common.Hash
 	enqueueWG sync.WaitGroup
 
-    // Indicates why/if the output channel was closed.
-    closed atomicCloseState
+	// Indicates why/if the output channel was closed.
+	closed atomicCloseState
 
 	// Protects in-memory dedupe (outstanding) and batch selection in addCode.
 	dedupeMu sync.Mutex
@@ -65,7 +65,7 @@ type CodeQueue struct {
 
 // TODO: this will be migrated to using libevm's options pattern in a follow-up PR.
 type codeQueueOptions struct {
-    capacity int
+	capacity int
 }
 
 type CodeQueueOption func(*codeQueueOptions)
@@ -74,7 +74,7 @@ type CodeQueueOption func(*codeQueueOptions)
 func WithCapacity(n int) CodeQueueOption {
 	return func(o *codeQueueOptions) {
 		if n > 0 {
-            o.capacity = n
+			o.capacity = n
 		}
 	}
 }
@@ -83,7 +83,7 @@ func WithCapacity(n int) CodeQueueOption {
 func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOption) (*CodeQueue, error) {
 	// Apply defaults then options.
 	o := codeQueueOptions{
-        capacity: defaultQueueCapacity,
+		capacity: defaultQueueCapacity,
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -91,7 +91,7 @@ func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOpti
 
 	q := &CodeQueue{
 		db:          db,
-        out:         make(chan common.Hash, o.capacity),
+		out:         make(chan common.Hash, o.capacity),
 		outstanding: set.NewSet[common.Hash](0),
 		quit:        quit,
 	}
@@ -103,10 +103,10 @@ func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOpti
 		q.closed.MarkQuitAndClose(q.out)
 	}()
 
-    // Always initialize eagerly.
-    if err := q.Init(); err != nil {
-        return nil, err
-    }
+	// Always initialize eagerly.
+	if err := q.Init(); err != nil {
+		return nil, err
+	}
 
 	return q, nil
 }
@@ -142,13 +142,13 @@ func (q *CodeQueue) Init() error {
 //  3. Persist "to-fetch" markers (deduped) and publish selected hashes to enqueueCh.
 //     The forwarder goroutine owns relaying to codeHashes and closing it.
 func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
-    // If the queue has been closed, reject new work.
-    switch q.closed.Get() {
-    case closeStateFinalized:
-        return errAddCodeAfterFinalize
-    case closeStateQuit:
-        return errFailedToAddCodeHashesToQueue
-    }
+	// If the queue has been closed, reject new work.
+	switch q.closed.Get() {
+	case closeStateFinalized:
+		return errAddCodeAfterFinalize
+	case closeStateQuit:
+		return errFailedToAddCodeHashesToQueue
+	}
 	return q.enqueue(codeHashes)
 }
 
@@ -181,13 +181,13 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 // Finalize implements [syncpkg.CodeRequestQueue] by signaling no further code hashes will be added.
 func (q *CodeQueue) Finalize() error {
 	q.enqueueWG.Wait()
-    // If already closed due to quit, report early-exit error.
-    if q.closed.Get() == closeStateQuit {
-        return errFailedToFinalizeCodeQueue
-    }
-    // Mark as finalized and close the channel (no-op if already finalized).
-    q.closed.MarkFinalizedAndClose(q.out)
-    return nil
+	// If already closed due to quit, report early-exit error.
+	if q.closed.Get() == closeStateQuit {
+		return errFailedToFinalizeCodeQueue
+	}
+	// Mark as finalized and close the channel (no-op if already finalized).
+	q.closed.MarkFinalizedAndClose(q.out)
+	return nil
 }
 
 // filterHashesToFetch returns the subset of codeHashes that should be enqueued and
@@ -257,7 +257,7 @@ func recoverUnfetchedCodeHashes(db ethdb.Database) ([]common.Hash, error) {
 
 // atomicCloseState provides a tiny typed wrapper around an atomic uint32.
 // It exposes enum-like operations to make intent explicit at call sites.
-type atomicCloseState struct{
+type atomicCloseState struct {
 	v atomic.Uint32
 }
 
@@ -266,17 +266,17 @@ func (s *atomicCloseState) Get() closeState {
 }
 
 func (s *atomicCloseState) Transition(oldState, newState closeState) bool {
-    return s.v.CompareAndSwap(uint32(oldState), uint32(newState))
+	return s.v.CompareAndSwap(uint32(oldState), uint32(newState))
 }
 
 func (s *atomicCloseState) MarkQuitAndClose(out chan common.Hash) {
-    if s.Transition(closeStateOpen, closeStateQuit) {
-        close(out)
-    }
+	if s.Transition(closeStateOpen, closeStateQuit) {
+		close(out)
+	}
 }
 
 func (s *atomicCloseState) MarkFinalizedAndClose(out chan common.Hash) {
-    if s.Transition(closeStateOpen, closeStateFinalized) {
-        close(out)
-    }
+	if s.Transition(closeStateOpen, closeStateFinalized) {
+		close(out)
+	}
 }
