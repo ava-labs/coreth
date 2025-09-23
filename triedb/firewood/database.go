@@ -150,7 +150,10 @@ func validatePath(path string) error {
 	// TODO(#1253): remove this after testing infrastructure is updated
 	oldPath := filepath.Join(dir, "firewood_state")
 	if _, err := os.Stat(oldPath); err == nil {
-		os.Rename(oldPath, path)
+		log.Warn("Found old database file, moving to new location", "old", oldPath, "new", path)
+		if err := os.Rename(oldPath, path); err != nil {
+			log.Error("Failed to move old database file", "error", err)
+		}
 	}
 
 	return nil
@@ -168,7 +171,7 @@ func (*Database) Scheme() string {
 }
 
 // Initialized checks whether a non-empty genesis block has been written.
-func (db *Database) Initialized(_ common.Hash) bool {
+func (db *Database) Initialized(common.Hash) bool {
 	rootBytes, err := db.fwDisk.Root()
 	if err != nil {
 		log.Error("firewood: error getting current root", "error", err)
