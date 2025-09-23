@@ -152,7 +152,7 @@ func validatePath(path string) error {
 	if _, err := os.Stat(oldPath); err == nil {
 		log.Warn("Found old database file, moving to new location", "old", oldPath, "new", path)
 		if err := os.Rename(oldPath, path); err != nil {
-			log.Error("Failed to move old database file", "error", err)
+			return fmt.Errorf("Failed to move old database file: %w", err)
 		}
 	}
 
