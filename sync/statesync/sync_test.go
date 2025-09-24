@@ -237,7 +237,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		GetLeafsIntercept: intercept.getLeafsIntercept,
 	})
 
-	require.EqualValues(t, 2, intercept.numRequests)
+	require.Equal(t, uint32(2), intercept.numRequests)
 
 	testSync(t, syncTest{
 		prepareForTest: func(*testing.T) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
@@ -518,7 +518,7 @@ func assertDBConsistency(t testing.TB, root common.Hash, clientDB ethdb.Database
 			codeHash := common.BytesToHash(acc.CodeHash)
 			code := rawdb.ReadCode(clientDB, codeHash)
 			actualHash := crypto.Keccak256Hash(code)
-			require.NotZero(t, len(code))
+			require.NotEmpty(t, code)
 			require.Equal(t, codeHash, actualHash)
 		}
 		if acc.Root == types.EmptyRootHash {

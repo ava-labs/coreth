@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/utils/rand"
 	"github.com/ava-labs/coreth/utils/utilstest"
@@ -68,11 +69,9 @@ func FillTrie(t *testing.T, start, numKeys int, keySize int, trieDB *triedb.Data
 
 	// Commit the root to [trieDB]
 	nextRoot, nodes, err := testTrie.Commit(false)
-	assert.NoError(t, err)
-	err = trieDB.Update(nextRoot, root, 0, trienode.NewWithNodeSet(nodes), nil)
-	assert.NoError(t, err)
-	err = trieDB.Commit(nextRoot, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	require.NoError(t, trieDB.Update(nextRoot, root, 0, trienode.NewWithNodeSet(nodes), nil))
+	require.NoError(t, trieDB.Commit(nextRoot, false))
 
 	return nextRoot, keys, values
 }
@@ -102,19 +101,19 @@ func AssertTrieConsistency(t testing.TB, root common.Hash, a, b *triedb.Database
 	count := 0
 	for itA.Next() && itB.Next() {
 		count++
-		assert.Equal(t, itA.Key, itB.Key)
-		assert.Equal(t, itA.Value, itB.Value)
+		require.Equal(t, itA.Key, itB.Key)
+		require.Equal(t, itA.Value, itB.Value)
 		if onLeaf != nil {
 			if err := onLeaf(itA.Key, itA.Value); err != nil {
 				t.Fatalf("error in onLeaf callback: %v", err)
 			}
 		}
 	}
-	assert.NoError(t, itA.Err)
-	assert.NoError(t, itB.Err)
-	assert.False(t, itA.Next())
-	assert.False(t, itB.Next())
-	assert.Greater(t, count, 0)
+	require.NoError(t, itA.Err)
+	require.NoError(t, itB.Err)
+	require.False(t, itA.Next())
+	require.False(t, itB.Next())
+	require.Positive(t, count)
 }
 
 // CorruptTrie deletes every [n]th trie node from the trie given by [tr] from the underlying [db].
