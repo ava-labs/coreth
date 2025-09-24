@@ -339,12 +339,6 @@ func (b *wrappedBlock) semanticVerify(predicateContext *precompileconfig.Predica
 		return err
 	}
 
-	if b.extension != nil {
-		if err := b.extension.SemanticVerify(); err != nil {
-			return err
-		}
-	}
-
 	// If the VM is not marked as bootstrapped the other chains may also be
 	// bootstrapping and not have populated the required indices. Since
 	// bootstrapping only verifies blocks that have been canonically accepted by
@@ -358,6 +352,12 @@ func (b *wrappedBlock) semanticVerify(predicateContext *precompileconfig.Predica
 		// or invalid.
 		if err := b.verifyPredicates(predicateContext); err != nil {
 			return fmt.Errorf("failed to verify predicates: %w", err)
+		}
+	}
+
+	if b.extension != nil {
+		if err := b.extension.SemanticVerify(); err != nil {
+			return err
 		}
 	}
 
