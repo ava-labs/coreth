@@ -171,7 +171,9 @@ func (t *stateSync) onStorageTrieFinished(root common.Hash) error {
 
 // onMainTrieFinished is called after the main trie finishes syncing.
 func (t *stateSync) onMainTrieFinished() error {
-	t.codeQueue.Finalize()
+	if err := t.codeQueue.Finalize(); err != nil {
+		return err
+	}
 
 	// count the number of storage tries we need to sync for eta purposes.
 	numStorageTries, err := t.trieQueue.countTries()

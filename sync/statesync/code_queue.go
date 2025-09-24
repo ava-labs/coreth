@@ -148,6 +148,10 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	if len(codeHashes) == 0 {
 		return nil
 	}
+	// Mark this enqueue as in-flight immediately so shutdown paths wait for us
+	// before closing the output channel.
+	q.enqueueWG.Add(1)
+	defer q.enqueueWG.Done()
 
 	batch := q.db.NewBatch()
 	// Persist all input hashes as to-fetch markers. Consumer will dedupe and skip
@@ -155,21 +159,17 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	// Note: markers are keyed by code hash, so repeated persists overwrite the same
 	// key rather than growing DB usage. The consumer deletes the marker after
 	// fulfilling the request (or when it detects code is already present).
-	selected := make([]common.Hash, 0, len(codeHashes))
 	for _, codeHash := range codeHashes {
 		customrawdb.AddCodeToFetch(batch, codeHash)
-		selected = append(selected, codeHash)
 	}
 
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to write batch of code to fetch markers due to: %w", err)
 	}
 
-	q.enqueueWG.Add(1)
-	defer q.enqueueWG.Done()
-	for _, hash := range selected {
+	for _, h := range codeHashes {
 		select {
-		case q.out <- hash:
+		case q.out <- h:
 		case <-q.quit:
 			return errFailedToAddCodeHashesToQueue
 		}
@@ -181,13 +181,14 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 // Waits for in-flight enqueues to complete, then closes the output channel.
 // If the queue was already closed due to early quit, returns errFailedToFinalizeCodeQueue.
 func (q *CodeQueue) Finalize() error {
-	q.enqueueWG.Wait()
-	// If already closed due to quit, report early-exit error.
-	if q.closed.get() == closeStateQuit {
+	// Attempt to transition to finalized. If already quit, report early-exit error.
+	if q.closed.get() == closeStateQuit || !q.closed.canTransitionToFinalized() {
 		return errFailedToFinalizeCodeQueue
 	}
-	// Mark as finalized and close the channel (no-op if already finalized).
-	q.closed.markFinalizedAndClose(q.out)
+
+	// Wait for any in-flight enqueues to complete before closing the output channel.
+	q.enqueueWG.Wait()
+	close(q.out)
 	return nil
 }
 
@@ -249,16 +250,20 @@ func (s *atomicCloseState) transition(oldState, newState closeState) bool {
 }
 
 func (s *atomicCloseState) markQuitAndClose(out chan common.Hash, wg *sync.WaitGroup) {
-    if s.transition(closeStateOpen, closeStateQuit) {
-        // Ensure all in-flight enqueues have returned before closing the channel
-        // to avoid racing a send with a close.
-        wg.Wait()
-        close(out)
-    }
+	if s.transition(closeStateOpen, closeStateQuit) {
+		// Ensure all in-flight enqueues have returned before closing the channel
+		// to avoid racing a send with a close.
+		wg.Wait()
+		close(out)
+	}
+}
+
+func (s *atomicCloseState) canTransitionToFinalized() bool {
+	return s.transition(closeStateOpen, closeStateFinalized)
 }
 
 func (s *atomicCloseState) markFinalizedAndClose(out chan common.Hash) {
-	if s.transition(closeStateOpen, closeStateFinalized) {
+	if s.canTransitionToFinalized() {
 		close(out)
 	}
 }
