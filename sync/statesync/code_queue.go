@@ -93,8 +93,9 @@ func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOpti
 	// Close the output channel on early shutdown to unblock consumers.
 	go func() {
 		<-q.quit
-		// If not already closed, mark as quit and close channel.
-		q.closed.markQuitAndClose(q.out)
+		// Transition to quit, wait for in-flight enqueues to finish,
+		// then close the output channel to signal consumers.
+		q.closed.markQuitAndClose(q.out, &q.enqueueWG)
 	}()
 
 	// Always initialize eagerly.
@@ -247,10 +248,13 @@ func (s *atomicCloseState) transition(oldState, newState closeState) bool {
 	return s.v.CompareAndSwap(uint32(oldState), uint32(newState))
 }
 
-func (s *atomicCloseState) markQuitAndClose(out chan common.Hash) {
-	if s.transition(closeStateOpen, closeStateQuit) {
-		close(out)
-	}
+func (s *atomicCloseState) markQuitAndClose(out chan common.Hash, wg *sync.WaitGroup) {
+    if s.transition(closeStateOpen, closeStateQuit) {
+        // Ensure all in-flight enqueues have returned before closing the channel
+        // to avoid racing a send with a close.
+        wg.Wait()
+        close(out)
+    }
 }
 
 func (s *atomicCloseState) markFinalizedAndClose(out chan common.Hash) {
