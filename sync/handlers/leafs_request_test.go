@@ -36,7 +36,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Corrupt [corruptedTrieRoot]
-	statesynctest.CorruptTrie(t, memdb, tr, 5)
+	statesynctest.CorruptTrie(t, memdb, tr, 2)
 
 	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, trieDB, 10_000, common.HashLength)
 	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 500, common.HashLength)
