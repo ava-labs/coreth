@@ -4,8 +4,8 @@
 package utils
 
 import (
-	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 )
 
@@ -60,5 +60,5 @@ func SafeDerefUint64String(ptr *uint64) string {
 	if ptr == nil {
 		return "nil"
 	}
-	return fmt.Sprintf("%d", *ptr)
+	return strconv.FormatUint(*ptr, 10)
 }
