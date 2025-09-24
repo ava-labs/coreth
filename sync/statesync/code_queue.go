@@ -261,9 +261,3 @@ func (s *atomicCloseState) markQuitAndClose(out chan common.Hash, wg *sync.WaitG
 func (s *atomicCloseState) canTransitionToFinalized() bool {
 	return s.transition(closeStateOpen, closeStateFinalized)
 }
-
-func (s *atomicCloseState) markFinalizedAndClose(out chan common.Hash) {
-	if s.canTransitionToFinalized() {
-		close(out)
-	}
-}
