@@ -4,6 +4,8 @@
 package atomictest
 
 import (
+	"math/rand"
+
 	"github.com/ava-labs/avalanchego/codec"
 	"github.com/ava-labs/avalanchego/codec/linearcodec"
 	"github.com/ava-labs/avalanchego/ids"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/utils/rand"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 )
@@ -149,7 +150,7 @@ func GenerateTestExportTx() *atomic.Tx {
 }
 
 func NewTestTx() *atomic.Tx {
-	txType := rand.SecureIntn(2)
+	txType := rand.Intn(2) //nolint:gosec
 	switch txType {
 	case 0:
 		return GenerateTestImportTx()

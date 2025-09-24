@@ -5,7 +5,7 @@ package message
 
 import (
 	"encoding/base64"
-	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
@@ -15,11 +15,16 @@ import (
 // TestMarshalLeafsRequest requires that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalLeafsRequest(t *testing.T) {
+	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+
 	startBytes := make([]byte, common.HashLength)
 	endBytes := make([]byte, common.HashLength)
 
-	copy(startBytes, deterministicBytes("leafs-start", common.HashLength))
-	copy(endBytes, deterministicBytes("leafs-end", common.HashLength))
+	_, err := rand.Read(startBytes)
+	require.NoError(t, err)
+
+	_, err = rand.Read(endBytes)
+	require.NoError(t, err)
 
 	leafsRequest := LeafsRequest{
 		Root:     common.BytesToHash([]byte("im ROOTing for ya")),
@@ -48,26 +53,30 @@ func TestMarshalLeafsRequest(t *testing.T) {
 // TestMarshalLeafsResponse requires that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalLeafsResponse(t *testing.T) {
+	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+
 	keysBytes := make([][]byte, 16)
 	valsBytes := make([][]byte, 16)
 	for i := range keysBytes {
 		keysBytes[i] = make([]byte, common.HashLength)
-		size := 8 + (i % 9)
-		valsBytes[i] = make([]byte, size)
+		valsBytes[i] = make([]byte, rand.Intn(8)+8) // min 8 bytes, max 16 bytes
 
-		copy(keysBytes[i], deterministicBytes(fmt.Sprintf("leafs-key-%d", i), common.HashLength))
-		copy(valsBytes[i], deterministicBytes(fmt.Sprintf("leafs-val-%d", i), size))
+		_, err := rand.Read(keysBytes[i])
+		require.NoError(t, err)
+		_, err = rand.Read(valsBytes[i])
+		require.NoError(t, err)
 	}
 
 	nextKey := make([]byte, common.HashLength)
-	copy(nextKey, deterministicBytes("leafs-next-key", common.HashLength))
+	_, err := rand.Read(nextKey)
+	require.NoError(t, err)
 
 	proofVals := make([][]byte, 4)
 	for i := range proofVals {
-		size := 8 + (i % 9)
-		proofVals[i] = make([]byte, size)
+		proofVals[i] = make([]byte, rand.Intn(8)+8) // min 8 bytes, max 16 bytes
 
-		copy(proofVals[i], deterministicBytes(fmt.Sprintf("leafs-proof-%d", i), size))
+		_, err = rand.Read(proofVals[i])
+		require.NoError(t, err)
 	}
 
 	leafsResponse := LeafsResponse{

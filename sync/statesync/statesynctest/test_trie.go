@@ -5,6 +5,7 @@ package statesynctest
 
 import (
 	"encoding/binary"
+	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils/wrappers"
@@ -16,13 +17,9 @@ import (
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/utils/rand"
 	"github.com/ava-labs/coreth/utils/utilstest"
-
-	cryptorand "crypto/rand"
 )
 
 // GenerateTrie creates a trie with [numKeys] key-value pairs inside of [trieDB].
@@ -40,6 +37,7 @@ func GenerateTrie(t *testing.T, trieDB *triedb.Database, numKeys int, keySize in
 // returns inserted keys and values
 // FillTrie reads from [rand] and the caller should call rand.Seed(n) for deterministic results
 func FillTrie(t *testing.T, start, numKeys int, keySize int, trieDB *triedb.Database, root common.Hash) (common.Hash, [][]byte, [][]byte) {
+	rand := rand.New(rand.NewSource(1)) //nolint:gosec
 	testTrie, err := trie.New(trie.TrieID(root), trieDB)
 	if err != nil {
 		t.Fatalf("error creating trie: %v", err)
@@ -52,14 +50,12 @@ func FillTrie(t *testing.T, start, numKeys int, keySize int, trieDB *triedb.Data
 	for i := start; i < numKeys; i++ {
 		key := make([]byte, keySize)
 		binary.BigEndian.PutUint64(key[:wrappers.LongLen], uint64(i+1))
-		_, err := cryptorand.Read(key[wrappers.LongLen:])
-		assert.NoError(t, err)
+		_, err := rand.Read(key[wrappers.LongLen:])
+		require.NoError(t, err)
 
-		// Generate random size between 128 and 256 bytes
-		valueSize := rand.SecureIntRange(128, 257) // min 128, max 256
-		value := make([]byte, valueSize)
-		_, err = cryptorand.Read(value)
-		assert.NoError(t, err)
+		value := make([]byte, rand.Intn(128)+128) // min 128 bytes, max 256 bytes
+		_, err = rand.Read(value)
+		require.NoError(t, err)
 
 		testTrie.MustUpdate(key, value)
 
@@ -155,6 +151,8 @@ func FillAccounts(
 		randBalance = uint256.NewInt(1000000000000000000)
 		maxNonce    = 10
 		accounts    = make(map[*utilstest.Key]*types.StateAccount, numAccounts)
+		rand        = rand.New(rand.NewSource(1)) //nolint:gosec
+
 	)
 
 	tr, err := trie.NewStateTrie(trie.TrieID(root), trieDB)
@@ -163,9 +161,8 @@ func FillAccounts(
 	}
 
 	for i := 0; i < numAccounts; i++ {
-		nonce := uint64(rand.SecureIntn(maxNonce))
 		acc := types.StateAccount{
-			Nonce:    nonce,
+			Nonce:    uint64(rand.Intn(maxNonce)),
 			Balance:  new(uint256.Int).Add(minBalance, randBalance),
 			CodeHash: types.EmptyCodeHash[:],
 			Root:     types.EmptyRootHash,
