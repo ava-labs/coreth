@@ -506,8 +506,10 @@ func testReorgProtection(t *testing.T, scheme string) {
 	// with the preferred chain lower than the last finalized block)
 	// should NEVER happen. However, the VM defends against this
 	// just in case.
+	err = vm1.SetPreference(context.Background(), vm1BlkC.ID())
 	require.ErrorContains(err, "cannot orphan finalized block")
-	require.ErrorContains(vm1BlkC.Accept(context.Background()), "expected accepted block to have parent")
+	err = vm1BlkC.Accept(context.Background())
+	require.ErrorContains(err, "expected accepted block to have parent")
 }
 
 // Regression test to ensure that a VM that accepts block C while preferring
@@ -729,7 +731,7 @@ func testStickyPreference(t *testing.T, scheme string) {
 	b = vm1.blockChain.GetBlockByNumber(blkBHeight)
 	require.Equal(blkBHash, b.Hash(), "expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	b = vm1.blockChain.GetBlockByNumber(blkDHeight)
-	require.Nil(b, "expected block at %d to be nil but got %s", blkDHeight, b.Hash().Hex())
+	require.Nil(b, "expected block at %d to be nil but got %s")
 	h := vm1.blockChain.CurrentBlock()
 	require.Equal(blkBHash, h.Hash(), "expected current block to have hash %s but got %s", blkBHash.Hex(), h.Hash().Hex())
 
@@ -739,7 +741,7 @@ func testStickyPreference(t *testing.T, scheme string) {
 	b = vm1.blockChain.GetBlockByNumber(blkBHeight)
 	require.Equal(blkBHash, b.Hash(), "expected block at %d to have hash %s but got %s", blkBHeight, blkBHash.Hex(), b.Hash().Hex())
 	b = vm1.blockChain.GetBlockByNumber(blkDHeight)
-	require.Nil(b, "expected block at %d to be nil but got %s", blkDHeight, b.Hash().Hex())
+	require.Nil(b, "expected block at %d to be nil but got %s")
 	h = vm1.blockChain.CurrentBlock()
 	require.Equal(blkBHash, h.Hash(), "expected current block to have hash %s but got %s", blkBHash.Hex(), h.Hash().Hex())
 

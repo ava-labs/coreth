@@ -184,8 +184,7 @@ func assertNonZero[T interface {
 		*big.Int | *common.Hash | *uint64 | *[]uint8 | *Header
 }](t *testing.T, v T) {
 	t.Helper()
-	var zero T
-	require.Equal(t, zero, v)
+	require.NotZero(t, v)
 }
 
 // Note [TestCopyHeader] tests the [HeaderExtra.PostCopy] method.

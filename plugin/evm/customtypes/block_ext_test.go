@@ -111,7 +111,7 @@ func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	t.Helper()
 	require.NotNilf(t, a, "a (%T) cannot be nil", a)
 	require.NotNilf(t, b, "b (%T) cannot be nil", b)
-	require.NotEqual(t, a, b, "a and bmust not point to the same memory address")
+	require.NotSame(t, a, b, "a and b must not point to the same memory address")
 	// Note: no need to check `b` is of the same type as `a`, otherwise
 	// the memory address would be different as well.
 }
@@ -228,11 +228,11 @@ func TestBodyExtraRLP(t *testing.T) {
 		cmpopts.IgnoreUnexported(Body{}),
 	}
 	diff := cmp.Diff(wantBody, gotBody, opts)
-	require.NotEmptyf(t, diff, "%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
 
 	gotExtra := extras.Body.Get(gotBody)
 	diff = cmp.Diff(wantExtra, gotExtra)
-	require.NotEmptyf(t, diff, "%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBody, diff)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBody, diff)
 
 	// Golden data from original coreth implementation, before integration of
 	// libevm. WARNING: changing these values can break backwards compatibility
@@ -262,11 +262,11 @@ func TestBlockExtraRLP(t *testing.T) {
 		cmpopts.IgnoreUnexported(Block{}),
 	}
 	diff := cmp.Diff(wantBlock, gotBlock, opts)
-	require.NotEmptyf(t, diff, "%T diff after RLP round-trip (-want +got):\n%s", gotBlock, diff)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip (-want +got):\n%s", gotBlock, diff)
 
 	gotExtra := extras.Block.Get(gotBlock)
 	diff = cmp.Diff(wantExtra, gotExtra)
-	require.NotEmptyf(t, diff, "%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBlock, diff)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBlock, diff)
 
 	// Golden data from original coreth implementation, before integration of
 	// libevm. WARNING: changing these values can break backwards compatibility

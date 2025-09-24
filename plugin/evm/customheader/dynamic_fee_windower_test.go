@@ -51,7 +51,7 @@ func TestSelectBigWithinBounds(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			v := selectBigWithinBounds(test.lower, test.value, test.upper)
-			require.Equalf(t, 0, v.Cmp(test.expected), "Expected (%d), found (%d)", test.expected, v)
+			require.Zerof(t, v.Cmp(test.expected), "Expected (%d), found (%d)", test.expected, v)
 		})
 	}
 }
