@@ -35,6 +35,7 @@ func TestMarshalCodeRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalCodeResponse(t *testing.T) {
 	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+
 	codeData := make([]byte, 50)
 	_, err := rand.Read(codeData)
 	require.NoError(t, err)
