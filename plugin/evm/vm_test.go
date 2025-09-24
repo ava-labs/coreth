@@ -1114,7 +1114,7 @@ func TestBuildTimeMilliseconds(t *testing.T) {
 			blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
 			require.NoError(err)
 			ethBlk := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
-			require.Equal(t, test.expectedTimeMilliseconds, customtypes.BlockTimeMilliseconds(ethBlk))
+			require.Equal(test.expectedTimeMilliseconds, customtypes.BlockTimeMilliseconds(ethBlk))
 		})
 	}
 }
