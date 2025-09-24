@@ -4,6 +4,7 @@
 package utils
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 )
@@ -52,4 +53,12 @@ func BigLessOrEqualUint64(a *big.Int, b uint64) bool {
 	return a != nil &&
 		a.IsUint64() &&
 		a.Uint64() <= b
+}
+
+// SafeDerefUint64String safely dereferences a uint64 pointer and returns a string.
+func SafeDerefUint64String(ptr *uint64) string {
+	if ptr == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", *ptr)
 }
