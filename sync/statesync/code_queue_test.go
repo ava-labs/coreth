@@ -5,6 +5,7 @@ package statesync
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -375,4 +376,42 @@ func TestCodeQueue_CleanFinalizeClosesOutput(t *testing.T) {
 	require.NoError(t, q.Finalize())
 	_, ok := <-q.CodeHashes()
 	require.False(t, ok)
+}
+
+func TestQuitAndAddCodeRace(t *testing.T) {
+	for range 10_000 {
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
+			quit := make(chan struct{})
+			q, err := NewCodeQueue(rawdb.NewMemoryDatabase(), quit)
+			require.NoError(t, err)
+
+			var ready, finished sync.WaitGroup
+			ready.Add(2)
+			finished.Add(2)
+			start := make(chan struct{})
+
+			go func() {
+				defer finished.Done()
+
+				ready.Done()
+				<-start
+				close(quit)
+			}()
+
+			go func() {
+				defer finished.Done()
+
+				in := []common.Hash{{}}
+				ready.Done()
+				<-start
+				q.AddCode(in)
+			}()
+
+			ready.Wait()
+			close(start)
+			finished.Wait()
+		})
+	}
 }
