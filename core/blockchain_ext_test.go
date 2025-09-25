@@ -1159,7 +1159,7 @@ func ReprocessAcceptBlockIdenticalStateRootTest(t *testing.T, create createFunc)
 
 	currentBlock = blockchain.CurrentBlock()
 	expectedCurrentBlock = chain1[1]
-	require.Equal(expectedCurrentBlock.Hash(), currentBlock.Hash())
+	require.Equalf(expectedCurrentBlock.Hash(), currentBlock.Hash(), "block hash mismatch for expected height %d, actual height %d", expectedCurrentBlock.NumberU64(), currentBlock.Number.Uint64())
 
 	// Accept the first block in [chain1] and reject all of [chain2]
 	require.NoError(blockchain.Accept(chain1[0]))

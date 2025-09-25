@@ -311,13 +311,13 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 	// Check that for each conflict tx (whose conflict is in the chain ancestry)
 	// the VM returns an error when it attempts to issue the conflict into the mempool
 	// and when it attempts to build a block with the conflict force added to the mempool.
-	for _, tx := range conflictTxs[:2] {
+	for i, tx := range conflictTxs[:2] {
 		err = vm.AtomicMempool.AddLocalTx(tx)
-		require.ErrorIs(err, ErrConflictingAtomicInputs)
+		require.ErrorIsf(err, ErrConflictingAtomicInputs, "tx index %d", i)
 		// Force issue transaction directly to the mempool
-		require.NoError(vm.AtomicMempool.ForceAddTx(tx))
+		require.NoErrorf(vm.AtomicMempool.ForceAddTx(tx), "force issue failed for tx index %d", i)
 		msg, err := vm.WaitForEvent(context.Background())
-		require.NoError(err)
+		require.NoErrorf(err, "wait for event failed for tx index %d", i)
 		require.Equal(commonEng.PendingTxs, msg)
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
@@ -325,7 +325,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 		// The new block is verified in BuildBlock, so
 		// BuildBlock should fail due to an attempt to
 		// double spend an atomic UTXO.
-		require.ErrorIs(err, ErrEmptyBlock)
+		require.ErrorIsf(err, ErrEmptyBlock, "tx index %d", i)
 	}
 
 	// Generate one more valid block so that we can copy the header to create an invalid block
