@@ -16,13 +16,13 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 
-	synccommon "github.com/ava-labs/coreth/sync"
+	syncpkg "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 )
 
 const defaultNumCodeFetchingWorkers = 5
 
-var _ synccommon.Syncer = (*CodeSyncer)(nil)
+var _ syncpkg.Syncer = (*CodeSyncer)(nil)
 
 // CodeSyncer syncs code bytes from the network in a separate thread.
 // It consumes code hashes from a queue and persists code into the DB.

@@ -109,6 +109,12 @@ func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
 	if len(codeHashes) == 0 {
 		return nil
 	}
+
+	// If the queue has quit, do not attempt to send to the closed channel.
+	if q.closed.didQuit() {
+		return errFailedToAddCodeHashesToQueue
+	}
+
 	// Mark this enqueue as in-flight immediately so shutdown paths wait for us
 	// before closing the output channel.
 	q.enqueueWG.Add(1)
