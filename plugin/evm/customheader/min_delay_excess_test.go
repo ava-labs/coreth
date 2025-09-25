@@ -52,7 +52,6 @@ func TestMinDelayExcess(t *testing.T) {
 			},
 			desiredMinDelayExcess: nil,
 			expectedDelayExcess:   nil,
-			expectedErr:           nil,
 		},
 		{
 			name:   "pre_granite_with_desired_value_returns_nil",
@@ -65,7 +64,6 @@ func TestMinDelayExcess(t *testing.T) {
 			},
 			desiredMinDelayExcess: utils.NewUint64(1000),
 			expectedDelayExcess:   nil,
-			expectedErr:           nil,
 		},
 		{
 			name:   "granite_first_block_initial_delay_excess",
@@ -78,7 +76,6 @@ func TestMinDelayExcess(t *testing.T) {
 			},
 			desiredMinDelayExcess: nil,
 			expectedDelayExcess:   utils.NewUint64(acp226.InitialDelayExcess),
-			expectedErr:           nil,
 		},
 		{
 			name:   "granite_no_parent_min_delay_error",
@@ -102,7 +99,6 @@ func TestMinDelayExcess(t *testing.T) {
 			},
 			desiredMinDelayExcess: nil,
 			expectedDelayExcess:   utils.NewUint64(500),
-			expectedErr:           nil,
 		},
 		{
 			name:   "granite_with_desired_min_delay_excess",
@@ -113,7 +109,6 @@ func TestMinDelayExcess(t *testing.T) {
 			},
 			desiredMinDelayExcess: utils.NewUint64(1000),
 			expectedDelayExcess:   utils.NewUint64(500 + acp226.MaxDelayExcessDiff),
-			expectedErr:           nil,
 		},
 		{
 			name:   "granite_with_zero_desired_value",
@@ -124,7 +119,6 @@ func TestMinDelayExcess(t *testing.T) {
 			},
 			desiredMinDelayExcess: utils.NewUint64(0),
 			expectedDelayExcess:   utils.NewUint64(500 - acp226.MaxDelayExcessDiff),
-			expectedErr:           nil,
 		},
 	}
 
@@ -146,7 +140,7 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name:   "pre_granite_no_verification",
+			name:   "pre_granite_nil_min_delay_excess",
 			config: extras.TestFortunaChainConfig, // Pre-Granite config
 			parent: &types.Header{
 				Time: 1000,
@@ -154,7 +148,15 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 			header: &types.Header{
 				Time: 1001,
 			},
-			expectedErr: nil,
+		},
+		{
+			name:   "pre_granite_min_delay_excess_set_error",
+			config: extras.TestFortunaChainConfig, // Pre-Granite config
+			parent: &types.Header{
+				Time: 1000,
+			},
+			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(1000)),
+			expectedErr: errRemoteMinDelayExcessSet,
 		},
 		{
 			name:   "granite_nil_min_delay_excess_error",
@@ -182,54 +184,37 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 			expectedErr: errIncorrectMinDelayExcess,
 		},
 		{
-			name:        "granite_correct_min_delay_excess",
-			config:      extras.TestGraniteChainConfig,
-			parent:      generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(500)),
-			expectedErr: nil,
+			name:   "granite_correct_min_delay_excess",
+			config: extras.TestGraniteChainConfig,
+			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
+			header: generateHeaderWithMinDelayExcess(1001, utils.NewUint64(500)),
 		},
 		{
-			name:        "granite_with_increased_desired_min_delay_excess_correct",
-			config:      extras.TestGraniteChainConfig,
-			parent:      generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(700)),
-			expectedErr: nil,
+			name:   "granite_with_increased_desired_min_delay_excess_correct",
+			config: extras.TestGraniteChainConfig,
+			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
+			header: generateHeaderWithMinDelayExcess(1001, utils.NewUint64(700)),
 		},
 		{
-			name:        "granite_with_decreased_desired_min_delay_excess_correct",
-			config:      extras.TestGraniteChainConfig,
-			parent:      generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(300)),
-			expectedErr: nil,
+			name:   "granite_with_decreased_desired_min_delay_excess_correct",
+			config: extras.TestGraniteChainConfig,
+			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
+			header: generateHeaderWithMinDelayExcess(1001, utils.NewUint64(300)),
 		},
 
 		// Different chain configs
 		{
-			name:        "fortuna_config_no_verification",
-			config:      extras.TestFortunaChainConfig,
-			parent:      &types.Header{Time: 1000},
-			header:      &types.Header{Time: 1001},
-			expectedErr: nil,
+			name:   "fortuna_config_no_verification",
+			config: extras.TestFortunaChainConfig,
+			parent: &types.Header{Time: 1000},
+			header: &types.Header{Time: 1001},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.expectedErr != nil && test.expectedErr.Error() == "panic expected" {
-				// Test panic cases
-				require.Panics(t, func() {
-					VerifyMinDelayExcess(test.config, test.parent, test.header)
-				})
-				return
-			}
-
 			err := VerifyMinDelayExcess(test.config, test.parent, test.header)
-
-			if test.expectedErr != nil {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
+			require.ErrorIs(t, err, test.expectedErr)
 		})
 	}
 }

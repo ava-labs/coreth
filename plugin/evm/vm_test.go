@@ -2399,6 +2399,12 @@ func TestMinDelayExcessInHeader(t *testing.T) {
 			expectedMinDelayExcess: nil,
 		},
 		{
+			name:                   "pre_granite_min_delay_excess",
+			fork:                   upgradetest.Fortuna,
+			desiredMinDelay:        utils.NewUint64(1000),
+			expectedMinDelayExcess: nil,
+		},
+		{
 			name:                   "granite_first_block_initial_delay_excess",
 			fork:                   upgradetest.Granite,
 			desiredMinDelay:        nil,
