@@ -107,6 +107,15 @@ func TestCodeQueue(t *testing.T) {
 					// Avoid leaking the internal goroutine
 					close(quit)
 				}
+
+				t.Run("after_quit_or_Finalize", func(t *testing.T) {
+					<-recvDone
+					ch := q.CodeHashes()
+					require.NotNilf(t, ch, "%T.CodeHashes()", q)
+					for range ch {
+						t.Fatalf("Unexpected receive on %T.CodeHashes()", q)
+					}
+				})
 			}()
 
 			var got []common.Hash
@@ -194,6 +203,11 @@ func TestCodeQueue_FinalizeWaitsForInflightAddCodeCalls(t *testing.T) {
 }
 
 func TestQuitAndAddCodeRace(t *testing.T) {
+	{
+		q := new(CodeQueue)
+		// Before the introduction of these fields, this test would panic.
+		_ = []any{&q.closeChanOnce, &q.chanLock}
+	}
 	for range 10_000 {
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
