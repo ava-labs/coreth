@@ -37,6 +37,7 @@ func GenerateTrie(t *testing.T, trieDB *triedb.Database, numKeys int, keySize in
 // returns inserted keys and values
 // FillTrie reads from [rand] and the caller should call rand.Seed(n) for deterministic results
 func FillTrie(t *testing.T, start, numKeys int, keySize int, trieDB *triedb.Database, root common.Hash) (common.Hash, [][]byte, [][]byte) {
+	rand := rand.New(rand.NewSource(1)) //nolint:gosec
 	testTrie, err := trie.New(trie.TrieID(root), trieDB)
 	if err != nil {
 		t.Fatalf("error creating trie: %v", err)
@@ -150,6 +151,8 @@ func FillAccounts(
 		randBalance = uint256.NewInt(1000000000000000000)
 		maxNonce    = 10
 		accounts    = make(map[*utilstest.Key]*types.StateAccount, numAccounts)
+		rand        = rand.New(rand.NewSource(1)) //nolint:gosec
+
 	)
 
 	tr, err := trie.NewStateTrie(trie.TrieID(root), trieDB)

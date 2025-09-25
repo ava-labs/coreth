@@ -81,7 +81,7 @@ var SyncerVMTests = []SyncerVMTest{
 }
 
 func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
+	rand.New(rand.NewSource(1)) //nolint:gosec
 	test := SyncTestParams{
 		SyncableInterval:   256,
 		StateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
@@ -93,7 +93,7 @@ func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
 }
 
 func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
+	rand.New(rand.NewSource(1)) //nolint:gosec
 	test := SyncTestParams{
 		SyncableInterval:   256,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -105,7 +105,7 @@ func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
 }
 
 func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
+	rand.New(rand.NewSource(1)) //nolint:gosec
 	numToGen := vmsync.BlocksToFetch + uint64(32)
 	test := SyncTestParams{
 		SyncableInterval:   numToGen,
@@ -118,11 +118,11 @@ func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup
 }
 
 func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.Seed(1)
+	rand.New(rand.NewSource(1)) //nolint:gosec
 	var lock sync.Mutex
 	reqCount := 0
 	test := SyncTestParams{
-		SyncableInterval:   256,
+		SyncableInterval:   vmsync.BlocksToFetch,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		SyncMode:           block.StateSyncStatic,
 		responseIntercept: func(syncerVM extension.InnerVM, nodeID ids.NodeID, requestID uint32, response []byte) {
@@ -130,8 +130,8 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 			defer lock.Unlock()
 
 			reqCount++
-			// Fail all requests after number 50 to interrupt the sync
-			if reqCount > 50 {
+			// Fail all requests after number 5 to interrupt the sync
+			if reqCount > 5 {
 				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID, commonEng.ErrTimeout); err != nil {
 					panic(err)
 				}
@@ -276,7 +276,7 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 	)
 	reqCount := 0
 	test := SyncTestParams{
-		SyncableInterval:   256,
+		SyncableInterval:   vmsync.BlocksToFetch,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		SyncMode:           block.StateSyncStatic,
 		responseIntercept: func(syncerVM extension.InnerVM, nodeID ids.NodeID, requestID uint32, response []byte) {
@@ -284,11 +284,11 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 			defer lock.Unlock()
 
 			reqCount++
-			// Shutdown the VM after 50 requests to interrupt the sync
-			if reqCount == 50 {
+			// Shutdown the VM after 5 requests to interrupt the sync
+			if reqCount == 5 {
 				// Note this verifies the VM shutdown does not time out while syncing.
 				require.NoError(t, testSyncVMSetup.syncerVM.shutdownOnceSyncerVM.Shutdown(context.Background()))
-			} else if reqCount < 50 {
+			} else if reqCount < 5 {
 				require.NoError(t, syncerVM.AppResponse(context.Background(), nodeID, requestID, response))
 			}
 		},

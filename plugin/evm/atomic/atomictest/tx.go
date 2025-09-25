@@ -150,7 +150,7 @@ func GenerateTestExportTx() *atomic.Tx {
 }
 
 func NewTestTx() *atomic.Tx {
-	txType := rand.Intn(2)
+	txType := rand.Intn(2) //nolint:gosec
 	switch txType {
 	case 0:
 		return GenerateTestImportTx()
