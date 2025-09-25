@@ -246,7 +246,19 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 		}
 	}
 	if pCtx == nil {
-		return fmt.Errorf("firewood: no unverified proposal found for block %d, new root %s, parent hash %s", block, root.Hex(), parentHash.Hex())
+		// Edge case: first set of proposals before `Commit`, or empty genesis block
+		// Neither `Update` nor `Commit` is called for genesis, so we can accept a proposal with parentHash of empty.
+		for _, possible := range db.unverifiedProposals {
+			if possible.Parent.Hashes[common.Hash{}] == struct{}{} {
+				pCtx = possible
+				pCtx.Block = block
+				pCtx.Parent.Hashes[parentHash] = struct{}{}
+				break
+			}
+		}
+		if pCtx == nil {
+			return fmt.Errorf("firewood: no unverified proposal found for block %d, root %s, hash %s", block, root.Hex(), hash.Hex())
+		}
 	}
 
 	// Verify that the proposal context matches what we expect.
@@ -255,7 +267,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 		return fmt.Errorf("firewood: proposal root mismatch, expected %s, got %s", root.Hex(), pCtx.Root.Hex())
 	case pCtx.Parent.Root != parentRoot:
 		return fmt.Errorf("firewood: proposal parent root mismatch, expected %s, got %s", parentRoot.Hex(), pCtx.Parent.Root.Hex())
-	case pCtx.Block != block && block != 0:
+	case pCtx.Block != block:
 		return fmt.Errorf("firewood: proposal block mismatch, expected %d, got %d", block, pCtx.Block)
 	}
 
@@ -353,7 +365,7 @@ func (*Database) Size() (common.StorageSize, common.StorageSize) {
 }
 
 // This isn't called anywhere in coreth
-func (*Database) Reference(_ common.Hash, _ common.Hash) {
+func (*Database) Reference(common.Hash, common.Hash) {
 	log.Error("firewood: Reference not implemented")
 }
 
@@ -365,11 +377,11 @@ func (*Database) Reference(_ common.Hash, _ common.Hash) {
 // We commit root A, and immediately dereference root B and its child.
 // Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
 // Thus, we recognize the single root C as the only proposal, and dereference it.
-func (*Database) Dereference(_ common.Hash) {
+func (*Database) Dereference(common.Hash) {
 }
 
 // Firewood does not support this.
-func (*Database) Cap(_ common.StorageSize) error {
+func (*Database) Cap(common.StorageSize) error {
 	return nil
 }
 
@@ -426,8 +438,8 @@ func (db *Database) createProposal(parent *ProposalContext, keys, values [][]byt
 	}
 	root := common.BytesToHash(currentRootBytes)
 
-	block := parent.Block + 1
 	// Edge case: genesis block
+	block := parent.Block + 1
 	if _, ok := parent.Hashes[common.Hash{}]; ok && parent.Root == types.EmptyRootHash {
 		block = 0
 	}
