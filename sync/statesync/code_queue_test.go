@@ -191,16 +191,6 @@ func TestCodeQueue_FinalizeCloses(t *testing.T) {
 	q.Finalize()
 	_, ok := <-q.CodeHashes()
 	require.False(t, ok)
-
-	// After finalize, AddCode with empty input should return an error.
-	err = q.AddCode(nil)
-	require.ErrorIs(t, err, errAddCodeAfterFinalize)
-
-	// After finalize, AddCode with non-empty input should return an error and enqueue nothing.
-	codeBytes := utils.RandomBytes(8)
-	h := crypto.Keccak256Hash(codeBytes)
-	err = q.AddCode([]common.Hash{h})
-	require.ErrorIs(t, err, errAddCodeAfterFinalize)
 }
 
 // Test that shutdown during enqueue returns the expected error.
@@ -385,13 +375,4 @@ func TestCodeQueue_CleanFinalizeClosesOutput(t *testing.T) {
 	require.NoError(t, q.Finalize())
 	_, ok := <-q.CodeHashes()
 	require.False(t, ok)
-
-	// After clean finalize, AddCode returns errAddCodeAfterFinalize.
-	err = q.AddCode(nil)
-	require.ErrorIs(t, err, errAddCodeAfterFinalize)
-	codeBytes := utils.RandomBytes(8)
-
-	h := crypto.Keccak256Hash(codeBytes)
-	err = q.AddCode([]common.Hash{h})
-	require.ErrorIs(t, err, errAddCodeAfterFinalize)
 }

@@ -30,18 +30,13 @@ const (
 var (
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 	errFailedToFinalizeCodeQueue    = errors.New("failed to finalize code queue")
-
-	// errAddCodeAfterFinalize is returned when [CodeQueue.AddCode] is called after [CodeQueue.Finalize] has been called.
-	// has permanently closed the queue to new work which guards against racy producers
-	// trying to enqueue during or after shutdown.
-	errAddCodeAfterFinalize = errors.New("cannot add code hashes after finalize")
 )
 
 // CodeQueue implements the producer side of code fetching.
 // It accepts code hashes, persists durable "to-fetch" markers (idempotent per hash),
 // and enqueues the hashes as-is onto an internal channel consumed by the code syncer.
-// The queue does not perform in-memory deduplication or local-code checks; the consumer
-// is responsible for deduping, skipping already-present code, and retrying.
+// The queue does not perform in-memory deduplication or local-code checks - that is
+// the responsibility of the consumer.
 type CodeQueue struct {
 	db   ethdb.Database
 	quit <-chan struct{}
@@ -111,36 +106,6 @@ func (q *CodeQueue) CodeHashes() <-chan common.Hash {
 // Persists idempotent "to-fetch" markers for all inputs and enqueues them as-is.
 // Returns errAddCodeAfterFinalize after a clean finalize and errFailedToAddCodeHashesToQueue on early quit.
 func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
-	// If the queue has been closed, reject new work.
-	switch q.closed.get() {
-	case closeStateFinalized:
-		return errAddCodeAfterFinalize
-	case closeStateQuit:
-		return errFailedToAddCodeHashesToQueue
-	}
-	return q.enqueue(codeHashes)
-}
-
-// init enqueues any persisted code markers found on disk.
-func (q *CodeQueue) init() error {
-	// Recover any persisted code markers and enqueue them.
-	// Note: dbCodeHashes are already present as "to-fetch" markers. addCode will
-	// re-persist them, which is a trivial redundancy that happens only on resume
-	// (e.g., after restart). We accept this to keep the code simple.
-	dbCodeHashes, err := recoverUnfetchedCodeHashes(q.db)
-	if err != nil {
-		return fmt.Errorf("unable to recover previous sync state: %w", err)
-	}
-	if err := q.enqueue(dbCodeHashes); err != nil {
-		return fmt.Errorf("unable to resume previous sync: %w", err)
-	}
-
-	return nil
-}
-
-// enqueue persists markers for the provided hashes and pushes them onto the output channel.
-// No deduplication is performed. The consumer is responsible for dedupe and retry.
-func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	if len(codeHashes) == 0 {
 		return nil
 	}
@@ -193,6 +158,23 @@ func (q *CodeQueue) Finalize() error {
 	}
 
 	// Already finalized - nothing to do.
+	return nil
+}
+
+// init enqueues any persisted code markers found on disk.
+func (q *CodeQueue) init() error {
+	// Recover any persisted code markers and enqueue them.
+	// Note: dbCodeHashes are already present as "to-fetch" markers. addCode will
+	// re-persist them, which is a trivial redundancy that happens only on resume
+	// (e.g., after restart). We accept this to keep the code simple.
+	dbCodeHashes, err := recoverUnfetchedCodeHashes(q.db)
+	if err != nil {
+		return fmt.Errorf("unable to recover previous sync state: %w", err)
+	}
+	if err := q.AddCode(dbCodeHashes); err != nil {
+		return fmt.Errorf("unable to resume previous sync: %w", err)
+	}
+
 	return nil
 }
 
