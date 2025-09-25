@@ -25,6 +25,11 @@ import (
 	"github.com/ava-labs/libevm/triedb/database"
 )
 
+const (
+	dbFileName  = "firewood.db"
+	logFileName = "firewood.log"
+)
+
 var (
 	_ proposable = (*ffi.Database)(nil)
 	_ proposable = (*ffi.Proposal)(nil)
@@ -61,7 +66,7 @@ type ProposalContext struct {
 }
 
 type Config struct {
-	FilePath             string
+	ChainDir             string
 	CleanCacheSize       int  // Size of the clean cache in bytes
 	FreeListCacheEntries uint // Number of free list entries to cache
 	Revisions            uint
@@ -99,11 +104,20 @@ type Database struct {
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
 func New(config Config) (*Database, error) {
-	if err := validatePath(config.FilePath); err != nil {
+	if err := validatePath(config.ChainDir); err != nil {
 		return nil, err
 	}
 
-	fw, err := ffi.New(config.FilePath, &ffi.Config{
+	// Start the logs prior to opening the database
+	logPath := filepath.Join(config.ChainDir, logFileName)
+	if err := ffi.StartLogs(&ffi.LogConfig{Path: logPath}); err != nil {
+		// This shouldn't be a fatal error, as this can only be called once per thread.
+		// Specifically, this will return an error in unit tests.
+		log.Error("firewood: error starting logs", "error", err)
+	}
+
+	dbPath := filepath.Join(config.ChainDir, dbFileName)
+	fw, err := ffi.New(dbPath, &ffi.Config{
 		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		FreeListCacheEntries: config.FreeListCacheEntries,
 		Revisions:            config.Revisions,
@@ -127,13 +141,12 @@ func New(config Config) (*Database, error) {
 	}, nil
 }
 
-func validatePath(path string) error {
-	if path == "" {
-		return errors.New("firewood database file path must be set")
+func validatePath(dir string) error {
+	if dir == "" {
+		return errors.New("chain data directory must be set")
 	}
 
 	// Check that the directory exists
-	dir := filepath.Dir(path)
 	switch info, err := os.Stat(dir); {
 	case os.IsNotExist(err):
 		log.Info("Database directory not found, creating", "path", dir)
