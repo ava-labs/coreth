@@ -77,7 +77,7 @@ type stateSync struct {
 
 	segments  chan syncclient.LeafSyncTask   // channel of tasks to sync
 	syncer    *syncclient.CallbackLeafSyncer // performs the sync, looping over each task's range and invoking specified callbacks
-	codeQueue syncpkg.CodeRequestQueue       // queue that manages the asynchronous download and batching of code hashes
+	codeQueue *CodeQueue                     // queue that manages the asynchronous download and batching of code hashes
 	trieQueue *trieQueue                     // manages a persistent list of storage tries we need to sync and any segments that are created for them
 
 	// track the main account trie specifically to commit its root at the end of the operation
@@ -94,7 +94,7 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, codeQueue syncpkg.CodeRequestQueue, config Config) (syncpkg.Syncer, error) {
+func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, codeQueue *CodeQueue, config Config) (syncpkg.Syncer, error) {
 	cfg := config.WithUnsetDefaults()
 
 	ss := &stateSync{

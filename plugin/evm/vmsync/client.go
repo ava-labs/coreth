@@ -217,7 +217,7 @@ func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64)
 	})
 }
 
-func (client *client) createEVMSyncer(fetcher syncpkg.CodeRequestQueue) (syncpkg.Syncer, error) {
+func (client *client) createEVMSyncer(fetcher *statesync.CodeQueue) (syncpkg.Syncer, error) {
 	return statesync.NewSyncer(
 		client.Client,
 		client.ChainDB,
@@ -227,7 +227,7 @@ func (client *client) createEVMSyncer(fetcher syncpkg.CodeRequestQueue) (syncpkg
 	)
 }
 
-func (client *client) createCodeQueue() (syncpkg.CodeRequestQueue, error) {
+func (client *client) createCodeQueue() (*statesync.CodeQueue, error) {
 	return statesync.NewCodeQueue(
 		client.ChainDB,
 		client.StateSyncDone,

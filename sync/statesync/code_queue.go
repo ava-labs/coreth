@@ -14,8 +14,6 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
-
-	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
 // closeState models the lifecycle of the output channel.
@@ -30,8 +28,6 @@ const (
 )
 
 var (
-	_ syncpkg.CodeRequestQueue = (*CodeQueue)(nil)
-
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 	errFailedToFinalizeCodeQueue    = errors.New("failed to finalize code queue")
 
@@ -111,7 +107,7 @@ func (q *CodeQueue) CodeHashes() <-chan common.Hash {
 	return q.out
 }
 
-// AddCode implements [syncpkg.CodeRequestQueue] by persisting and enqueueing new hashes.
+// AddCode persists and enqueues new code hashes.
 // Persists idempotent "to-fetch" markers for all inputs and enqueues them as-is.
 // Returns errAddCodeAfterFinalize after a clean finalize and errFailedToAddCodeHashesToQueue on early quit.
 func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
@@ -177,7 +173,7 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 	return nil
 }
 
-// Finalize implements [syncpkg.CodeRequestQueue] by signaling no further code hashes will be added.
+// Finalize signals that no further code hashes will be added.
 // Waits for in-flight enqueues to complete, then closes the output channel.
 // If the queue was already closed due to early quit, returns errFailedToFinalizeCodeQueue.
 func (q *CodeQueue) Finalize() error {

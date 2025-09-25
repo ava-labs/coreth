@@ -8,7 +8,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
-	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -47,26 +46,4 @@ type Extender interface {
 
 	// OnFinishAfterCommit is called after committing the sync results.
 	OnFinishAfterCommit(summaryHeight uint64) error
-}
-
-// CodeRequestQueue is a minimal interface for accepting discovered code hashes
-// and signaling when no more code hashes will be produced.
-type CodeRequestQueue interface {
-	// AddCode enqueues the provided code hashes for fetching, ignoring any
-	// hashes already present locally or already queued. Implementations may
-	// block until internally ready to accept work. Returns a non-nil error if the
-	// queue is shutting down, has been finalized, or if persisting enqueue markers fails.
-	AddCode(codeHashes []common.Hash) error
-
-	// CodeHashes returns a channel that yields code hashes to be fetched by the
-	// consumer. The channel should be closed when no further hashes will be
-	// produced (e.g., after Finalize and draining any outstanding items).
-	CodeHashes() <-chan common.Hash
-
-	// Finalize signals that no more code hashes will be produced by the
-	// producer (e.g., after the account trie has been fully scanned). After
-	// this call, the queue should complete any outstanding work and then
-	// close the CodeHashes channel. Returns a non-nil error if the queue is
-	// shutting down.
-	Finalize() error
 }
