@@ -181,14 +181,22 @@ func (q *CodeQueue) enqueue(codeHashes []common.Hash) error {
 // Waits for in-flight enqueues to complete, then closes the output channel.
 // If the queue was already closed due to early quit, returns errFailedToFinalizeCodeQueue.
 func (q *CodeQueue) Finalize() error {
-	// Attempt to transition to finalized. If already quit, report early-exit error.
-	if q.closed.get() == closeStateQuit || !q.closed.canTransitionToFinalized() {
+	// Attempt to transition to finalized. If we win the CAS, wait for in-flight
+	// enqueues to complete and close the output channel. If we lose, return an
+	// error only if the queue has already quit - otherwise, it was already finalized.
+	if q.closed.canTransitionToFinalized() {
+		q.enqueueWG.Wait()
+		close(q.out)
+		return nil
+	}
+
+	// If CAS fails, check if the queue has already quit.
+	// NOTE: Callers who do not care about the error can ignore it.
+	if q.closed.didQuit() {
 		return errFailedToFinalizeCodeQueue
 	}
 
-	// Wait for any in-flight enqueues to complete before closing the output channel.
-	q.enqueueWG.Wait()
-	close(q.out)
+	// Already finalized - nothing to do.
 	return nil
 }
 
@@ -260,4 +268,8 @@ func (s *atomicCloseState) markQuitAndClose(out chan common.Hash, wg *sync.WaitG
 
 func (s *atomicCloseState) canTransitionToFinalized() bool {
 	return s.transition(closeStateOpen, closeStateFinalized)
+}
+
+func (s *atomicCloseState) didQuit() bool {
+	return s.get() == closeStateQuit
 }
