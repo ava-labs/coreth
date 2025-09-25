@@ -123,7 +123,14 @@ func (c *CodeSyncer) work(ctx context.Context) error {
 				return nil
 			}
 
-			// Skip work already present locally.
+			// Deduplicate in-flight code hashes across workers first to avoid
+			// racing repeated HasCode() checks for the same hash.
+			if _, loaded := c.inFlight.LoadOrStore(codeHash, struct{}{}); loaded {
+				continue
+			}
+
+			// After acquiring responsibility for this hash, re-check whether the code
+			// is already present locally. If so, clean up and release responsibility.
 			if rawdb.HasCode(c.db, codeHash) {
 				// Best-effort cleanup of stale marker.
 				batch := c.db.NewBatch()
@@ -132,11 +139,8 @@ func (c *CodeSyncer) work(ctx context.Context) error {
 				if err := batch.Write(); err != nil {
 					return fmt.Errorf("failed to write batch for stale code marker: %w", err)
 				}
-				continue
-			}
-
-			// Deduplicate in-flight code hashes across workers.
-			if _, loaded := c.inFlight.LoadOrStore(codeHash, struct{}{}); loaded {
+				// Release in-flight ownership since no network fetch is needed.
+				c.inFlight.Delete(codeHash)
 				continue
 			}
 
@@ -169,12 +173,15 @@ func (c *CodeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 	for i, codeHash := range codeHashes {
 		customrawdb.DeleteCodeToFetch(batch, codeHash)
 		rawdb.WriteCode(batch, codeHash, codeByteSlices[i])
-		// Mark not in-flight after persisting.
-		c.inFlight.Delete(codeHash)
 	}
 
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to write batch for fulfilled code requests: %w", err)
+	}
+	// After successfully committing to the database, release in-flight ownership
+	// so that subsequent work for these hashes can be considered again if needed.
+	for _, codeHash := range codeHashes {
+		c.inFlight.Delete(codeHash)
 	}
 	return nil
 }
