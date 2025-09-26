@@ -153,3 +153,89 @@ func TestVerifyTime(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTimestamp(t *testing.T) {
+	now := time.Unix(1714339200, 123_456_789) // Fixed timestamp for consistent testing
+	nowSeconds := uint64(now.Unix())
+	nowMillis := uint64(now.UnixMilli())
+
+	tests := []struct {
+		name           string
+		parent         *types.Header
+		now            time.Time
+		expectedSec    uint64
+		expectedMillis uint64
+	}{
+		{
+			name:           "current_time_after_parent_time",
+			parent:         generateHeader(nowSeconds-10, nil),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
+		},
+		{
+			name:           "current_time_after_parent_time_with_milliseconds",
+			parent:         generateHeader(nowSeconds-10, utils.NewUint64(nowMillis-500)),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
+		},
+		{
+			name:           "current_time_equals_parent_time_no_milliseconds",
+			parent:         generateHeader(nowSeconds, nil),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowSeconds * 1000, // parent.Time * 1000
+		},
+		{
+			name:           "current_time_equals_parent_time_with_milliseconds",
+			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis)),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis, // parent's TimeMilliseconds
+		},
+		{
+			name:           "current_time_before_parent_time",
+			parent:         generateHeader(nowSeconds+10, nil),
+			now:            now,
+			expectedSec:    nowSeconds + 10,
+			expectedMillis: (nowSeconds + 10) * 1000, // parent.Time * 1000
+		},
+		{
+			name:           "current_time_before_parent_time_with_milliseconds",
+			parent:         generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
+			now:            now,
+			expectedSec:    nowSeconds + 10,
+			expectedMillis: nowMillis, // parent's TimeMilliseconds
+		},
+		{
+			name:           "current_time_before_parent_time_with_milliseconds",
+			parent:         generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
+			now:            now,
+			expectedSec:    nowSeconds + 10,
+			expectedMillis: nowMillis, // parent's TimeMilliseconds
+		},
+		{
+			name:           "zero_parent_time",
+			parent:         generateHeader(0, nil),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
+		},
+		{
+			name:           "zero_parent_time_with_milliseconds",
+			parent:         generateHeader(0, utils.NewUint64(500)),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sec, millis := GetTimestamp(test.parent, test.now)
+			require.Equal(t, test.expectedSec, sec, "timestamp seconds mismatch")
+			require.Equal(t, test.expectedMillis, millis, "timestamp milliseconds mismatch")
+		})
+	}
+}
