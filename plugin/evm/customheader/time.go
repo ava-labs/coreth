@@ -41,7 +41,6 @@ func GetTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
 		timestamp = parent.Time
 		// If the parent has a TimeMilliseconds, use it. Otherwise, use the parent time * 1000.
-		parentExtra := customtypes.GetHeaderExtra(parent)
 		if parentExtra.TimeMilliseconds != nil {
 			timestampMS = *parentExtra.TimeMilliseconds
 		} else {
