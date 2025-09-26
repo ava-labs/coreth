@@ -13,9 +13,9 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
@@ -24,12 +24,11 @@ import (
 
 func TestGasLimit(t *testing.T) {
 	tests := []struct {
-		name      string
-		upgrades  extras.NetworkUpgrades
-		parent    *types.Header
-		timestamp uint64
-		want      uint64
-		wantErr   error
+		name     string
+		upgrades extras.NetworkUpgrades
+		parent   *types.Header
+		want     uint64
+		wantErr  error
 	}{
 		{
 			name:     "fortuna_invalid_parent_header",
@@ -73,7 +72,7 @@ func TestGasLimit(t *testing.T) {
 			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got, err := GasLimit(config, test.parent, test.timestamp)
+			got, err := GasLimit(config, test.parent, 0)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, got)
 		})
@@ -327,7 +326,7 @@ func TestGasCapacity(t *testing.T) {
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
-			timestamp: 1,
+			timestamp: 1000,
 			want:      acp176.MinMaxPerSecond,
 		},
 	}

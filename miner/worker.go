@@ -39,6 +39,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
@@ -47,7 +48,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/libevm/common"
@@ -165,11 +165,11 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		}
 	}
 
-	gasLimit, err := customheader.GasLimit(chainExtra, parent, timestamp)
+	gasLimit, err := customheader.GasLimit(chainExtra, parent, timestampMS)
 	if err != nil {
 		return nil, fmt.Errorf("calculating new gas limit: %w", err)
 	}
-	baseFee, err := customheader.BaseFee(chainExtra, parent, timestamp)
+	baseFee, err := customheader.BaseFee(chainExtra, parent, timestampMS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate new base fee: %w", err)
 	}
@@ -287,7 +287,11 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	}
 
 	chainConfigExtra := params.GetExtra(w.chainConfig)
-	capacity, err := customheader.GasCapacity(chainConfigExtra, parent, header.Time)
+	timeMS := header.Time * 1000
+	if chainConfigExtra.IsGranite(header.Time) {
+		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
+	}
+	capacity, err := customheader.GasCapacity(chainConfigExtra, parent, timeMS)
 	if err != nil {
 		return nil, fmt.Errorf("calculating gas capacity: %w", err)
 	}
