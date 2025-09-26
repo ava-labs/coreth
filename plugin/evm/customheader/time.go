@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/params/extras"
@@ -24,9 +25,11 @@ var (
 	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
 	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
 	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
+	ErrMinDelayNotMet                = errors.New("minimum block delay not met")
+	ErrFutureTimestampAbuse          = errors.New("future timestamp abuse detected")
 )
 
-// GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the next child block based on the parent's timestamp and the current time.
+// GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
 // First return value is the timestamp in seconds, second return value is the timestamp in milliseconds.
 func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 	var (
@@ -36,17 +39,30 @@ func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 	// Note: in order to support asynchronous block production, blocks are allowed to have
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
+	// TODO QUESTION(ceyonur): is it better to just let it fail the verification / or just sleep?
 	parentExtra := customtypes.GetHeaderExtra(parent)
 	if parent.Time >= timestamp ||
 		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
-		timestamp = parent.Time
+		delayMS := uint64(0)
+		// If parent has no min delay excess, blocks are allowed to have the same timestamp as their parent.
+		// Else, there is a minimum delay enforced, and if the timestamp is the same as the parent,
+		// the block will be rejected.
+		// The block builder should have already waited enough time to meet the minimum delay.
+		// This is the last adjustment to the timestamp.
+		minDelayExcess := customtypes.GetHeaderExtra(parent).MinDelayExcess
+		if minDelayExcess != nil {
+			delayMS = acp226.DelayExcess(*minDelayExcess).Delay()
+		}
+		// Add the delay to the parent timestamp with seconds precision.
+		timestamp = parent.Time + delayMS/1000
 		// If the parent has a TimeMilliseconds, use it. Otherwise, use the parent time * 1000.
 		if parentExtra.TimeMilliseconds != nil {
-			timestampMS = *parentExtra.TimeMilliseconds
+			timestampMS = *parentExtra.TimeMilliseconds + delayMS
 		} else {
-			timestampMS = parent.Time * 1000 // TODO: establish minimum time
+			timestampMS = parent.Time*1000 + delayMS
 		}
 	}
+
 	return timestamp, timestampMS
 }
 
@@ -100,7 +116,6 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 	}
 
 	// Verify TimeMilliseconds is not earlier than parent's TimeMilliseconds
-	// TODO: Ensure minimum block delay is enforced
 	if parentExtra.TimeMilliseconds != nil && *headerExtra.TimeMilliseconds < *parentExtra.TimeMilliseconds {
 		return fmt.Errorf("%w: %d < parent %d",
 			errBlockTooOld,
@@ -109,12 +124,54 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 		)
 	}
 
+	// Verify minimum block delay is enforced
+	if err := verifyMinDelay(extraConfig, parent, header); err != nil {
+		return err
+	}
+
 	// Verify TimeMilliseconds is not too far in the future
+	// Q: This still is a problem especially if someone issues a block in the future
+	// then the next builder will wait until potentially MaxFutureBlockTime + delay
 	if maxBlockTimeMillis := uint64(now.Add(MaxFutureBlockTime).UnixMilli()); *headerExtra.TimeMilliseconds > maxBlockTimeMillis {
 		return fmt.Errorf("%w: %d > allowed %d",
 			ErrBlockTooFarInFuture,
 			*headerExtra.TimeMilliseconds,
 			maxBlockTimeMillis,
+		)
+	}
+
+	return nil
+}
+
+// verifyMinDelay verifies that the minimum block delay is enforced based on the min delay excess.
+func verifyMinDelay(extraConfig *extras.ChainConfig, parent *types.Header, header *types.Header) error {
+	headerExtra := customtypes.GetHeaderExtra(header)
+	parentExtra := customtypes.GetHeaderExtra(parent)
+
+	// if parent has no TimeMilliseconds, no min delay is required
+	if parentExtra.TimeMilliseconds == nil {
+		return nil
+	}
+
+	// Calculate the actual time difference in milliseconds
+	actualDelayMillis := *headerExtra.TimeMilliseconds - *parentExtra.TimeMilliseconds
+
+	// Parent might not have a min delay excess if this is the first Granite block
+	// in this case we cannot verify the min delay,
+	// Otherwise parent should have been verified in VerifyMinDelayExcess
+	minDelayExcess := customtypes.GetHeaderExtra(parent).MinDelayExcess
+	if minDelayExcess == nil {
+		return nil
+	}
+
+	minRequiredDelayMillis := acp226.DelayExcess(*minDelayExcess).Delay()
+
+	// Check if the actual delay meets the minimum requirement
+	if actualDelayMillis < minRequiredDelayMillis {
+		return fmt.Errorf("%w: actual delay %dms < required %dms",
+			ErrMinDelayNotMet,
+			actualDelayMillis,
+			minRequiredDelayMillis,
 		)
 	}
 
