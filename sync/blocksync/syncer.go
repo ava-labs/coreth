@@ -5,6 +5,7 @@ package blocksync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/libevm/common"
@@ -18,7 +19,11 @@ import (
 
 const blocksPerRequest = 32
 
-var _ syncpkg.Syncer = (*BlockSyncer)(nil)
+var (
+	_                        syncpkg.Syncer = (*BlockSyncer)(nil)
+	errBlocksToFetchRequired                = errors.New("blocksToFetch must be > 0")
+	errFromHashRequired                     = errors.New("fromHash must be non-zero when fromHeight > 0")
+)
 
 type BlockSyncer struct {
 	db            ethdb.Database
@@ -29,6 +34,14 @@ type BlockSyncer struct {
 }
 
 func NewSyncer(client statesyncclient.Client, db ethdb.Database, fromHash common.Hash, fromHeight uint64, blocksToFetch uint64) (*BlockSyncer, error) {
+	if blocksToFetch == 0 {
+		return nil, errBlocksToFetchRequired
+	}
+	// Sanity check: if fromHash is zero but height > 0, return error.
+	if (fromHash == common.Hash{}) && fromHeight > 0 {
+		return nil, errFromHashRequired
+	}
+
 	return &BlockSyncer{
 		client:        client,
 		db:            db,

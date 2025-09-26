@@ -32,6 +32,7 @@ const (
 var (
 	_                           syncpkg.Syncer = (*stateSync)(nil)
 	errCodeRequestQueueRequired                = errors.New("code request queue is required")
+	errLeafsRequestSizeRequired                = errors.New("leafs request size must be > 0")
 )
 
 // stateSync keeps the state of the entire state sync operation.
@@ -60,19 +61,36 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-// SyncerOption configures the state syncer via functional options.
-type SyncerOption = options.Option[stateSync]
+// stateSyncConfig carries construction-time options for state syncer.
+type stateSyncConfig struct {
+	batchSize uint
+}
+
+// SyncerOption configures the state syncer via functional options (applied to a private config).
+type SyncerOption = options.Option[stateSyncConfig]
 
 // WithBatchSize sets the database batch size for writes.
 func WithBatchSize(n uint) SyncerOption {
-	return options.Func[stateSync](func(c *stateSync) {
-		c.batchSize = n
+	return options.Func[stateSyncConfig](func(c *stateSyncConfig) {
+		if n > 0 {
+			c.batchSize = n
+		}
 	})
 }
 
 func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, codeQueue *CodeQueue, leafsRequestSize uint16, opts ...SyncerOption) (syncpkg.Syncer, error) {
+	if leafsRequestSize == 0 {
+		return nil, errLeafsRequestSizeRequired
+	}
+
+	// Build construction config with defaults and apply options.
+	cfg := stateSyncConfig{
+		batchSize: ethdb.IdealBatchSize,
+	}
+	options.ApplyTo(&cfg, opts...)
+
 	ss := &stateSync{
-		batchSize:       ethdb.IdealBatchSize,
+		batchSize:       cfg.batchSize,
 		db:              db,
 		root:            root,
 		trieDB:          triedb.NewDatabase(db, nil),
@@ -91,9 +109,6 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		mainTrieDone:     make(chan struct{}),
 		storageTriesDone: make(chan struct{}),
 	}
-
-	// Apply options and inline defaults.
-	options.ApplyTo(ss, opts...)
 
 	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, &syncclient.LeafSyncerConfig{
 		RequestSize: leafsRequestSize,

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -36,17 +37,19 @@ var (
 
 	_ syncpkg.Syncer          = (*Syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
+
+	errTargetHeightRequired = errors.New("target height must be > 0")
 )
 
 // config holds the configuration for creating a new atomic syncer.
 type config struct {
-	// RequestSize is the maximum number of leaves to request in a single network call.
+	// requestSize is the maximum number of leaves to request in a single network call.
 	// NOTE: user facing option validated as the parameter [plugin/evm/config.Config.StateSyncRequestSize].
-	RequestSize uint16
+	requestSize uint16
 
-	// NumWorkers is the number of worker goroutines to use for syncing.
+	// numWorkers is the number of worker goroutines to use for syncing.
 	// If not set, [defaultNumWorkers] will be used.
-	NumWorkers int
+	numWorkers int
 }
 
 // SyncerOption configures the atomic syncer via functional options.
@@ -56,7 +59,7 @@ type SyncerOption = options.Option[config]
 func WithRequestSize(n uint16) SyncerOption {
 	return options.Func[config](func(c *config) {
 		if n > 0 {
-			c.RequestSize = n
+			c.requestSize = n
 		}
 	})
 }
@@ -65,7 +68,7 @@ func WithRequestSize(n uint16) SyncerOption {
 func WithNumWorkers(n int) SyncerOption {
 	return options.Func[config](func(c *config) {
 		if n > 0 {
-			c.NumWorkers = n
+			c.numWorkers = n
 		}
 	})
 }
@@ -90,9 +93,13 @@ type Syncer struct {
 
 // NewSyncer returns a new syncer instance that will sync the atomic trie from the network.
 func NewSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie *atomicstate.AtomicTrie, targetRoot common.Hash, targetHeight uint64, opts ...SyncerOption) (*Syncer, error) {
+	if targetHeight == 0 {
+		return nil, errTargetHeightRequired
+	}
+
 	cfg := config{
-		NumWorkers:  defaultNumWorkers,
-		RequestSize: defaultRequestSize,
+		numWorkers:  defaultNumWorkers,
+		requestSize: defaultRequestSize,
 	}
 	options.ApplyTo(&cfg, opts...)
 
@@ -112,7 +119,7 @@ func NewSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie 
 	}
 
 	// Create tasks channel with capacity for the number of workers.
-	tasks := make(chan syncclient.LeafSyncTask, cfg.NumWorkers)
+	tasks := make(chan syncclient.LeafSyncTask, cfg.numWorkers)
 
 	// For atomic trie syncing, we typically want a single task since the trie is sequential.
 	// But we can create multiple tasks if needed for parallel processing of different ranges.
@@ -120,8 +127,8 @@ func NewSyncer(client syncclient.LeafClient, db *versiondb.Database, atomicTrie 
 	close(tasks)
 
 	syncer.syncer = syncclient.NewCallbackLeafSyncer(client, tasks, &syncclient.LeafSyncerConfig{
-		RequestSize: cfg.RequestSize,
-		NumWorkers:  cfg.NumWorkers,
+		RequestSize: cfg.requestSize,
+		NumWorkers:  cfg.numWorkers,
 		OnFailure:   func() {}, // No-op since we flush progress to disk at the regular commit interval.
 	})
 
