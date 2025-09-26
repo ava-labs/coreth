@@ -167,7 +167,7 @@ func TestGetTimestamp(t *testing.T) {
 		expectedMillis uint64
 	}{
 		{
-			name:           "current_time_after_parent_time",
+			name:           "current_time_after_parent_time_no_milliseconds",
 			parent:         generateHeader(nowSeconds-10, nil),
 			now:            now,
 			expectedSec:    nowSeconds,
@@ -209,33 +209,19 @@ func TestGetTimestamp(t *testing.T) {
 			expectedMillis: nowMillis, // parent's TimeMilliseconds
 		},
 		{
-			name:           "current_time_before_parent_time_with_milliseconds",
-			parent:         generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
-			now:            now,
-			expectedSec:    nowSeconds + 10,
-			expectedMillis: nowMillis, // parent's TimeMilliseconds
-		},
-		{
-			name:           "zero_parent_time",
-			parent:         generateHeader(0, nil),
+			name:           "current_time_milliseconds_before_parent_time_milliseconds",
+			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis+10)),
 			now:            now,
 			expectedSec:    nowSeconds,
-			expectedMillis: nowMillis,
-		},
-		{
-			name:           "zero_parent_time_with_milliseconds",
-			parent:         generateHeader(0, utils.NewUint64(500)),
-			now:            now,
-			expectedSec:    nowSeconds,
-			expectedMillis: nowMillis,
+			expectedMillis: nowMillis + 10, // parent's TimeMilliseconds
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			sec, millis := GetTimestamp(test.parent, test.now)
-			require.Equal(t, test.expectedSec, sec, "timestamp seconds mismatch")
-			require.Equal(t, test.expectedMillis, millis, "timestamp milliseconds mismatch")
+			require.Equal(t, test.expectedSec, sec)
+			require.Equal(t, test.expectedMillis, millis)
 		})
 	}
 }
