@@ -154,7 +154,7 @@ func TestVerifyTime(t *testing.T) {
 	}
 }
 
-func TestGetTimestamp(t *testing.T) {
+func TestGetNextTimestamp(t *testing.T) {
 	now := time.Unix(1714339200, 123_456_789) // Fixed timestamp for consistent testing
 	nowSeconds := uint64(now.Unix())
 	nowMillis := uint64(now.UnixMilli())
@@ -219,7 +219,7 @@ func TestGetTimestamp(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sec, millis := GetTimestamp(test.parent, test.now)
+			sec, millis := GetNextTimestamp(test.parent, test.now)
 			require.Equal(t, test.expectedSec, sec)
 			require.Equal(t, test.expectedMillis, millis)
 		})

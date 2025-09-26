@@ -26,9 +26,9 @@ var (
 	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
 )
 
-// GetTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
+// GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
 // First return value is the timestamp in seconds, second return value is the timestamp in milliseconds.
-func GetTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
+func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 	var (
 		timestamp   = uint64(now.Unix())
 		timestampMS = uint64(now.UnixMilli())

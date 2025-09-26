@@ -149,7 +149,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		chainExtra = params.GetExtra(w.chainConfig)
 	)
 
-	timestamp, timestampMS := customheader.GetTimestamp(parent, tstart)
+	timestamp, timestampMS := customheader.GetNextTimestamp(parent, tstart)
 
 	header := &types.Header{
 		ParentHash: parent.Hash(),
