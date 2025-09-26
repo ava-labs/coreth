@@ -155,7 +155,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 	// per second.
 	parentExtra := customtypes.GetHeaderExtra(parent)
 	if parent.Time >= timestamp ||
-		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds > timestampMS) {
+		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
 		timestamp = parent.Time
 		// If the parent has a TimeMilliseconds, use it. Otherwise, use the parent time * 1000.
 		if parentExtra.TimeMilliseconds != nil {
