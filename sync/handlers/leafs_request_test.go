@@ -26,21 +26,22 @@ import (
 )
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
-	rand.Seed(1)
+	r := rand.New(rand.NewSource(1))
 	testHandlerStats := &statstest.TestHandlerStats{}
 	memdb := rawdb.NewMemoryDatabase()
 	trieDB := triedb.NewDatabase(memdb, nil)
 
-	corruptedTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 100, common.HashLength)
+	corruptedTrieRoot, _, _ := statesynctest.GenerateTrie(t, r, trieDB, 100, common.HashLength)
 	tr, err := trie.New(trie.TrieID(corruptedTrieRoot), trieDB)
 	require.NoError(t, err)
 	// Corrupt [corruptedTrieRoot]
 	statesynctest.CorruptTrie(t, memdb, tr, 5)
 
-	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, trieDB, 10_000, common.HashLength)
-	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 500, common.HashLength)
+	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, r, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, r, trieDB, 500, common.HashLength)
 	accountTrieRoot, accounts := statesynctest.FillAccounts(
 		t,
+		r,
 		trieDB,
 		common.Hash{},
 		10_000,
@@ -565,7 +566,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					// modify one entry of 1 in 4 segments
 					if i%(segmentLen*4) == 0 {
 						randomBytes := make([]byte, 5)
-						_, err := rand.Read(randomBytes)
+						_, err := r.Read(randomBytes)
 						require.NoError(t, err)
 						rawdb.WriteStorageSnapshot(memdb, largeStorageAccount, it.Hash(), randomBytes)
 					}
