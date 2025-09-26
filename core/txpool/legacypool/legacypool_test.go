@@ -43,6 +43,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
@@ -91,10 +92,15 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 
-	return &types.Header{
+	header := &types.Header{
 		Number:   new(big.Int),
 		GasLimit: bc.gasLimit.Load(),
 	}
+	if params.GetExtra(bc.config).IsGranite(0) {
+		var timeMS uint64
+		customtypes.GetHeaderExtra(header).TimeMilliseconds = &timeMS
+	}
+	return header
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
