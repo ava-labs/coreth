@@ -40,9 +40,10 @@ func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
 	// TODO QUESTION(ceyonur): is it better to just let it fail the verification / or just sleep?
-	if parent.Time >= timestamp {
+	parentExtra := customtypes.GetHeaderExtra(parent)
+	if parent.Time >= timestamp ||
+		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
 		delayMS := uint64(0)
-		parentExtra := customtypes.GetHeaderExtra(parent)
 		// If parent has no min delay excess, blocks are allowed to have the same timestamp as their parent.
 		// Else, there is a minimum delay enforced, and if the timestamp is the same as the parent,
 		// the block will be rejected.
