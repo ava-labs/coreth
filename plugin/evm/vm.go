@@ -84,6 +84,7 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 	avalancheUtils "github.com/ava-labs/avalanchego/utils"
 	avalanchegoprometheus "github.com/ava-labs/avalanchego/vms/evm/metrics/prometheus"
+	evmdatabase "github.com/ava-labs/coreth/plugin/evm/database"
 	corethlog "github.com/ava-labs/coreth/plugin/evm/log"
 	warpcontract "github.com/ava-labs/coreth/precompile/contracts/warp"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
@@ -208,6 +209,9 @@ type VM struct {
 
 	// [chaindb] is the database supplied to the Ethereum backend
 	chaindb ethdb.Database
+
+	// wrappedChainDB is block database wrapped chaindb
+	wrappedChainDB *evmdatabase.WrappedEthDatabase
 
 	// [acceptedBlockDB] is the database to store the last accepted
 	// block.
@@ -663,6 +667,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 		RequestSize:        vm.config.StateSyncRequestSize,
 		LastAcceptedHeight: lastAcceptedHeight, // TODO clean up how this is passed around
 		ChainDB:            vm.chaindb,
+		WrappedChainDB:     vm.wrappedChainDB,
 		VerDB:              vm.versiondb,
 		MetadataDB:         vm.metadataDB,
 		Acceptor:           vm,
