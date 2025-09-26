@@ -129,7 +129,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 	}
 
 	// Verify header.BaseFee matches the expected value.
-	expectedBaseFee, err := customheader.BaseFee(config, parent, header.Time)
+	expectedBaseFee, err := customheader.BaseFee(config, parent, header.Time*1000) //TODO fix
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}

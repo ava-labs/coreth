@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
@@ -20,8 +21,9 @@ import (
 func feeStateBeforeBlock(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (acp176.State, error) {
+	timestamp := timeMS / 1000
 	if timestamp < parent.Time {
 		return acp176.State{}, fmt.Errorf("%w: timestamp %d prior to parent timestamp %d",
 			errInvalidTimestamp,
@@ -43,7 +45,17 @@ func feeStateBeforeBlock(
 		}
 	}
 
-	state.AdvanceSeconds(timestamp - parent.Time)
+	switch {
+	case config.IsGranite(timestamp):
+		parentMS := parent.Time * 1000
+		if config.IsGranite(parent.Time) {
+			parentMS = *customtypes.GetHeaderExtra(parent).TimeMilliseconds
+		}
+		state.AdvanceMilliseconds(timeMS - parentMS)
+	case config.IsFortuna(timestamp):
+		// If the parent block was not running with ACP-176, we start with the
+		state.AdvanceSeconds(timestamp - parent.Time)
+	}
 	return state, nil
 }
 
@@ -56,7 +68,11 @@ func feeStateAfterBlock(
 	desiredTargetExcess *gas.Gas,
 ) (acp176.State, error) {
 	// Calculate the gas state after the parent block
-	state, err := feeStateBeforeBlock(config, parent, header.Time)
+	var timeMS = header.Time * 1000
+	if config.IsGranite(header.Time) {
+		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
+	}
+	state, err := feeStateBeforeBlock(config, parent, timeMS)
 	if err != nil {
 		return acp176.State{}, fmt.Errorf("calculating initial fee state: %w", err)
 	}

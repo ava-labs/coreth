@@ -29,11 +29,12 @@ var (
 func GasLimit(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (uint64, error) {
+	timestamp := timeMS / 1000
 	switch {
 	case config.IsFortuna(timestamp):
-		state, err := feeStateBeforeBlock(config, parent, timestamp)
+		state, err := feeStateBeforeBlock(config, parent, timeMS)
 		if err != nil {
 			return 0, fmt.Errorf("calculating initial fee state: %w", err)
 		}
@@ -80,7 +81,12 @@ func VerifyGasUsed(
 		}
 	}
 
-	capacity, err := GasCapacity(config, parent, header.Time)
+	timeMS := header.Time * 1000
+	if config.IsGranite(header.Time) {
+		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
+	}
+
+	capacity, err := GasCapacity(config, parent, timeMS)
 	if err != nil {
 		return fmt.Errorf("calculating gas capacity: %w", err)
 	}
@@ -101,8 +107,22 @@ func VerifyGasLimit(
 	header *types.Header,
 ) error {
 	switch {
+	case config.IsGranite(header.Time):
+		timeMS := *customtypes.GetHeaderExtra(header).TimeMilliseconds
+		state, err := feeStateBeforeBlock(config, parent, timeMS)
+		if err != nil {
+			return fmt.Errorf("calculating initial fee state: %w", err)
+		}
+		maxCapacity := state.MaxCapacity()
+		if header.GasLimit != uint64(maxCapacity) {
+			return fmt.Errorf("%w: have %d, want %d",
+				errInvalidGasLimit,
+				header.GasLimit,
+				maxCapacity,
+			)
+		}
 	case config.IsFortuna(header.Time):
-		state, err := feeStateBeforeBlock(config, parent, header.Time)
+		state, err := feeStateBeforeBlock(config, parent, header.Time*1000)
 		if err != nil {
 			return fmt.Errorf("calculating initial fee state: %w", err)
 		}
@@ -160,14 +180,15 @@ func VerifyGasLimit(
 func GasCapacity(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (uint64, error) {
+	timestamp := timeMS / 1000
 	// Prior to the F upgrade, the gas capacity is equal to the gas limit.
 	if !config.IsFortuna(timestamp) {
-		return GasLimit(config, parent, timestamp)
+		return GasLimit(config, parent, timeMS)
 	}
 
-	state, err := feeStateBeforeBlock(config, parent, timestamp)
+	state, err := feeStateBeforeBlock(config, parent, timeMS)
 	if err != nil {
 		return 0, fmt.Errorf("calculating initial fee state: %w", err)
 	}
@@ -188,7 +209,12 @@ func RemainingAtomicGasCapacity(
 		return ap5.AtomicGasLimit, nil
 	}
 
-	state, err := feeStateBeforeBlock(config, parent, header.Time)
+	timeMS := header.Time * 1000
+	if config.IsGranite(header.Time) {
+		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
+	}
+
+	state, err := feeStateBeforeBlock(config, parent, timeMS)
 	if err != nil {
 		return 0, fmt.Errorf("calculating initial fee state: %w", err)
 	}
