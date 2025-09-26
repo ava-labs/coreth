@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/coreth/sync/blocksync"
 	"github.com/ava-labs/coreth/sync/statesync"
 
+	evmdatabase "github.com/ava-labs/coreth/plugin/evm/database"
 	syncpkg "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
@@ -50,12 +51,13 @@ type EthBlockWrapper interface {
 }
 
 type ClientConfig struct {
-	Chain      *eth.Ethereum
-	State      *chain.State
-	ChainDB    ethdb.Database
-	Acceptor   BlockAcceptor
-	VerDB      *versiondb.Database
-	MetadataDB database.Database
+	Chain          *eth.Ethereum
+	State          *chain.State
+	ChainDB        ethdb.Database
+	WrappedChainDB *evmdatabase.WrappedEthDatabase
+	Acceptor       BlockAcceptor
+	VerDB          *versiondb.Database
+	MetadataDB     database.Database
 
 	// Extension points.
 	Parser message.SyncableParser
@@ -355,6 +357,11 @@ func (client *client) finishSync() error {
 	parentHeight := block.NumberU64() - 1
 	parentHash := block.ParentHash()
 	client.Chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
+
+	// Init the wrapped chain db with the min height of the blocks that we will be storing
+	if client.WrappedChainDB != nil && !client.WrappedChainDB.IsInitialized() {
+		client.WrappedChainDB.InitWithMinHeight(block.NumberU64() + 1)
+	}
 
 	if err := client.Chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
 		return err
