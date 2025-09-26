@@ -11,7 +11,6 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 
-	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
@@ -68,7 +67,7 @@ func feeStateAfterBlock(
 	desiredTargetExcess *gas.Gas,
 ) (acp176.State, error) {
 	// Calculate the gas state after the parent block
-	var timeMS = header.Time * 1000
+	timeMS := header.Time * 1000
 	if config.IsGranite(header.Time) {
 		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
 	}
