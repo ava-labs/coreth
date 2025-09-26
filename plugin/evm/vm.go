@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
@@ -68,6 +69,7 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -102,6 +104,15 @@ var (
 )
 
 const (
+	// Minimum amount of time to wait after building a block before attempting to build a block
+	// a second time without changing the contents of the mempool.
+	PreGraniteMinBlockBuildingRetryDelay = 500 * time.Millisecond
+	// Minimum amount of time to wait after attempting/build a block before attempting to build another block
+	// This is only applied for retrying to build a block after a minimum delay has passed.
+	// The initial minimum delay is applied according to parent minDelayExcess (if available)
+	// TODO (ceyonur): Decide whether this a correct value.
+	PostGraniteMinBlockBuildingRetryDelay = acp226.MinDelayMilliseconds
+
 	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB
 	missingCacheSize       = 50
@@ -876,7 +887,31 @@ func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 		}
 	}
 
-	return builder.waitForEvent(ctx)
+	var initialMinBlockBuildingRetryDelay, minBlockBuildingRetryDelay time.Duration
+	// check if we're building a block for Granite
+	if vm.chainConfigExtra().IsGranite(uint64(time.Now().Unix())) {
+		// For Granite, implement two-stage delay:
+		// Stage 1: ACP-226 minimum delay based on parent's MinDelayExcess
+		// Stage 2: PostGraniteMinBlockBuildingRetryDelay as min delay
+
+		// Calculate ACP-226 delay from parent's MinDelayExcess
+		parent := vm.blockChain.CurrentBlock()
+		acp226Delay := time.Duration(acp226.MinDelayMilliseconds) * time.Millisecond // Default minimum
+		if parent != nil {
+			parentExtra := customtypes.GetHeaderExtra(parent)
+			if parentExtra.MinDelayExcess != nil {
+				acp226Delay = time.Duration(acp226.DelayExcess(*parentExtra.MinDelayExcess).Delay()) * time.Millisecond
+			}
+		}
+
+		initialMinBlockBuildingRetryDelay = acp226Delay
+		minBlockBuildingRetryDelay = PostGraniteMinBlockBuildingRetryDelay
+	} else { // TODO (ceyonur): this else branch can be removed after Granite is activated.
+		// Pre-Granite: Use simple delay mechanism
+		initialMinBlockBuildingRetryDelay = 0 // No initial delay
+		minBlockBuildingRetryDelay = PreGraniteMinBlockBuildingRetryDelay
+	}
+	return builder.waitForEvent(ctx, initialMinBlockBuildingRetryDelay, minBlockBuildingRetryDelay)
 }
 
 // Shutdown implements the snowman.ChainVM interface

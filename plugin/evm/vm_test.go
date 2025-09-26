@@ -2003,7 +2003,7 @@ func TestWaitForEvent(t *testing.T) {
 					msg, err := vm.WaitForEvent(context.Background())
 					assert.NoError(t, err)
 					assert.Equal(t, commonEng.PendingTxs, msg)
-					assert.GreaterOrEqual(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
+					assert.GreaterOrEqual(t, time.Since(lastBuildBlockTime), PreGraniteMinBlockBuildingRetryDelay)
 				}()
 
 				wg.Wait()

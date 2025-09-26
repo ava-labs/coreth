@@ -21,10 +21,6 @@ import (
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
 
-// Minimum amount of time to wait after building a block before attempting to build a block
-// a second time without changing the contents of the mempool.
-const MinBlockBuildingRetryDelay = 500 * time.Millisecond
-
 type blockBuilder struct {
 	ctx *snow.Context
 
@@ -114,20 +110,33 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 }
 
 // waitForEvent waits until a block needs to be built.
-// It returns only after at least [minBlockBuildingRetryDelay] passed from the last time a block was built.
-func (b *blockBuilder) waitForEvent(ctx context.Context) (commonEng.Message, error) {
+// For the first build, it waits for `initialMinBlockBuildingDelay`.
+// For subsequent builds, it waits for the longer of `initialMinBlockBuildingDelay` or `minBlockBuildingRetryDelay`.
+func (b *blockBuilder) waitForEvent(ctx context.Context, initialMinBlockBuildingDelay, minBlockBuildingRetryDelay time.Duration) (commonEng.Message, error) {
 	lastBuildTime, err := b.waitForNeedToBuild(ctx)
 	if err != nil {
 		return 0, err
 	}
 	timeSinceLastBuildTime := time.Since(lastBuildTime)
-	if b.lastBuildTime.IsZero() || timeSinceLastBuildTime >= MinBlockBuildingRetryDelay {
+
+	// Determine the required delay based on whether this is the first build or a retry
+	var requiredDelay time.Duration
+	if b.lastBuildTime.IsZero() {
+		// if this is the first build, we must wait for initial delay
+		requiredDelay = initialMinBlockBuildingDelay
+	} else {
+		//  wait for the longer of initial delay or retry delay
+		requiredDelay = max(initialMinBlockBuildingDelay, minBlockBuildingRetryDelay)
+	}
+
+	if timeSinceLastBuildTime >= requiredDelay {
 		b.ctx.Log.Debug("Last time we built a block was long enough ago, no need to wait",
 			zap.Duration("timeSinceLastBuildTime", timeSinceLastBuildTime),
 		)
 		return commonEng.PendingTxs, nil
 	}
-	timeUntilNextBuild := MinBlockBuildingRetryDelay - timeSinceLastBuildTime
+
+	timeUntilNextBuild := requiredDelay - timeSinceLastBuildTime
 	b.ctx.Log.Debug("Last time we built a block was too recent, waiting",
 		zap.Duration("timeUntilNextBuild", timeUntilNextBuild),
 	)
