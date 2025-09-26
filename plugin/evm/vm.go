@@ -33,6 +33,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -54,7 +55,6 @@ import (
 	_ "github.com/ava-labs/libevm/eth/tracers/js"
 	_ "github.com/ava-labs/libevm/eth/tracers/native"
 
-	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/constants"
 	"github.com/ava-labs/coreth/core"
