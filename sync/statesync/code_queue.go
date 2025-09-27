@@ -12,6 +12,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/options"
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 )
@@ -49,20 +50,19 @@ type CodeQueue struct {
 	closed atomicCloseState
 }
 
-// TODO: this will be migrated to using libevm's options pattern in a follow-up PR.
-type codeQueueOptions struct {
+type queueConfig struct {
 	capacity int
 }
 
-type CodeQueueOption func(*codeQueueOptions)
+type CodeQueueOption = options.Option[queueConfig]
 
 // WithCapacity overrides the queue buffer capacity.
 func WithCapacity(n int) CodeQueueOption {
-	return func(o *codeQueueOptions) {
+	return options.Func[queueConfig](func(o *queueConfig) {
 		if n > 0 {
 			o.capacity = n
 		}
-	}
+	})
 }
 
 // NewCodeQueue creates a new code queue applying optional functional options.
@@ -70,12 +70,10 @@ func WithCapacity(n int) CodeQueueOption {
 // goroutine.
 func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOption) (*CodeQueue, error) {
 	// Apply defaults then options.
-	o := codeQueueOptions{
+	o := queueConfig{
 		capacity: defaultQueueCapacity,
 	}
-	for _, opt := range opts {
-		opt(&o)
-	}
+	options.ApplyTo(&o, opts...)
 
 	q := &CodeQueue{
 		db:   db,
