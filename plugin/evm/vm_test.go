@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/upgrade"
@@ -2382,4 +2383,14 @@ func TestBlockGasValidation(t *testing.T) {
 			require.ErrorIs(err, test.want)
 		})
 	}
+}
+
+func TestInspectDatabases(t *testing.T) {
+	var (
+		vm = newDefaultTestVM()
+		db = memdb.New()
+	)
+
+	vm.initializeDBs(db)
+	require.NoError(t, vm.inspectDatabases())
 }
