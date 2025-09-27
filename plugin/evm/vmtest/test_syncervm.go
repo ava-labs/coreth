@@ -157,7 +157,12 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		if !hasItem {
 			t.Fatal("expected nodeSet to contain at least 1 nodeID")
 		}
-		go testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
+		go func() {
+			if err := testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request); err != nil {
+				t.Errorf("AppRequest failed: %v", err)
+			}
+		}()
+
 		return nil
 	}
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
@@ -242,7 +247,11 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	testSyncVMSetup.serverVM.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
-			go syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response)
+			go func() {
+				if err := syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response); err != nil {
+					t.Errorf("AppResponse failed: %v", err)
+				}
+			}()
 		} else {
 			go test.responseIntercept(syncReEnabledVM, nodeID, requestID, response)
 		}
@@ -384,7 +393,11 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	serverTest.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
-			go syncerVM.AppResponse(ctx, nodeID, requestID, response)
+			go func() {
+				if err := syncerVM.AppResponse(ctx, nodeID, requestID, response); err != nil {
+					t.Errorf("AppResponse failed: %v", err)
+				}
+			}()
 		} else {
 			go test.responseIntercept(syncerVM, nodeID, requestID, response)
 		}
