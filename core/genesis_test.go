@@ -28,7 +28,6 @@
 package core
 
 import (
-	"bytes"
 	_ "embed"
 	"fmt"
 	"math/big"
@@ -40,10 +39,8 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/triedb/firewood"
-	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -70,7 +67,7 @@ func TestGenesisBlockForTesting(t *testing.T) {
 }
 
 func TestSetupGenesis(t *testing.T) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testSetupGenesis(t, scheme)
 		})
@@ -302,8 +299,6 @@ func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 	switch scheme {
 	case rawdb.HashScheme:
 		return triedb.HashDefaults
-	case rawdb.PathScheme:
-		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
 	case customrawdb.FirewoodScheme:
 		fwCfg := firewood.Defaults
 		// Create a unique temporary directory for each test
@@ -313,57 +308,4 @@ func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 		t.Fatalf("unknown scheme %s", scheme)
 	}
 	return nil
-}
-
-func TestVerkleGenesisCommit(t *testing.T) {
-	var verkleTime uint64 = 0
-	verkleConfig := &params.ChainConfig{
-		ChainID:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(0),
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    big.NewInt(0),
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		ShanghaiTime:        &verkleTime,
-		CancunTime:          &verkleTime,
-		VerkleTime:          &verkleTime,
-	}
-
-	genesis := &Genesis{
-		BaseFee:    big.NewInt(ap3.InitialBaseFee),
-		Config:     verkleConfig,
-		Timestamp:  verkleTime,
-		Difficulty: big.NewInt(0),
-		Alloc: types.GenesisAlloc{
-			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
-		},
-	}
-
-	expected := common.Hex2Bytes("22678ccc2daa04e91013ce47799973bd6c1824f37989d7cea4cbdcd79b39137f")
-	got := genesis.ToBlock().Root().Bytes()
-	if !bytes.Equal(got, expected) {
-		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
-	}
-
-	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, DBOverride: pathdb.Defaults.BackendConstructor})
-	block := genesis.MustCommit(db, triedb)
-	if !bytes.Equal(block.Root().Bytes(), expected) {
-		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
-	}
-
-	// Test that the trie is verkle
-	if !triedb.IsVerkle() {
-		t.Fatalf("expected trie to be verkle")
-	}
-
-	if !rawdb.ExistsAccountTrieNode(db, nil) {
-		t.Fatal("could not find node")
-	}
 }
