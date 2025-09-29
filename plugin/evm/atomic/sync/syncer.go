@@ -4,7 +4,6 @@
 package sync
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -32,9 +31,6 @@ const (
 )
 
 var (
-	// Pre-allocate zero bytes to avoid repeated allocations.
-	zeroBytes = bytes.Repeat([]byte{0x00}, common.HashLength)
-
 	_ syncpkg.Syncer          = (*Syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 
