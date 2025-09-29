@@ -37,10 +37,11 @@ type blockBuilder struct {
 	pendingSignal *lock.Cond
 
 	buildBlockLock sync.Mutex
-	// lastBuildTime is the time when the last block was built.
+	// lastBuiltHeight is the height of the last block was built.
 	// This is used to ensure that we don't build blocks too frequently,
 	// but at least after a minimum delay of minBlockBuildingRetryDelay.
-	lastBuildTime time.Time
+	lastBuiltHeight uint64
+	isRetry         bool
 }
 
 // NewBlockBuilder creates a new block builder. extraMempool is an optional mempool (can be nil) that
@@ -58,10 +59,11 @@ func (vm *VM) NewBlockBuilder(extraMempool extension.BuilderMempool) *blockBuild
 }
 
 // handleGenerateBlock is called from the VM immediately after BuildBlock.
-func (b *blockBuilder) handleGenerateBlock() {
+func (b *blockBuilder) handleGenerateBlock(currentHeight uint64) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
-	b.lastBuildTime = time.Now()
+	b.isRetry = b.lastBuiltHeight == currentHeight
+	b.lastBuiltHeight = currentHeight
 }
 
 // needToBuild returns true if there are outstanding transactions to be issued
@@ -116,38 +118,34 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 // waitForEvent waits until a block needs to be built.
 // It returns only after at least [minBlockBuildingRetryDelay] passed from the last time a block was built.
 func (b *blockBuilder) waitForEvent(ctx context.Context) (commonEng.Message, error) {
-	lastBuildTime, err := b.waitForNeedToBuild(ctx)
+	isRetry, err := b.waitForNeedToBuild(ctx)
 	if err != nil {
 		return 0, err
 	}
-	timeSinceLastBuildTime := time.Since(lastBuildTime)
-	if b.lastBuildTime.IsZero() || timeSinceLastBuildTime >= MinBlockBuildingRetryDelay {
-		b.ctx.Log.Debug("Last time we built a block was long enough ago, no need to wait",
-			zap.Duration("timeSinceLastBuildTime", timeSinceLastBuildTime),
-		)
+	if !isRetry {
+		b.ctx.Log.Debug("This is the first time we attempt to build a block at this height, no need to wait")
 		return commonEng.PendingTxs, nil
 	}
-	timeUntilNextBuild := MinBlockBuildingRetryDelay - timeSinceLastBuildTime
 	b.ctx.Log.Debug("Last time we built a block was too recent, waiting",
-		zap.Duration("timeUntilNextBuild", timeUntilNextBuild),
+		zap.Duration("timeUntilNextBuild", MinBlockBuildingRetryDelay),
 	)
 	select {
 	case <-ctx.Done():
 		return 0, ctx.Err()
-	case <-time.After(timeUntilNextBuild):
+	case <-time.After(MinBlockBuildingRetryDelay):
 		return commonEng.PendingTxs, nil
 	}
 }
 
 // waitForNeedToBuild waits until needToBuild returns true.
 // It returns the last time a block was built.
-func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, error) {
+func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (bool, error) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
 	for !b.needToBuild() {
 		if err := b.pendingSignal.Wait(ctx); err != nil {
-			return time.Time{}, err
+			return false, err
 		}
 	}
-	return b.lastBuildTime, nil
+	return b.isRetry, nil
 }
