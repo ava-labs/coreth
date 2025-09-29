@@ -273,10 +273,7 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 	}
 
 	chainConfigExtra := params.GetExtra(w.chainConfig)
-	timeMS := header.Time * 1000
-	if chainConfigExtra.IsGranite(header.Time) {
-		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
-	}
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
 	capacity, err := customheader.GasCapacity(chainConfigExtra, parent, timeMS)
 	if err != nil {
 		return nil, fmt.Errorf("calculating gas capacity: %w", err)

@@ -46,13 +46,9 @@ func feeStateBeforeBlock(
 
 	switch {
 	case config.IsGranite(timestamp):
-		parentMS := parent.Time * 1000
-		if config.IsGranite(parent.Time) {
-			parentMS = *customtypes.GetHeaderExtra(parent).TimeMilliseconds
-		}
+		parentMS := customtypes.HeaderTimeMilliseconds(parent)
 		state.AdvanceMilliseconds(timeMS - parentMS)
 	case config.IsFortuna(timestamp):
-		// If the parent block was not running with ACP-176, we start with the
 		state.AdvanceSeconds(timestamp - parent.Time)
 	}
 	return state, nil
@@ -67,10 +63,7 @@ func feeStateAfterBlock(
 	desiredTargetExcess *gas.Gas,
 ) (acp176.State, error) {
 	// Calculate the gas state after the parent block
-	timeMS := header.Time * 1000
-	if config.IsGranite(header.Time) {
-		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
-	}
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
 	state, err := feeStateBeforeBlock(config, parent, timeMS)
 	if err != nil {
 		return acp176.State{}, fmt.Errorf("calculating initial fee state: %w", err)

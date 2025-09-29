@@ -370,11 +370,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	fakeChainReader := newChainMaker(nil, config, engine)
 	configExtra := params.GetExtra(config)
 	time := parent.Time() + 10
-	timeMS := time * 1000
-	if configExtra.IsGranite(parent.Time()) {
-		// Granite blocks require TimeMilliseconds to be set
-		timeMS = *customtypes.GetHeaderExtra(parent.Header()).TimeMilliseconds + 10000
-	}
+	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + 10000
 	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), timeMS)
 	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), timeMS)
 	header := &types.Header{
@@ -394,8 +390,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	if configExtra.IsGranite(header.Time) {
 		headerExtra := customtypes.GetHeaderExtra(header)
-		headerExtra.TimeMilliseconds = new(uint64)
-		*headerExtra.TimeMilliseconds = header.Time * 1000
+		headerExtra.TimeMilliseconds = utils.NewUint64(header.Time * 1000)
 	}
 	if configExtra.IsApricotPhase4(header.Time) {
 		headerExtra := customtypes.GetHeaderExtra(header)

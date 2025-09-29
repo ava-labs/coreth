@@ -129,11 +129,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 	}
 
 	// Verify header.BaseFee matches the expected value.
-	headerExtra := customtypes.GetHeaderExtra(header)
-	timeMS := header.Time * 1000
-	if config.IsGranite(header.Time) {
-		timeMS = *headerExtra.TimeMilliseconds
-	}
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
 	expectedBaseFee, err := customheader.BaseFee(config, parent, timeMS)
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
@@ -141,6 +137,8 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 	if !utils.BigEqual(header.BaseFee, expectedBaseFee) {
 		return fmt.Errorf("expected base fee %d, found %d", expectedBaseFee, header.BaseFee)
 	}
+
+	headerExtra := customtypes.GetHeaderExtra(header)
 
 	// Enforce BlockGasCost constraints
 	expectedBlockGasCost := customheader.BlockGasCost(

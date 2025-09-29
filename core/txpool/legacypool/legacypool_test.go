@@ -97,8 +97,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit: bc.gasLimit.Load(),
 	}
 	if params.GetExtra(bc.config).IsGranite(0) {
-		var timeMS uint64
-		customtypes.GetHeaderExtra(header).TimeMilliseconds = &timeMS
+		customtypes.GetHeaderExtra(header).TimeMilliseconds = new(uint64)
 	}
 	return header
 }

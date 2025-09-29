@@ -81,10 +81,7 @@ func VerifyGasUsed(
 		}
 	}
 
-	timeMS := header.Time * 1000
-	if config.IsGranite(header.Time) {
-		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
-	}
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
 
 	capacity, err := GasCapacity(config, parent, timeMS)
 	if err != nil {
@@ -107,22 +104,9 @@ func VerifyGasLimit(
 	header *types.Header,
 ) error {
 	switch {
-	case config.IsGranite(header.Time):
-		timeMS := *customtypes.GetHeaderExtra(header).TimeMilliseconds
-		state, err := feeStateBeforeBlock(config, parent, timeMS)
-		if err != nil {
-			return fmt.Errorf("calculating initial fee state: %w", err)
-		}
-		maxCapacity := state.MaxCapacity()
-		if header.GasLimit != uint64(maxCapacity) {
-			return fmt.Errorf("%w: have %d, want %d",
-				errInvalidGasLimit,
-				header.GasLimit,
-				maxCapacity,
-			)
-		}
 	case config.IsFortuna(header.Time):
-		state, err := feeStateBeforeBlock(config, parent, header.Time*1000)
+		timeMS := customtypes.HeaderTimeMilliseconds(header)
+		state, err := feeStateBeforeBlock(config, parent, timeMS)
 		if err != nil {
 			return fmt.Errorf("calculating initial fee state: %w", err)
 		}
@@ -209,10 +193,7 @@ func RemainingAtomicGasCapacity(
 		return ap5.AtomicGasLimit, nil
 	}
 
-	timeMS := header.Time * 1000
-	if config.IsGranite(header.Time) {
-		timeMS = *customtypes.GetHeaderExtra(header).TimeMilliseconds
-	}
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
 
 	state, err := feeStateBeforeBlock(config, parent, timeMS)
 	if err != nil {
