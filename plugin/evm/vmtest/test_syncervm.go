@@ -81,7 +81,6 @@ var SyncerVMTests = []SyncerVMTest{
 }
 
 func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.New(rand.NewSource(1)) //nolint:gosec
 	test := SyncTestParams{
 		SyncableInterval:   256,
 		StateSyncMinBlocks: 300, // must be greater than [syncableInterval] to skip sync
@@ -93,7 +92,6 @@ func SkipStateSyncTest(t *testing.T, testSetup *SyncTestSetup) {
 }
 
 func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.New(rand.NewSource(1)) //nolint:gosec
 	test := SyncTestParams{
 		SyncableInterval:   256,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
@@ -105,7 +103,6 @@ func StateSyncFromScratchTest(t *testing.T, testSetup *SyncTestSetup) {
 }
 
 func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.New(rand.NewSource(1)) //nolint:gosec
 	numToGen := vmsync.BlocksToFetch + uint64(32)
 	test := SyncTestParams{
 		SyncableInterval:   numToGen,
@@ -118,8 +115,8 @@ func StateSyncFromScratchExceedParentTest(t *testing.T, testSetup *SyncTestSetup
 }
 
 func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup) {
-	rand.New(rand.NewSource(1)) //nolint:gosec
 	var lock sync.Mutex
+	require := require.New(t)
 	reqCount := 0
 	test := SyncTestParams{
 		SyncableInterval:   vmsync.BlocksToFetch,
@@ -139,7 +136,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 					panic(err)
 				}
 			} else {
-				require.NoError(t, syncerVM.AppResponse(context.Background(), nodeID, requestID, response))
+				require.NoError(syncerVM.AppResponse(context.Background(), nodeID, requestID, response))
 			}
 		},
 		expectedErr: context.Canceled,
@@ -158,16 +155,14 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
 	appSender.SendAppRequestF = func(ctx context.Context, nodeSet set.Set[ids.NodeID], requestID uint32, request []byte) error {
 		nodeID, hasItem := nodeSet.Pop()
-		if !hasItem {
-			t.Fatal("expected nodeSet to contain at least 1 nodeID")
-		}
+		require.True(hasItem, "expected nodeSet to contain at least 1 nodeID")
 		go testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request)
 		return nil
 	}
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
 	genesisJSON := []byte(GenesisJSON(paramstest.ForkToChainConfig[upgradetest.Latest]))
-	if err := syncDisabledVM.Initialize(
+	require.NoError(syncDisabledVM.Initialize(
 		context.Background(),
 		testSyncVMSetup.syncerVM.SnowCtx,
 		testSyncVMSetup.syncerVM.DB,
@@ -176,50 +171,32 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		[]byte(stateSyncDisabledConfigJSON),
 		[]*commonEng.Fx{},
 		appSender,
-	); err != nil {
-		t.Fatal(err)
-	}
+	))
 
 	defer func() {
-		if err := syncDisabledVM.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(syncDisabledVM.Shutdown(context.Background()))
 	}()
 
-	if height := syncDisabledVM.LastAcceptedExtendedBlock().Height(); height != 0 {
-		t.Fatalf("Unexpected last accepted height: %d", height)
-	}
+	require.Zero(syncDisabledVM.LastAcceptedExtendedBlock().Height(), "Unexpected last accepted height")
 
 	enabled, err := syncDisabledVM.StateSyncEnabled(context.Background())
-	require.NoError(t, err)
-	require.False(t, enabled, "sync should be disabled")
+	require.NoError(err)
+	require.False(enabled, "sync should be disabled")
 
 	// Process the first 10 blocks from the serverVM
 	for i := uint64(1); i < 10; i++ {
 		ethBlock := testSyncVMSetup.serverVM.VM.Ethereum().BlockChain().GetBlockByNumber(i)
-		if ethBlock == nil {
-			t.Fatalf("VM Server did not have a block available at height %d", i)
-		}
+		require.NotNil(ethBlock, "couldn't get block %d", i)
 		b, err := rlp.EncodeToBytes(ethBlock)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		blk, err := syncDisabledVM.ParseBlock(context.Background(), b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := blk.Verify(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		if err := blk.Accept(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
+		require.NoError(blk.Verify(context.Background()))
+		require.NoError(blk.Accept(context.Background()))
 	}
 	// Verify the snapshot disk layer matches the last block root
 	lastRoot := syncDisabledVM.Ethereum().BlockChain().CurrentBlock().Root
-	if err := syncDisabledVM.Ethereum().BlockChain().Snapshots().Verify(lastRoot); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(syncDisabledVM.Ethereum().BlockChain().Snapshots().Verify(lastRoot))
 	syncDisabledVM.Ethereum().BlockChain().DrainAcceptorQueue()
 
 	// Create a new VM from the same database with state sync enabled.
@@ -230,7 +207,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		test.StateSyncMinBlocks,
 	)
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
-	if err := syncReEnabledVM.Initialize(
+	require.NoError(syncReEnabledVM.Initialize(
 		context.Background(),
 		testSyncVMSetup.syncerVM.SnowCtx,
 		testSyncVMSetup.syncerVM.DB,
@@ -239,9 +216,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		[]byte(configJSON),
 		[]*commonEng.Fx{},
 		appSender,
-	); err != nil {
-		t.Fatal(err)
-	}
+	))
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
 	testSyncVMSetup.serverVM.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
@@ -255,15 +230,15 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	}
 
 	// connect peer to [syncerVM]
-	require.NoError(t, syncReEnabledVM.Connected(
+	require.NoError(syncReEnabledVM.Connected(
 		context.Background(),
 		testSyncVMSetup.serverVM.SnowCtx.NodeID,
 		statesyncclient.StateSyncVersion,
 	))
 
 	enabled, err = syncReEnabledVM.StateSyncEnabled(context.Background())
-	require.NoError(t, err)
-	require.True(t, enabled, "sync should be enabled")
+	require.NoError(err)
+	require.True(enabled, "sync should be enabled")
 
 	testSyncVMSetup.syncerVM.VM = syncReEnabledVM
 	testSyncerVM(t, testSyncVMSetup, test, testSetup.ExtraSyncerVMTest)
@@ -337,7 +312,8 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	generateAndAcceptBlocks(t, serverVM, numBlocks, testSetup.GenFn, nil, cb)
 
 	// make some accounts
-	root, accounts := statesynctest.FillAccountsWithOverlappingStorage(t, serverVM.Ethereum().BlockChain().TrieDB(), types.EmptyRootHash, 1000, 16)
+	r := rand.New(rand.NewSource(1))
+	root, accounts := statesynctest.FillAccountsWithOverlappingStorage(t, r, serverVM.Ethereum().BlockChain().TrieDB(), types.EmptyRootHash, 1000, 16)
 
 	// patch serverVM's lastAcceptedBlock to have the new root
 	// and update the vm's state so the trie with accounts will
@@ -537,9 +513,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
 		br := predicate.BlockResults{}
 		b, err := br.Bytes()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		gen.AppendExtra(b)
 		i := 0
 		for k := range fundedAccounts {
@@ -573,9 +547,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	generateAndAcceptBlocks(t, syncerVM, blocksToBuild, func(_ int, vm extension.InnerVM, gen *core.BlockGen) {
 		br := predicate.BlockResults{}
 		b, err := br.Bytes()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		gen.AppendExtra(b)
 		i := 0
 		for k := range fundedAccounts {
@@ -629,24 +601,17 @@ func patchBlock(blk *types.Block, root common.Hash, db ethdb.Database) *types.Bl
 // TODO: consider using this helper function in vm_test.go and elsewhere in this package to clean up tests
 func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, gen func(int, extension.InnerVM, *core.BlockGen), accepted func(*types.Block), cb dummy.ConsensusCallbacks) {
 	t.Helper()
+	require := require.New(t)
 
 	// acceptExternalBlock defines a function to parse, verify, and accept a block once it has been
 	// generated by GenerateChain
 	acceptExternalBlock := func(block *types.Block) {
 		bytes, err := rlp.EncodeToBytes(block)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		extendedBlock, err := vm.ParseBlock(context.Background(), bytes)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := extendedBlock.Verify(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		if err := extendedBlock.Accept(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
+		require.NoError(extendedBlock.Verify(context.Background()))
+		require.NoError(extendedBlock.Accept(context.Background()))
 
 		if accepted != nil {
 			accepted(block)
@@ -665,9 +630,7 @@ func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, 
 			gen(i, vm, g)
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 	vm.Ethereum().BlockChain().DrainAcceptorQueue()
 }
 
