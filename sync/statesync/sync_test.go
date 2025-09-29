@@ -6,8 +6,8 @@ package statesync
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"errors"
+	"math/rand"
 	"sync/atomic"
 	"testing"
 

@@ -127,8 +127,6 @@ func FillAccounts(
 		randBalance = uint256.NewInt(1000000000000000000)
 		maxNonce    = 10
 		accounts    = make(map[*utilstest.Key]*types.StateAccount, numAccounts)
-		rand        = rand.New(rand.NewSource(1)) //nolint:gosec
-
 	)
 
 	tr, err := trie.NewStateTrie(trie.TrieID(root), trieDB)

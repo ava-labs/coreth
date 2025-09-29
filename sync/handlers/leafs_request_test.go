@@ -6,7 +6,7 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
+	"math/rand"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
