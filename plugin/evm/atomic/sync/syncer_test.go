@@ -207,7 +207,7 @@ func TestSyncerParallelizationScenarios(t *testing.T) {
 func TestSyncerContextCancellation(t *testing.T) {
 	ctx, mockClient, atomicBackend, clientDB, root := setupParallelizationTest(t, testTargetHeight)
 	syncer, err := NewSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, testTargetHeight)
-	require.NoError(t, err, "could not create test syncer")
+	require.NoError(t, err, "NewSyncer()")
 
 	// Immediately cancel the context to simulate cancellation.
 	ctx, cancel := context.WithCancel(ctx)
@@ -232,12 +232,12 @@ func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Contex
 // runParallelizationTest executes a parallelization test with the given parameters.
 func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, clientDB *versiondb.Database, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int) {
 	syncer, err := NewSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight)
-	require.NoError(t, err, "could not create test syncer")
+	require.NoError(t, err, "NewSyncer()")
 
 	workerType := "default workers"
 	if numWorkers > 0 {
 		syncer, err = NewSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, WithNumWorkers(numWorkers))
-		require.NoError(t, err, "could not create test syncer")
+		require.NoError(t, err, "NewSyncer()")
 		workerType = fmt.Sprintf("%d workers", numWorkers)
 	}
 
@@ -261,7 +261,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 			targetHeight,
 			WithNumWorkers(numWorkers),
 		)
-		require.NoError(t, err, "could not create syncer")
+		require.NoError(t, err, "NewSyncer()")
 		mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
 			if numLeaves+len(leafsResponse.Keys) > checkpoint.leafCutoff {
@@ -290,7 +290,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 		WithRequestSize(defaultRequestSize),
 		WithNumWorkers(numWorkers),
 	)
-	require.NoError(t, err, "could not create syncer")
+	require.NoError(t, err, "NewSyncer()")
 	mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 		// Increment the number of leaves and return the original response
 		numLeaves += len(leafsResponse.Keys)
@@ -361,10 +361,10 @@ func setupTestInfrastructure(t *testing.T, serverTrieDB *triedb.Database) (conte
 
 	clientDB := versiondb.New(memdb.New())
 	repo, err := state.NewAtomicTxRepository(clientDB, message.Codec, 0)
-	require.NoError(t, err, "could not initialize atomic tx repository")
+	require.NoError(t, err, "NewAtomicTxRepository()")
 
 	atomicBackend, err := state.NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, 0, common.Hash{}, testCommitInterval)
-	require.NoError(t, err, "could not initialize atomic backend")
+	require.NoError(t, err, "NewAtomicBackend()")
 
 	return ctx, mockClient, atomicBackend, clientDB
 }

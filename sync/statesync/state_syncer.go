@@ -61,19 +61,14 @@ type stateSync struct {
 	stats              *trieSyncStats
 }
 
-// stateSyncConfig carries construction-time options for state syncer.
-type stateSyncConfig struct {
-	batchSize uint
-}
-
-// SyncerOption configures the state syncer via functional options (applied to a private config).
-type SyncerOption = options.Option[stateSyncConfig]
+// SyncerOption configures the state syncer via functional options.
+type SyncerOption = options.Option[stateSync]
 
 // WithBatchSize sets the database batch size for writes.
 func WithBatchSize(n uint) SyncerOption {
-	return options.Func[stateSyncConfig](func(c *stateSyncConfig) {
+	return options.Func[stateSync](func(s *stateSync) {
 		if n > 0 {
-			c.batchSize = n
+			s.batchSize = n
 		}
 	})
 }
@@ -83,14 +78,8 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		return nil, errLeafsRequestSizeRequired
 	}
 
-	// Build construction config with defaults and apply options.
-	cfg := stateSyncConfig{
-		batchSize: ethdb.IdealBatchSize,
-	}
-	options.ApplyTo(&cfg, opts...)
-
+	// Construct with defaults, then apply options directly to stateSync.
 	ss := &stateSync{
-		batchSize:       cfg.batchSize,
 		db:              db,
 		root:            root,
 		trieDB:          triedb.NewDatabase(db, nil),
@@ -108,7 +97,11 @@ func NewSyncer(client syncclient.Client, db ethdb.Database, root common.Hash, co
 		segments:         make(chan syncclient.LeafSyncTask, defaultNumWorkers*numStorageTrieSegments),
 		mainTrieDone:     make(chan struct{}),
 		storageTriesDone: make(chan struct{}),
+		batchSize:        ethdb.IdealBatchSize,
 	}
+
+	// Apply functional options.
+	options.ApplyTo(ss, opts...)
 
 	ss.syncer = syncclient.NewCallbackLeafSyncer(client, ss.segments, &syncclient.LeafSyncerConfig{
 		RequestSize: leafsRequestSize,

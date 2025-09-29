@@ -40,19 +40,17 @@ type CodeQueue struct {
 	out           <-chan common.Hash // Invariant: never nil
 	chanLock      sync.RWMutex
 	closeChanOnce sync.Once // See usage in [CodeQueue.closeOutChannelOnce]
-}
 
-type queueConfig struct {
 	capacity int
 }
 
-type CodeQueueOption = options.Option[queueConfig]
+type CodeQueueOption = options.Option[CodeQueue]
 
 // WithCapacity overrides the queue buffer capacity.
 func WithCapacity(n int) CodeQueueOption {
-	return options.Func[queueConfig](func(o *queueConfig) {
+	return options.Func[CodeQueue](func(q *CodeQueue) {
 		if n > 0 {
-			o.capacity = n
+			q.capacity = n
 		}
 	})
 }
@@ -61,19 +59,17 @@ func WithCapacity(n int) CodeQueueOption {
 // The `quit` channel, if non-nil, MUST eventually be closed to avoid leaking a
 // goroutine.
 func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOption) (*CodeQueue, error) {
-	// Apply defaults then options.
-	o := queueConfig{
+	// Create with defaults, then apply options.
+	q := &CodeQueue{
+		db:       db,
+		quit:     quit,
 		capacity: defaultQueueCapacity,
 	}
-	options.ApplyTo(&o, opts...)
+	options.ApplyTo(q, opts...)
 
-	ch := make(chan common.Hash, o.capacity)
-	q := &CodeQueue{
-		db:   db,
-		in:   ch,
-		out:  ch,
-		quit: quit,
-	}
+	ch := make(chan common.Hash, q.capacity)
+	q.in = ch
+	q.out = ch
 
 	if quit != nil {
 		// Close the output channel on early shutdown to unblock consumers.

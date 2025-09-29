@@ -150,12 +150,10 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	return s.syncer.Sync(ctx)
 }
 
-// addZeros adds [common.HashLenth] zeros to [height] and returns the result as []byte
+// addZeroes returns the big-endian representation of `height`, prefixed with [common.HashLength] zeroes.
 func addZeroes(height uint64) []byte {
-	packer := wrappers.Packer{Bytes: make([]byte, atomicstate.TrieKeyLength)}
-	packer.PackLong(height)
-	packer.PackFixedBytes(zeroBytes)
-	return packer.Bytes
+	const n = common.HashLength
+	return binary.BigEndian.AppendUint64(make([]byte, n, n+8), height)
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.

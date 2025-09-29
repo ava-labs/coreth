@@ -37,7 +37,7 @@ func NewSyncer(client statesyncclient.Client, db ethdb.Database, fromHash common
 	if blocksToFetch == 0 {
 		return nil, errBlocksToFetchRequired
 	}
-	// Sanity check: if fromHash is zero but height > 0, return error.
+
 	if (fromHash == common.Hash{}) && fromHeight > 0 {
 		return nil, errFromHashRequired
 	}
