@@ -244,8 +244,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	senderWg.Wait()
 	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 	for _, nodeID := range nodes {
-		_, exists := contactedNodes[nodeID]
-		require.Truef(t, exists, "node %s was not contacted", nodeID)
+		require.Contains(t, contactedNodes, nodeID, "node %s was not contacted", nodeID)
 	}
 
 	// ensure empty nodeID is not allowed

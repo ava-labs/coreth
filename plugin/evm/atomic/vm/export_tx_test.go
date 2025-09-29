@@ -4,7 +4,6 @@
 package vm
 
 import (
-	"bytes"
 	"context"
 	"math/big"
 	"testing"
@@ -973,9 +972,7 @@ func TestExportTxAccept(t *testing.T) {
 		avaxInputID[:],
 	})
 	require.NoError(t, err)
-
-	require.Truef(t, bytes.Equal(fetchedValues[0], indexedValues[0]), "inconsistent values returned fetched %x indexed %x", fetchedValues[0], indexedValues[0])
-	require.Truef(t, bytes.Equal(fetchedValues[1], indexedValues[1]), "inconsistent values returned fetched %x indexed %x", fetchedValues[1], indexedValues[1])
+	require.Equalf(t, fetchedValues, indexedValues, "inconsistent values returned fetched vs indexed")
 
 	customUTXOBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, &avax.UTXO{
 		UTXOID: customUTXOID,
@@ -991,8 +988,8 @@ func TestExportTxAccept(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Truef(t, bytes.Equal(fetchedValues[0], customUTXOBytes), "incorrect values returned expected %x got %x", customUTXOBytes, fetchedValues[0])
-	require.Truef(t, bytes.Equal(fetchedValues[1], avaxUTXOBytes), "incorrect values returned expected %x got %x", avaxUTXOBytes, fetchedValues[1])
+	require.Equal(t, fetchedValues[0], customUTXOBytes)
+	require.Equal(t, fetchedValues[1], avaxUTXOBytes)
 }
 
 func TestExportTxVerify(t *testing.T) {
@@ -1656,9 +1653,7 @@ func TestNewExportTx(t *testing.T) {
 
 			burnedAVAX, err := exportTx.Burned(vm.Ctx.AVAXAssetID)
 			require.NoError(t, err)
-			if burnedAVAX != test.expectedBurnedAVAX {
-				require.Failf(t, "", "burned wrong amount of AVAX - expected %d burned %d", test.expectedBurnedAVAX, burnedAVAX)
-			}
+			require.Equal(t, test.expectedBurnedAVAX, burnedAVAX, "unexpected amount of AVAX burned")
 
 			commitBatch, err := vm.VersionDB().CommitBatch()
 			require.NoErrorf(t, err, "Failed to create commit batch for VM due to %s", err)
@@ -1671,7 +1666,9 @@ func TestNewExportTx(t *testing.T) {
 			wrappedStateDB = extstate.New(statedb)
 			require.NoError(t, exportTx.EVMStateTransfer(vm.Ctx, wrappedStateDB))
 
-			require.Equalf(t, 0, wrappedStateDB.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)), "address balance %s equal %s not %s", ethAddress.String(), wrappedStateDB.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
+			balance := wrappedStateDB.GetBalance(ethAddress)
+			expectedBalance := uint256.NewInt(test.bal * units.Avax)
+			require.Zerof(t, balance.Cmp(expectedBalance), "address balance %s equal %s not %s", ethAddress.String(), balance, expectedBalance)
 		})
 	}
 }
@@ -1820,8 +1817,13 @@ func TestNewExportTxMulticoin(t *testing.T) {
 			wrappedStateDB = extstate.New(statedb)
 			require.NoError(t, exportTx.EVMStateTransfer(vm.Ctx, wrappedStateDB))
 
-			require.Equalf(t, 0, wrappedStateDB.GetBalance(ethAddress).Cmp(uint256.NewInt(test.bal*units.Avax)), "address balance %s equal %s not %s", ethAddress.String(), wrappedStateDB.GetBalance(ethAddress), new(big.Int).SetUint64(test.bal*units.Avax))
-			require.Equalf(t, 0, wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])).Cmp(new(big.Int).SetUint64(test.balmc)), "address balance multicoin %s equal %s not %s", ethAddress.String(), wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:])), new(big.Int).SetUint64(test.balmc))
+			balance := wrappedStateDB.GetBalance(ethAddress)
+			expectedBalance := uint256.NewInt(test.bal * units.Avax)
+			require.Zerof(t, balance.Cmp(expectedBalance), "address balance %s equal %s not %s", ethAddress.String(), balance, expectedBalance)
+
+			balanceMC := wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.BytesToHash(tid[:]))
+			expectedBalanceMC := new(big.Int).SetUint64(test.balmc)
+			require.Equalf(t, expectedBalanceMC, balanceMC, "address multicoin balance %s equal %s not %s", ethAddress.String(), balanceMC, expectedBalanceMC)
 		})
 	}
 }

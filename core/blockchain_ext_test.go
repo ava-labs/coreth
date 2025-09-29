@@ -774,15 +774,13 @@ func BuildOnVariousStagesTest(t *testing.T, create createFunc) {
 }
 
 func EmptyBlocksTest(t *testing.T, create createFunc) {
-	var (
-		require = require.New(t)
-		chainDB = rawdb.NewMemoryDatabase()
-		// Ensure that key1 has some funds in the genesis block.
-		gspec = &Genesis{
-			Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-			Alloc:  types.GenesisAlloc{},
-		}
-	)
+	require := require.New(t)
+	chainDB := rawdb.NewMemoryDatabase()
+	// Ensure that key1 has some funds in the genesis block.
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{},
+	}
 
 	blockchain, err := create(chainDB, gspec, common.Hash{}, t.TempDir())
 	require.NoError(err)
@@ -902,22 +900,22 @@ func ReorgReInsertTest(t *testing.T, create createFunc) {
 	require.NoError(err)
 
 	// Insert and accept first block
-	_, err = blockchain.InsertChain(chain)
+	err = blockchain.InsertBlock(chain[0])
 	require.NoError(err)
 	require.NoError(blockchain.Accept(chain[0]))
 
 	// Insert block and then set preference back (rewind) to last accepted blck
-	_, err = blockchain.InsertChain(chain[1:2])
+	err = blockchain.InsertBlock(chain[1])
 	require.NoError(err)
 	require.NoError(blockchain.SetPreference(chain[0]))
 
 	// Re-insert and accept block
-	_, err = blockchain.InsertChain(chain[1:2])
+	err = blockchain.InsertBlock(chain[1])
 	require.NoError(err)
 	require.NoError(blockchain.Accept(chain[1]))
 
 	// Build on top of the re-inserted block and accept
-	_, err = blockchain.InsertChain(chain[2:3])
+	err = blockchain.InsertBlock(chain[2])
 	require.NoError(err)
 	require.NoError(blockchain.Accept(chain[2]))
 	blockchain.DrainAcceptorQueue()

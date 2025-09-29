@@ -485,11 +485,9 @@ func TestNewImportTx(t *testing.T) {
 		statedb, err := vm.Ethereum().BlockChain().State()
 		require.NoError(t, err)
 
-		expectedRemainingBalance := new(uint256.Int).Mul(
-			uint256.NewInt(importAmount-actualAVAXBurned), atomic.X2CRate)
-		if actualBalance := statedb.GetBalance(ethAddress); actualBalance.Cmp(expectedRemainingBalance) != 0 {
-			require.Equalf(t, 0, actualBalance.Cmp(expectedRemainingBalance), "address remaining balance %s equal %s not %s", ethAddress.String(), actualBalance, expectedRemainingBalance)
-		}
+		expectedRemainingBalance := new(uint256.Int).Mul(uint256.NewInt(importAmount-actualAVAXBurned), atomic.X2CRate)
+		actualBalance := statedb.GetBalance(ethAddress)
+		require.Zerof(t, actualBalance.Cmp(expectedRemainingBalance), "address remaining balance %s equal %s not %s", ethAddress.String(), actualBalance, expectedRemainingBalance)
 	}
 	tests2 := map[string]atomicTxTest{
 		"apricot phase 0": {
@@ -1176,7 +1174,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				require.NoError(t, err)
 
 				avaxBalance := statedb.GetBalance(ethAddress)
-				require.Equalf(t, 0, avaxBalance.Cmp(atomic.X2CRate), "Expected AVAX balance to be %d, found balance: %d", *atomic.X2CRate, avaxBalance)
+				require.Zerof(t, avaxBalance.Cmp(atomic.X2CRate), "Expected AVAX balance to be %d, found balance: %d", *atomic.X2CRate, avaxBalance)
 			},
 		},
 		"non-AVAX UTXO": {
@@ -1216,7 +1214,7 @@ func TestImportTxEVMStateTransfer(t *testing.T) {
 				assetBalance := wrappedStateDB.GetBalanceMultiCoin(ethAddress, common.Hash(assetID))
 				require.Equalf(t, 0, assetBalance.Cmp(common.Big1), "Expected asset balance to be %d, found balance: %d", common.Big1, assetBalance)
 				avaxBalance := wrappedStateDB.GetBalance(ethAddress)
-				require.Equalf(t, 0, avaxBalance.Cmp(uint256.NewInt(0)), "Expected AVAX balance to be 0, found balance: %d", avaxBalance)
+				require.Zerof(t, avaxBalance.Cmp(uint256.NewInt(0)), "Expected AVAX balance to be 0, found balance: %d", avaxBalance)
 			},
 		},
 	}
