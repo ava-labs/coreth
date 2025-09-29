@@ -16,9 +16,9 @@ import (
 	"github.com/ava-labs/libevm/trie"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
+	"github.com/ava-labs/coreth/sync"
 
 	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
-	"github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
@@ -31,7 +31,7 @@ const (
 )
 
 var (
-	_ sync.Syncer          = (*Syncer)(nil)
+	_ sync.Syncer             = (*Syncer)(nil)
 	_ syncclient.LeafSyncTask = (*syncerLeafTask)(nil)
 
 	errTargetHeightRequired = errors.New("target height must be > 0")
@@ -148,11 +148,11 @@ func (s *Syncer) Sync(ctx context.Context) error {
 
 // addZeroes returns the big-endian representation of `height`, prefixed with [common.HashLength] zeroes.
 func addZeroes(height uint64) []byte {
-    // Key format is [height(8 bytes)][blockchainID(32 bytes)]. Start should be the
-    // smallest key for the given height, i.e., height followed by zeroed blockchainID.
-    b := make([]byte, wrappers.LongLen+common.HashLength)
-    binary.BigEndian.PutUint64(b[:wrappers.LongLen], height)
-    return b
+	// Key format is [height(8 bytes)][blockchainID(32 bytes)]. Start should be the
+	// smallest key for the given height, i.e., height followed by zeroed blockchainID.
+	b := make([]byte, wrappers.LongLen+common.HashLength)
+	binary.BigEndian.PutUint64(b[:wrappers.LongLen], height)
+	return b
 }
 
 // onLeafs is the callback for the leaf syncer, which will insert the key-value pairs into the trie.

@@ -9,8 +9,8 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-
 	"github.com/ava-labs/coreth/sync"
+
 	syncclient "github.com/ava-labs/coreth/sync/client"
 )
 
