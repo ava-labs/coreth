@@ -21,8 +21,8 @@ var (
 	errParentMinDelayExcessNil = errors.New("parent min delay excess should not be nil")
 )
 
-// MinDelay
-//
+// MinDelayExcess calculates the minimum delay excess based on the parent, current
+// header and the desired min delay excess.
 // If the `desiredMinDelayExcess` is nil, the parent's delay excess is used.
 func MinDelayExcess(
 	config *extras.ChainConfig,
@@ -30,16 +30,17 @@ func MinDelayExcess(
 	header *types.Header,
 	desiredMinDelayExcess *uint64,
 ) (*uint64, error) {
+	// If the header is in Granite, calculate the min delay excess.
+	// Otherwise, return nil.
 	if config.IsGranite(header.Time) {
-		minDelayExcess, err := minDelayExcessAfterBlock(config, parent, desiredMinDelayExcess)
+		minDelayExcess, err := minDelayExcess(config, parent, desiredMinDelayExcess)
 		if err != nil {
 			return nil, fmt.Errorf("calculating min delay excess: %w", err)
 		}
 		minDelayExcessU64 := uint64(minDelayExcess)
 		return &minDelayExcessU64, nil
-	} else { // Prior to Granite there was no expected min delay excess.
-		return nil, nil
 	}
+	return nil, nil
 }
 
 // VerifyMinDelayExcess verifies that the min delay excess in header is consistent.
@@ -59,7 +60,7 @@ func VerifyMinDelayExcess(
 		// to have correctly set it to that value. Otherwise, the resulting
 		// value will be as close to the claimed value as possible, but would
 		// not be equal.
-		expectedDelayExcess, err := minDelayExcessAfterBlock(
+		expectedDelayExcess, err := minDelayExcess(
 			config,
 			parent,
 			remoteDelayExcess,
@@ -85,12 +86,12 @@ func VerifyMinDelayExcess(
 	return nil
 }
 
-// minDelayExcessBeforeBlock takes the previous header and the timestamp of its child
-// block and calculates the minimum delay before the child block is executed.
-// Should only be called with timestamp in Granite.
-func minDelayExcessBeforeBlock(
+// minDelayExcess takes the parent header and the desired min delay excess
+// and returns the min delay excess for the child block.
+func minDelayExcess(
 	config *extras.ChainConfig,
 	parent *types.Header,
+	desiredMinDelayExcess *uint64,
 ) (acp226.DelayExcess, error) {
 	minDelayExcess := acp226.DelayExcess(acp226.InitialDelayExcess)
 	if config.IsGranite(parent.Time) {
@@ -101,21 +102,6 @@ func minDelayExcessBeforeBlock(
 			return 0, fmt.Errorf("%w: %s", errParentMinDelayExcessNil, parent.Hash())
 		}
 		minDelayExcess = acp226.DelayExcess(*parentMinDelayExcess)
-	}
-
-	return minDelayExcess, nil
-}
-
-// minDelayExcessAfterBlock takes the previous header and returns the min delay excess.
-func minDelayExcessAfterBlock(
-	config *extras.ChainConfig,
-	parent *types.Header,
-	desiredMinDelayExcess *uint64,
-) (acp226.DelayExcess, error) {
-	// Calculate the gas state after the parent block
-	minDelayExcess, err := minDelayExcessBeforeBlock(config, parent)
-	if err != nil {
-		return 0, fmt.Errorf("calculating initial min delay excess: %w", err)
 	}
 
 	// If the desired min delay excess is specified, move the min delay excess as much

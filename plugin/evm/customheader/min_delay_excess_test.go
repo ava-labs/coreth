@@ -15,17 +15,6 @@ import (
 	"github.com/ava-labs/coreth/utils"
 )
 
-func generateHeaderWithMinDelayExcess(timeSeconds uint64, minDelayExcess *uint64) *types.Header {
-	return customtypes.WithHeaderExtra(
-		&types.Header{
-			Time: timeSeconds,
-		},
-		&customtypes.HeaderExtra{
-			MinDelayExcess: minDelayExcess,
-		},
-	)
-}
-
 func TestMinDelayExcess(t *testing.T) {
 	activatingGraniteConfig := *extras.TestGraniteChainConfig
 	activatingGraniteTimestamp := uint64(1000)
@@ -217,4 +206,15 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 			require.ErrorIs(t, err, test.expectedErr)
 		})
 	}
+}
+
+func generateHeaderWithMinDelayExcess(timeSeconds uint64, minDelayExcess *uint64) *types.Header {
+	return customtypes.WithHeaderExtra(
+		&types.Header{
+			Time: timeSeconds,
+		},
+		&customtypes.HeaderExtra{
+			MinDelayExcess: minDelayExcess,
+		},
+	)
 }
