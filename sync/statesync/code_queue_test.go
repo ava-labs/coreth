@@ -113,7 +113,7 @@ func TestCodeQueue(t *testing.T) {
 					ch := q.CodeHashes()
 					require.NotNilf(t, ch, "%T.CodeHashes()", q)
 					for range ch {
-						t.Fatalf("Unexpected receive on %T.CodeHashes()", q)
+						require.FailNowf(t, "Unexpected receive", "%T.CodeHashes()", q)
 					}
 				})
 			}()
