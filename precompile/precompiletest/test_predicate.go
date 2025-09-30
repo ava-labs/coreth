@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
+	"github.com/ava-labs/coreth/params/extras"
 )
 
 // PredicateTest defines a unit test/benchmark for verifying a precompile predicate.
@@ -30,7 +31,7 @@ func (test PredicateTest) Run(t testing.TB) {
 	require := require.New(t)
 	predicater := test.Config.(precompileconfig.Predicater)
 
-	predicateGas, predicateGasErr := predicater.PredicateGas(test.Predicate)
+	predicateGas, predicateGasErr := predicater.PredicateGas(test.Predicate, &extras.AvalancheRules{})
 	require.ErrorIs(predicateGasErr, test.GasErr)
 	if test.GasErr != nil {
 		return
