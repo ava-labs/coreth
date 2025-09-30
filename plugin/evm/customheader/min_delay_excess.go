@@ -70,10 +70,10 @@ func VerifyMinDelayExcess(
 		}
 
 		if *remoteDelayExcess != uint64(expectedDelayExcess) {
-			return fmt.Errorf("%w: expected %+v, found %+v",
+			return fmt.Errorf("%w: expected %d, found %d",
 				errIncorrectMinDelayExcess,
 				expectedDelayExcess,
-				remoteDelayExcess,
+				*remoteDelayExcess,
 			)
 		}
 	default:
