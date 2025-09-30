@@ -87,7 +87,8 @@ func VerifyMinDelayExcess(
 }
 
 // minDelayExcess takes the parent header and the desired min delay excess
-// and returns the min delay excess for the child block.
+// and returns the min delay excess for the child block. Assumes the Granite
+// upgrade has been activated.
 func minDelayExcess(
 	config *extras.ChainConfig,
 	parent *types.Header,
