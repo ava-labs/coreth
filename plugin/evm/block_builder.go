@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/lock"
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/log"
 	"github.com/holiman/uint256"
 	"go.uber.org/zap"
@@ -63,12 +64,7 @@ func (vm *VM) NewBlockBuilder(extraMempool extension.BuilderMempool) *blockBuild
 func (b *blockBuilder) handleGenerateBlock(currentParentHash common.Hash) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
-	// if this is a retry, set the last build time to the current time
-	if b.lastBuildParentHash == currentParentHash {
-		b.lastBuildTime = time.Now()
-	} else { // else reset the timer if this is the first time we build this block
-		b.lastBuildTime = time.Time{}
-	}
+	b.lastBuildTime = time.Now()
 	b.lastBuildParentHash = currentParentHash
 }
 
@@ -123,22 +119,25 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 
 // waitForEvent waits until a block needs to be built.
 // It returns only after at least [minBlockBuildingRetryDelay] passed from the last time a block was built.
-func (b *blockBuilder) waitForEvent(ctx context.Context) (commonEng.Message, error) {
-	lastBuildTime, err := b.waitForNeedToBuild(ctx)
+func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.Header) (commonEng.Message, error) {
+	lastBuildTime, lastBuildParentHash, err := b.waitForNeedToBuild(ctx)
 	if err != nil {
 		return 0, err
 	}
 	timeSinceLastBuildTime := time.Since(lastBuildTime)
-	// if this is the first time we try to build a block
-	// or if the time since the last build is greater than the minimum retry delay
+	isRetry := lastBuildParentHash == currentHeader.ParentHash
+	// 1. if this is the first time we try to build a block
+	// 2. if this is not a retry
+	// 3. if the time since the last build is greater than the minimum retry delay
 	// then we can build a block immediately.
-	if lastBuildTime.IsZero() || timeSinceLastBuildTime >= MinBlockBuildingRetryDelay {
-		b.ctx.Log.Debug("Last time we built a block was long enough ago, no need to wait",
+	if !isRetry || lastBuildTime.IsZero() || timeSinceLastBuildTime >= MinBlockBuildingRetryDelay {
+		b.ctx.Log.Debug("Last time we built a block was long enough ago or this is not a retry, no need to wait",
 			zap.Duration("timeSinceLastBuildTime", timeSinceLastBuildTime),
+			zap.Bool("isRetry", isRetry),
 		)
 		return commonEng.PendingTxs, nil
 	}
-	timeUntilNextBuild := MinBlockBuildingRetryDelay - time.Since(lastBuildTime)
+	timeUntilNextBuild := MinBlockBuildingRetryDelay - timeSinceLastBuildTime
 	b.ctx.Log.Debug("Last time we built a block was too recent, waiting",
 		zap.Duration("timeUntilNextBuild", timeUntilNextBuild),
 	)
@@ -152,13 +151,13 @@ func (b *blockBuilder) waitForEvent(ctx context.Context) (commonEng.Message, err
 
 // waitForNeedToBuild waits until needToBuild returns true.
 // It returns the last time a block was built.
-func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, error) {
+func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, common.Hash, error) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
 	for !b.needToBuild() {
 		if err := b.pendingSignal.Wait(ctx); err != nil {
-			return time.Time{}, err
+			return time.Time{}, common.Hash{}, err
 		}
 	}
-	return b.lastBuildTime, nil
+	return b.lastBuildTime, b.lastBuildParentHash, nil
 }
