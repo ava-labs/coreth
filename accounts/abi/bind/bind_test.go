@@ -2156,10 +2156,17 @@ func golangBindings(t *testing.T, overload bool) {
 
 			import (
 				"testing"
+
+				"github.com/ava-labs/coreth/plugin/evm/customtypes"
+				libevmtypes "github.com/ava-labs/libevm/core/types"
+
 				%s
 			)
 
 			func Test%s(t *testing.T) {
+				customtypes.Register()
+				t.Cleanup(libevmtypes.TestOnlyClearRegisteredExtras)
+
 				%s
 			}
 		`, tt.imports, tt.name, tt.tester)

@@ -13,10 +13,14 @@ var extras ethtypes.ExtraPayloads[*HeaderExtra, *BlockBodyExtra, isMultiCoin]
 // once and therefore is only allowed to be used in tests and `package main`, to
 // avoid polluting other packages that transitively depend on this one but don't
 // need registration.
+//
+// Without a call to Register, none of the functionality of this package will
+// work, and most will simply panic.
 func Register() {
 	extras = ethtypes.RegisterExtras[
 		HeaderExtra, *HeaderExtra,
 		BlockBodyExtra, *BlockBodyExtra,
 		isMultiCoin,
 	]()
+	IsMultiCoinPayloads = extras.StateAccount
 }

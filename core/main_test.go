@@ -6,12 +6,14 @@ package core
 import (
 	"testing"
 
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"go.uber.org/goleak"
 )
 
 // TestMain uses goleak to verify tests in this package do not leak unexpected
 // goroutines.
 func TestMain(m *testing.M) {
+	customtypes.Register()
 	opts := []goleak.Option{
 		// No good way to shut down these goroutines:
 		goleak.IgnoreTopFunction("github.com/ava-labs/coreth/core/state/snapshot.(*diskLayer).generate"),

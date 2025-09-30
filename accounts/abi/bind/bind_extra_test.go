@@ -6,6 +6,7 @@ package bind_test
 import (
 	"bytes"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
@@ -20,7 +21,13 @@ import (
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	os.Exit(m.Run())
+}
 
 // TestGetSenderNativeAssetCall checks that the NativeAssetCall proxies the
 // caller address This behavior is disabled on the network and is only to test
