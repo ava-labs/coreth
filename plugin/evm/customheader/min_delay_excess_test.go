@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customheader/customheadertest"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/utils"
 )
@@ -25,8 +26,8 @@ func TestMinDelayExcess(t *testing.T) {
 		config                *extras.ChainConfig
 		parent                *types.Header
 		header                *types.Header
-		desiredMinDelayExcess *uint64
-		expectedDelayExcess   *uint64
+		desiredMinDelayExcess *acp226.DelayExcess
+		expectedDelayExcess   *acp226.DelayExcess
 		expectedErr           error
 	}{
 		// Pre-Granite tests
@@ -51,7 +52,7 @@ func TestMinDelayExcess(t *testing.T) {
 			header: &types.Header{
 				Time: 1001,
 			},
-			desiredMinDelayExcess: utils.NewUint64(1000),
+			desiredMinDelayExcess: customheadertest.NewDelayExcessPtr(1000),
 			expectedDelayExcess:   nil,
 		},
 		{
@@ -64,7 +65,7 @@ func TestMinDelayExcess(t *testing.T) {
 				Time: activatingGraniteTimestamp + 1,
 			},
 			desiredMinDelayExcess: nil,
-			expectedDelayExcess:   utils.NewUint64(acp226.InitialDelayExcess),
+			expectedDelayExcess:   customheadertest.NewDelayExcessPtr(acp226.InitialDelayExcess),
 		},
 		{
 			name:   "granite_no_parent_min_delay_error",
@@ -82,32 +83,32 @@ func TestMinDelayExcess(t *testing.T) {
 		{
 			name:   "granite_with_parent_min_delay",
 			config: extras.TestGraniteChainConfig,
-			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
+			parent: generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
 			header: &types.Header{
 				Time: 1001,
 			},
 			desiredMinDelayExcess: nil,
-			expectedDelayExcess:   utils.NewUint64(500),
+			expectedDelayExcess:   customheadertest.NewDelayExcessPtr(500),
 		},
 		{
 			name:   "granite_with_desired_min_delay_excess",
 			config: extras.TestGraniteChainConfig,
-			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
+			parent: generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
 			header: &types.Header{
 				Time: 1001,
 			},
-			desiredMinDelayExcess: utils.NewUint64(1000),
-			expectedDelayExcess:   utils.NewUint64(500 + acp226.MaxDelayExcessDiff),
+			desiredMinDelayExcess: customheadertest.NewDelayExcessPtr(1000),
+			expectedDelayExcess:   customheadertest.NewDelayExcessPtr(500 + acp226.MaxDelayExcessDiff),
 		},
 		{
 			name:   "granite_with_zero_desired_value",
 			config: extras.TestGraniteChainConfig,
-			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
+			parent: generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
 			header: &types.Header{
 				Time: 1001,
 			},
-			desiredMinDelayExcess: utils.NewUint64(0),
-			expectedDelayExcess:   utils.NewUint64(500 - acp226.MaxDelayExcessDiff),
+			desiredMinDelayExcess: customheadertest.NewDelayExcessPtr(0),
+			expectedDelayExcess:   customheadertest.NewDelayExcessPtr(500 - acp226.MaxDelayExcessDiff),
 		},
 	}
 
@@ -144,7 +145,7 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 			parent: &types.Header{
 				Time: 1000,
 			},
-			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(1000)),
+			header:      generateHeaderWithMinDelayExcess(1001, customheadertest.NewDelayExcessPtr(1000)),
 			expectedErr: errRemoteMinDelayExcessSet,
 		},
 		{
@@ -161,34 +162,34 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 		{
 			name:        "granite_incorrect_min_delay_excess",
 			config:      extras.TestGraniteChainConfig,
-			parent:      generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(1000)),
+			parent:      generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
+			header:      generateHeaderWithMinDelayExcess(1001, customheadertest.NewDelayExcessPtr(1000)),
 			expectedErr: errIncorrectMinDelayExcess,
 		},
 		{
 			name:        "granite_incorrect_min_delay_excess_with_zero_desired",
 			config:      extras.TestGraniteChainConfig,
-			parent:      generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header:      generateHeaderWithMinDelayExcess(1001, utils.NewUint64(0)),
+			parent:      generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
+			header:      generateHeaderWithMinDelayExcess(1001, customheadertest.NewDelayExcessPtr(0)),
 			expectedErr: errIncorrectMinDelayExcess,
 		},
 		{
 			name:   "granite_correct_min_delay_excess",
 			config: extras.TestGraniteChainConfig,
-			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header: generateHeaderWithMinDelayExcess(1001, utils.NewUint64(500)),
+			parent: generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
+			header: generateHeaderWithMinDelayExcess(1001, customheadertest.NewDelayExcessPtr(500)),
 		},
 		{
 			name:   "granite_with_increased_desired_min_delay_excess_correct",
 			config: extras.TestGraniteChainConfig,
-			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header: generateHeaderWithMinDelayExcess(1001, utils.NewUint64(700)),
+			parent: generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
+			header: generateHeaderWithMinDelayExcess(1001, customheadertest.NewDelayExcessPtr(700)),
 		},
 		{
 			name:   "granite_with_decreased_desired_min_delay_excess_correct",
 			config: extras.TestGraniteChainConfig,
-			parent: generateHeaderWithMinDelayExcess(1000, utils.NewUint64(500)),
-			header: generateHeaderWithMinDelayExcess(1001, utils.NewUint64(300)),
+			parent: generateHeaderWithMinDelayExcess(1000, customheadertest.NewDelayExcessPtr(500)),
+			header: generateHeaderWithMinDelayExcess(1001, customheadertest.NewDelayExcessPtr(300)),
 		},
 
 		// Different chain configs
@@ -208,7 +209,7 @@ func TestVerifyMinDelayExcess(t *testing.T) {
 	}
 }
 
-func generateHeaderWithMinDelayExcess(timeSeconds uint64, minDelayExcess *uint64) *types.Header {
+func generateHeaderWithMinDelayExcess(timeSeconds uint64, minDelayExcess *acp226.DelayExcess) *types.Header {
 	return customtypes.WithHeaderExtra(
 		&types.Header{
 			Time: timeSeconds,

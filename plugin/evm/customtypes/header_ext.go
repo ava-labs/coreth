@@ -7,6 +7,8 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/rlp"
@@ -40,7 +42,9 @@ type HeaderExtra struct {
 	ExtDataGasUsed   *big.Int
 	BlockGasCost     *big.Int
 	TimeMilliseconds *uint64
-	MinDelayExcess   *uint64
+	// We use acp226.DelayExcess type only here
+	// using that in HeaderSerializable would cause rlpgen to generate incorrect code
+	MinDelayExcess *acp226.DelayExcess
 }
 
 // EncodeRLP RLP encodes the given [ethtypes.Header] and [HeaderExtra] together
@@ -163,7 +167,7 @@ func (h *HeaderSerializable) updateFromExtras(extras *HeaderExtra) {
 	h.ExtDataGasUsed = extras.ExtDataGasUsed
 	h.BlockGasCost = extras.BlockGasCost
 	h.TimeMilliseconds = extras.TimeMilliseconds
-	h.MinDelayExcess = extras.MinDelayExcess
+	h.MinDelayExcess = utils.Uint64PtrFrom(extras.MinDelayExcess)
 }
 
 func (h *HeaderSerializable) updateToExtras(extras *HeaderExtra) {
@@ -171,7 +175,7 @@ func (h *HeaderSerializable) updateToExtras(extras *HeaderExtra) {
 	extras.ExtDataGasUsed = h.ExtDataGasUsed
 	extras.BlockGasCost = h.BlockGasCost
 	extras.TimeMilliseconds = h.TimeMilliseconds
-	extras.MinDelayExcess = h.MinDelayExcess
+	extras.MinDelayExcess = utils.Uint64PtrTo[acp226.DelayExcess](h.MinDelayExcess)
 }
 
 // NOTE: both generators currently do not support type aliases.

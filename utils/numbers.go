@@ -62,3 +62,19 @@ func SafeDerefUint64String(ptr *uint64) string {
 	}
 	return strconv.FormatUint(*ptr, 10)
 }
+
+func Uint64PtrFrom[T ~uint64](v *T) *uint64 {
+	if v == nil {
+		return nil
+	}
+	u := uint64(*v)
+	return &u
+}
+
+func Uint64PtrTo[T ~uint64](v *uint64) *T {
+	if v == nil {
+		return nil
+	}
+	t := T(*v)
+	return &t
+}

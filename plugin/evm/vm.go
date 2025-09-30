@@ -543,9 +543,9 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		*desiredTargetExcess = acp176.DesiredTargetExcess(*vm.config.GasTarget)
 	}
 
-	var desiredDelayExcess *uint64
+	var desiredDelayExcess *acp226.DelayExcess
 	if vm.config.MinDelayTarget != nil {
-		desiredDelayExcess = new(uint64)
+		desiredDelayExcess = new(acp226.DelayExcess)
 		*desiredDelayExcess = acp226.DesiredDelayExcess(*vm.config.MinDelayTarget)
 	}
 

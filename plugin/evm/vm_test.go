@@ -47,6 +47,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/paramstest"
 	"github.com/ava-labs/coreth/plugin/evm/customheader"
+	"github.com/ava-labs/coreth/plugin/evm/customheader/customheadertest"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
@@ -2059,7 +2060,7 @@ func TestMinDelayExcessInHeader(t *testing.T) {
 		name                   string
 		fork                   upgradetest.Fork
 		desiredMinDelay        *uint64
-		expectedMinDelayExcess *uint64
+		expectedMinDelayExcess *acp226.DelayExcess
 	}{
 		{
 			name:                   "pre_granite_no_min_delay_excess",
@@ -2077,19 +2078,19 @@ func TestMinDelayExcessInHeader(t *testing.T) {
 			name:                   "granite_first_block_initial_delay_excess",
 			fork:                   upgradetest.Granite,
 			desiredMinDelay:        nil,
-			expectedMinDelayExcess: utils.NewUint64(acp226.InitialDelayExcess),
+			expectedMinDelayExcess: customheadertest.NewDelayExcessPtr(acp226.InitialDelayExcess),
 		},
 		{
 			name:                   "granite_with_excessive_desired_min_delay_excess",
 			fork:                   upgradetest.Granite,
 			desiredMinDelay:        utils.NewUint64(4000),
-			expectedMinDelayExcess: utils.NewUint64(acp226.InitialDelayExcess + acp226.MaxDelayExcessDiff),
+			expectedMinDelayExcess: customheadertest.NewDelayExcessPtr(acp226.InitialDelayExcess + acp226.MaxDelayExcessDiff),
 		},
 		{
 			name:                   "granite_with_zero_desired_min_delay_excess",
 			fork:                   upgradetest.Granite,
 			desiredMinDelay:        utils.NewUint64(0),
-			expectedMinDelayExcess: utils.NewUint64(acp226.InitialDelayExcess - acp226.MaxDelayExcessDiff),
+			expectedMinDelayExcess: customheadertest.NewDelayExcessPtr(acp226.InitialDelayExcess - acp226.MaxDelayExcessDiff),
 		},
 	}
 
@@ -2122,8 +2123,8 @@ func TestMinDelayExcessInHeader(t *testing.T) {
 			headerExtra := customtypes.GetHeaderExtra(ethBlock.Header())
 
 			require.Equal(test.expectedMinDelayExcess, headerExtra.MinDelayExcess, "expected %s, got %s",
-				utils.SafeDerefUint64String(test.expectedMinDelayExcess),
-				utils.SafeDerefUint64String(headerExtra.MinDelayExcess))
+				utils.SafeDerefUint64String(utils.Uint64PtrFrom(test.expectedMinDelayExcess)),
+				utils.SafeDerefUint64String(utils.Uint64PtrFrom(headerExtra.MinDelayExcess)))
 		})
 	}
 }

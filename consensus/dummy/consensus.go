@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
@@ -68,7 +69,7 @@ type (
 		cb                  ConsensusCallbacks
 		consensusMode       Mode
 		desiredTargetExcess *gas.Gas
-		desiredDelayExcess  *uint64
+		desiredDelayExcess  *acp226.DelayExcess
 	}
 )
 
@@ -76,7 +77,7 @@ func NewDummyEngine(
 	cb ConsensusCallbacks,
 	mode Mode,
 	desiredTargetExcess *gas.Gas, // Guides the target gas excess (ACP-176) toward the desired value
-	desiredDelayExcess *uint64, // Guides the min delay excess (ACP-226) toward the desired value
+	desiredDelayExcess *acp226.DelayExcess, // Guides the min delay excess (ACP-226) toward the desired value
 ) *DummyEngine {
 	return &DummyEngine{
 		cb:                  cb,

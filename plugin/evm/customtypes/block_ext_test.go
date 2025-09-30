@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/coreth/plugin/evm/customheader/customheadertest"
 	"github.com/ava-labs/coreth/utils"
 
 	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
@@ -328,7 +329,7 @@ func TestBlockGetters(t *testing.T) {
 				ExtDataGasUsed:   big.NewInt(1),
 				BlockGasCost:     big.NewInt(2),
 				TimeMilliseconds: utils.NewUint64(3),
-				MinDelayExcess:   utils.NewUint64(4),
+				MinDelayExcess:   customheadertest.NewDelayExcessPtr(4),
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
@@ -339,7 +340,7 @@ func TestBlockGetters(t *testing.T) {
 			wantVersion:          3,
 			wantExtData:          []byte{4},
 			wantTimeMilliseconds: utils.NewUint64(3),
-			wantMinDelayExcess:   utils.NewUint64(4),
+			wantMinDelayExcess:   customheadertest.NewDelayExcessPtr(4),
 		},
 	}
 

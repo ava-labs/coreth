@@ -12,6 +12,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
@@ -118,7 +119,7 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		ExtDataGasUsed:   big.NewInt(22),
 		BlockGasCost:     big.NewInt(23),
 		TimeMilliseconds: ptrTo(uint64(24)),
-		MinDelayExcess:   ptrTo(uint64(25)),
+		MinDelayExcess:   ptrTo(acp226.DesiredDelayExcess(25)),
 	}
 	return WithHeaderExtra(header, extra), extra
 }
