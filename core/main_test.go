@@ -6,8 +6,9 @@ package core
 import (
 	"testing"
 
-	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"go.uber.org/goleak"
+
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
 
 // TestMain uses goleak to verify tests in this package do not leak unexpected

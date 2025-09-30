@@ -4,14 +4,13 @@
 package customtypes
 
 import (
-	"github.com/ava-labs/libevm/core/types"
 	ethtypes "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 type isMultiCoin bool
 
-var IsMultiCoinPayloads pseudo.Accessor[types.StateOrSlimAccount, isMultiCoin]
+var IsMultiCoinPayloads pseudo.Accessor[ethtypes.StateOrSlimAccount, isMultiCoin]
 
 func IsMultiCoin(s ethtypes.StateOrSlimAccount) bool {
 	return bool(IsMultiCoinPayloads.Get(s))
