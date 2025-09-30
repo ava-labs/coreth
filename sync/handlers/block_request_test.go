@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -22,10 +23,16 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
 	"github.com/ava-labs/coreth/sync/handlers/stats/statstest"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	os.Exit(m.Run())
+}
 
 type blockRequestTest struct {
 	name string
