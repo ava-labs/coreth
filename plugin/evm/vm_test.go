@@ -1664,14 +1664,15 @@ func TestWaitForEvent(t *testing.T) {
 
 				var wg sync.WaitGroup
 				wg.Add(1)
-				// this should not delay anything
-				lastBuildBlockTime := time.Now()
+
 				go func() {
 					defer wg.Done()
+					timeStart := time.Now()
 					msg, err := vm.WaitForEvent(context.Background())
+					timeSinceStart := time.Since(timeStart)
 					assert.NoError(t, err)
 					assert.Equal(t, commonEng.PendingTxs, msg)
-					assert.Less(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
+					assert.Less(t, timeSinceStart, 50*time.Millisecond)
 				}()
 
 				wg.Wait()

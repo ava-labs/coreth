@@ -39,7 +39,7 @@ type blockBuilder struct {
 	pendingSignal *lock.Cond
 
 	buildBlockLock sync.Mutex
-	// lastBuildParentHash is the parent hash of the last block was built.
+	// lastBuildParentHash is the parent hash of the last block that was built.
 	// This and lastBuildTime are used to ensure that we don't build blocks too frequently,
 	// but at least after a minimum delay of minBlockBuildingRetryDelay.
 	lastBuildParentHash common.Hash
