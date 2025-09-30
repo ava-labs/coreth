@@ -10,8 +10,8 @@ import (
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 // PredicateTest defines a unit test/benchmark for verifying a precompile predicate.
