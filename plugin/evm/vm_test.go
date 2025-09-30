@@ -1650,11 +1650,10 @@ func TestWaitForEvent(t *testing.T) {
 			},
 		},
 		{
-			name: "WaitForEvent waits some time after a block is built",
+			name: "WaitForEvent does not wait for new block to be built",
 			testCase: func(t *testing.T, vm *VM) {
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
-				lastBuildBlockTime := time.Now()
-				blk, err := vmtest.IssueTxsAndBuild([]*types.Transaction{signedTx}, vm)
+				blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
 				require.NoError(t, err)
 				require.NoError(t, blk.Accept(context.Background()))
 				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
@@ -1665,7 +1664,33 @@ func TestWaitForEvent(t *testing.T) {
 
 				var wg sync.WaitGroup
 				wg.Add(1)
+				// this should not delay anything
+				lastBuildBlockTime := time.Now()
+				go func() {
+					defer wg.Done()
+					msg, err := vm.WaitForEvent(context.Background())
+					assert.NoError(t, err)
+					assert.Equal(t, commonEng.PendingTxs, msg)
+					assert.Less(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
+				}()
 
+				wg.Wait()
+			},
+		},
+		{
+			name: "WaitForEvent waits for a delay with a retry",
+			testCase: func(t *testing.T, vm *VM) {
+				lastBuildBlockTime := time.Now()
+				_, err := vm.BuildBlock(context.Background())
+				require.NoError(t, err)
+				// we haven't accepted the previous built block, so this should be a retry
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+				for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
+					require.NoError(t, err)
+				}
+
+				var wg sync.WaitGroup
+				wg.Add(1)
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(context.Background())
@@ -1673,7 +1698,6 @@ func TestWaitForEvent(t *testing.T) {
 					assert.Equal(t, commonEng.PendingTxs, msg)
 					assert.GreaterOrEqual(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
 				}()
-
 				wg.Wait()
 			},
 		},
