@@ -143,7 +143,6 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 	_, err = vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMessage)
 	require.ErrorIs(err, warp.ErrVerifyWarpMessage)
 	_, err = vm.warpBackend.GetBlockSignature(context.TODO(), blk.ID())
-	require.NoError(err) // can get a block signature even if the message isn't signed yet
 	require.ErrorIs(err, warp.ErrValidateBlock)
 
 	require.NoError(vm.SetPreference(context.Background(), blk.ID()))
