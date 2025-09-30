@@ -126,8 +126,8 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 	}
 	timeSinceLastBuildTime := time.Since(lastBuildTime)
 	isRetry := lastBuildParentHash == currentHeader.ParentHash
-	// 1. if this is the first time we try to build a block
-	// 2. if this is not a retry
+	// 1. if this is not a retry
+	// 2. if this is the first time we try to build a block
 	// 3. if the time since the last build is greater than the minimum retry delay
 	// then we can build a block immediately.
 	if !isRetry || lastBuildTime.IsZero() || timeSinceLastBuildTime >= MinBlockBuildingRetryDelay {
