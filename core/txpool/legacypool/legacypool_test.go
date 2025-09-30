@@ -63,6 +63,8 @@ var (
 )
 
 func init() {
+	params.RegisterExtras()
+
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
 	eip1559Config.BerlinBlock = common.Big0

@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
 
@@ -15,6 +16,8 @@ import (
 // goroutines.
 func TestMain(m *testing.M) {
 	customtypes.Register()
+	params.RegisterExtras()
+
 	opts := []goleak.Option{
 		// No good way to shut down these goroutines:
 		goleak.IgnoreTopFunction("github.com/ava-labs/coreth/core/state/snapshot.(*diskLayer).generate"),

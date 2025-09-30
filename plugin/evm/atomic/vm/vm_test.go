@@ -50,6 +50,7 @@ import (
 
 func TestMain(m *testing.M) {
 	customtypes.Register()
+	params.RegisterExtras()
 	os.Exit(m.Run())
 }
 
