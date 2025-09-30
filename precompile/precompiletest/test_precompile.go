@@ -97,15 +97,16 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *tes
 	if chainConfig == nil {
 		mockChainConfig := precompileconfig.NewMockChainConfig(ctrl)
 		mockChainConfig.EXPECT().IsDurango(gomock.Any()).AnyTimes().Return(true)
+		mockChainConfig.EXPECT().IsGranite(gomock.Any()).AnyTimes().Return(false)
 		chainConfig = mockChainConfig
 	}
 
 	blockContext := contract.NewMockBlockContext(ctrl)
+	blockContext.EXPECT().Timestamp().Return(uint64(time.Now().Unix())).AnyTimes()
 	if test.SetupBlockContext != nil {
 		test.SetupBlockContext(blockContext)
 	} else {
 		blockContext.EXPECT().Number().Return(big.NewInt(0)).AnyTimes()
-		blockContext.EXPECT().Timestamp().Return(uint64(time.Now().Unix())).AnyTimes()
 	}
 	snowContext := snowtest.Context(t, snowtest.CChainID)
 

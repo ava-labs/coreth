@@ -42,18 +42,18 @@ func (m *MockPredicater) EXPECT() *MockPredicaterMockRecorder {
 }
 
 // PredicateGas mocks base method.
-func (m *MockPredicater) PredicateGas(pred predicate.Predicate) (uint64, error) {
+func (m *MockPredicater) PredicateGas(pred predicate.Predicate, rules Rules) (uint64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PredicateGas", pred)
+	ret := m.ctrl.Call(m, "PredicateGas", pred, rules)
 	ret0, _ := ret[0].(uint64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PredicateGas indicates an expected call of PredicateGas.
-func (mr *MockPredicaterMockRecorder) PredicateGas(pred any) *gomock.Call {
+func (mr *MockPredicaterMockRecorder) PredicateGas(pred, rules any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PredicateGas", reflect.TypeOf((*MockPredicater)(nil).PredicateGas), pred)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PredicateGas", reflect.TypeOf((*MockPredicater)(nil).PredicateGas), pred, rules)
 }
 
 // VerifyPredicate mocks base method.
@@ -200,6 +200,20 @@ func (m *MockChainConfig) IsDurango(time uint64) bool {
 func (mr *MockChainConfigMockRecorder) IsDurango(time any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDurango", reflect.TypeOf((*MockChainConfig)(nil).IsDurango), time)
+}
+
+// IsGranite mocks base method.
+func (m *MockChainConfig) IsGranite(time uint64) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsGranite", time)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsGranite indicates an expected call of IsGranite.
+func (mr *MockChainConfigMockRecorder) IsGranite(time any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsGranite", reflect.TypeOf((*MockChainConfig)(nil).IsGranite), time)
 }
 
 // MockAccepter is a mock of Accepter interface.
