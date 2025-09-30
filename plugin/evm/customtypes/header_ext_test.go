@@ -119,7 +119,7 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		ExtDataGasUsed:   big.NewInt(22),
 		BlockGasCost:     big.NewInt(23),
 		TimeMilliseconds: ptrTo(uint64(24)),
-		MinDelayExcess:   ptrTo(acp226.DesiredDelayExcess(25)),
+		MinDelayExcess:   ptrTo(acp226.DelayExcess(25)),
 	}
 	return WithHeaderExtra(header, extra), extra
 }
@@ -171,6 +171,8 @@ func allFieldsSet[T interface {
 				assertNonZero(t, f)
 			case *Header:
 				assertNonZero(t, f)
+			case *acp226.DelayExcess:
+				assertNonZero(t, f)
 			case []uint8, []*Header, Transactions, []*Transaction, Withdrawals, []*Withdrawal:
 				assert.NotEmpty(t, f)
 			default:
@@ -182,7 +184,7 @@ func allFieldsSet[T interface {
 
 func assertNonZero[T interface {
 	common.Hash | common.Address | BlockNonce | uint32 | uint64 | Bloom |
-		*big.Int | *common.Hash | *uint64 | *[]uint8 | *Header
+		*big.Int | *common.Hash | *uint64 | *[]uint8 | *Header | *acp226.DelayExcess
 }](t *testing.T, v T) {
 	t.Helper()
 	require.NotZero(t, v)

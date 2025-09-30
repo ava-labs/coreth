@@ -10,6 +10,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/google/go-cmp/cmp"
@@ -92,6 +93,8 @@ func exportedFieldsPointToDifferentMemory[T interface {
 			case *big.Int:
 				assertDifferentPointers(t, f, fieldCp)
 			case *common.Hash:
+				assertDifferentPointers(t, f, fieldCp)
+			case *acp226.DelayExcess:
 				assertDifferentPointers(t, f, fieldCp)
 			case *uint64:
 				assertDifferentPointers(t, f, fieldCp)
@@ -314,7 +317,7 @@ func TestBlockGetters(t *testing.T) {
 		wantVersion          uint32
 		wantExtData          []byte
 		wantTimeMilliseconds *uint64
-		wantMinDelayExcess   *uint64
+		wantMinDelayExcess   *acp226.DelayExcess
 	}{
 		{
 			name:                 "empty",
