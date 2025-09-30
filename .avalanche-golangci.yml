@@ -104,8 +104,8 @@ linters:
     forbidigo:
       # Forbid the following identifiers (list of regexp).
       forbid:
-        # - pattern: require\.Error$(# ErrorIs should be used instead)?
-        # - pattern: require\.ErrorContains$(# ErrorIs should be used instead)?
+        - pattern: require\.Error$(# ErrorIs should be used instead)?
+        - pattern: require\.ErrorContains$(# ErrorIs should be used instead)?
         # - pattern: require\.EqualValues$(# Equal should be used instead)?
         # - pattern: require\.NotEqualValues$(# NotEqual should be used instead)?
         - pattern: ^(t|b|tb|f)\.(Fatal|Fatalf|Error|Errorf)$(# the require library should be used instead)?
