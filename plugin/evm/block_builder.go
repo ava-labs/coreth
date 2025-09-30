@@ -38,10 +38,10 @@ type blockBuilder struct {
 	pendingSignal *lock.Cond
 
 	buildBlockLock sync.Mutex
-	// lastBuiltParentHash is the parent hash of the last block was built.
+	// lastBuildParentHash is the parent hash of the last block was built.
 	// This and lastBuildTime are used to ensure that we don't build blocks too frequently,
 	// but at least after a minimum delay of minBlockBuildingRetryDelay.
-	lastBuiltParentHash common.Hash
+	lastBuildParentHash common.Hash
 	lastBuildTime       time.Time
 }
 
@@ -64,12 +64,12 @@ func (b *blockBuilder) handleGenerateBlock(currentParentHash common.Hash) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
 	// if this is a retry, set the last build time to the current time
-	if b.lastBuiltParentHash == currentParentHash {
+	if b.lastBuildParentHash == currentParentHash {
 		b.lastBuildTime = time.Now()
 	} else { // else reset the timer if this is the first time we build this block
 		b.lastBuildTime = time.Time{}
 	}
-	b.lastBuiltParentHash = currentParentHash
+	b.lastBuildParentHash = currentParentHash
 }
 
 // needToBuild returns true if there are outstanding transactions to be issued
