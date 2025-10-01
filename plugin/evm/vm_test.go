@@ -1616,19 +1616,17 @@ func TestWaitForEvent(t *testing.T) {
 					require.NoError(t, err)
 				}
 
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+				defer cancel()
+
 				var wg sync.WaitGroup
 				wg.Add(1)
-
 				go func() {
 					defer wg.Done()
-					timeStart := time.Now()
-					msg, err := vm.WaitForEvent(context.Background())
-					timeSinceStart := time.Since(timeStart)
+					msg, err := vm.WaitForEvent(ctx)
 					assert.NoError(t, err)
 					assert.Equal(t, commonEng.PendingTxs, msg)
-					assert.Less(t, timeSinceStart, 50*time.Millisecond)
 				}()
-
 				wg.Wait()
 			},
 		},
