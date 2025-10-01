@@ -111,8 +111,3 @@ func minDelayExcess(
 	}
 	return minDelayExcess, nil
 }
-
-func NewDelayExcessPtr(value uint64) *acp226.DelayExcess {
-	delayExcess := acp226.DelayExcess(value)
-	return &delayExcess
-}
