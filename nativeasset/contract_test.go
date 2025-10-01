@@ -16,10 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	// Force import core to register the VM hooks.
-	// This allows testing the precompiles by exercising the EVM.
-	_ "github.com/ava-labs/coreth/core"
-
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -31,6 +28,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	core.RegisterExtras()
 	customtypes.Register()
 	params.RegisterExtras()
 	os.Exit(m.Run())

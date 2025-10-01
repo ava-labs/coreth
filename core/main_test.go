@@ -15,6 +15,8 @@ import (
 // TestMain uses goleak to verify tests in this package do not leak unexpected
 // goroutines.
 func TestMain(m *testing.M) {
+	RegisterExtras()
+
 	customtypes.Register()
 	params.RegisterExtras()
 

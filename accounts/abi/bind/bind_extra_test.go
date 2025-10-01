@@ -17,6 +17,7 @@ import (
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/accounts/abi/bind"
 	"github.com/ava-labs/coreth/accounts/abi/bind/backends"
+	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/eth/ethconfig"
 	"github.com/ava-labs/coreth/ethclient/simulated"
 	"github.com/ava-labs/coreth/node"
@@ -25,6 +26,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	core.RegisterExtras()
 	customtypes.Register()
 	params.RegisterExtras()
 	os.Exit(m.Run())
