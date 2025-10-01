@@ -63,9 +63,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	core.RegisterExtras()
-	customtypes.Register()
-	params.RegisterExtras()
+	RegisterAllLibEVMExtras()
 
 	// This MUST be called after [params.RegisterExtras].
 	genesisJSONCancun = vmtest.GenesisJSON(activateCancun(params.TestChainConfig))
