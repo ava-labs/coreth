@@ -179,7 +179,7 @@ func TestSendWarpMessage(t *testing.T) {
 
 func TestGetVerifiedWarpMessage(t *testing.T) {
 	networkID := uint32(54321)
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	callerAddr := common.HexToAddress("0x0123")
 	sourceAddress := common.HexToAddress("0x456789")
 	sourceChainID := ids.GenerateTestID()
@@ -454,7 +454,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 
 func TestGetVerifiedWarpBlockHash(t *testing.T) {
 	networkID := uint32(54321)
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	callerAddr := common.HexToAddress("0x0123")
 	sourceChainID := ids.GenerateTestID()
 	blockHash := ids.GenerateTestID()

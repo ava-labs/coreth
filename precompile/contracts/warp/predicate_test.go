@@ -202,7 +202,7 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 }
 
 func createValidPredicateTest(snowCtx *snow.Context, numKeys uint64, predicate predicate.Predicate) precompiletest.PredicateTest {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	return precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
 		PredicateContext: &precompileconfig.PredicateContext{
@@ -226,7 +226,7 @@ func TestWarpMessageFromPrimaryNetwork(t *testing.T) {
 
 func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigners bool) {
 	require := require.New(t)
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	numKeys := 10
 	cChainID := ids.GenerateTestID()
 	addressedCall, err := payload.NewAddressedCall(agoUtils.RandomBytes(20), agoUtils.RandomBytes(100))
@@ -299,7 +299,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 }
 
 func TestInvalidPredicatePacking(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	numKeys := 1
 	snowCtx := createSnowCtx(t, []validatorRange{
 		{
@@ -329,7 +329,7 @@ func TestInvalidPredicatePacking(t *testing.T) {
 }
 
 func TestInvalidWarpMessage(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	numKeys := 1
 	snowCtx := createSnowCtx(t, []validatorRange{
 		{
@@ -361,7 +361,7 @@ func TestInvalidWarpMessage(t *testing.T) {
 }
 
 func TestInvalidAddressedPayload(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	numKeys := 1
 	snowCtx := createSnowCtx(t, []validatorRange{
 		{
@@ -406,7 +406,7 @@ func TestInvalidAddressedPayload(t *testing.T) {
 }
 
 func TestInvalidBitSet(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	addressedCall, err := payload.NewAddressedCall(agoUtils.RandomBytes(20), agoUtils.RandomBytes(100))
 	require.NoError(t, err)
 	unsignedMsg, err := avalancheWarp.NewUnsignedMessage(
@@ -452,7 +452,7 @@ func TestInvalidBitSet(t *testing.T) {
 }
 
 func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
@@ -500,7 +500,7 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 
 // multiple messages all correct, multiple messages all incorrect, mixed bag
 func TestWarpMultiplePredicates(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,
@@ -559,7 +559,7 @@ func TestWarpMultiplePredicates(t *testing.T) {
 }
 
 func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
-	gasConfig := WarpPredicateGasConfig(false)
+	gasConfig := GetWarpPredicateGasConfig(false)
 	snowCtx := createSnowCtx(t, []validatorRange{
 		{
 			start:     0,

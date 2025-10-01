@@ -66,7 +66,7 @@ func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, s
 		return handler.packFailed(), remainingGas, nil
 	}
 
-	warpGasConfig := WarpPredicateGasConfig(contract.IsGraniteActivated(accessibleState))
+	warpGasConfig := GetWarpPredicateGasConfig(contract.IsGraniteActivated(accessibleState))
 
 	// Note: we charge for the size of the message during both predicate verification and each time the message is read during
 	// EVM execution because each execution incurs an additional read cost.
