@@ -114,7 +114,7 @@ func TestMinDelayExcess(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := MinDelayExcess(test.config, test.parent, test.header, test.desiredMinDelayExcess)
+			result, err := MinDelayExcess(test.config, test.parent, test.header.Time, test.desiredMinDelayExcess)
 			require.ErrorIs(t, err, test.expectedErr)
 			require.Equal(t, test.expectedDelayExcess, result)
 		})

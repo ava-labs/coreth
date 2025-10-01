@@ -27,12 +27,12 @@ var (
 func MinDelayExcess(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	header *types.Header,
+	timestamp uint64,
 	desiredMinDelayExcess *acp226.DelayExcess,
 ) (*acp226.DelayExcess, error) {
 	// If the header is in Granite, calculate the min delay excess.
 	// Otherwise, return nil.
-	if config.IsGranite(header.Time) {
+	if config.IsGranite(timestamp) {
 		minDelayExcess, err := minDelayExcess(config, parent, desiredMinDelayExcess)
 		if err != nil {
 			return nil, fmt.Errorf("calculating min delay excess: %w", err)

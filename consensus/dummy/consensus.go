@@ -342,7 +342,7 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 	minDelayExcess, err := customheader.MinDelayExcess(
 		configExtra,
 		parent,
-		header,
+		header.Time,
 		eng.desiredDelayExcess,
 	)
 	if err != nil {
