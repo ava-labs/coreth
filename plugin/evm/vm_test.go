@@ -2122,9 +2122,7 @@ func TestMinDelayExcessInHeader(t *testing.T) {
 			ethBlock := blk.(*chain.BlockWrapper).Block.(*wrappedBlock).ethBlock
 			headerExtra := customtypes.GetHeaderExtra(ethBlock.Header())
 
-			require.Equal(test.expectedMinDelayExcess, headerExtra.MinDelayExcess, "expected %s, got %s",
-				utils.SafeDerefUint64String(utils.Uint64PtrFrom(test.expectedMinDelayExcess)),
-				utils.SafeDerefUint64String(utils.Uint64PtrFrom(headerExtra.MinDelayExcess)))
+			require.Equal(test.expectedMinDelayExcess, headerExtra.MinDelayExcess, "expected %s, got %s", test.expectedMinDelayExcess, headerExtra.MinDelayExcess)
 		})
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/ava-labs/avalanchego/vms/evm/acp226"
+	"github.com/ava-labs/coreth/utils/utilstest"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
@@ -110,16 +111,16 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		Nonce:            BlockNonce{15},
 		BaseFee:          big.NewInt(16),
 		WithdrawalsHash:  &common.Hash{17},
-		BlobGasUsed:      ptrTo(uint64(18)),
-		ExcessBlobGas:    ptrTo(uint64(19)),
+		BlobGasUsed:      utilstest.PointerTo(uint64(18)),
+		ExcessBlobGas:    utilstest.PointerTo(uint64(19)),
 		ParentBeaconRoot: &common.Hash{20},
 	}
 	extra := &HeaderExtra{
 		ExtDataHash:      common.Hash{21},
 		ExtDataGasUsed:   big.NewInt(22),
 		BlockGasCost:     big.NewInt(23),
-		TimeMilliseconds: ptrTo(uint64(24)),
-		MinDelayExcess:   ptrTo(acp226.DelayExcess(25)),
+		TimeMilliseconds: utilstest.PointerTo(uint64(24)),
+		MinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(25)),
 	}
 	return WithHeaderExtra(header, extra), extra
 }
@@ -191,5 +192,3 @@ func assertNonZero[T interface {
 }
 
 // Note [TestCopyHeader] tests the [HeaderExtra.PostCopy] method.
-
-func ptrTo[T any](x T) *T { return &x }
