@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/goleak"
 
+	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
@@ -18,6 +19,7 @@ func TestMain(m *testing.M) {
 	RegisterExtras()
 
 	customtypes.Register()
+	extstate.RegisterExtras()
 	params.RegisterExtras()
 
 	opts := []goleak.Option{
