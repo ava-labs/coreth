@@ -66,10 +66,15 @@ type PrecompileRunparams struct {
 }
 
 func (test PrecompileTest) Run(t *testing.T, module modules.Module) {
+	test.run(t, module, false)
+	test.run(t, module, true)
+}
+
+func (test PrecompileTest) run(t *testing.T, module modules.Module, isGraniteActivated bool) {
 	state := newTestStateDB(t, map[common.Address][]predicate.Predicate{
 		module.Address: test.Predicates,
 	})
-	runParams := test.setup(t, module, state)
+	runParams := test.setup(t, module, state, isGraniteActivated)
 
 	if runParams.Input != nil {
 		ret, remainingGas, err := module.Contract.Run(runParams.AccessibleState, runParams.Caller, runParams.ContractAddress, runParams.Input, runParams.SuppliedGas, runParams.ReadOnly)
@@ -87,7 +92,7 @@ func (test PrecompileTest) Run(t *testing.T, module modules.Module) {
 	}
 }
 
-func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *testStateDB) PrecompileRunparams {
+func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *testStateDB, isGraniteActivated bool) PrecompileRunparams {
 	t.Helper()
 	contractAddress := module.Address
 
@@ -97,7 +102,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *tes
 	if chainConfig == nil {
 		mockChainConfig := precompileconfig.NewMockChainConfig(ctrl)
 		mockChainConfig.EXPECT().IsDurango(gomock.Any()).AnyTimes().Return(true)
-		mockChainConfig.EXPECT().IsGranite(gomock.Any()).AnyTimes().Return(false)
+		mockChainConfig.EXPECT().IsGranite(gomock.Any()).AnyTimes().Return(isGraniteActivated)
 		chainConfig = mockChainConfig
 	}
 
