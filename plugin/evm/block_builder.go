@@ -133,8 +133,7 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 	// 2. if this is not a retry
 	// 3. if the time since the last build is greater than the minimum retry delay
 	// then we can build a block immediately.
-	if initialMinBlockBuildingDelay <= 0 &&
-		(!isRetry || timeSinceLastBuildTime >= minBlockBuildingRetryDelay) {
+	if initialMinBlockBuildingDelay <= 0 && (!isRetry || timeSinceLastBuildTime >= minBlockBuildingRetryDelay) {
 		b.ctx.Log.Debug("Last time we built a block was long enough ago or this is not a retry, no need to wait",
 			zap.Duration("timeSinceLastBuildTime", timeSinceLastBuildTime),
 			zap.Bool("isRetry", isRetry),
@@ -171,34 +170,27 @@ func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, commo
 }
 
 func getMinBlockBuildingDelays(currentHeader *types.Header, config *extras.ChainConfig) (time.Duration, time.Duration) {
-	var initialMinBlockBuildingDelay, minBlockBuildingRetryDelay time.Duration
-	// check if we're building a block for Granite
-	if config.IsGranite(uint64(time.Now().Unix())) {
-		// For Granite, implement two-stage delay:
-		// Stage 1: ACP-226 minimum delay based on parent's MinDelayExcess
-		// Stage 2: PostGraniteMinBlockBuildingRetryDelay as min delay
-
-		// Calculate ACP-226 delay from parent's MinDelayExcess
-		acp226DelayExcess := acp226.DelayExcess(acp226.InitialDelayExcess) // initial minimum
-		parentExtra := customtypes.GetHeaderExtra(currentHeader)
-		if parentExtra.MinDelayExcess != nil {
-			acp226DelayExcess = acp226.DelayExcess(*parentExtra.MinDelayExcess)
-		}
-		acp226Delay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
-
-		// now check how much time has passed since the parent block was built
-		parentBlockTime := customtypes.FullBlockTime(currentHeader)
-		timeSinceParentBlock := time.Since(parentBlockTime)
-
-		initialMinBlockBuildingDelay = timeSinceParentBlock - acp226Delay
-		if initialMinBlockBuildingDelay < 0 {
-			initialMinBlockBuildingDelay = 0
-		}
-		minBlockBuildingRetryDelay = PostGraniteMinBlockBuildingRetryDelay
-	} else { // TODO (ceyonur): this else branch can be removed after Granite is activated.
-		// Pre-Granite: Use simple delay mechanism
-		initialMinBlockBuildingDelay = 0 // No initial delay
-		minBlockBuildingRetryDelay = PreGraniteMinBlockBuildingRetryDelay
+	// TODO (ceyonur): this check can be removed after Granite is activated.
+	if !config.IsGranite(uint64(time.Now().Unix())) {
+		return 0, PreGraniteMinBlockBuildingRetryDelay // Pre-Granite: no initial delay
 	}
-	return initialMinBlockBuildingDelay, minBlockBuildingRetryDelay
+
+	// Granite: Calculate ACP-226 delay from parent's MinDelayExcess
+	acp226DelayExcess := acp226.DelayExcess(acp226.InitialDelayExcess)
+	parentExtra := customtypes.GetHeaderExtra(currentHeader)
+	if parentExtra.MinDelayExcess != nil {
+		acp226DelayExcess = acp226.DelayExcess(*parentExtra.MinDelayExcess)
+	}
+	acp226Delay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
+
+	// Calculate initial delay: time since parent minus ACP-226 delay (clamped to 0)
+	parentBlockTime := customtypes.FullBlockTime(currentHeader)
+	timeSinceParentBlock := time.Since(parentBlockTime)
+	// TODO question (ceyonur): should we just use acp226Delay if timeSinceParentBlock is negative?
+	initialMinBlockBuildingDelay := acp226Delay - timeSinceParentBlock
+	if initialMinBlockBuildingDelay < 0 {
+		initialMinBlockBuildingDelay = 0
+	}
+
+	return initialMinBlockBuildingDelay, PostGraniteMinBlockBuildingRetryDelay
 }
