@@ -33,7 +33,7 @@ const (
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
 )
 
-type WarpPredicateGasConfig struct {
+type GasConfig struct {
 	// Gas cost per warp signer in the validator set
 	PerWarpSigner uint64
 	// Gas cost per chunk of the warp message (each chunk is 128 bytes)
@@ -349,17 +349,17 @@ func createWarpPrecompile() contract.StatefulPrecompiledContract {
 	return statefulContract
 }
 
-func GetWarpPredicateGasConfig(isGraniteActivated bool) WarpPredicateGasConfig {
+func GetWarpPredicateGasConfig(isGraniteActivated bool) GasConfig {
 	if isGraniteActivated {
-		return WarpPredicateGasConfig{
-			PerWarpSigner:            500,
+		return GasConfig{
+			PerWarpSigner:            250,
 			PerWarpMessageChunk:      3_200,
-			PerSignatureVerification: 200_000,
+			PerSignatureVerification: 100_000,
 		}
 	}
-	return WarpPredicateGasConfig{
-		PerWarpSigner:            250,
+	return GasConfig{
+		PerWarpSigner:            500,
 		PerWarpMessageChunk:      3_200,
-		PerSignatureVerification: 100_000,
+		PerSignatureVerification: 200_000,
 	}
 }

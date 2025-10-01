@@ -264,18 +264,6 @@ type AvalancheRules struct {
 	IsGranite                                                                           bool
 }
 
-func (a *AvalancheRules) IsDurangoActivated() bool {
-	return a.IsDurango
-}
-
-func (a *AvalancheRules) IsEtnaActivated() bool {
-	return a.IsEtna
-}
-
-func (a *AvalancheRules) IsFortunaActivated() bool {
-	return a.IsFortuna
-}
-
 func (a *AvalancheRules) IsGraniteActivated() bool {
 	return a.IsGranite
 }
