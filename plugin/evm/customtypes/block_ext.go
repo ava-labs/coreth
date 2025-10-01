@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 
@@ -139,10 +140,10 @@ func BlockTimeMilliseconds(b *ethtypes.Block) *uint64 {
 	return time
 }
 
-func BlockMinDelayExcess(b *ethtypes.Block) *uint64 {
-	var excess *uint64
+func BlockMinDelayExcess(b *ethtypes.Block) *acp226.DelayExcess {
+	var excess *acp226.DelayExcess
 	if e := GetHeaderExtra(b.Header()).MinDelayExcess; e != nil {
-		excess = new(uint64)
+		excess = new(acp226.DelayExcess)
 		*excess = *e
 	}
 	return excess
