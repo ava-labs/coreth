@@ -106,14 +106,8 @@ func Copy(c *ChainConfig) ChainConfig {
 }
 
 // WithExtra sets the extra payload on `c` and returns the modified argument.
-//
-// WithExtra does not require a preceding call to [RegisterExtras], which allows
-// it to be used in top-level global declarations of [ChainConfig] values
-// carrying extras.
 func WithExtra(c *ChainConfig, extra *extras.ChainConfig) *ChainConfig {
-	WithTempRegisteredExtras(func() {
-		payloads.ChainConfig.Set(c, extra)
-	})
+	payloads.ChainConfig.Set(c, extra)
 	return c
 }
 

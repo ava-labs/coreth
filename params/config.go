@@ -45,7 +45,32 @@ var (
 	AvalancheLocalChainID = big.NewInt(43112)
 )
 
+func init() {
+	WithTempRegisteredExtras(initialiseChainConfigs)
+}
+
 var (
+	TestChainConfig,
+	TestLaunchConfig,
+	TestApricotPhase1Config,
+	TestApricotPhase2Config,
+	TestApricotPhase3Config,
+	TestApricotPhase4Config,
+	TestApricotPhase5Config,
+	TestApricotPhasePre6Config,
+	TestApricotPhase6Config,
+	TestApricotPhasePost6Config,
+	TestBanffChainConfig,
+	TestCortinaChainConfig,
+	TestDurangoChainConfig,
+	TestEtnaChainConfig,
+	TestFortunaChainConfig,
+	TestGraniteChainConfig *ChainConfig
+
+	TestRules Rules
+)
+
+func initialiseChainConfigs() {
 	TestChainConfig = WithExtra(
 		&ChainConfig{
 			ChainID:             big.NewInt(1),
@@ -371,7 +396,7 @@ var (
 	)
 
 	TestRules = TestChainConfig.Rules(new(big.Int), IsMergeTODO, 0)
-)
+}
 
 // ChainConfig is the core config which determines the blockchain settings.
 //
