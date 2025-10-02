@@ -117,7 +117,7 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 	}
 
 	// Verify minimum block delay is enforced
-	if err := verifyMinDelay(extraConfig, parent, header); err != nil {
+	if err := verifyMinDelay(parent, header); err != nil {
 		return err
 	}
 
@@ -136,7 +136,7 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 }
 
 // verifyMinDelay verifies that the minimum block delay is enforced based on the min delay excess.
-func verifyMinDelay(extraConfig *extras.ChainConfig, parent *types.Header, header *types.Header) error {
+func verifyMinDelay(parent *types.Header, header *types.Header) error {
 	headerExtra := customtypes.GetHeaderExtra(header)
 	parentExtra := customtypes.GetHeaderExtra(parent)
 
