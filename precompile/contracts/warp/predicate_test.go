@@ -619,7 +619,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 	noValidators := precompiletest.PredicateTest{
 		Config: NewConfig(utils.NewUint64(0), 0, false),
 		PredicateContext: &precompileconfig.PredicateContext{
-			SnowCtx: createSnowCtx(t, nil),
+			SnowCtx: createSnowCtx(t, nil /*=validators*/), // No validators in state
 			ProposerVMBlockCtx: &block.Context{
 				PChainHeight: 1,
 			},
@@ -635,7 +635,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			SnowCtx: createSnowCtx(t, []validatorRange{
 				{
 					start:     0,
-					end:       100,
+					end:       2, // Generate two validators each with max weight to force overflow
 					weight:    math.MaxUint64,
 					publicKey: true,
 				},
