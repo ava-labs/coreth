@@ -32,7 +32,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 		expectedTimeToWait     time.Duration
 		expectedShouldBuildNow bool
 	}{
-		// Test cases from original TestGetMinBlockBuildingDelays
 		{
 			name:   "pre_granite_returns_build_immediately_zero_time",
 			config: extras.TestFortunaChainConfig, // Pre-Granite config
@@ -122,7 +121,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			name:                   "granite_with_2_seconds_before_clock_only_waits_for_retry_delay",
 			config:                 extras.TestGraniteChainConfig,
 			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
-			lastBuildTime:          now,                                                             // Zero time means not a retry
+			lastBuildTime:          now,
 			lastBuildParentHash:    common.Hash{1},
 			expectedTimeToWait:     PostGraniteMinBlockBuildingRetryDelay,
 			expectedShouldBuildNow: false,
