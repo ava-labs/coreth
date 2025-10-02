@@ -492,6 +492,21 @@ func TestBaseFee(t *testing.T) {
 			timeMS: 500,
 			want:   big.NewInt(994_269_358), // e^((2_704_386_192 - 750_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
 		},
+		{
+			name:     "granite_1.25_seconds",
+			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: (&acp176.State{
+					Gas: gas.State{
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+					},
+					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
+				}).Bytes(),
+			},
+			timeMS: 1250,
+			want:   big.NewInt(985_734_910), // e^((2_704_386_192 - 1_875_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
