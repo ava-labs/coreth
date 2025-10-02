@@ -54,8 +54,7 @@ var (
 	testVdrs    []*testValidator
 	vdrs        map[ids.NodeID]*validators.GetValidatorOutput
 
-	preGranite       precompileconfig.Rules
-	granite          precompileconfig.Rules
+	graniteRules     precompileconfig.Rules
 	graniteGasConfig GasConfig
 )
 
@@ -99,9 +98,8 @@ func init() {
 		panic(err)
 	}
 
-	preGranite = extras.AvalancheRules{IsGranite: false}
-	granite = extras.AvalancheRules{IsGranite: true}
-	graniteGasConfig = CurrentGasConfig(granite)
+	graniteRules = extras.AvalancheRules{IsGranite: true}
+	graniteGasConfig = CurrentGasConfig(graniteRules)
 
 	for _, testVdr := range testVdrs {
 		blsSignature, err := testVdr.sk.Sign(unsignedMsg.Bytes())
@@ -220,7 +218,7 @@ func createValidPredicateTest(snowCtx *snow.Context, numKeys uint64, predicate p
 			},
 		},
 		Predicate:   predicate,
-		Rules:       granite,
+		Rules:       graniteRules,
 		Gas:         graniteGasConfig.PerSignatureVerification + uint64(len(predicate))*graniteGasConfig.PerWarpMessageChunk + numKeys*graniteGasConfig.PerWarpSigner,
 		GasErr:      nil,
 		ExpectedErr: nil,
@@ -298,7 +296,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			},
 		},
 		Predicate:   pred,
-		Rules:       granite,
+		Rules:       graniteRules,
 		Gas:         graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numKeys)*graniteGasConfig.PerWarpSigner,
 		GasErr:      nil,
 		ExpectedErr: nil,
@@ -329,7 +327,7 @@ func TestInvalidPredicatePacking(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Rules:     granite,
+		Rules:     graniteRules,
 		Gas:       graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numKeys)*graniteGasConfig.PerWarpSigner,
 		GasErr:    errInvalidPredicateBytes,
 	}
@@ -361,7 +359,7 @@ func TestInvalidWarpMessage(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Rules:     granite,
+		Rules:     graniteRules,
 		Gas:       graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numKeys)*graniteGasConfig.PerWarpSigner,
 		GasErr:    errInvalidWarpMsg,
 	}
@@ -406,7 +404,7 @@ func TestInvalidAddressedPayload(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Rules:     granite,
+		Rules:     graniteRules,
 		Gas:       graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numKeys)*graniteGasConfig.PerWarpSigner,
 		GasErr:    errInvalidWarpMsgPayload,
 	}
@@ -452,7 +450,7 @@ func TestInvalidBitSet(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Rules:     granite,
+		Rules:     graniteRules,
 		Gas:       graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numKeys)*graniteGasConfig.PerWarpSigner,
 		GasErr:    errCannotGetNumSigners,
 	}
@@ -498,7 +496,7 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 				},
 			},
 			Predicate:   pred,
-			Rules:       granite,
+			Rules:       graniteRules,
 			Gas:         graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numSigners)*graniteGasConfig.PerWarpSigner,
 			GasErr:      nil,
 			ExpectedErr: expectedErr,
@@ -557,7 +555,7 @@ func TestWarpMultiplePredicates(t *testing.T) {
 					},
 				},
 				Predicate:   pred,
-				Rules:       granite,
+				Rules:       graniteRules,
 				Gas:         expectedGas,
 				GasErr:      nil,
 				ExpectedErr: expectedErr,
@@ -602,7 +600,7 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 				},
 			},
 			Predicate:   pred,
-			Rules:       granite,
+			Rules:       graniteRules,
 			Gas:         graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk + uint64(numSigners)*graniteGasConfig.PerWarpSigner,
 			GasErr:      nil,
 			ExpectedErr: expectedErr,
