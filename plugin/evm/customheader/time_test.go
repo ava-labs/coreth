@@ -225,6 +225,15 @@ func TestGetNextTimestamp(t *testing.T) {
 			now:         now,
 			expectedErr: ErrGraniteClockBehindParent,
 		},
+		{
+			name:           "current_timesec_equals_parent_time_with_different_milliseconds_granite",
+			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis-1000)),
+			extraConfig:    extras.TestGraniteChainConfig,
+			now:            now,
+			expectedErr:    nil,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
+		},
 	}
 
 	for _, test := range tests {

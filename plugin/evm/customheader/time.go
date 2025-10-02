@@ -35,27 +35,23 @@ func GetNextTimestamp(parent *types.Header, config *extras.ChainConfig, now time
 		timestamp   = uint64(now.Unix())
 		timestampMS = uint64(now.UnixMilli())
 	)
-	// Note: in order to support asynchronous block production, blocks are allowed to have
-	// the same timestamp as their parent. This allows more than one block to be produced
-	// per second.
-	parentExtra := customtypes.GetHeaderExtra(parent)
-	if parent.Time >= timestamp || (parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
-		// In pre-Granite, blocks are allowed to have the same timestamp as their parent.
-		// In Granite, there is a minimum delay enforced, and if the timestamp is the same as the parent,
-		// the block will be rejected.
-		// The block builder should have already waited enough time to meet the minimum delay.
-		// This is to early-exit from the block building.
-		if config.IsGranite(timestamp) {
+	if parent.Time < timestamp {
+		return timestamp, timestampMS, nil
+	}
+	// In Granite, there is a minimum delay enforced, and if the timestamp is the same as the parent,
+	// the block will be rejected.
+	// The block builder should have already waited enough time to meet the minimum delay.
+	// This is to early-exit from the block building.
+	if config.IsGranite(timestamp) {
+		if uint64(customtypes.BlockTime(parent).UnixMilli()) >= timestampMS {
 			return 0, 0, ErrGraniteClockBehindParent
 		}
-		// Add the delay to the parent timestamp with seconds precision.
-		timestamp = parent.Time
-		// Actually we don't need to set timestampMS, because it will be not be set if this is not
-		// Granite, but setting here for consistency.
-		timestampMS = parent.Time * 1000
+		return timestamp, timestampMS, nil
 	}
-
-	return timestamp, timestampMS, nil
+	// In pre-Granite, blocks are allowed to have the same timestamp as their parent
+	// Actually we don't need to return modified timestampMS, because it will be not be set if this is not
+	// Granite, but setting here for consistency.
+	return parent.Time, parent.Time * 1000, nil
 }
 
 // VerifyTime verifies that the header's Time and TimeMilliseconds fields are
