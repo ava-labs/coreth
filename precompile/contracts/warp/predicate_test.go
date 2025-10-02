@@ -153,7 +153,8 @@ func createWarpMessage(numKeys int) *avalancheWarp.Message {
 		}
 		sig = aggregateSignature
 	} else {
-		// populate with a random signature
+		// Parsing an unpopulated signature fails, so instead we populate a
+		// random signature.
 		sk, err := localsigner.New()
 		if err != nil {
 			panic(err)
