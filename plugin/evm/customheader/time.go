@@ -24,11 +24,13 @@ var (
 	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
 	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
 	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
+	ErrMinDelayNotMet                = errors.New("minimum block delay not met")
+	ErrGraniteClockBehindParent      = errors.New("current timestamp is not allowed to be behind than parent timestamp in Granite")
 )
 
-// GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the next child block based on the parent's timestamp and the current time.
+// GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
 // First return value is the timestamp in seconds, second return value is the timestamp in milliseconds.
-func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
+func GetNextTimestamp(parent *types.Header, config *extras.ChainConfig, now time.Time) (uint64, uint64, error) {
 	var (
 		timestamp   = uint64(now.Unix())
 		timestampMS = uint64(now.UnixMilli())
@@ -37,17 +39,23 @@ func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
 	parentExtra := customtypes.GetHeaderExtra(parent)
-	if parent.Time >= timestamp ||
-		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
-		timestamp = parent.Time
-		// If the parent has a TimeMilliseconds, use it. Otherwise, use the parent time * 1000.
-		if parentExtra.TimeMilliseconds != nil {
-			timestampMS = *parentExtra.TimeMilliseconds
-		} else {
-			timestampMS = parent.Time * 1000 // TODO: establish minimum time
+	if parent.Time >= timestamp || (parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
+		// In pre-Granite, blocks are allowed to have the same timestamp as their parent.
+		// In Granite, there is a minimum delay enforced, and if the timestamp is the same as the parent,
+		// the block will be rejected.
+		// The block builder should have already waited enough time to meet the minimum delay.
+		// This is to early-exit from the block building.
+		if config.IsGranite(timestamp) {
+			return 0, 0, ErrGraniteClockBehindParent
 		}
+		// Add the delay to the parent timestamp with seconds precision.
+		timestamp = parent.Time
+		// Actually we don't need to set timestampMS, because it will be not be set if this is not
+		// Granite, but setting here for consistency.
+		timestampMS = parent.Time * 1000
 	}
-	return timestamp, timestampMS
+
+	return timestamp, timestampMS, nil
 }
 
 // VerifyTime verifies that the header's Time and TimeMilliseconds fields are
