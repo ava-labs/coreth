@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
@@ -102,6 +103,15 @@ var (
 )
 
 const (
+	// Minimum amount of time to wait after building a block before attempting to build a block
+	// a second time without changing the contents of the mempool.
+	PreGraniteMinBlockBuildingRetryDelay = 500 * time.Millisecond
+	// Minimum amount of time to wait after attempting/build a block before attempting to build another block
+	// This is only applied for retrying to build a block after a minimum delay has passed.
+	// The initial minimum delay is applied according to parent minDelayExcess (if available)
+	// TODO (ceyonur): Decide whether this a correct value.
+	PostGraniteMinBlockBuildingRetryDelay = 100 * time.Millisecond
+
 	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB
 	missingCacheSize       = 50
@@ -876,7 +886,7 @@ func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 		}
 	}
 
-	return builder.waitForEvent(ctx)
+	return builder.waitForEvent(ctx, vm.blockChain.CurrentHeader())
 }
 
 // Shutdown implements the snowman.ChainVM interface
@@ -918,7 +928,7 @@ func (vm *VM) buildBlockWithContext(_ context.Context, proposerVMBlockCtx *block
 	}
 
 	block, err := vm.miner.GenerateBlock(predicateCtx)
-	vm.builder.handleGenerateBlock()
+	vm.builder.handleGenerateBlock(vm.blockChain.CurrentHeader().ParentHash)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", vmerrors.ErrGenerateBlockFailed, err)
 	}
