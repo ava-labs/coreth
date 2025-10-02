@@ -17,7 +17,6 @@ import (
 	"github.com/ava-labs/libevm/log"
 
 	warpprecompile "github.com/ava-labs/coreth/precompile/contracts/warp"
-	warpValidators "github.com/ava-labs/coreth/warp/validators"
 )
 
 var errNoValidators = errors.New("cannot aggregate signatures from subnet with no validators")
@@ -108,8 +107,7 @@ func (a *API) aggregateSignatures(ctx context.Context, unsignedMessage *warp.Uns
 		return nil, err
 	}
 
-	state := warpValidators.NewState(validatorState, a.chainContext.SubnetID, a.chainContext.ChainID, a.requirePrimaryNetworkSigners())
-	validatorSet, err := warp.GetCanonicalValidatorSetFromSubnetID(ctx, state, pChainHeight, subnetID)
+	validatorSet, err := warp.GetCanonicalValidatorSetFromSubnetID(ctx, validatorState, pChainHeight, subnetID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validator set: %w", err)
 	}
