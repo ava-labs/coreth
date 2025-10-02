@@ -644,7 +644,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			},
 		},
 		Predicate:   pred,
-		Gas:         GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk, // Gas cost should be equal to [TestWarpNoValidators]
+		Gas:         expectedGas,
 		GasErr:      nil,
 		ExpectedErr: avalancheWarp.ErrWeightOverflow,
 	}
