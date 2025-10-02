@@ -613,16 +613,19 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 }
 
 func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
-	pred := createPredicate(0)
-	expectedGas := GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk
-
+	var (
+		config            = NewConfig(utils.NewUint64(0), 0, false)
+		proposervmContext = &block.Context{
+			PChainHeight: 1,
+		}
+		pred        = createPredicate(0)
+		expectedGas = GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk
+	)
 	noValidators := precompiletest.PredicateTest{
-		Config: NewConfig(utils.NewUint64(0), 0, false),
+		Config: config,
 		PredicateContext: &precompileconfig.PredicateContext{
-			SnowCtx: createSnowCtx(t, nil /*=validators*/), // No validators in state
-			ProposerVMBlockCtx: &block.Context{
-				PChainHeight: 1,
-			},
+			SnowCtx:            createSnowCtx(t, nil /*=validators*/), // No validators in state
+			ProposerVMBlockCtx: proposervmContext,
 		},
 		Predicate:   pred,
 		Gas:         expectedGas,
@@ -630,7 +633,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 		ExpectedErr: bls.ErrNoPublicKeys,
 	}
 	weightOverflow := precompiletest.PredicateTest{
-		Config: NewConfig(utils.NewUint64(0), 0, false),
+		Config: config,
 		PredicateContext: &precompileconfig.PredicateContext{
 			SnowCtx: createSnowCtx(t, []validatorRange{
 				{
@@ -640,9 +643,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 					publicKey: true,
 				},
 			}),
-			ProposerVMBlockCtx: &block.Context{
-				PChainHeight: 1,
-			},
+			ProposerVMBlockCtx: proposervmContext,
 		},
 		Predicate:   pred,
 		Gas:         expectedGas,
