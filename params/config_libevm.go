@@ -5,6 +5,7 @@ package params
 
 import (
 	"math/big"
+	"sync"
 
 	"github.com/ava-labs/libevm/common"
 
@@ -33,11 +34,18 @@ func RegisterExtras() {
 	payloads = ethparams.RegisterExtras(extrasToRegister())
 }
 
+var tempExtrasMu sync.Mutex
+
 // WithTempRegisteredExtras runs `fn` with temporary registration otherwise
-// equivalent to a call to [RegisterExtras], but limited to the life of `fn`.
+// equivalent to a call to [RegisterExtras], but limited to the life of `fn`. It
+// is safe for concurrent use.
 func WithTempRegisteredExtras(fn func()) {
+	tempExtrasMu.Lock()
 	old := payloads
-	defer func() { payloads = old }()
+	defer func() {
+		payloads = old
+		tempExtrasMu.Unlock()
+	}()
 
 	ethparams.WithTempRegisteredExtras(extrasToRegister(), func(extras ethparams.ExtraPayloads[*extras.ChainConfig, RulesExtra]) {
 		payloads = extras
