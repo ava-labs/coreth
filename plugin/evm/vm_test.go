@@ -1540,8 +1540,10 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 }
 
 func TestWaitForEvent(t *testing.T) {
+	fortunaFork := upgradetest.Fortuna
 	for _, testCase := range []struct {
 		name     string
+		Fork     *upgradetest.Fork
 		testCase func(*testing.T, *VM)
 	}{
 		{
@@ -1605,8 +1607,10 @@ func TestWaitForEvent(t *testing.T) {
 				wg.Wait()
 			},
 		},
+		// TODO (ceyonur): remove this test after Granite is activated.
 		{
-			name: "WaitForEvent does not wait for new block to be built",
+			name: "WaitForEvent does not wait for new block to be built in fortuna",
+			Fork: &fortunaFork,
 			testCase: func(t *testing.T, vm *VM) {
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
@@ -1634,8 +1638,10 @@ func TestWaitForEvent(t *testing.T) {
 				wg.Wait()
 			},
 		},
+		// TODO (ceyonur): remove this test after Granite is activated.
 		{
-			name: "WaitForEvent waits for a delay with a retry",
+			name: "WaitForEvent waits for a delay with a retry in fortuna",
+			Fork: &fortunaFork,
 			testCase: func(t *testing.T, vm *VM) {
 				lastBuildBlockTime := time.Now()
 				_, err := vm.BuildBlock(context.Background())
@@ -1658,9 +1664,21 @@ func TestWaitForEvent(t *testing.T) {
 				wg.Wait()
 			},
 		},
+		{
+			name: "WaitForEvent waits for the initial delay with a retry in granite",
+			testCase: func(t *testing.T, vm *VM) {
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+				blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
+				require.NoError(t, err)
+				require.NoError(t, blk.Accept(context.Background()))
+			},
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			fork := upgradetest.Latest
+			if testCase.Fork != nil {
+				fork = *testCase.Fork
+			}
 			vm := newDefaultTestVM()
 			vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 				Fork: &fork,

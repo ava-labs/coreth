@@ -156,12 +156,11 @@ func CalcExtDataHash(extdata []byte) common.Hash {
 	return ethtypes.RLPHash(extdata)
 }
 
-func FullBlockTime(eth *ethtypes.Header) time.Time {
-	var timeMilliseconds uint64
+func BlockTime(eth *ethtypes.Header) time.Time {
 	if t := GetHeaderExtra(eth).TimeMilliseconds; t != nil {
-		timeMilliseconds = *t
+		return time.UnixMilli(int64(*t))
 	}
-	return time.Unix(int64(eth.Time), int64(timeMilliseconds))
+	return time.Unix(int64(eth.Time), 0)
 }
 
 func NewBlockWithExtData(

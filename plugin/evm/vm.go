@@ -110,7 +110,7 @@ const (
 	// This is only applied for retrying to build a block after a minimum delay has passed.
 	// The initial minimum delay is applied according to parent minDelayExcess (if available)
 	// TODO (ceyonur): Decide whether this a correct value.
-	PostGraniteMinBlockBuildingRetryDelay = acp226.MinDelayMilliseconds
+	PostGraniteMinBlockBuildingRetryDelay = 100 * time.Millisecond
 
 	secpCacheSize          = 1024
 	decidedCacheSize       = 10 * units.MiB

@@ -16,29 +16,6 @@ import (
 	"github.com/ava-labs/coreth/utils"
 )
 
-func generateHeader(timeSeconds uint64, timeMilliseconds *uint64) *types.Header {
-	return customtypes.WithHeaderExtra(
-		&types.Header{
-			Time: timeSeconds,
-		},
-		&customtypes.HeaderExtra{
-			TimeMilliseconds: timeMilliseconds,
-		},
-	)
-}
-
-func generateHeaderWithMinDelayExcessAndTime(timeSeconds uint64, timeMilliseconds *uint64, minDelayExcess *uint64) *types.Header {
-	return customtypes.WithHeaderExtra(
-		&types.Header{
-			Time: timeSeconds,
-		},
-		&customtypes.HeaderExtra{
-			TimeMilliseconds: timeMilliseconds,
-			MinDelayExcess:   minDelayExcess,
-		},
-	)
-}
-
 func TestVerifyTime(t *testing.T) {
 	var (
 		now         = time.Unix(1714339200, 123_456_789)
@@ -369,4 +346,27 @@ func TestGetNextTimestamp(t *testing.T) {
 			require.Equal(t, test.expectedMillis, millis)
 		})
 	}
+}
+
+func generateHeader(timeSeconds uint64, timeMilliseconds *uint64) *types.Header {
+	return customtypes.WithHeaderExtra(
+		&types.Header{
+			Time: timeSeconds,
+		},
+		&customtypes.HeaderExtra{
+			TimeMilliseconds: timeMilliseconds,
+		},
+	)
+}
+
+func generateHeaderWithMinDelayExcessAndTime(timeSeconds uint64, timeMilliseconds *uint64, minDelayExcess *uint64) *types.Header {
+	return customtypes.WithHeaderExtra(
+		&types.Header{
+			Time: timeSeconds,
+		},
+		&customtypes.HeaderExtra{
+			TimeMilliseconds: timeMilliseconds,
+			MinDelayExcess:   (*acp226.DelayExcess)(minDelayExcess),
+		},
+	)
 }
