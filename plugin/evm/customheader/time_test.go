@@ -259,6 +259,7 @@ func TestVerifyTime(t *testing.T) {
 				utils.NewUint64(0),          // Parent has zero delay excess
 			),
 			extraConfig: extras.TestGraniteChainConfig,
+			expectedErr: ErrMinDelayNotMet,
 		},
 	}
 

@@ -39,13 +39,12 @@ func GetNextTimestamp(parent *types.Header, config *extras.ChainConfig, now time
 	// the same timestamp as their parent. This allows more than one block to be produced
 	// per second.
 	parentExtra := customtypes.GetHeaderExtra(parent)
-	if parent.Time >= timestamp ||
+	if parent.Time >= timestamp || (parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
 		// In pre-Granite, blocks are allowed to have the same timestamp as their parent.
 		// In Granite, there is a minimum delay enforced, and if the timestamp is the same as the parent,
 		// the block will be rejected.
 		// The block builder should have already waited enough time to meet the minimum delay.
 		// This is to early-exit from the block building.
-		(parentExtra.TimeMilliseconds != nil && *parentExtra.TimeMilliseconds >= timestampMS) {
 		if config.IsGranite(timestamp) {
 			return 0, 0, ErrGraniteClockBehindParent
 		}
