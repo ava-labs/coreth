@@ -59,7 +59,3 @@ func ParseABI(rawABI string) abi.ABI {
 
 	return parsed
 }
-
-func IsGraniteActivated(evm AccessibleState) bool {
-	return evm.GetChainConfig().IsGranite(evm.GetBlockContext().Timestamp())
-}
