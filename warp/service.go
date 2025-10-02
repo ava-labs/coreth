@@ -23,18 +23,16 @@ var errNoValidators = errors.New("cannot aggregate signatures from subnet with n
 
 // API introduces snowman specific functionality to the evm
 type API struct {
-	chainContext                 *snow.Context
-	backend                      Backend
-	signatureAggregator          *acp118.SignatureAggregator
-	requirePrimaryNetworkSigners func() bool
+	chainContext        *snow.Context
+	backend             Backend
+	signatureAggregator *acp118.SignatureAggregator
 }
 
-func NewAPI(chainCtx *snow.Context, backend Backend, signatureAggregator *acp118.SignatureAggregator, requirePrimaryNetworkSigners func() bool) *API {
+func NewAPI(chainCtx *snow.Context, backend Backend, signatureAggregator *acp118.SignatureAggregator) *API {
 	return &API{
-		backend:                      backend,
-		chainContext:                 chainCtx,
-		signatureAggregator:          signatureAggregator,
-		requirePrimaryNetworkSigners: requirePrimaryNetworkSigners,
+		backend:             backend,
+		chainContext:        chainCtx,
+		signatureAggregator: signatureAggregator,
 	}
 }
 
