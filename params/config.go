@@ -70,6 +70,8 @@ var (
 	TestRules Rules
 )
 
+// initialiseChainConfigs MUST be called inside [WithTempRegisteredExtras] to
+// allow [WithExtra] to work without global registration of libevm extras.
 func initialiseChainConfigs() {
 	TestChainConfig = WithExtra(
 		&ChainConfig{
