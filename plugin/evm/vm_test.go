@@ -1638,7 +1638,7 @@ func TestWaitForEvent(t *testing.T) {
 				lastBuildBlockTime := time.Now()
 				_, err := vm.BuildBlock(context.Background())
 				require.NoError(t, err)
-				// we haven't accepted the previous built block, so this should be a retry
+				// we haven't advanced the tip to include the previous built block, so this is a retry
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				for _, err := range vm.txPool.AddRemotesSync([]*types.Transaction{signedTx}) {
 					require.NoError(t, err)
