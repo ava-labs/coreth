@@ -1606,7 +1606,7 @@ func TestWaitForEvent(t *testing.T) {
 			},
 		},
 		{
-			name: "WaitForEvent does not wait for new block to be built",
+			name: "WaitForEvent does not wait to build on a new block",
 			testCase: func(t *testing.T, vm *VM) {
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				blk, err := vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
