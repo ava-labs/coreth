@@ -62,9 +62,12 @@ var (
 	eip1559Config *params.ChainConfig
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
+func init() {
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
 	eip1559Config.BerlinBlock = common.Big0
