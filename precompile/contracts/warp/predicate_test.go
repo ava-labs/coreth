@@ -636,7 +636,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			PChainHeight: 1,
 		}
 		pred        = createPredicate(0)
-		expectedGas = GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk
+		expectedGas = graniteGasConfig.PerSignatureVerification + uint64(len(pred))*graniteGasConfig.PerWarpMessageChunk
 	)
 	noValidators := precompiletest.PredicateTest{
 		Config: config,
@@ -644,6 +644,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			SnowCtx:            createSnowCtx(t, nil /*=validators*/), // No validators in state
 			ProposerVMBlockCtx: proposervmContext,
 		},
+		Rules:       graniteRules,
 		Predicate:   pred,
 		Gas:         expectedGas,
 		GasErr:      nil,
@@ -663,6 +664,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			ProposerVMBlockCtx: proposervmContext,
 		},
 		Predicate:   pred,
+		Rules:       graniteRules,
 		Gas:         expectedGas,
 		GasErr:      nil,
 		ExpectedErr: safemath.ErrOverflow,
