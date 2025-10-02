@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/params/extras"
@@ -51,7 +50,7 @@ func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64) {
 		// This is the last adjustment to the timestamp.
 		minDelayExcess := customtypes.GetHeaderExtra(parent).MinDelayExcess
 		if minDelayExcess != nil {
-			delayMS = acp226.DelayExcess(*minDelayExcess).Delay()
+			delayMS = minDelayExcess.Delay()
 		}
 		// Add the delay to the parent timestamp with seconds precision.
 		timestamp = parent.Time + delayMS/1000
@@ -164,7 +163,7 @@ func verifyMinDelay(extraConfig *extras.ChainConfig, parent *types.Header, heade
 		return nil
 	}
 
-	minRequiredDelayMillis := acp226.DelayExcess(*minDelayExcess).Delay()
+	minRequiredDelayMillis := minDelayExcess.Delay()
 
 	// Check if the actual delay meets the minimum requirement
 	if actualDelayMillis < minRequiredDelayMillis {

@@ -18,6 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/coreth/utils/utilstest"
+
 	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
 	// package so assume the presence of identifiers. A dot-import reduces PR
 	// noise during the refactoring.
@@ -110,16 +112,16 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		Nonce:            BlockNonce{15},
 		BaseFee:          big.NewInt(16),
 		WithdrawalsHash:  &common.Hash{17},
-		BlobGasUsed:      ptrTo(uint64(18)),
-		ExcessBlobGas:    ptrTo(uint64(19)),
+		BlobGasUsed:      utilstest.PointerTo(uint64(18)),
+		ExcessBlobGas:    utilstest.PointerTo(uint64(19)),
 		ParentBeaconRoot: &common.Hash{20},
 	}
 	extra := &HeaderExtra{
 		ExtDataHash:      common.Hash{21},
 		ExtDataGasUsed:   big.NewInt(22),
 		BlockGasCost:     big.NewInt(23),
-		TimeMilliseconds: ptrTo(uint64(24)),
-		MinDelayExcess:   ptrTo(acp226.DelayExcess(25)),
+		TimeMilliseconds: utilstest.PointerTo(uint64(24)),
+		MinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(25)),
 	}
 	return WithHeaderExtra(header, extra), extra
 }
@@ -191,5 +193,3 @@ func assertNonZero[T interface {
 }
 
 // Note [TestCopyHeader] tests the [HeaderExtra.PostCopy] method.
-
-func ptrTo[T any](x T) *T { return &x }
