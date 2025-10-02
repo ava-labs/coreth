@@ -448,28 +448,24 @@ func TestBaseFee(t *testing.T) {
 		{
 			name:     "granite_genesis_block",
 			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
-			parent: customtypes.WithHeaderExtra(&types.Header{
+			parent: &types.Header{
 				Number: big.NewInt(0),
-			}, &customtypes.HeaderExtra{
-				TimeMilliseconds: utils.NewUint64(0),
-			}),
+			},
 			want: big.NewInt(acp176.MinGasPrice),
 		},
 		{
 			name:     "granite_invalid_fee_state",
 			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
-			parent: customtypes.WithHeaderExtra(&types.Header{
+			parent: &types.Header{
 				Number: big.NewInt(1),
 				Extra:  make([]byte, acp176.StateSize-1),
-			}, &customtypes.HeaderExtra{
-				TimeMilliseconds: utils.NewUint64(0),
-			}),
+			},
 			wantErr: acp176.ErrStateInsufficientLength,
 		},
 		{
 			name:     "granite_decrease",
 			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
-			parent: customtypes.WithHeaderExtra(&types.Header{
+			parent: &types.Header{
 				Number: big.NewInt(1),
 				Extra: (&acp176.State{
 					Gas: gas.State{
@@ -477,16 +473,14 @@ func TestBaseFee(t *testing.T) {
 					},
 					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
 				}).Bytes(),
-			}, &customtypes.HeaderExtra{
-				TimeMilliseconds: utils.NewUint64(0),
-			}),
+			},
 			timeMS: 1000,
 			want:   big.NewInt(988_571_555), // e^((2_704_386_192 - 1_500_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
 		},
 		{
 			name:     "granite_partial_second",
 			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
-			parent: customtypes.WithHeaderExtra(&types.Header{
+			parent: &types.Header{
 				Number: big.NewInt(1),
 				Extra: (&acp176.State{
 					Gas: gas.State{
@@ -494,9 +488,7 @@ func TestBaseFee(t *testing.T) {
 					},
 					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
 				}).Bytes(),
-			}, &customtypes.HeaderExtra{
-				TimeMilliseconds: utils.NewUint64(0),
-			}),
+			},
 			timeMS: 500,
 			want:   big.NewInt(994_269_358), // e^((2_704_386_192 - 750_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
 		},
