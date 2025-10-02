@@ -264,7 +264,7 @@ type AvalancheRules struct {
 	IsGranite                                                                           bool
 }
 
-func (a *AvalancheRules) IsGraniteActivated() bool {
+func (a AvalancheRules) IsGraniteActivated() bool {
 	return a.IsGranite
 }
 

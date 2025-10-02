@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package precompiletest
+package warp
 
 import (
 	"testing"
@@ -20,13 +20,13 @@ type PredicateTest struct {
 	PredicateContext *precompileconfig.PredicateContext
 
 	Predicate   predicate.Predicate
-	Rules       precompileconfig.Rules
 	Gas         uint64
+	Rules       precompileconfig.Rules
 	GasErr      error
 	ExpectedErr error
 }
 
-func (test PredicateTest) Run(t testing.TB) {
+func (test PredicateTest) run(t testing.TB) {
 	t.Helper()
 	require := require.New(t)
 	predicater := test.Config.(precompileconfig.Predicater)
@@ -48,7 +48,7 @@ func RunPredicateTests(t *testing.T, predicateTests map[string]PredicateTest) {
 
 	for name, test := range predicateTests {
 		t.Run(name, func(t *testing.T) {
-			test.Run(t)
+			test.run(t)
 		})
 	}
 }
@@ -58,7 +58,7 @@ func (test PredicateTest) RunBenchmark(b *testing.B) {
 	start := time.Now()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		test.Run(b)
+		test.run(b)
 	}
 	b.StopTimer()
 	elapsed := uint64(time.Since(start))

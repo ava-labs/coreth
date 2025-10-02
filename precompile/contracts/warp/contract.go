@@ -18,6 +18,7 @@ import (
 
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/precompile/contract"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 const (
@@ -349,8 +350,8 @@ func createWarpPrecompile() contract.StatefulPrecompiledContract {
 	return statefulContract
 }
 
-func GetWarpPredicateGasConfig(isGraniteActivated bool) GasConfig {
-	if isGraniteActivated {
+func CurrentGasConfig(rules precompileconfig.Rules) GasConfig {
+	if rules.IsGraniteActivated() {
 		return GasConfig{
 			PerWarpSigner:            250,
 			PerWarpMessageChunk:      3_200,

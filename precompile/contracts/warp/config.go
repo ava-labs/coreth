@@ -145,7 +145,9 @@ func (*Config) Accept(acceptCtx *precompileconfig.AcceptContext, blockHash commo
 //
 // If the payload of the warp message fails parsing, return a non-nil error invalidating the transaction.
 func (*Config) PredicateGas(pred predicate.Predicate, rules precompileconfig.Rules) (uint64, error) {
-	gasConfig := GetWarpPredicateGasConfig(rules.IsGraniteActivated())
+	gasConfig := CurrentGasConfig(rules)
+
+	fmt.Printf("warp predicate gas config: %+v\n", gasConfig)
 
 	totalGas := gasConfig.PerSignatureVerification
 	bytesGasCost, overflow := math.SafeMul(gasConfig.PerWarpMessageChunk, uint64(len(pred)))
