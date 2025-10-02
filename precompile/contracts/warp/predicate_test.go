@@ -21,7 +21,6 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
-	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
@@ -647,7 +646,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 		Predicate:   pred,
 		Gas:         GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk, // Gas cost should be equal to [TestWarpNoValidators]
 		GasErr:      nil,
-		ExpectedErr: warp.ErrWeightOverflow,
+		ExpectedErr: avalancheWarp.ErrWeightOverflow,
 	}
 	precompiletest.RunPredicateTests(t, map[string]precompiletest.PredicateTest{
 		"no_validators":   noValidators,
