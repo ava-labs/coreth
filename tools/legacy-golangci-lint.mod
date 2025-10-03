@@ -1,5 +1,16 @@
 module github.com/ava-labs/coreth/tools/legacy-golangci-lint
 
+// This file manages golangci-lint v1, used to lint coreth. v2
+// of golangci-lint is used to apply avalanchego linting rules and is
+// managed along with the rest of the coreth CLI tools in tools/go.mod.
+// A separate file is needed because a mod file can only manage a
+// single version of a given module.
+//
+// To use (from repo root):
+//
+// go tool -modfile=tools/legacy-golangci-lint.mod golangci-lint [args]
+//
+
 go 1.24.7
 
 tool github.com/golangci/golangci-lint/cmd/golangci-lint
