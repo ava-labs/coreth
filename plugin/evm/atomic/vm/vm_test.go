@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -46,6 +47,12 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 func newAtomicTestVM() *VM {
 	return WrapVM(&evm.VM{})
@@ -1532,6 +1539,62 @@ func TestWaitForEvent(t *testing.T) {
 				require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx))
 
 				wg.Wait()
+			},
+		},
+		{
+			name: "WaitForEvent doesn't return if both mempool is empty",
+			testCase: func(t *testing.T, vm *VM, address common.Address, key *ecdsa.PrivateKey) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+				defer cancel()
+
+				var wg sync.WaitGroup
+				wg.Add(1)
+
+				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
+				go func() {
+					defer wg.Done()
+					msg, err := vm.WaitForEvent(ctx)
+					assert.ErrorIs(t, err, context.DeadlineExceeded)
+					assert.Zero(t, msg)
+				}()
+
+				wg.Wait()
+
+				t.Log("WaitForEvent returns when regular transactions are added to the mempool")
+
+				txs := make([]*types.Transaction, 10)
+				for i := 0; i < 10; i++ {
+					tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(3*ap0.MinGasPrice), nil)
+					signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), key)
+					require.NoError(t, err)
+
+					txs[i] = signedTx
+				}
+				errs := vm.Ethereum().TxPool().Add(txs, false, false)
+				for _, err := range errs {
+					require.NoError(t, err)
+				}
+
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+					msg, err := vm.WaitForEvent(context.Background())
+					assert.NoError(t, err)
+					assert.Equal(t, commonEng.PendingTxs, msg)
+				}()
+
+				wg.Wait()
+
+				// Build a block again to wipe out the subscription
+				blk, err := vm.BuildBlock(context.Background())
+				require.NoError(t, err)
+
+				require.NoError(t, blk.Verify(context.Background()))
+
+				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+
+				require.NoError(t, blk.Accept(context.Background()))
 			},
 		},
 	} {
