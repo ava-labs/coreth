@@ -8,6 +8,7 @@
 - Implement ACP-226: Add `timeMilliseconds` (Unix uint64) timestamp to block header for Granite upgrade.
 - Implement ACP-226: Add `minDelayExcess` (uint64) to block header for Granite upgrade.
 - Update go version to 1.24.7
+- Enabled logs for Firewood.
 
 ## [v0.15.3](https://github.com/ava-labs/coreth/releases/tag/v0.15.3)
 

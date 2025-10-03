@@ -70,7 +70,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		tconf.DBOverride = pathdb.Defaults.BackendConstructor
 	case customrawdb.FirewoodScheme:
 		cfg := firewood.Defaults
-		cfg.FilePath = filepath.Join(tempdir, "firewood")
+		cfg.ChainDir = filepath.Join(tempdir, "firewood")
 		tconf.DBOverride = cfg.BackendConstructor
 	default:
 		panic("unknown trie database scheme" + scheme)
