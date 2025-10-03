@@ -1521,7 +1521,27 @@ func TestWaitForEvent(t *testing.T) {
 		testCase func(*testing.T, *VM, common.Address, *ecdsa.PrivateKey)
 	}{
 		{
-			name: "WaitForEvent returns when a atomic transaction is added to the mempool",
+			name: "WaitForEvent with context cancelled returns 0",
+			testCase: func(t *testing.T, vm *VM, _ common.Address, _ *ecdsa.PrivateKey) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+				defer cancel()
+
+				var wg sync.WaitGroup
+				wg.Add(1)
+
+				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
+				go func() {
+					defer wg.Done()
+					msg, err := vm.WaitForEvent(ctx)
+					assert.ErrorIs(t, err, context.DeadlineExceeded)
+					assert.Zero(t, msg)
+				}()
+
+				wg.Wait()
+			},
+		},
+		{
+			name: "WaitForEvent returns when a transaction is added to the mempool",
 			testCase: func(t *testing.T, vm *VM, address common.Address, _ *ecdsa.PrivateKey) {
 				importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
 				require.NoError(t, err)

@@ -181,7 +181,7 @@ func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, commo
 // 1. If the current header is in Granite, return the remaining ACP-226 delay after the parent block time and the minimum retry delay.
 // 2. If the current header is not in Granite, return 0 and the minimum retry delay.
 func (b *blockBuilder) getMinBlockBuildingDelays(currentHeader *types.Header, config *extras.ChainConfig) (time.Duration, time.Duration, error) {
-	// TODO (ceyonur): this check can be removed after Granite is activated.
+	// TODO Cleanup (ceyonur): this check can be removed after Granite is activated.
 	currentTimestamp := b.clock.Unix()
 	if !config.IsGranite(currentTimestamp) {
 		return 0, PreGraniteMinBlockBuildingRetryDelay, nil // Pre-Granite: no initial delay
