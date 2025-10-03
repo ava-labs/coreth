@@ -24,14 +24,7 @@ func feeStateBeforeBlock(
 ) (acp176.State, error) {
 	timestamp := timeMS / 1000
 	parentMS := customtypes.HeaderTimeMilliseconds(parent)
-	if config.IsGranite(parent.Time) && timeMS < parentMS {
-		return acp176.State{}, fmt.Errorf("%w: timeMS %d prior to parent timeMS %d",
-			errInvalidTimestamp,
-			timeMS,
-			parentMS,
-		)
-	}
-	if timestamp < parent.Time {
+	if timeMS < parentMS {
 		return acp176.State{}, fmt.Errorf("%w: timestamp %d prior to parent timestamp %d",
 			errInvalidTimestamp,
 			timestamp,

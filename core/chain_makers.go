@@ -375,7 +375,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 
 func (cm *chainMaker) makeHeader(parent *types.Block, gap uint64, state *state.StateDB, engine consensus.Engine) *types.Header {
 	time := parent.Time() + gap // block time is fixed at [gap] seconds
-	timeMS := time * 1000
+	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + gap*1000
 
 	config := params.GetExtra(cm.config)
 	gasLimit, err := customheader.GasLimit(config, parent.Header(), timeMS)

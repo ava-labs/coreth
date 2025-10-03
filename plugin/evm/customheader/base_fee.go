@@ -61,5 +61,6 @@ func EstimateNextBaseFee(
 	}
 
 	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
-	return BaseFee(config, parent, timestamp*1000)
+	timeMS := timestamp * 1000
+	return BaseFee(config, parent, timeMS)
 }

@@ -120,9 +120,6 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		}
 		config := params.GetExtra(bc.config)
 		timeMS := blockTime * 1000
-		if config.IsGranite(blockTime) {
-			customtypes.GetHeaderExtra(parent).TimeMilliseconds = &timeMS
-		}
 		baseFee, err := customheader.BaseFee(
 			config, parent, timeMS,
 		)

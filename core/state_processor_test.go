@@ -369,8 +369,9 @@ func TestStateProcessorErrors(t *testing.T) {
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
 	configExtra := params.GetExtra(config)
-	time := parent.Time() + 10
-	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + 10000
+	gap := uint64(10) // 10 seconds
+	time := parent.Time() + gap
+	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + gap*1000
 	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), timeMS)
 	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), timeMS)
 	header := &types.Header{
