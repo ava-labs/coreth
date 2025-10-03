@@ -149,7 +149,7 @@ func (w *worker) commitNewWork(predicateContext *precompileconfig.PredicateConte
 		chainExtra = params.GetExtra(w.chainConfig)
 	)
 
-	timestamp, timestampMS, err := customheader.GetNextTimestamp(parent, chainExtra, tstart)
+	timestamp, timestampMS, err := customheader.GetNextTimestamp(chainExtra, parent, tstart)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get next timestamp: %w", err)
 	}

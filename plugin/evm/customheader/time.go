@@ -24,13 +24,12 @@ var (
 	ErrTimeMillisecondsRequired      = errors.New("TimeMilliseconds is required after Granite activation")
 	ErrTimeMillisecondsMismatched    = errors.New("TimeMilliseconds does not match header.Time")
 	ErrTimeMillisecondsBeforeGranite = errors.New("TimeMilliseconds should be nil before Granite activation")
-	ErrMinDelayNotMet                = errors.New("minimum block delay not met")
 	ErrGraniteClockBehindParent      = errors.New("current timestamp is not allowed to be behind than parent timestamp in Granite")
 )
 
 // GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
 // First return value is the timestamp in seconds, second return value is the timestamp in milliseconds.
-func GetNextTimestamp(parent *types.Header, config *extras.ChainConfig, now time.Time) (uint64, uint64, error) {
+func GetNextTimestamp(config *extras.ChainConfig, parent *types.Header, now time.Time) (uint64, uint64, error) {
 	var (
 		timestamp   = uint64(now.Unix())
 		timestampMS = uint64(now.UnixMilli())

@@ -241,7 +241,7 @@ func TestGetNextTimestamp(t *testing.T) {
 			if test.extraConfig == nil {
 				test.extraConfig = extras.TestChainConfig
 			}
-			sec, millis, err := GetNextTimestamp(test.parent, test.extraConfig, test.now)
+			sec, millis, err := GetNextTimestamp(test.extraConfig, test.parent, test.now)
 			require.ErrorIs(t, err, test.expectedErr)
 			require.Equal(t, test.expectedSec, sec)
 			require.Equal(t, test.expectedMillis, millis)
