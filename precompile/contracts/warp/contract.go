@@ -39,7 +39,7 @@ type GasConfig struct {
 	PerWarpSigner uint64
 	// Gas cost per chunk of the warp message (each chunk is 128 bytes)
 	PerWarpMessageChunk uint64
-	// Gas cost to verify a warp message signature
+	// Gas cost to verify a BLS signature
 	PerSignatureVerification uint64
 }
 
