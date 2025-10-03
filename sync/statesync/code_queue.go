@@ -67,6 +67,7 @@ func NewCodeQueue(db ethdb.Database, quit <-chan struct{}, opts ...CodeQueueOpti
 	}
 	options.ApplyTo(q, opts...)
 
+	// Initialize the channel with the (potentially overridden) capacity.
 	ch := make(chan common.Hash, q.capacity)
 	q.in = ch
 	q.out = ch
