@@ -17,6 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -54,6 +55,9 @@ type PrecompileTest struct {
 	// ChainConfig is the chain config to use for the precompile's block context
 	// If nil, the default chain config will be used.
 	ChainConfig precompileconfig.ChainConfig
+	// Rules is the rules to use for the precompile's block context
+	// If nil, the default rules will be used.
+	Rules precompileconfig.Rules
 }
 
 type PrecompileRunparams struct {
@@ -91,6 +95,10 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *tes
 	t.Helper()
 	contractAddress := module.Address
 
+	if test.Rules == nil {
+		test.Rules = extras.AvalancheRules{IsGranite: true}
+	}
+
 	ctrl := gomock.NewController(t)
 
 	chainConfig := test.ChainConfig
@@ -101,11 +109,11 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *tes
 	}
 
 	blockContext := contract.NewMockBlockContext(ctrl)
+	blockContext.EXPECT().Timestamp().Return(uint64(time.Now().Unix())).AnyTimes()
 	if test.SetupBlockContext != nil {
 		test.SetupBlockContext(blockContext)
 	} else {
 		blockContext.EXPECT().Number().Return(big.NewInt(0)).AnyTimes()
-		blockContext.EXPECT().Timestamp().Return(uint64(time.Now().Unix())).AnyTimes()
 	}
 	snowContext := snowtest.Context(t, snowtest.CChainID)
 
@@ -114,6 +122,7 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *tes
 	accessibleState.EXPECT().GetBlockContext().Return(blockContext).AnyTimes()
 	accessibleState.EXPECT().GetSnowContext().Return(snowContext).AnyTimes()
 	accessibleState.EXPECT().GetChainConfig().Return(chainConfig).AnyTimes()
+	accessibleState.EXPECT().GetRules().Return(test.Rules).AnyTimes()
 
 	if test.Config != nil {
 		require.NoError(t, module.Configure(chainConfig, test.Config, state, blockContext))
