@@ -31,9 +31,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ava-labs/avalanchego/vms/evm/sync/customrawdb"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"

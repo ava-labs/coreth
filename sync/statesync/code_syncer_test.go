@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils"
+	"github.com/ava-labs/avalanchego/vms/evm/sync/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/crypto"
@@ -15,7 +16,6 @@ import (
 	"github.com/ava-labs/libevm/ethdb/memorydb"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ava-labs/coreth/utils/utilstest"

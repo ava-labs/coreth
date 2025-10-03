@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/evm/sync/customrawdb"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/bloombits"
@@ -51,7 +52,6 @@ import (
 	"github.com/ava-labs/coreth/miner"
 	"github.com/ava-labs/coreth/node"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/accounts"
 	"github.com/ava-labs/libevm/common"
