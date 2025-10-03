@@ -15,6 +15,17 @@ import (
 	"github.com/ava-labs/coreth/utils"
 )
 
+func generateHeader(timeSeconds uint64, timeMilliseconds *uint64) *types.Header {
+	return customtypes.WithHeaderExtra(
+		&types.Header{
+			Time: timeSeconds,
+		},
+		&customtypes.HeaderExtra{
+			TimeMilliseconds: timeMilliseconds,
+		},
+	)
+}
+
 func TestVerifyTime(t *testing.T) {
 	var (
 		now         = time.Unix(1714339200, 123_456_789)
@@ -151,11 +162,9 @@ func TestGetNextTimestamp(t *testing.T) {
 	tests := []struct {
 		name           string
 		parent         *types.Header
-		extraConfig    *extras.ChainConfig
 		now            time.Time
 		expectedSec    uint64
 		expectedMillis uint64
-		expectedErr    error
 	}{
 		{
 			name:           "current_time_after_parent_time_no_milliseconds",
@@ -172,90 +181,47 @@ func TestGetNextTimestamp(t *testing.T) {
 			expectedMillis: nowMillis,
 		},
 		{
-			name:           "current_time_equals_parent_time_no_milliseconds_pre_granite",
+			name:           "current_time_equals_parent_time_no_milliseconds",
 			parent:         generateHeader(nowSeconds, nil),
-			extraConfig:    extras.TestFortunaChainConfig,
 			now:            now,
 			expectedSec:    nowSeconds,
 			expectedMillis: nowSeconds * 1000, // parent.Time * 1000
 		},
 		{
-			name:           "current_time_equals_parent_time_with_milliseconds_pre_granite",
+			name:           "current_time_equals_parent_time_with_milliseconds",
 			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis)),
-			extraConfig:    extras.TestFortunaChainConfig,
 			now:            now,
 			expectedSec:    nowSeconds,
-			expectedMillis: nowSeconds * 1000, // parent.Time * 1000
+			expectedMillis: nowMillis, // parent's TimeMilliseconds
 		},
 		{
-			name:           "current_time_before_parent_time_pre_granite",
+			name:           "current_time_before_parent_time",
 			parent:         generateHeader(nowSeconds+10, nil),
-			extraConfig:    extras.TestFortunaChainConfig,
 			now:            now,
 			expectedSec:    nowSeconds + 10,
 			expectedMillis: (nowSeconds + 10) * 1000, // parent.Time * 1000
 		},
 		{
-			name:           "current_time_before_parent_time_with_milliseconds_pre_granite",
+			name:           "current_time_before_parent_time_with_milliseconds",
 			parent:         generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
-			extraConfig:    extras.TestFortunaChainConfig,
 			now:            now,
 			expectedSec:    nowSeconds + 10,
-			expectedMillis: (nowSeconds + 10) * 1000, // parent.Time * 1000
+			expectedMillis: nowMillis, // parent's TimeMilliseconds
 		},
 		{
-			name:           "current_time_milliseconds_before_parent_time_milliseconds_pre_granite",
+			name:           "current_time_milliseconds_before_parent_time_milliseconds",
 			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis+10)),
-			extraConfig:    extras.TestFortunaChainConfig,
 			now:            now,
 			expectedSec:    nowSeconds,
-			expectedMillis: nowSeconds * 1000, // parent.Time * 1000
-		},
-		{
-			name:        "current_time_before_parent_time_granite",
-			parent:      generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
-			extraConfig: extras.TestGraniteChainConfig,
-			now:         now,
-			expectedErr: ErrGraniteClockBehindParent,
-		},
-		{
-			name:        "current_time_equals_parent_time_with_milliseconds_granite",
-			parent:      generateHeader(nowSeconds, utils.NewUint64(nowMillis)),
-			extraConfig: extras.TestGraniteChainConfig,
-			now:         now,
-			expectedErr: ErrGraniteClockBehindParent,
-		},
-		{
-			name:           "current_timesec_equals_parent_time_with_different_milliseconds_granite",
-			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis-1000)),
-			extraConfig:    extras.TestGraniteChainConfig,
-			now:            now,
-			expectedErr:    nil,
-			expectedSec:    nowSeconds,
-			expectedMillis: nowMillis,
+			expectedMillis: nowMillis + 10, // parent's TimeMilliseconds
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.extraConfig == nil {
-				test.extraConfig = extras.TestChainConfig
-			}
-			sec, millis, err := GetNextTimestamp(test.extraConfig, test.parent, test.now)
-			require.ErrorIs(t, err, test.expectedErr)
+			sec, millis := GetNextTimestamp(test.parent, test.now)
 			require.Equal(t, test.expectedSec, sec)
 			require.Equal(t, test.expectedMillis, millis)
 		})
 	}
-}
-
-func generateHeader(timeSeconds uint64, timeMilliseconds *uint64) *types.Header {
-	return customtypes.WithHeaderExtra(
-		&types.Header{
-			Time: timeSeconds,
-		},
-		&customtypes.HeaderExtra{
-			TimeMilliseconds: timeMilliseconds,
-		},
-	)
 }

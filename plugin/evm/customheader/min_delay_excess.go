@@ -77,7 +77,7 @@ func VerifyMinDelayExcess(
 		}
 	default:
 		// Prior to Granite there was no expected min delay excess.
-		// TODO Cleanup (ceyonur): this can be removed after Granite is activated.
+		// TODO (ceyonur): this can be removed after Granite is activated.
 		if customtypes.GetHeaderExtra(header).MinDelayExcess != nil {
 			return fmt.Errorf("%w: %s", errRemoteMinDelayExcessSet, header.Hash())
 		}
