@@ -139,7 +139,7 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 	if err != nil {
 		return 0, err
 	}
-	timeUntilNextBuild, shouldBuildImmediately, err := b.calculateBlockBuildingDelay(
+	timeUntilNextBuild, err := b.calculateBlockBuildingDelay(
 		lastBuildTime,
 		lastBuildParentHash,
 		currentHeader,
@@ -147,7 +147,7 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 	if err != nil {
 		return 0, err
 	}
-	if shouldBuildImmediately {
+	if timeUntilNextBuild == 0 {
 		b.ctx.Log.Debug("Last time we built a block was long enough ago or this is not a retry, no need to wait")
 		return commonEng.PendingTxs, nil
 	}
@@ -176,11 +176,11 @@ func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, commo
 	return b.lastBuildTime, b.lastBuildParentHash, nil
 }
 
-// getMinBlockBuildingDelays returns the initial min block building delay and the minimum retry delay.
+// currentMinBlockBuildingDelays returns the initial min block building delay and the minimum retry delay.
 // It implements the following logic:
 // 1. If the current header is in Granite, return the remaining ACP-226 delay after the parent block time and the minimum retry delay.
 // 2. If the current header is not in Granite, return 0 and the minimum retry delay.
-func (b *blockBuilder) getMinBlockBuildingDelays(currentHeader *types.Header, config *extras.ChainConfig) (time.Duration, time.Duration, error) {
+func (b *blockBuilder) currentMinBlockBuildingDelays(currentHeader *types.Header, config *extras.ChainConfig) (time.Duration, time.Duration, error) {
 	// TODO Cleanup (ceyonur): this check can be removed after Granite is activated.
 	currentTimestamp := b.clock.Unix()
 	if !config.IsGranite(currentTimestamp) {
@@ -216,25 +216,25 @@ func (b *blockBuilder) calculateBlockBuildingDelay(
 	lastBuildTime time.Time,
 	lastBuildParentHash common.Hash,
 	currentHeader *types.Header,
-) (time.Duration, bool, error) {
-	initialMinBlockBuildingDelay, minBlockBuildingRetryDelay, err := b.getMinBlockBuildingDelays(currentHeader, b.chainConfig)
+) (time.Duration, error) {
+	initialDelay, retryDelay, err := b.currentMinBlockBuildingDelays(currentHeader, b.chainConfig)
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	isRetry := lastBuildParentHash == currentHeader.ParentHash && !lastBuildTime.IsZero() // if last build time is zero, this is not a retry
 
 	timeSinceLastBuildTime := b.clock.Time().Sub(lastBuildTime)
 	var remainingMinDelay time.Duration
-	if minBlockBuildingRetryDelay > timeSinceLastBuildTime {
-		remainingMinDelay = minBlockBuildingRetryDelay - timeSinceLastBuildTime
+	if retryDelay > timeSinceLastBuildTime {
+		remainingMinDelay = retryDelay - timeSinceLastBuildTime
 	}
 
-	if initialMinBlockBuildingDelay > 0 {
-		remainingMinDelay = max(initialMinBlockBuildingDelay, remainingMinDelay)
+	if initialDelay > 0 {
+		remainingMinDelay = max(initialDelay, remainingMinDelay)
 	} else if !isRetry || remainingMinDelay == 0 {
-		return 0, true, nil // Build immediately
+		return 0, nil // Build immediately
 	}
 
-	return remainingMinDelay, false, nil // Need to wait
+	return remainingMinDelay, nil // Need to wait
 }

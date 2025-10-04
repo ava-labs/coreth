@@ -24,13 +24,12 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 	clock := &mockable.Clock{}
 	clock.Set(now)
 	tests := []struct {
-		name                   string
-		config                 *extras.ChainConfig
-		currentHeader          *types.Header
-		lastBuildTime          time.Time
-		lastBuildParentHash    common.Hash
-		expectedTimeToWait     time.Duration
-		expectedShouldBuildNow bool
+		name                string
+		config              *extras.ChainConfig
+		currentHeader       *types.Header
+		lastBuildTime       time.Time
+		lastBuildParentHash common.Hash
+		expectedTimeToWait  time.Duration
 	}{
 		{
 			name:   "pre_granite_returns_build_immediately_zero_time",
@@ -39,9 +38,9 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:          time.Time{}, // Zero time means not a retry
-			lastBuildParentHash:    common.Hash{1},
-			expectedShouldBuildNow: true,
+			lastBuildTime:       time.Time{}, // Zero time means not a retry
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  0,
 		},
 		{
 			name:   "pre_granite_returns_build_immediately_different_parent_hash",
@@ -50,9 +49,9 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{2},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:          now,
-			lastBuildParentHash:    common.Hash{1},
-			expectedShouldBuildNow: true,
+			lastBuildTime:       now,
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  0,
 		},
 		{
 			name:   "pre_granite_returns_build_delays_with_same_parent_hash",
@@ -61,10 +60,9 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:          now,
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     PreGraniteMinBlockBuildingRetryDelay,
-			expectedShouldBuildNow: false,
+			lastBuildTime:       now,
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  PreGraniteMinBlockBuildingRetryDelay,
 		},
 		{
 			name:   "pre_granite_returns_build_returns_immediately_if_enough_time_passed",
@@ -73,10 +71,9 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:          now.Add(-PreGraniteMinBlockBuildingRetryDelay), // Less than retry delay ago
-			lastBuildParentHash:    common.Hash{1},                                 // Same as current parent
-			expectedTimeToWait:     0,
-			expectedShouldBuildNow: true,
+			lastBuildTime:       now.Add(-PreGraniteMinBlockBuildingRetryDelay), // Less than retry delay ago
+			lastBuildParentHash: common.Hash{1},                                 // Same as current parent
+			expectedTimeToWait:  0,
 		},
 		{
 			name:   "pre_granite_returns_build_delays_only_remaining_min_delay",
@@ -85,64 +82,57 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:          now.Add(-PreGraniteMinBlockBuildingRetryDelay / 2), // Less than retry delay ago
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     PreGraniteMinBlockBuildingRetryDelay / 2,
-			expectedShouldBuildNow: false,
+			lastBuildTime:       now.Add(-PreGraniteMinBlockBuildingRetryDelay / 2), // Less than retry delay ago
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  PreGraniteMinBlockBuildingRetryDelay / 2,
 		},
 		{
-			name:                   "granite_block_with_now_time",
-			config:                 extras.TestGraniteChainConfig,
-			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64, acp226.InitialDelayExcess),
-			lastBuildTime:          time.Time{},
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     2000 * time.Millisecond, // should wait for initial delay
-			expectedShouldBuildNow: false,
+			name:                "granite_block_with_now_time",
+			config:              extras.TestGraniteChainConfig,
+			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64, acp226.InitialDelayExcess),
+			lastBuildTime:       time.Time{},
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  2000 * time.Millisecond, // should wait for initial delay
 		},
 		{
-			name:                   "granite_block_with_2_seconds_before_clock_no_retry",
-			config:                 extras.TestGraniteChainConfig,
-			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
-			lastBuildTime:          time.Time{}, // Zero time means not a retry
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     0, // should not wait for initial delay
-			expectedShouldBuildNow: true,
+			name:                "granite_block_with_2_seconds_before_clock_no_retry",
+			config:              extras.TestGraniteChainConfig,
+			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
+			lastBuildTime:       time.Time{}, // Zero time means not a retry
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  0, // should not wait for initial delay
 		},
 		{
-			name:                   "granite_block_with_2_seconds_before_clock_with_retry",
-			config:                 extras.TestGraniteChainConfig,
-			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
-			lastBuildTime:          now,
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     PostGraniteMinBlockBuildingRetryDelay,
-			expectedShouldBuildNow: false,
+			name:                "granite_block_with_2_seconds_before_clock_with_retry",
+			config:              extras.TestGraniteChainConfig,
+			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
+			lastBuildTime:       now,
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  PostGraniteMinBlockBuildingRetryDelay,
 		},
 		{
-			name:                   "granite_with_2_seconds_before_clock_only_waits_for_retry_delay",
-			config:                 extras.TestGraniteChainConfig,
-			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
-			lastBuildTime:          now,
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     PostGraniteMinBlockBuildingRetryDelay,
-			expectedShouldBuildNow: false,
+			name:                "granite_with_2_seconds_before_clock_only_waits_for_retry_delay",
+			config:              extras.TestGraniteChainConfig,
+			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
+			lastBuildTime:       now,
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  PostGraniteMinBlockBuildingRetryDelay,
 		},
 		{
-			name:                   "granite_with_2_seconds_before_clock_only_waits_for_remaining_retry_delay",
-			config:                 extras.TestGraniteChainConfig,
-			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
-			lastBuildTime:          now.Add(-PostGraniteMinBlockBuildingRetryDelay / 2),             // Less than retry delay ago
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     PostGraniteMinBlockBuildingRetryDelay / 2,
-			expectedShouldBuildNow: false,
+			name:                "granite_with_2_seconds_before_clock_only_waits_for_remaining_retry_delay",
+			config:              extras.TestGraniteChainConfig,
+			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
+			lastBuildTime:       now.Add(-PostGraniteMinBlockBuildingRetryDelay / 2),             // Less than retry delay ago
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  PostGraniteMinBlockBuildingRetryDelay / 2,
 		},
 		{
-			name:                   "granite_with_2_seconds_after_clock",
-			config:                 extras.TestGraniteChainConfig,
-			currentHeader:          createGraniteTestHeader(common.Hash{1}, nowMilliUint64+2000, acp226.InitialDelayExcess),
-			lastBuildTime:          time.Time{}, // Zero time means not a retry
-			lastBuildParentHash:    common.Hash{1},
-			expectedTimeToWait:     4000 * time.Millisecond,
-			expectedShouldBuildNow: false,
+			name:                "granite_with_2_seconds_after_clock",
+			config:              extras.TestGraniteChainConfig,
+			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64+2000, acp226.InitialDelayExcess),
+			lastBuildTime:       time.Time{}, // Zero time means not a retry
+			lastBuildParentHash: common.Hash{1},
+			expectedTimeToWait:  4000 * time.Millisecond,
 		},
 	}
 
@@ -153,7 +143,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				chainConfig: tt.config,
 			}
 
-			timeToWait, shouldBuildNow, err := b.calculateBlockBuildingDelay(
+			timeToWait, err := b.calculateBlockBuildingDelay(
 				tt.lastBuildTime,
 				tt.lastBuildParentHash,
 				tt.currentHeader,
@@ -161,7 +151,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedTimeToWait, timeToWait)
-			require.Equal(t, tt.expectedShouldBuildNow, shouldBuildNow)
 		})
 	}
 }
