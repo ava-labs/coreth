@@ -34,13 +34,14 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/vms/evm/acp226"
-	"github.com/ava-labs/coreth/internal/blocktest"
-	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/rlp"
+
+	"github.com/ava-labs/coreth/internal/blocktest"
+	"github.com/ava-labs/coreth/params"
 
 	// This test file has to be in package types_test to avoid a circular
 	// dependency when importing `params`. We dot-import the package to mimic
