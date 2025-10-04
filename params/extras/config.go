@@ -105,9 +105,10 @@ type AvalancheContext struct {
 type ChainConfig struct {
 	NetworkUpgrades // Config for timestamps that enable network upgrades.
 
+	// TODO: determine why this isn't serialized - it seems like it should be
 	AvalancheContext `json:"-"` // Avalanche specific context set during VM initialization. Not serialized.
 
-	UpgradeConfig `json:"-"` // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles). Not serialized.
+	UpgradeConfig // Config specified in upgradeBytes (avalanche network upgrades or enable/disabling precompiles).
 }
 
 //nolint:revive // General-purpose types lose the meaning of args if unused ones are removed
@@ -127,6 +128,11 @@ func (c *ChainConfig) CheckConfigCompatible(newcfg_ *ethparams.ChainConfig, head
 	}
 
 	if err := c.checkNetworkUpgradesCompatible(&newcfg.NetworkUpgrades, headTimestamp); err != nil {
+		return err
+	}
+
+	// Check that the precompiles on the new config are compatible with the existing precompile config.
+	if err := c.checkPrecompilesCompatible(newcfg.PrecompileUpgrades, headTimestamp); err != nil {
 		return err
 	}
 
