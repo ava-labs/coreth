@@ -15,14 +15,12 @@ import (
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/platformvm/api"
-	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
@@ -173,10 +171,8 @@ type warpTest struct {
 	receivingSubnetSigner        types.Signer
 
 	// Fields set throughout test execution
-	blockID                     ids.ID
-	blockPayload                *payload.Hash
-	blockPayloadUnsignedMessage *avalancheWarp.UnsignedMessage
-	blockPayloadSignedMessage   *avalancheWarp.Message
+	blockID                   ids.ID
+	blockPayloadSignedMessage *avalancheWarp.Message
 
 	addressedCallUnsignedMessage *avalancheWarp.UnsignedMessage
 	addressedCallSignedMessage   *avalancheWarp.Message
@@ -280,9 +276,6 @@ func (w *warpTest) sendMessageFromSendingSubnet() {
 
 	ginkgo.GinkgoLogr.Info("Constructing warp block hash unsigned message", "blockHash", blockHash)
 	w.blockID = ids.ID(blockHash) // Set blockID to construct a warp message containing a block hash payload later
-	w.blockPayload, err = payload.NewHash(w.blockID)
-	require.NoError(err)
-	w.blockPayloadUnsignedMessage, err = avalancheWarp.NewUnsignedMessage(w.networkID, w.sendingSubnet.BlockchainID, w.blockPayload.Bytes())
 	require.NoError(err)
 
 	ginkgo.GinkgoLogr.Info("Fetching relevant warp logs from the newly produced block")
@@ -342,7 +335,7 @@ func (w *warpTest) aggregateSignaturesViaAPI() {
 	// If the source subnet is the Primary Network, then we only need to aggregate signatures from the receiving
 	// subnet's validator set instead of the entire Primary Network.
 	// If the destination turns out to be the Primary Network as well, then this is a no-op.
-	var validators map[ids.NodeID]*validators.GetValidatorOutput
+	var validators map[ids.NodeID]*avalanchevalidators.GetValidatorOutput
 	if w.sendingSubnet.SubnetID == constants.PrimaryNetworkID {
 		validators, err = pChainClient.GetValidatorsAt(ctx, w.receivingSubnet.SubnetID, api.Height(pChainHeight))
 	} else {
@@ -371,7 +364,7 @@ func (w *warpTest) aggregateSignaturesViaAPI() {
 	require.NoError(err)
 	numSigners, err := parsedWarpMessage.Signature.NumSigners()
 	require.NoError(err)
-	require.Equal(numSigners, len(warpValidators.Validators))
+	require.Len(warpValidators.Validators, numSigners)
 	parsedWarpMessage.Signature.Verify(&parsedWarpMessage.UnsignedMessage, w.networkID, warpValidators, warp.WarpQuorumDenominator, warp.WarpQuorumDenominator)
 	require.NoError(err)
 	w.addressedCallSignedMessage = parsedWarpMessage
@@ -383,7 +376,7 @@ func (w *warpTest) aggregateSignaturesViaAPI() {
 	require.NoError(err)
 	numSigners, err = parsedWarpBlockMessage.Signature.NumSigners()
 	require.NoError(err)
-	require.Equal(numSigners, len(warpValidators.Validators))
+	require.Len(warpValidators.Validators, numSigners)
 	parsedWarpBlockMessage.Signature.Verify(&parsedWarpBlockMessage.UnsignedMessage, w.networkID, warpValidators, warp.WarpQuorumDenominator, warp.WarpQuorumDenominator)
 	require.NoError(err)
 	w.blockPayloadSignedMessage = parsedWarpBlockMessage
