@@ -35,7 +35,6 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -1549,6 +1548,11 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 }
 
 func TestWaitForEvent(t *testing.T) {
+	type eventResult struct {
+		msg commonEng.Message
+		err error
+	}
+
 	for _, testCase := range []struct {
 		name     string
 		testCase func(*testing.T, *VM)
@@ -1561,16 +1565,18 @@ func TestWaitForEvent(t *testing.T) {
 
 				var wg sync.WaitGroup
 				wg.Add(1)
+				resultCh := make(chan eventResult, 1)
 
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(ctx)
-					assert.ErrorIs(t, err, context.DeadlineExceeded)
-					assert.Zero(t, msg)
+					resultCh <- eventResult{msg: msg, err: err}
 				}()
 
 				wg.Wait()
+				result := <-resultCh
+				require.ErrorIs(t, result.err, context.DeadlineExceeded)
+				require.Zero(t, result.msg)
 			},
 		},
 		{
@@ -1578,12 +1584,12 @@ func TestWaitForEvent(t *testing.T) {
 			testCase: func(t *testing.T, vm *VM) {
 				var wg sync.WaitGroup
 				wg.Add(1)
+				resultCh := make(chan eventResult, 1)
 
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(context.Background())
-					assert.NoError(t, err)
-					assert.Equal(t, commonEng.PendingTxs, msg)
+					resultCh <- eventResult{msg: msg, err: err}
 				}()
 
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
@@ -1592,6 +1598,9 @@ func TestWaitForEvent(t *testing.T) {
 				}
 
 				wg.Wait()
+				result := <-resultCh
+				require.NoError(t, result.err)
+				require.Equal(t, commonEng.PendingTxs, result.msg)
 			},
 		},
 		{
@@ -1602,13 +1611,12 @@ func TestWaitForEvent(t *testing.T) {
 
 				var wg sync.WaitGroup
 				wg.Add(1)
+				resultCh := make(chan eventResult, 1)
 
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(ctx)
-					assert.ErrorIs(t, err, context.DeadlineExceeded)
-					assert.Zero(t, msg)
+					resultCh <- eventResult{msg: msg, err: err}
 				}()
 
 				wg.Wait()
@@ -1658,11 +1666,13 @@ func TestWaitForEvent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					msg, err := vm.WaitForEvent(context.Background())
-					assert.NoError(t, err)
-					assert.Equal(t, commonEng.PendingTxs, msg)
-					assert.GreaterOrEqual(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
+					resultCh <- eventResult{msg: msg, err: err}
 				}()
 				wg.Wait()
+				result := <-resultCh
+				require.NoError(t, result.err)
+				require.Equal(t, commonEng.PendingTxs, result.msg)
+				require.GreaterOrEqual(t, time.Since(lastBuildBlockTime), MinBlockBuildingRetryDelay)
 			},
 		},
 	} {
