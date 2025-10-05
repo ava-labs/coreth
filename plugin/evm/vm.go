@@ -255,6 +255,10 @@ type VM struct {
 	chainAlias string
 	// RPC handlers (should be stopped before closing chaindb)
 	rpcHandlers []interface{ Stop() }
+
+	blockNumLock    sync.RWMutex
+	pendingBlockNum uint64
+	latestBlockNum  uint64
 }
 
 // Initialize implements the snowman.ChainVM interface
@@ -808,7 +812,11 @@ func (vm *VM) initBlockBuilding() error {
 
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	vm.builderLock.Lock()
-	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool)
+	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool, func() bool {
+		vm.blockNumLock.RLock()
+		defer vm.blockNumLock.RUnlock()
+		return vm.pendingBlockNum != vm.latestBlockNum
+	})
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
@@ -858,7 +866,38 @@ func (vm *VM) initBlockBuilding() error {
 		vm.shutdownWg.Done()
 	}()
 
+	events := make(chan core.NewTxPoolReorgEvent)
+	sub := vm.txPool.SubscribeNewReorgEvent(events)
+	vm.shutdownWg.Add(1)
+	go func() {
+		vm.subscribeToTxPoolEvents(events)
+		sub.Unsubscribe()
+		vm.shutdownWg.Done()
+	}()
+
 	return nil
+}
+
+func (vm *VM) subscribeToTxPoolEvents(events <-chan core.NewTxPoolReorgEvent) {
+	for {
+		select {
+		case <-vm.shutdownChan:
+			return
+		case event := <-events:
+			if event.Head == nil {
+				log.Warn("nil head in tx pool reorg event")
+				continue
+			}
+			if event.Head.Number == nil {
+				log.Warn("nil head number in tx pool reorg event")
+				continue
+			}
+			vm.blockNumLock.Lock()
+			vm.latestBlockNum = event.Head.Number.Uint64()
+			vm.blockNumLock.Unlock()
+			vm.builder.signalCanBuild()
+		}
+	}
 }
 
 func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
@@ -1027,7 +1066,11 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
 
-	return vm.blockChain.SetPreference(block.GetEthBlock())
+	err = vm.blockChain.SetPreference(block.GetEthBlock())
+	if err == nil {
+		vm.setPendingBlock(block.GetEthBlock().NumberU64())
+	}
+	return err
 }
 
 // GetBlockIDAtHeight returns the canonical block at [height].
@@ -1202,6 +1245,12 @@ func attachEthService(handler *rpc.Server, apis []rpc.API, names []string) error
 	}
 
 	return nil
+}
+
+func (vm *VM) setPendingBlock(blockNum uint64) {
+	vm.blockNumLock.Lock()
+	defer vm.blockNumLock.Unlock()
+	vm.pendingBlockNum = blockNum
 }
 
 func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
