@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -1597,13 +1598,27 @@ func TestWaitForEvent(t *testing.T) {
 			},
 		},
 		{
-			name: "WaitForEvent doesn't return if mempool is empty",
+			name: "WaitForEvent doesn't return once a block is built and accepted",
 			testCase: func(t *testing.T, vm *VM) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
-				defer cancel()
-
 				var wg sync.WaitGroup
 				wg.Add(1)
+
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+
+				err := errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
+				require.NoError(t, err)
+
+				blk, err := vm.BuildBlock(context.Background())
+				require.NoError(t, err)
+
+				require.NoError(t, blk.Verify(context.Background()))
+
+				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+
+				require.NoError(t, blk.Accept(context.Background()))
+
+				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+				defer cancel()
 
 				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
