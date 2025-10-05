@@ -35,8 +35,9 @@ type blockBuilder struct {
 	clock *mockable.Clock
 	ctx   *snow.Context
 
-	txPool       *txpool.TxPool
-	extraMempool extension.BuilderMempool
+	pendingPoolUpdate func() bool
+	txPool            *txpool.TxPool
+	extraMempool      extension.BuilderMempool
 
 	shutdownChan <-chan struct{}
 	shutdownWg   *sync.WaitGroup
@@ -53,7 +54,7 @@ type blockBuilder struct {
 
 // NewBlockBuilder creates a new block builder. extraMempool is an optional mempool (can be nil) that
 // can be used to add transactions to the block builder, in addition to the txPool.
-func (vm *VM) NewBlockBuilder(extraMempool extension.BuilderMempool) *blockBuilder {
+func (vm *VM) NewBlockBuilder(extraMempool extension.BuilderMempool, pendingPoolUpdate func() bool) *blockBuilder {
 	b := &blockBuilder{
 		ctx:          vm.ctx,
 		txPool:       vm.txPool,
@@ -156,7 +157,7 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, common.Hash, error) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
-	for !b.needToBuild() {
+	for !b.needToBuild() || b.pendingPoolUpdate() {
 		if err := b.pendingSignal.Wait(ctx); err != nil {
 			return time.Time{}, common.Hash{}, err
 		}
