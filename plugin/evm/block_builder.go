@@ -193,12 +193,12 @@ func (b *blockBuilder) initialMinBlockBuildingDelay(currentHeader *types.Header,
 	parentBlockTime := customtypes.BlockTime(currentHeader)
 	timeSinceParentBlock := b.clock.Time().Sub(parentBlockTime)
 	// TODO question (ceyonur): should we just use acp226Delay if timeSinceParentBlock is negative?
-	initialMinBlockBuildingDelay := acp226Delay - timeSinceParentBlock
-	if initialMinBlockBuildingDelay < 0 {
-		initialMinBlockBuildingDelay = 0
+	initialDelay := acp226Delay - timeSinceParentBlock
+	if initialDelay < 0 {
+		initialDelay = 0
 	}
 
-	return initialMinBlockBuildingDelay, nil
+	return initialDelay, nil
 }
 
 // calculateBlockBuildingDelay calculates the delay needed before building the next block.
