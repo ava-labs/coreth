@@ -65,6 +65,7 @@ var (
 
 func TestMain(m *testing.M) {
 	params.RegisterExtras()
+	customtypes.Register()
 	os.Exit(m.Run())
 }
 
