@@ -143,7 +143,7 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 	if err != nil {
 		return 0, err
 	}
-	if timeUntilNextBuild == 0 {
+	if timeUntilNextBuild <= 0 {
 		b.ctx.Log.Debug("Last time we built a block was long enough ago or this is not a retry, no need to wait")
 		return commonEng.PendingTxs, nil
 	}
@@ -228,7 +228,7 @@ func (b *blockBuilder) calculateBlockBuildingDelay(
 
 	if initialDelay > 0 {
 		remainingMinDelay = max(initialDelay, remainingMinDelay)
-	} else if !isRetry || remainingMinDelay == 0 {
+	} else if !isRetry || remainingMinDelay <= 0 {
 		return 0, nil // Build immediately
 	}
 
