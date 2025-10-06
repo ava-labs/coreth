@@ -234,9 +234,8 @@ func (c *Config) VerifyPredicate(predicateContext *precompileconfig.PredicateCon
 		sourceSubnetID = predicateContext.SnowCtx.SubnetID
 	}
 
-	validatorSet, err := warp.GetCanonicalValidatorSetFromSubnetID(
+	validatorSet, err := predicateContext.SnowCtx.ValidatorState.GetWarpValidatorSet(
 		context.TODO(),
-		predicateContext.SnowCtx.ValidatorState,
 		predicateContext.ProposerVMBlockCtx.PChainHeight,
 		sourceSubnetID,
 	)

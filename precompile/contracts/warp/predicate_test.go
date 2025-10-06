@@ -215,6 +215,9 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 		GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
 			return getValidatorsOutput, nil
 		},
+		GetWarpValidatorSetF: func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
+			return validators.FlattenValidatorSet(getValidatorsOutput)
+		},
 	}
 	snowCtx.ValidatorState = state
 	return snowCtx
@@ -283,7 +286,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 	snowCtx := snowtest.Context(t, ids.GenerateTestID())
 	snowCtx.SubnetID = ids.GenerateTestID()
 	snowCtx.CChainID = cChainID
-	snowCtx.ValidatorState = &validatorstest.State{
+	validatorState := &validatorstest.State{
 		GetSubnetIDF: func(_ context.Context, chainID ids.ID) (ids.ID, error) {
 			require.Equal(chainID, cChainID)
 			return constants.PrimaryNetworkID, nil // Return Primary Network SubnetID
@@ -297,6 +300,14 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			return getValidatorsOutput, nil
 		},
 	}
+	validatorState.GetWarpValidatorSetF = func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
+		vdrs, err := validatorState.GetValidatorSet(ctx, height, subnetID)
+		if err != nil {
+			return validators.WarpSet{}, err
+		}
+		return validators.FlattenValidatorSet(vdrs)
+	}
+	snowCtx.ValidatorState = validatorState
 
 	test := precompiletest.PredicateTest{
 		Config: NewConfig(utils.NewUint64(0), 0, requirePrimaryNetworkSigners),
@@ -737,6 +748,9 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 			},
 			GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
 				return getValidatorsOutput, nil
+			},
+			GetWarpValidatorSetF: func(context.Context, uint64, ids.ID) (validators.WarpSet, error) {
+				return validators.FlattenValidatorSet(getValidatorsOutput)
 			},
 		}
 		snowCtx.ValidatorState = state

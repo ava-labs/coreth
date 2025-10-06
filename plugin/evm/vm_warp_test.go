@@ -338,7 +338,7 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 	minimumValidPChainHeight := uint64(10)
 	getValidatorSetTestErr := errors.New("can't get validator set test error")
 
-	vm.ctx.ValidatorState = &validatorstest.State{
+	validatorState := &validatorstest.State{
 		// TODO: test both Primary Network / C-Chain and non-Primary Network
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
@@ -361,6 +361,14 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 			}, nil
 		},
 	}
+	validatorState.GetWarpValidatorSetF = func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
+		vdrs, err := validatorState.GetValidatorSet(ctx, height, subnetID)
+		if err != nil {
+			return validators.WarpSet{}, err
+		}
+		return validators.FlattenValidatorSet(vdrs)
+	}
+	vm.ctx.ValidatorState = validatorState
 
 	signersBitSet := set.NewBits()
 	signersBitSet.Add(0)
@@ -638,7 +646,7 @@ func testReceiveWarpMessage(
 	minimumValidPChainHeight := uint64(10)
 	getValidatorSetTestErr := errors.New("can't get validator set test error")
 
-	vm.ctx.ValidatorState = &validatorstest.State{
+	validatorState := &validatorstest.State{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			if msgFrom == fromPrimary {
 				return constants.PrimaryNetworkID, nil
@@ -665,6 +673,14 @@ func testReceiveWarpMessage(
 			return vdrOutput, nil
 		},
 	}
+	validatorState.GetWarpValidatorSetF = func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
+		vdrs, err := validatorState.GetValidatorSet(ctx, height, subnetID)
+		if err != nil {
+			return validators.WarpSet{}, err
+		}
+		return validators.FlattenValidatorSet(vdrs)
+	}
+	vm.ctx.ValidatorState = validatorState
 
 	signersBitSet := set.NewBits()
 	for i := range signers {
