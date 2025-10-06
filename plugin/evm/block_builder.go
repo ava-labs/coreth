@@ -28,14 +28,10 @@ import (
 )
 
 const (
-	// Minimum amount of time to wait after building a block before attempting to build a block
-	// a second time without changing the contents of the mempool.
-	PreGraniteMinBlockBuildingRetryDelay = 500 * time.Millisecond
 	// Minimum amount of time to wait after attempting/build a block before attempting to build another block
-	// This is only applied for retrying to build a block after a minimum delay has passed.
+	// This is only applied for retrying to build a block after a initial minimum delay has passed.
 	// The initial minimum delay is applied according to parent minDelayExcess (if available)
-	// TODO (ceyonur): Decide whether this a correct value.
-	PostGraniteMinBlockBuildingRetryDelay = 100 * time.Millisecond
+	RetryDelay = 100 * time.Millisecond
 )
 
 type blockBuilder struct {
@@ -176,20 +172,20 @@ func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, commo
 	return b.lastBuildTime, b.lastBuildParentHash, nil
 }
 
-// currentMinBlockBuildingDelays returns the initial min block building delay and the minimum retry delay.
+// initialMinBlockBuildingDelay returns the initial min block building delay.
 // It implements the following logic:
-// 1. If the current header is in Granite, return the remaining ACP-226 delay after the parent block time and the minimum retry delay.
-// 2. If the current header is not in Granite, return 0 and the minimum retry delay.
-func (b *blockBuilder) currentMinBlockBuildingDelays(currentHeader *types.Header, config *extras.ChainConfig) (time.Duration, time.Duration, error) {
-	// TODO Cleanup (ceyonur): this check can be removed after Granite is activated.
+// 1. If the current header is in Granite, return the remaining ACP-226 delay after the parent block time.
+// 2. If the current header is not in Granite, return 0.
+func (b *blockBuilder) initialMinBlockBuildingDelay(currentHeader *types.Header, config *extras.ChainConfig) (time.Duration, error) {
+	// TODO (ceyonur): this check can be removed after Granite is activated. (See https://github.com/ava-labs/coreth/issues/1318)
 	currentTimestamp := b.clock.Unix()
 	if !config.IsGranite(currentTimestamp) {
-		return 0, PreGraniteMinBlockBuildingRetryDelay, nil // Pre-Granite: no initial delay
+		return 0, nil // Pre-Granite: no initial delay
 	}
 
 	acp226DelayExcess, err := customheader.MinDelayExcess(config, currentHeader, currentTimestamp, nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	acp226Delay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
 
@@ -202,7 +198,7 @@ func (b *blockBuilder) currentMinBlockBuildingDelays(currentHeader *types.Header
 		initialMinBlockBuildingDelay = 0
 	}
 
-	return initialMinBlockBuildingDelay, PostGraniteMinBlockBuildingRetryDelay, nil
+	return initialMinBlockBuildingDelay, nil
 }
 
 // calculateBlockBuildingDelay calculates the delay needed before building the next block.
@@ -217,7 +213,7 @@ func (b *blockBuilder) calculateBlockBuildingDelay(
 	lastBuildParentHash common.Hash,
 	currentHeader *types.Header,
 ) (time.Duration, error) {
-	initialDelay, retryDelay, err := b.currentMinBlockBuildingDelays(currentHeader, b.chainConfig)
+	initialDelay, err := b.initialMinBlockBuildingDelay(currentHeader, b.chainConfig)
 	if err != nil {
 		return 0, err
 	}
@@ -226,8 +222,8 @@ func (b *blockBuilder) calculateBlockBuildingDelay(
 
 	timeSinceLastBuildTime := b.clock.Time().Sub(lastBuildTime)
 	var remainingMinDelay time.Duration
-	if retryDelay > timeSinceLastBuildTime {
-		remainingMinDelay = retryDelay - timeSinceLastBuildTime
+	if RetryDelay > timeSinceLastBuildTime {
+		remainingMinDelay = RetryDelay - timeSinceLastBuildTime
 	}
 
 	if initialDelay > 0 {

@@ -62,7 +62,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			},
 			lastBuildTime:       now,
 			lastBuildParentHash: common.Hash{1},
-			expectedTimeToWait:  PreGraniteMinBlockBuildingRetryDelay,
+			expectedTimeToWait:  RetryDelay,
 		},
 		{
 			name:   "pre_granite_returns_build_returns_immediately_if_enough_time_passed",
@@ -71,8 +71,8 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:       now.Add(-PreGraniteMinBlockBuildingRetryDelay), // Less than retry delay ago
-			lastBuildParentHash: common.Hash{1},                                 // Same as current parent
+			lastBuildTime:       now.Add(-RetryDelay), // Less than retry delay ago
+			lastBuildParentHash: common.Hash{1},       // Same as current parent
 			expectedTimeToWait:  0,
 		},
 		{
@@ -82,9 +82,9 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
 			},
-			lastBuildTime:       now.Add(-PreGraniteMinBlockBuildingRetryDelay / 2), // Less than retry delay ago
+			lastBuildTime:       now.Add(-RetryDelay / 2), // Less than retry delay ago
 			lastBuildParentHash: common.Hash{1},
-			expectedTimeToWait:  PreGraniteMinBlockBuildingRetryDelay / 2,
+			expectedTimeToWait:  RetryDelay / 2,
 		},
 		{
 			name:                "granite_block_with_now_time",
@@ -108,7 +108,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
 			lastBuildTime:       now,
 			lastBuildParentHash: common.Hash{1},
-			expectedTimeToWait:  PostGraniteMinBlockBuildingRetryDelay,
+			expectedTimeToWait:  RetryDelay,
 		},
 		{
 			name:                "granite_with_2_seconds_before_clock_only_waits_for_retry_delay",
@@ -116,15 +116,15 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
 			lastBuildTime:       now,
 			lastBuildParentHash: common.Hash{1},
-			expectedTimeToWait:  PostGraniteMinBlockBuildingRetryDelay,
+			expectedTimeToWait:  RetryDelay,
 		},
 		{
 			name:                "granite_with_2_seconds_before_clock_only_waits_for_remaining_retry_delay",
 			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
-			lastBuildTime:       now.Add(-PostGraniteMinBlockBuildingRetryDelay / 2),             // Less than retry delay ago
+			lastBuildTime:       now.Add(-RetryDelay / 2),                                        // Less than retry delay ago
 			lastBuildParentHash: common.Hash{1},
-			expectedTimeToWait:  PostGraniteMinBlockBuildingRetryDelay / 2,
+			expectedTimeToWait:  RetryDelay / 2,
 		},
 		{
 			name:                "granite_with_2_seconds_after_clock",
