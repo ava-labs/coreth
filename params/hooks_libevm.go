@@ -196,8 +196,8 @@ func (a accessibleState) GetChainConfig() precompileconfig.ChainConfig {
 }
 
 func (a accessibleState) GetRules() precompileconfig.Rules {
-	extra := GetExtra(a.GetPrecompileEnv().ChainConfig())
-	return extra.GetAvalancheRules(a.GetBlockContext().Timestamp())
+	chainConfigExtra := GetExtra(a.GetPrecompileEnv().ChainConfig())
+	return chainConfigExtra.GetAvalancheRules(a.GetBlockContext().Timestamp())
 }
 
 func (a accessibleState) GetSnowContext() *snow.Context {

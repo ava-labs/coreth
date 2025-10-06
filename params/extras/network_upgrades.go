@@ -264,6 +264,7 @@ type AvalancheRules struct {
 	IsGranite                                                                           bool
 }
 
+// IsGraniteActivated is used by the warp precompile to determine which gas costs to use.
 func (a AvalancheRules) IsGraniteActivated() bool {
 	return a.IsGranite
 }
