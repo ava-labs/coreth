@@ -87,6 +87,17 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			expectedTimeToWait:  RetryDelay / 2,
 		},
 		{
+			name:   "first_granite_block_build_immediately",
+			config: extras.TestGraniteChainConfig,
+			currentHeader: &types.Header{
+				ParentHash: common.Hash{1},
+				Time:       nowSecUint64,
+			},
+			lastBuildTime:       now,
+			lastBuildParentHash: common.Hash{2},
+			expectedTimeToWait:  0,
+		},
+		{
 			name:                "granite_block_with_now_time",
 			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64, acp226.InitialDelayExcess),
