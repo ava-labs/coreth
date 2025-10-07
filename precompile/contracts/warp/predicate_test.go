@@ -215,7 +215,7 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 		GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
 			return getValidatorsOutput, nil
 		},
-		GetWarpValidatorSetF: func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
+		GetWarpValidatorSetF: func(context.Context, uint64, ids.ID) (validators.WarpSet, error) {
 			return validators.FlattenValidatorSet(getValidatorsOutput)
 		},
 	}
