@@ -13,7 +13,6 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
 
@@ -25,15 +24,13 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 	clock.Set(now)
 	tests := []struct {
 		name                string
-		config              *extras.ChainConfig
 		currentHeader       *types.Header
 		lastBuildTime       time.Time
 		lastBuildParentHash common.Hash
 		expectedTimeToWait  time.Duration
 	}{
 		{
-			name:   "pre_granite_returns_build_immediately_zero_time",
-			config: extras.TestFortunaChainConfig, // Pre-Granite config
+			name: "pre_granite_returns_build_immediately_zero_time",
 			currentHeader: &types.Header{
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
@@ -43,8 +40,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			expectedTimeToWait:  0,
 		},
 		{
-			name:   "pre_granite_returns_build_immediately_different_parent_hash",
-			config: extras.TestFortunaChainConfig, // Pre-Granite config
+			name: "pre_granite_returns_build_immediately_different_parent_hash",
 			currentHeader: &types.Header{
 				ParentHash: common.Hash{2},
 				Time:       nowSecUint64,
@@ -54,8 +50,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			expectedTimeToWait:  0,
 		},
 		{
-			name:   "pre_granite_returns_build_delays_with_same_parent_hash",
-			config: extras.TestFortunaChainConfig, // Pre-Granite config
+			name: "pre_granite_returns_build_delays_with_same_parent_hash",
 			currentHeader: &types.Header{
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
@@ -65,8 +60,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			expectedTimeToWait:  RetryDelay,
 		},
 		{
-			name:   "pre_granite_returns_build_returns_immediately_if_enough_time_passed",
-			config: extras.TestFortunaChainConfig, // Pre-Granite config
+			name: "pre_granite_returns_build_returns_immediately_if_enough_time_passed",
 			currentHeader: &types.Header{
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
@@ -76,8 +70,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			expectedTimeToWait:  0,
 		},
 		{
-			name:   "pre_granite_returns_build_delays_only_remaining_min_delay",
-			config: extras.TestFortunaChainConfig, // Pre-Granite config
+			name: "pre_granite_returns_build_delays_only_remaining_min_delay",
 			currentHeader: &types.Header{
 				ParentHash: common.Hash{1},
 				Time:       nowSecUint64,
@@ -87,19 +80,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 			expectedTimeToWait:  RetryDelay / 2,
 		},
 		{
-			name:   "first_granite_block_build_immediately",
-			config: extras.TestGraniteChainConfig,
-			currentHeader: &types.Header{
-				ParentHash: common.Hash{1},
-				Time:       nowSecUint64,
-			},
-			lastBuildTime:       now,
-			lastBuildParentHash: common.Hash{2},
-			expectedTimeToWait:  0,
-		},
-		{
 			name:                "granite_block_with_now_time",
-			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64, acp226.InitialDelayExcess),
 			lastBuildTime:       time.Time{},
 			lastBuildParentHash: common.Hash{1},
@@ -107,7 +88,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 		},
 		{
 			name:                "granite_block_with_2_seconds_before_clock_no_retry",
-			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
 			lastBuildTime:       time.Time{}, // Zero time means not a retry
 			lastBuildParentHash: common.Hash{1},
@@ -115,7 +95,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 		},
 		{
 			name:                "granite_block_with_2_seconds_before_clock_with_retry",
-			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, acp226.InitialDelayExcess),
 			lastBuildTime:       now,
 			lastBuildParentHash: common.Hash{1},
@@ -123,7 +102,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 		},
 		{
 			name:                "granite_with_2_seconds_before_clock_only_waits_for_retry_delay",
-			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
 			lastBuildTime:       now,
 			lastBuildParentHash: common.Hash{1},
@@ -131,7 +109,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 		},
 		{
 			name:                "granite_with_2_seconds_before_clock_only_waits_for_remaining_retry_delay",
-			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64-2000, 0), // 0 means min delay excess which is 1
 			lastBuildTime:       now.Add(-RetryDelay / 2),                                        // Less than retry delay ago
 			lastBuildParentHash: common.Hash{1},
@@ -139,7 +116,6 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 		},
 		{
 			name:                "granite_with_2_seconds_after_clock",
-			config:              extras.TestGraniteChainConfig,
 			currentHeader:       createGraniteTestHeader(common.Hash{1}, nowMilliUint64+2000, acp226.InitialDelayExcess),
 			lastBuildTime:       time.Time{}, // Zero time means not a retry
 			lastBuildParentHash: common.Hash{1},
@@ -150,8 +126,7 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := &blockBuilder{
-				clock:       clock,
-				chainConfig: tt.config,
+				clock: clock,
 			}
 
 			timeToWait := b.calculateBlockBuildingDelay(

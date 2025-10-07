@@ -19,7 +19,6 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 
@@ -34,9 +33,8 @@ const (
 )
 
 type blockBuilder struct {
-	clock       *mockable.Clock
-	ctx         *snow.Context
-	chainConfig *extras.ChainConfig
+	clock *mockable.Clock
+	ctx   *snow.Context
 
 	txPool       *txpool.TxPool
 	extraMempool extension.BuilderMempool
@@ -59,7 +57,6 @@ type blockBuilder struct {
 func (vm *VM) NewBlockBuilder(extraMempool extension.BuilderMempool) *blockBuilder {
 	b := &blockBuilder{
 		ctx:          vm.ctx,
-		chainConfig:  vm.chainConfigExtra(),
 		txPool:       vm.txPool,
 		extraMempool: extraMempool,
 		shutdownChan: vm.shutdownChan,
@@ -168,22 +165,6 @@ func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, commo
 	return b.lastBuildTime, b.lastBuildParentHash, nil
 }
 
-// minNextBlockTime calculates the minimum next block time based on the current header and the chain config.
-func (b *blockBuilder) minNextBlockTime(parent *types.Header, config *extras.ChainConfig) time.Time {
-	parentExtra := customtypes.GetHeaderExtra(parent)
-	// If the parent header has no min delay excess, there is nothing to wait for, because the rule does not apply
-	// to the block to be built.
-	if parentExtra.MinDelayExcess == nil {
-		return time.Time{}
-	}
-	parentTime := customtypes.BlockTime(parent)
-	acp226DelayExcess := *parentExtra.MinDelayExcess
-	// parent's delay excess is already verified by consensus
-	// so this should not overflow
-	requiredDelay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
-	return parentTime.Add(requiredDelay)
-}
-
 // calculateBlockBuildingDelay calculates the delay needed before building the next block.
 func (b *blockBuilder) calculateBlockBuildingDelay(
 	lastBuildTime time.Time,
@@ -198,8 +179,24 @@ func (b *blockBuilder) calculateBlockBuildingDelay(
 		nextBuildTime = lastBuildTime.Add(RetryDelay)
 	} else {
 		// If this is not a retry, we need to wait for the minimum next block time.
-		nextBuildTime = b.minNextBlockTime(currentHeader, b.chainConfig)
+		nextBuildTime = minNextBlockTime(currentHeader)
 	}
 	remainingDelay := nextBuildTime.Sub(b.clock.Time())
 	return max(remainingDelay, 0)
+}
+
+// minNextBlockTime calculates the minimum next block time based on the current header.
+func minNextBlockTime(parent *types.Header) time.Time {
+	parentExtra := customtypes.GetHeaderExtra(parent)
+	// If the parent header has no min delay excess, there is nothing to wait for, because the rule does not apply
+	// to the block to be built.
+	if parentExtra.MinDelayExcess == nil {
+		return time.Time{}
+	}
+	parentTime := customtypes.BlockTime(parent)
+	acp226DelayExcess := *parentExtra.MinDelayExcess
+	// parent's delay excess is already verified by consensus
+	// so this should not overflow
+	requiredDelay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
+	return parentTime.Add(requiredDelay)
 }
