@@ -154,13 +154,12 @@ func TestCalculateBlockBuildingDelay(t *testing.T) {
 				chainConfig: tt.config,
 			}
 
-			timeToWait, err := b.calculateBlockBuildingDelay(
+			timeToWait := b.calculateBlockBuildingDelay(
 				tt.lastBuildTime,
 				tt.lastBuildParentHash,
 				tt.currentHeader,
 			)
 
-			require.NoError(t, err)
 			require.Equal(t, tt.expectedTimeToWait, timeToWait)
 		})
 	}
