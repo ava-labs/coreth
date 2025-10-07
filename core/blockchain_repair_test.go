@@ -52,6 +52,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/triedb"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -524,17 +525,10 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	}
 }
 
-func useWrappedBlockDatabase(t *testing.T, kvdb avalanchedatabase.Database, chaindb ethdb.Database, datadir string) ethdb.Database {
-	config := blockdb.DefaultConfig().WithDir(datadir).WithSyncToDisk(false)
-	blockDatabase, err := blockdb.New(config, logging.NoLog{})
-	if err != nil {
-		t.Fatalf("Failed to create block database: %v", err)
-	}
-	wrappedBlockDatabase, err := database.NewWrappedBlockDatabase(kvdb, blockDatabase, chaindb, true)
-	if err != nil {
-		t.Fatalf("Failed to create wrapped block database: %v", err)
-	}
-	return wrappedBlockDatabase
+func useBlockDatabase(t *testing.T, kvdb avalanchedatabase.Database, chaindb ethdb.Database, datadir string) ethdb.Database {
+	db := database.NewBlockDatabase(kvdb, chaindb, blockdb.DefaultConfig(), datadir, logging.NoLog{}, prometheus.NewRegistry())
+	require.NoError(t, db.InitWithMinHeight(1))
+	return db
 }
 
 func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string, useBlockDB bool) {
@@ -558,7 +552,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	}
 	kvdb := memdb.New()
 	if useBlockDB {
-		db = useWrappedBlockDatabase(t, kvdb, db, datadir)
+		db = useBlockDatabase(t, kvdb, db, datadir)
 	}
 
 	defer db.Close() // Might double close, should be fine
@@ -655,7 +649,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
 	if useBlockDB {
-		db = useWrappedBlockDatabase(t, kvdb, db, datadir)
+		db = useBlockDatabase(t, kvdb, db, datadir)
 	}
 	defer db.Close()
 	newChain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)

@@ -28,19 +28,15 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/event"
-	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/triedb"
 )
 
@@ -136,6 +132,9 @@ func (bc *BlockChain) HasFastBlock(hash common.Hash, number uint64) bool {
 	if !bc.HasBlock(hash, number) {
 		return false
 	}
+	if _, ok := bc.verifiedReceiptsCache.Get(hash); ok {
+		return true
+	}
 	if bc.receiptsCache.Contains(hash) {
 		return true
 	}
@@ -201,33 +200,16 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	// Check verified receipts cache first
+	if receipts, ok := bc.verifiedReceiptsCache.Get(hash); ok {
+		return receipts
+	}
+
+	// Check main receipts cache
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
-	if block, ok := bc.verifiedBlockCache.Get(hash); ok {
-		var baseFee *big.Int
-		if block.Header() == nil {
-			baseFee = big.NewInt(0)
-		} else {
-			baseFee = block.Header().BaseFee
-		}
-		// Compute effective blob gas price.
-		var blobGasPrice *big.Int
-		if block.Header() != nil && block.Header().ExcessBlobGas != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.Header().ExcessBlobGas)
-		}
-		receipts := rawdb.ReadRawReceipts(bc.db, block.Hash(), block.NumberU64())
-		if receipts == nil {
-			return nil
-		}
-		config := bc.chainConfig
-		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), baseFee, blobGasPrice, block.Transactions()); err != nil {
-			log.Error("Failed to derive block receipts fields", "hash", block.Hash(), "number", block.NumberU64(), "err", err)
-			return nil
-		}
-		bc.receiptsCache.Add(hash, receipts)
-		return receipts
-	}
+
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil
