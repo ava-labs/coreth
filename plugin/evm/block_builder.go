@@ -178,6 +178,8 @@ func (b *blockBuilder) minNextBlockTime(parent *types.Header, config *extras.Cha
 	}
 	parentTime := customtypes.BlockTime(parent)
 	acp226DelayExcess := *parentExtra.MinDelayExcess
+	// parent's delay excess is already verified by consensus
+	// so this should not overflow
 	requiredDelay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
 	return parentTime.Add(requiredDelay)
 }
