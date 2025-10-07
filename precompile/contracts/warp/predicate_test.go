@@ -297,7 +297,7 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			require.Equal(chainID, cChainID)
 			return constants.PrimaryNetworkID, nil // Return Primary Network SubnetID
 		},
-		GetWarpValidatorSetF: func(_ context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
+		GetWarpValidatorSetF: func(_ context.Context, _ uint64, subnetID ids.ID) (validators.WarpSet, error) {
 			expectedSubnetID := snowCtx.SubnetID
 			if requirePrimaryNetworkSigners {
 				expectedSubnetID = constants.PrimaryNetworkID
