@@ -338,37 +338,36 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 	minimumValidPChainHeight := uint64(10)
 	getValidatorSetTestErr := errors.New("can't get validator set test error")
 
-	validatorState := &validatorstest.State{
+	vm.ctx.ValidatorState = &validatorstest.State{
 		// TODO: test both Primary Network / C-Chain and non-Primary Network
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
 		},
-		GetValidatorSetF: func(_ context.Context, height uint64, _ ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		GetWarpValidatorSetF: func(_ context.Context, height uint64, _ ids.ID) (validators.WarpSet, error) {
 			if height < minimumValidPChainHeight {
-				return nil, getValidatorSetTestErr
+				return validators.WarpSet{}, getValidatorSetTestErr
 			}
-			return map[ids.NodeID]*validators.GetValidatorOutput{
-				nodeID1: {
-					NodeID:    nodeID1,
-					PublicKey: blsPublicKey1,
-					Weight:    50,
+			vdrs := validators.WarpSet{
+				Validators: []*validators.Warp{
+					{
+						PublicKey:      blsPublicKey1,
+						PublicKeyBytes: bls.PublicKeyToUncompressedBytes(blsPublicKey1),
+						Weight:         50,
+						NodeIDs:        []ids.NodeID{nodeID1},
+					},
+					{
+						PublicKey:      blsPublicKey2,
+						PublicKeyBytes: bls.PublicKeyToUncompressedBytes(blsPublicKey2),
+						Weight:         50,
+						NodeIDs:        []ids.NodeID{nodeID2},
+					},
 				},
-				nodeID2: {
-					NodeID:    nodeID2,
-					PublicKey: blsPublicKey2,
-					Weight:    50,
-				},
-			}, nil
+				TotalWeight: 100,
+			}
+			avagoUtils.Sort(vdrs.Validators)
+			return vdrs, nil
 		},
 	}
-	validatorState.GetWarpValidatorSetF = func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
-		vdrs, err := validatorState.GetValidatorSet(ctx, height, subnetID)
-		if err != nil {
-			return validators.WarpSet{}, err
-		}
-		return validators.FlattenValidatorSet(vdrs)
-	}
-	vm.ctx.ValidatorState = validatorState
 
 	signersBitSet := set.NewBits()
 	signersBitSet.Add(0)
