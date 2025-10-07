@@ -220,18 +220,16 @@ func (c *Config) VerifyPredicate(predicateContext *precompileconfig.PredicateCon
 		return fmt.Errorf("%w: %w", errCannotRetrieveValidatorSet, err)
 	}
 
-	// The primary network validator set is never required when verifying
-	// messages from the P-chain.
-	//
-	// For the X-chain and the C-chain, chains can be configured not to require
-	// the primary network validators to have signed the warp message and to use
-	// the, likely smaller, local subnet's validator set.
-	canOptimizePrimaryNetwork := !c.RequirePrimaryNetworkSigners || warpMsg.SourceChainID == constants.PlatformChainID
-	// If the chain is in the primary network and we don't require verifying
-	// against the primary network validator set, then we override the source
-	// subnet ID to the local chain's validator set.
-	if canOptimizePrimaryNetwork && sourceSubnetID == constants.PrimaryNetworkID {
-		sourceSubnetID = predicateContext.SnowCtx.SubnetID
+	if sourceSubnetID == constants.PrimaryNetworkID {
+		// For the X-chain and the C-chain, chains can be configured not to
+		// require the primary network validators to have signed the warp
+		// message and to use the, likely smaller, local subnet's validator set.
+		//
+		// The primary network validator set is never required when verifying
+		// messages from the P-chain because the P-chain is always synced.
+		if !c.RequirePrimaryNetworkSigners || warpMsg.SourceChainID == constants.PlatformChainID {
+			sourceSubnetID = predicateContext.SnowCtx.SubnetID
+		}
 	}
 
 	validatorSet, err := predicateContext.SnowCtx.ValidatorState.GetWarpValidatorSet(
