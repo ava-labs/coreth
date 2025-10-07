@@ -645,41 +645,37 @@ func testReceiveWarpMessage(
 	minimumValidPChainHeight := uint64(10)
 	getValidatorSetTestErr := errors.New("can't get validator set test error")
 
-	validatorState := &validatorstest.State{
+	vm.ctx.ValidatorState = &validatorstest.State{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			if msgFrom == fromPrimary {
 				return constants.PrimaryNetworkID, nil
 			}
 			return vm.ctx.SubnetID, nil
 		},
-		GetValidatorSetF: func(_ context.Context, height uint64, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		GetWarpValidatorSetF: func(_ context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
 			if height < minimumValidPChainHeight {
-				return nil, getValidatorSetTestErr
+				return validators.WarpSet{}, getValidatorSetTestErr
 			}
 			signers := subnetSigners
 			if subnetID == constants.PrimaryNetworkID {
 				signers = primarySigners
 			}
 
-			vdrOutput := make(map[ids.NodeID]*validators.GetValidatorOutput)
+			vdrs := validators.WarpSet{}
 			for _, s := range signers {
-				vdrOutput[s.nodeID] = &validators.GetValidatorOutput{
-					NodeID:    s.nodeID,
-					PublicKey: s.secret.PublicKey(),
-					Weight:    s.weight,
-				}
+				pk := s.secret.PublicKey()
+				vdrs.Validators = append(vdrs.Validators, &validators.Warp{
+					PublicKey:      pk,
+					PublicKeyBytes: bls.PublicKeyToUncompressedBytes(pk),
+					Weight:         s.weight,
+					NodeIDs:        []ids.NodeID{s.nodeID},
+				})
+				vdrs.TotalWeight += s.weight
 			}
-			return vdrOutput, nil
+			avagoUtils.Sort(vdrs.Validators)
+			return vdrs, nil
 		},
 	}
-	validatorState.GetWarpValidatorSetF = func(ctx context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
-		vdrs, err := validatorState.GetValidatorSet(ctx, height, subnetID)
-		if err != nil {
-			return validators.WarpSet{}, err
-		}
-		return validators.FlattenValidatorSet(vdrs)
-	}
-	vm.ctx.ValidatorState = validatorState
 
 	signersBitSet := set.NewBits()
 	for i := range signers {
