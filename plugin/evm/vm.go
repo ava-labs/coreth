@@ -1067,9 +1067,10 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 	}
 
 	err = vm.blockChain.SetPreference(block.GetEthBlock())
-	if err == nil {
-		vm.setPendingBlock(block.GetEthBlock().NumberU64())
+	if err != nil {
+		return err
 	}
+	vm.setPendingBlock(block.GetEthBlock().NumberU64())
 	return err
 }
 
