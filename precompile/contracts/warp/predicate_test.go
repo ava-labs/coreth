@@ -205,8 +205,6 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 			validatorSet[testVdrs[i].nodeID] = validatorOutput
 		}
 	}
-	warpValidators, err := validators.FlattenValidatorSet(validatorSet)
-	require.NoError(tb, err)
 
 	snowCtx := snowtest.Context(tb, snowtest.CChainID)
 	snowCtx.ValidatorState = &validatorstest.State{
@@ -214,7 +212,7 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 			return sourceSubnetID, nil
 		},
 		GetWarpValidatorSetF: func(context.Context, uint64, ids.ID) (validators.WarpSet, error) {
-			return warpValidators, nil
+			return validators.FlattenValidatorSet(validatorSet)
 		},
 	}
 	return snowCtx
