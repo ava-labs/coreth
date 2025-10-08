@@ -41,16 +41,6 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 		},
 	}
 
-	t.Run("without_registration", func(t *testing.T) {
-		t.Run("payloads", func(t *testing.T) {
-			for pkg, fn := range payloadTests {
-				t.Run(pkg, func(t *testing.T) {
-					require.Panics(t, func() { fn(t) })
-				})
-			}
-		})
-	})
-
 	t.Run("with_temp_registration", func(t *testing.T) {
 		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
 			return WithTempRegisteredLibEVMExtras(lock, func() error {
@@ -65,6 +55,19 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 			})
 		})
 		require.NoError(t, err)
+	})
+
+	// These are deliberately placed after the tests of temporary registration,
+	// to demonstrate that (a) they are indeed temporary, and (b) they would
+	// otherwise panic.
+	t.Run("without_registration", func(t *testing.T) {
+		t.Run("payloads", func(t *testing.T) {
+			for pkg, fn := range payloadTests {
+				t.Run(pkg, func(t *testing.T) {
+					require.Panics(t, func() { fn(t) })
+				})
+			}
+		})
 	})
 
 	RegisterAllLibEVMExtras()
