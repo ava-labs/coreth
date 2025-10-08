@@ -1,11 +1,15 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package evm
+// These tests are run in a different package because the primary `evm` tests
+// leak goroutines that result in race conditions with the temporary
+// registration of extras, which is intended to be done separately.
+package evm_test
 
 import (
 	"testing"
 
+	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
@@ -26,7 +30,7 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 	var reRegistered bool
 	t.Cleanup(func() {
 		if !reRegistered {
-			RegisterAllLibEVMExtras()
+			evm.RegisterAllLibEVMExtras()
 		}
 	})
 
@@ -43,7 +47,7 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 
 	t.Run("with_temp_registration", func(t *testing.T) {
 		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
-			return WithTempRegisteredLibEVMExtras(lock, func() error {
+			return evm.WithTempRegisteredLibEVMExtras(lock, func() error {
 
 				t.Run("payloads", func(t *testing.T) {
 					for pkg, fn := range payloadTests {
@@ -70,7 +74,7 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 		})
 	})
 
-	RegisterAllLibEVMExtras()
+	evm.RegisterAllLibEVMExtras()
 	reRegistered = true
 
 	t.Run("with_permanent_registration", func(t *testing.T) {
