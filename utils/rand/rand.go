@@ -5,16 +5,24 @@ package rand
 
 import (
 	"crypto/rand"
-	"encoding/binary"
-	"math"
+	"math/big"
 )
 
-func SecureFloat64() float64 {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic("crypto/rand failed: " + err.Error())
+// Credit to Brandur Leach (@Brandur) for this implementation.
+// https://brandur.org/fragments/crypto-rand-float64
+
+// Intn is a shortcut for generating a random integer between 0 and
+// max using crypto/rand.
+func Intn(max int64) int64 {
+	nBig, err := rand.Int(rand.Reader, big.NewInt(max))
+	if err != nil {
+		panic(err)
 	}
-	bits := binary.BigEndian.Uint64(b[:])
-	bits = (bits >> 12) | (1023 << 52) // 52-bit mantissa, exponent=1023 -> [1,2)
-	return math.Float64frombits(bits) - 1.0
+	return nBig.Int64()
+}
+
+// SecureFloat64 is a shortcut for generating a random float between 0 and
+// 1 using crypto/rand.
+func SecureFloat64() float64 {
+	return float64(Intn(1<<53)) / (1 << 53)
 }

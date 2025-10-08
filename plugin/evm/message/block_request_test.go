@@ -38,8 +38,7 @@ func TestMarshalBlockRequest(t *testing.T) {
 // TestMarshalBlockResponse requires that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalBlockResponse(t *testing.T) {
-	// create some random bytes
-	// set seed to ensure deterministic random behaviour
+	// Create some random bytes and then set the seed to ensure deterministic behaviour
 	rand := rand.New(rand.NewSource(1)) //nolint:gosec
 	blocksBytes := make([][]byte, 32)
 	for i := range blocksBytes {
