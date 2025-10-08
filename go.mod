@@ -8,6 +8,9 @@ module github.com/ava-labs/coreth
 //   - go.mod (here)
 //   - tools/go.mod
 //   - tools/legacy-golangci-lint.mod
+//   - accounts/abi/bind/bind_test.go
+//   - Dockerfile
+//   - RELEASES.md
 //
 // - If updating between minor versions (e.g. 1.24.x -> 1.25.x):
 //   - Consider updating the version of golangci-lint (see tools/go.mod)
