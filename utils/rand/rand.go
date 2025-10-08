@@ -12,9 +12,9 @@ import (
 // https://brandur.org/fragments/crypto-rand-float64
 
 // Intn is a shortcut for generating a random integer between 0 and
-// max using crypto/rand.
-func Intn(max int64) int64 {
-	nBig, err := rand.Int(rand.Reader, big.NewInt(max))
+// n using crypto/rand.
+func Intn(n int64) int64 {
+	nBig, err := rand.Int(rand.Reader, big.NewInt(n))
 	if err != nil {
 		panic(err)
 	}
