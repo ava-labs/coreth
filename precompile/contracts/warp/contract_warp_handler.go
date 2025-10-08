@@ -44,7 +44,12 @@ type messageHandler interface {
 	handleMessage(msg *warp.Message) ([]byte, error)
 }
 
-func handleWarpMessage(accessibleState contract.AccessibleState, input []byte, suppliedGas uint64, handler messageHandler) ([]byte, uint64, error) {
+func handleWarpMessage(
+	accessibleState contract.AccessibleState,
+	input []byte,
+	suppliedGas uint64,
+	handler messageHandler,
+) ([]byte, uint64, error) {
 	remainingGas, err := contract.DeductGas(suppliedGas, GetVerifiedWarpMessageBaseCost)
 	if err != nil {
 		return nil, remainingGas, err

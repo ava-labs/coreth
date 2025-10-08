@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	GetVerifiedWarpMessageBaseCost uint64 = 2      // Base cost of entering getVerifiedWarpMessage
-	GetBlockchainIDGasCost         uint64 = 2      // Based on GasQuickStep used in existing EVM instructions
+	GetVerifiedWarpMessageBaseCost uint64 = 750 // Base cost of entering getVerifiedWarpMessage
+	GetBlockchainIDGasCost         uint64 = 200
 	AddWarpMessageGasCost          uint64 = 20_000 // Cost of producing and serving a BLS Signature
 	// Sum of base log gas cost, cost of producing 4 topics, and producing + serving a BLS Signature (sign + trie write)
 	// Note: using trie write for the gas cost results in a conservative overestimate since the message is stored in a
@@ -32,9 +32,9 @@ const (
 	// SendWarpMessageGasCostPerByte cost accounts for producing a signed message of a given size
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
 
-	GasCostPerWarpSigner            uint64 = 500
-	GasCostPerWarpMessageChunk      uint64 = 3_200
-	GasCostPerSignatureVerification uint64 = 200_000
+	GasCostPerWarpSigner            uint64 = 250
+	GasCostPerWarpMessageChunk      uint64 = 512 // matches call data byte cost
+	GasCostPerSignatureVerification uint64 = 100_000
 )
 
 var (
