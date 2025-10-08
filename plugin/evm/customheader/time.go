@@ -140,11 +140,11 @@ func verifyMinDelay(parent *types.Header, header *types.Header) error {
 	headerExtra := customtypes.GetHeaderExtra(header)
 	parentExtra := customtypes.GetHeaderExtra(parent)
 
-	minDelayExcess := customtypes.GetHeaderExtra(parent).MinDelayExcess
+	parentMinDelayExcess := customtypes.GetHeaderExtra(parent).MinDelayExcess
 	// Parent might not have a min delay excess if this is the first Granite block
 	// in this case we cannot verify the min delay,
 	// Otherwise parent should have been verified in VerifyMinDelayExcess
-	if minDelayExcess == nil {
+	if parentMinDelayExcess == nil {
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func verifyMinDelay(parent *types.Header, header *types.Header) error {
 	// TimeMilliseconds is earlier than the header's TimeMilliseconds in VerifyTime.
 	actualDelayMillis := *headerExtra.TimeMilliseconds - *parentExtra.TimeMilliseconds
 
-	minRequiredDelayMillis := minDelayExcess.Delay()
+	minRequiredDelayMillis := parentMinDelayExcess.Delay()
 
 	if actualDelayMillis < minRequiredDelayMillis {
 		return fmt.Errorf("%w: actual delay %dms < required %dms",
