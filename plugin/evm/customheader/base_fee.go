@@ -4,7 +4,6 @@
 package customheader
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -13,8 +12,6 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
-
-var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 
 // BaseFee takes the previous header and the timestamp of its child block and
 // calculates the expected base fee for the child block.
@@ -55,12 +52,7 @@ func EstimateNextBaseFee(
 	parent *types.Header,
 	timeMS uint64,
 ) (*big.Int, error) {
-	if config.ApricotPhase3BlockTimestamp == nil {
-		return nil, errEstimateBaseFeeWithoutActivation
-	}
-
 	parentMS := customtypes.HeaderTimeMilliseconds(parent)
-	ap3TimeMS := *config.ApricotPhase3BlockTimestamp * 1000
-	timeMS = max(timeMS, parentMS, ap3TimeMS)
+	timeMS = max(timeMS, parentMS)
 	return BaseFee(config, parent, timeMS)
 }

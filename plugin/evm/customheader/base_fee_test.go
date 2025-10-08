@@ -532,36 +532,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 		parent   *types.Header
 		timeMS   uint64
 		want     *big.Int
-		wantErr  error
 	}{
-		{
-			name:     "ap3",
-			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
-			parent: &types.Header{
-				Number:  big.NewInt(1),
-				Extra:   (&ap3.Window{}).Bytes(),
-				BaseFee: big.NewInt(ap3.MaxBaseFee),
-			},
-			timeMS: 1000,
-			want: func() *big.Int {
-				const (
-					gasTarget                  = ap3.TargetGas
-					gasUsed                    = ap3.IntrinsicBlockGas
-					amountUnderTarget          = gasTarget - gasUsed
-					parentBaseFee              = ap3.MaxBaseFee
-					smoothingFactor            = ap3.BaseFeeChangeDenominator
-					baseFeeFractionUnderTarget = amountUnderTarget * parentBaseFee / gasTarget
-					delta                      = baseFeeFractionUnderTarget / smoothingFactor
-					baseFee                    = parentBaseFee - delta
-				)
-				return big.NewInt(baseFee)
-			}(),
-		},
-		{
-			name:     "ap3_not_scheduled",
-			upgrades: extras.TestApricotPhase2Config.NetworkUpgrades,
-			wantErr:  errEstimateBaseFeeWithoutActivation,
-		},
 		{
 			name:     "fortuna",
 			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
@@ -631,7 +602,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := EstimateNextBaseFee(config, test.parent, test.timeMS)
-			require.ErrorIs(err, test.wantErr)
+			require.NoError(err)
 			require.Equal(test.want, got)
 		})
 	}
