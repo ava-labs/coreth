@@ -131,7 +131,7 @@ func TestVerifyTime(t *testing.T) {
 		// Min delay verification tests
 		{
 			name:         "pre_granite_no_min_delay_verification",
-			header:       generateHeader(timeSeconds-1, nil),
+			header:       generateHeader(timeSeconds, nil),
 			parentHeader: generateHeader(timeSeconds, nil),
 			extraConfig:  extras.TestFortunaChainConfig,
 		},
