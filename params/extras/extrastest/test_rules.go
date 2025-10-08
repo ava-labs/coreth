@@ -1,13 +1,16 @@
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 package extrastest
 
 import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
+	"github.com/ava-labs/libevm/common"
+
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/params/paramstest"
-	"github.com/ava-labs/libevm/common"
 )
 
 func ForkToRules(fork upgradetest.Fork) *extras.Rules {
