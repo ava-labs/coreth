@@ -50,8 +50,6 @@ func BaseFee(
 //
 // Warning: This function should only be used in estimation and should not be
 // used when calculating the canonical base fee for a block.
-//
-// TODO(#1290): Adapt for Granite upgrade.
 func EstimateNextBaseFee(
 	config *extras.ChainConfig,
 	parent *types.Header,
