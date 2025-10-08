@@ -211,7 +211,7 @@ func RunPrecompileTests(t *testing.T, module modules.Module, contractTests map[s
 	}
 }
 
-func RunPrecompileBenches(b *testing.B, module modules.Module, contractTests map[string]PrecompileTest) {
+func RunPrecompileBenchmarks(b *testing.B, module modules.Module, contractTests map[string]PrecompileTest) {
 	b.Helper()
 
 	for name, test := range contractTests {
