@@ -527,12 +527,12 @@ func TestBaseFee(t *testing.T) {
 
 func TestEstimateNextBaseFee(t *testing.T) {
 	tests := []struct {
-		name      string
-		upgrades  extras.NetworkUpgrades
-		parent    *types.Header
-		timestamp uint64
-		want      *big.Int
-		wantErr   error
+		name     string
+		upgrades extras.NetworkUpgrades
+		parent   *types.Header
+		timeMS   uint64
+		want     *big.Int
+		wantErr  error
 	}{
 		{
 			name:     "ap3",
@@ -542,7 +542,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 				Extra:   (&ap3.Window{}).Bytes(),
 				BaseFee: big.NewInt(ap3.MaxBaseFee),
 			},
-			timestamp: 1,
+			timeMS: 1000,
 			want: func() *big.Int {
 				const (
 					gasTarget                  = ap3.TargetGas
@@ -562,6 +562,66 @@ func TestEstimateNextBaseFee(t *testing.T) {
 			upgrades: extras.TestApricotPhase2Config.NetworkUpgrades,
 			wantErr:  errEstimateBaseFeeWithoutActivation,
 		},
+		{
+			name:     "fortuna",
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: (&acp176.State{
+					Gas: gas.State{
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+					},
+					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
+				}).Bytes(),
+			},
+			timeMS: 1000,
+			want:   big.NewInt(988_571_555), // e^((2_704_386_192 - 1_500_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
+		},
+		{
+			name:     "fortuna_milliseconds",
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: (&acp176.State{
+					Gas: gas.State{
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+					},
+					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
+				}).Bytes(),
+			},
+			timeMS: 1500,
+			want:   big.NewInt(988_571_555), // same as above, rounded down.
+		},
+		{
+			name:     "granite",
+			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: (&acp176.State{
+					Gas: gas.State{
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+					},
+					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
+				}).Bytes(),
+			},
+			timeMS: 1000,
+			want:   big.NewInt(988_571_555), // e^((2_704_386_192 - 750_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
+		},
+		{
+			name:     "granite_milliseconds",
+			upgrades: extras.TestGraniteChainConfig.NetworkUpgrades,
+			parent: &types.Header{
+				Number: big.NewInt(1),
+				Extra: (&acp176.State{
+					Gas: gas.State{
+						Excess: 2_704_386_192, // 1_500_000 * ln(nAVAX) * [acp176.TargetToPriceUpdateConversion]
+					},
+					TargetExcess: 13_605_152, // 2^25 * ln(1.5)
+				}).Bytes(),
+			},
+			timeMS: 1500,
+			want:   big.NewInt(982_906_404), // e^((2_704_386_192 - 2_250_000) / 1_500_000 / [acp176.TargetToPriceUpdateConversion])
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -570,7 +630,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
-			got, err := EstimateNextBaseFee(config, test.parent, test.timestamp)
+			got, err := EstimateNextBaseFee(config, test.parent, test.timeMS)
 			require.ErrorIs(err, test.wantErr)
 			require.Equal(test.want, got)
 		})

@@ -11,6 +11,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
 
 var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
@@ -54,13 +55,14 @@ func BaseFee(
 func EstimateNextBaseFee(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (*big.Int, error) {
 	if config.ApricotPhase3BlockTimestamp == nil {
 		return nil, errEstimateBaseFeeWithoutActivation
 	}
 
-	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
-	timeMS := timestamp * 1000
+	parentMS := customtypes.HeaderTimeMilliseconds(parent)
+	ap3TimeMS := *config.ApricotPhase3BlockTimestamp * 1000
+	timeMS = max(timeMS, parentMS, ap3TimeMS)
 	return BaseFee(config, parent, timeMS)
 }

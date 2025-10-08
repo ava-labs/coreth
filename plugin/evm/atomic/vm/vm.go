@@ -394,7 +394,7 @@ func (vm *VM) verifyTxAtTip(tx *atomic.Tx) error {
 	extraRules := params.GetRulesExtra(vm.InnerVM.ChainConfig().Rules(preferredBlock.Number, params.IsMergeTODO, preferredBlock.Time))
 	parentHeader := preferredBlock
 	var nextBaseFee *big.Int
-	timestamp := uint64(vm.clock.Time().Unix())
+	timestamp := uint64(vm.clock.Time().UnixMilli())
 	if extraConfig.IsApricotPhase3(timestamp) {
 		nextBaseFee, err = customheader.EstimateNextBaseFee(extraConfig, parentHeader, timestamp)
 		if err != nil {
