@@ -53,7 +53,7 @@ var (
 	testVdrs    []*testValidator
 	vdrs        map[ids.NodeID]*validators.GetValidatorOutput
 
-	graniteRules     = extrastest.ForkToRules(upgradetest.Granite)
+	graniteRules     = extrastest.ForkToAvalancheRules(upgradetest.Granite)
 	graniteGasConfig = CurrentGasConfig(graniteRules)
 )
 
@@ -561,8 +561,8 @@ func TestWarpMultiplePredicates(t *testing.T) {
 				expectedGas = graniteGasConfig.PredicateGasCost(len(pred), numSigners)
 				expectedErr = nil
 			} else {
-				expectedGas = graniteGasConfig.PredicateGasCost(len(pred), 1)
 				pred = invalidPredicate
+				expectedGas = graniteGasConfig.PredicateGasCost(len(invalidPredicate), 1)
 				expectedErr = errFailedVerification
 			}
 
