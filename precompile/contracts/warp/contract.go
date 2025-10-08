@@ -376,3 +376,7 @@ func CurrentGasConfig(rules precompileconfig.Rules) GasConfig {
 		}
 	}
 }
+
+func (g GasConfig) PredicateGasCost(chunks int, signers int) uint64 {
+	return g.PerSignatureVerification + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
+}

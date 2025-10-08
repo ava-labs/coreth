@@ -17,7 +17,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/coreth/core/extstate"
-	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -94,10 +93,6 @@ func (test PrecompileTest) Run(t *testing.T, module modules.Module) {
 func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *testStateDB) PrecompileRunparams {
 	t.Helper()
 	contractAddress := module.Address
-
-	if test.Rules == nil {
-		test.Rules = extras.AvalancheRules{IsGranite: true}
-	}
 
 	ctrl := gomock.NewController(t)
 
