@@ -31,7 +31,7 @@ var (
 // GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
 // It returns an error if the timestamp is behind the parent's timestamp in Granite.
 // First return value is the timestamp in seconds, second return value is the timestamp in milliseconds.
-func GetNextTimestamp(parent *types.Header, config *extras.ChainConfig, now time.Time) (uint64, uint64, error) {
+func GetNextTimestamp(parent *types.Header, now time.Time) (uint64, uint64, error) {
 	var (
 		timestamp   = uint64(now.Unix())
 		timestampMS = uint64(now.UnixMilli())
@@ -40,13 +40,15 @@ func GetNextTimestamp(parent *types.Header, config *extras.ChainConfig, now time
 	if parent.Time < timestamp {
 		return timestamp, timestampMS, nil
 	}
+
+	parentExtra := customtypes.GetHeaderExtra(parent)
 	// In Granite, there is a minimum delay enforced, and if the timestamp is the same as the parent,
 	// the block will be rejected. This is to early-exit from the block building.
 	// The block builder should have already waited enough time to meet the minimum delay.
-	if config.IsGranite(timestamp) {
+	if parentExtra.TimeMilliseconds != nil {
 		// Timestamp milliseconds might be still later than parent's timestamp milliseconds
 		// even though the second timestamp is equal to the parent's timestamp. (from the case parent.Time < timestamp)
-		parentTimeMS := customtypes.HeaderTimeMilliseconds(parent)
+		parentTimeMS := *parentExtra.TimeMilliseconds
 		if timestampMS <= parentTimeMS {
 			return 0, 0, fmt.Errorf("%w: current %d <= parent %d", ErrGraniteClockBehindParent, timestampMS, parentTimeMS)
 		}

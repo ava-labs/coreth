@@ -337,6 +337,7 @@ func (b *wrappedBlock) semanticVerify(predicateContext *precompileconfig.Predica
 
 	header := b.ethBlock.Header()
 	// Ensure MinDelayExcess is consistent with rules and minimum block delay is enforced.
+	// This should be called before VerifyTime to avoid unnecessary checks in VerifyTime.
 	if err := customheader.VerifyMinDelayExcess(extraConfig, parent, header); err != nil {
 		return err
 	}
