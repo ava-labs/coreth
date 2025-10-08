@@ -26,9 +26,8 @@ import (
 )
 
 const (
-	// Minimum amount of time to wait after attempting/build a block before attempting to build another block
-	// This is only applied for retrying to build a block after a initial minimum delay has passed.
-	// The initial minimum delay is applied according to parent minDelayExcess (if available)
+	// Minimum amount of time to wait to retry building a block after a failed attempt.
+	// It is assumed that the first block building attempt is already after the minimum delay time.
 	RetryDelay = 100 * time.Millisecond
 )
 
