@@ -33,15 +33,18 @@ do
     if [[ ${command_status:-0} == 0 ]]; then
         rm test.out
         exit 0
-    else 
+    else
         unset command_status # Clear the error code for the next run
     fi
 
     # If the test failed, print the output
     unexpected_failures=$(
         # First grep pattern corresponds to test failures, second pattern corresponds to test panics due to timeouts
+        # NOTE: comm requires BOTH inputs to be sorted. We sort -u the left (extracted failures)
+        # and right (known_flakes.txt) sides with LC_ALL=C to ensure bytewise, stable ordering
+        # across environments and to deduplicate entries so comm order checks are satisfied.
         (grep "^--- FAIL" test.out | awk '{print $3}' || grep -E '^\s+Test.+ \(' test.out | awk '{print $1}') |
-        sort -u | comm -23 -  <(sed 's/\r$//' ./scripts/known_flakes.txt)
+        LC_ALL=C sort -u | comm -23 - <(sed 's/\r$//' ./scripts/known_flakes.txt | LC_ALL=C sort -u)
     )
     if [ -n "${unexpected_failures}" ]; then
         echo "Unexpected test failures: ${unexpected_failures}"
