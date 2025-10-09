@@ -5,7 +5,11 @@ package core
 
 import (
 	"fmt"
+	"io"
+	"io/fs"
 	"math/big"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -164,6 +168,63 @@ func copyMemDB(db ethdb.Database) (ethdb.Database, error) {
 	return newDB, nil
 }
 
+func copyDir(t *testing.T, dir string) string {
+	t.Helper()
+	if dir == "" {
+		return ""
+	}
+	newPath := t.TempDir()
+
+	// Walk the source directory recursively and mirror its structure/contents
+	// into the destination directory created above.
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		// Skip the root element itself
+		if rel == "." {
+			return nil
+		}
+		dstPath := filepath.Join(newPath, rel)
+
+		if d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		// Regular file copy
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		src, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+
+		dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer dst.Close()
+
+		if _, err := io.Copy(dst, src); err != nil {
+			return err
+		}
+		return dst.Sync()
+	})
+	require.NoError(t, err, "failed to copy directory %s to %s", dir, newPath)
+	return newPath
+}
+
 // checkBlockChainState creates a new BlockChain instance and checks that exporting each block from
 // genesis to last accepted from the original instance yields the same last accepted block and state
 // root.
@@ -211,7 +272,8 @@ func checkBlockChainState(
 	// Copy the database over to prevent any issues when re-using [originalDB] after this call.
 	originalDB, err = copyMemDB(originalDB)
 	require.NoError(err)
-	restartedChain, err := create(originalDB, gspec, lastAcceptedBlock.Hash(), oldChainDataDir)
+	newChainDataDir := copyDir(t, oldChainDataDir)
+	restartedChain, err := create(originalDB, gspec, lastAcceptedBlock.Hash(), newChainDataDir)
 	require.NoError(err)
 	defer restartedChain.Stop()
 	currentBlock := restartedChain.CurrentBlock()
