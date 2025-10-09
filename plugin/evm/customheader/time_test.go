@@ -288,7 +288,6 @@ func TestGetNextTimestamp(t *testing.T) {
 		now            time.Time
 		expectedSec    uint64
 		expectedMillis uint64
-		expectedErr    error
 	}{
 		{
 			name:           "current_time_after_parent_time_no_milliseconds",
@@ -319,22 +318,25 @@ func TestGetNextTimestamp(t *testing.T) {
 			expectedMillis: (nowSeconds + 10) * 1000, // parent.Time * 1000
 		},
 		{
-			name:        "current_time_before_parent_time_with_milliseconds",
-			parent:      generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
-			now:         now,
-			expectedErr: ErrGraniteClockBehindParent,
+			name:           "current_time_before_parent_time_with_milliseconds",
+			parent:         generateHeader(nowSeconds+10, utils.NewUint64(nowMillis)),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
 		},
 		{
-			name:        "current_time_milliseconds_before_parent_time_milliseconds",
-			parent:      generateHeader(nowSeconds, utils.NewUint64(nowMillis+10)),
-			now:         now,
-			expectedErr: ErrGraniteClockBehindParent,
+			name:           "current_time_milliseconds_before_parent_time_milliseconds",
+			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis+10)),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
 		},
 		{
-			name:        "current_time_equals_parent_time_with_milliseconds_granite",
-			parent:      generateHeader(nowSeconds, utils.NewUint64(nowMillis)),
-			now:         now,
-			expectedErr: ErrGraniteClockBehindParent,
+			name:           "current_time_equals_parent_time_with_milliseconds_granite",
+			parent:         generateHeader(nowSeconds, utils.NewUint64(nowMillis)),
+			now:            now,
+			expectedSec:    nowSeconds,
+			expectedMillis: nowMillis,
 		},
 		{
 			name:           "current_timesec_equals_parent_time_with_less_milliseconds",
@@ -347,10 +349,9 @@ func TestGetNextTimestamp(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sec, millis, err := GetNextTimestamp(test.parent, test.now)
-			require.ErrorIs(t, err, test.expectedErr)
-			require.Equal(t, test.expectedSec, sec)
-			require.Equal(t, test.expectedMillis, millis)
+			time := GetNextTimestamp(test.parent, test.now)
+			require.Equal(t, test.expectedSec, uint64(time.Unix()))
+			require.Equal(t, test.expectedMillis, uint64(time.UnixMilli()))
 		})
 	}
 }
