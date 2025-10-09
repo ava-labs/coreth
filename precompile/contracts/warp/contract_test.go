@@ -194,8 +194,6 @@ func BenchmarkSendWarpMessage(b *testing.B) {
 
 func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.PrecompileTest {
 	networkID := uint32(54321)
-	preGraniteGasConfig := CurrentGasConfig(extras.AvalancheRules{IsGranite: false})
-	postGraniteGasConfig := CurrentGasConfig(extras.AvalancheRules{IsGranite: true})
 	callerAddr := common.HexToAddress("0x0123")
 	sourceAddress := common.HexToAddress("0x456789")
 	sourceChainID := ids.GenerateTestID()
@@ -472,7 +470,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
 			ReadOnly:    false,
 			ExpectedRes: func() []byte {
 				res, err := PackGetVerifiedWarpMessageOutput(GetVerifiedWarpMessageOutput{
@@ -501,7 +499,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(set.NewBits(0))
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
 			ReadOnly:    false,
 			ExpectedRes: func() []byte {
 				res, err := PackGetVerifiedWarpMessageOutput(GetVerifiedWarpMessageOutput{
@@ -526,7 +524,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
 			ReadOnly:    true,
 			ExpectedRes: func() []byte {
 				res, err := PackGetVerifiedWarpMessageOutput(GetVerifiedWarpMessageOutput{
@@ -551,7 +549,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)) - 1,
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)) - 1,
 			ReadOnly:    false,
 			ExpectedErr: vm.ErrOutOfGas.Error(),
 		},
@@ -563,7 +561,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidPackedPredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(invalidPackedPredicate)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidPredicateBytes.Error(),
 		},
@@ -575,7 +573,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidWarpMsgPredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(invalidWarpMsgPredicate)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidWarpMsg.Error(),
 		},
@@ -587,7 +585,7 @@ func getVerifiedWarpMessageTests(tb testing.TB) map[string]precompiletest.Precom
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures)
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidAddressedPredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(invalidAddressedPredicate)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidAddressedPayload.Error(),
 		},
@@ -606,8 +604,6 @@ func BenchmarkGetVerifiedWarpMessage(b *testing.B) {
 
 func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.PrecompileTest {
 	networkID := uint32(54321)
-	preGraniteGasConfig := CurrentGasConfig(extras.AvalancheRules{IsGranite: false})
-	postGraniteGasConfig := CurrentGasConfig(extras.AvalancheRules{IsGranite: false})
 	callerAddr := common.HexToAddress("0x0123")
 	sourceChainID := ids.GenerateTestID()
 	blockHash := ids.GenerateTestID()
@@ -636,6 +632,11 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 
 	noFailures := set.NewBits()
 	require.Empty(tb, noFailures.Bytes())
+
+	_ = preGraniteGasConfig
+	_ = invalidWarpMsgPredicate
+	_ = invalidHashPredicate
+	_ = invalidPackedPredicate
 
 	return map[string]precompiletest.PrecompileTest{
 		"get message success": {
@@ -877,7 +878,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
 			ReadOnly:    false,
 			ExpectedRes: func() []byte {
 				res, err := PackGetVerifiedWarpBlockHashOutput(GetVerifiedWarpBlockHashOutput{
@@ -887,9 +888,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 					},
 					Valid: true,
 				})
-				if err != nil {
-					panic(err)
-				}
+				require.NoError(tb, err)
 				return res
 			}(),
 		},
@@ -905,7 +904,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(set.NewBits(0)).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
 			ReadOnly:    false,
 			ExpectedRes: func() []byte {
 				res, err := PackGetVerifiedWarpBlockHashOutput(GetVerifiedWarpBlockHashOutput{
@@ -929,7 +928,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)),
 			ReadOnly:    true,
 			ExpectedRes: func() []byte {
 				res, err := PackGetVerifiedWarpBlockHashOutput(GetVerifiedWarpBlockHashOutput{
@@ -953,7 +952,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)) - 1,
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)) - 1,
 			ReadOnly:    false,
 			ExpectedErr: vm.ErrOutOfGas.Error(),
 		},
@@ -965,7 +964,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidPackedPredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(invalidPackedPredicate)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidPredicateBytes.Error(),
 		},
@@ -977,7 +976,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidWarpMsgPredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(invalidWarpMsgPredicate)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidWarpMsg.Error(),
 		},
@@ -989,7 +988,7 @@ func getVerifiedWarpBlockHashTests(tb testing.TB) map[string]precompiletest.Prec
 				mbc.EXPECT().GetPredicateResults(common.Hash{}, ContractAddress).Return(noFailures).AnyTimes()
 			},
 			Rules:       extras.AvalancheRules{IsGranite: true},
-			SuppliedGas: GetVerifiedWarpMessageBaseCost + postGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidHashPredicate)),
+			SuppliedGas: GetVerifiedWarpMessageBaseCost + graniteGasConfig.PerWarpMessageChunk*uint64(len(invalidHashPredicate)),
 			ReadOnly:    false,
 			ExpectedErr: errInvalidBlockHashPayload.Error(),
 		},
