@@ -18,24 +18,43 @@ import (
 
 	"github.com/ava-labs/coreth/accounts/abi"
 	"github.com/ava-labs/coreth/precompile/contract"
+	"github.com/ava-labs/coreth/precompile/precompileconfig"
 )
 
 const (
 	GetVerifiedWarpMessageBaseCost uint64 = 750 // Base cost of entering getVerifiedWarpMessage
 	GetBlockchainIDGasCost         uint64 = 200
-	AddWarpMessageGasCost          uint64 = 20_000 // Cost of producing and serving a BLS Signature
-	// Sum of base log gas cost, cost of producing 4 topics, and producing + serving a BLS Signature (sign + trie write)
+	addWarpMessageBaseGasCost      uint64 = 20_000 // Cost of producing and serving a BLS Signature
+	// Sum of base log gas cost, cost of producing 3 topics, and producing + serving a BLS Signature (sign + trie write)
 	// Note: using trie write for the gas cost results in a conservative overestimate since the message is stored in a
 	// flat database that can be cleaned up after a period of time instead of the EVM trie.
 
-	SendWarpMessageGasCost uint64 = contract.LogGas + 3*contract.LogTopicGas + AddWarpMessageGasCost + contract.WriteGasCostPerSlot
+	SendWarpMessageGasCost uint64 = contract.LogGas + 3*contract.LogTopicGas + addWarpMessageBaseGasCost + contract.WriteGasCostPerSlot
 	// SendWarpMessageGasCostPerByte cost accounts for producing a signed message of a given size
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
-
-	GasCostPerWarpSigner            uint64 = 250
-	GasCostPerWarpMessageChunk      uint64 = 512 // matches call data byte cost
-	GasCostPerSignatureVerification uint64 = 100_000
 )
+
+var (
+	preGraniteGasConfig = GasConfig{
+		PerWarpSigner:            500,
+		PerWarpMessageChunk:      3_200,
+		PerSignatureVerification: 200_000,
+	}
+	graniteGasConfig = GasConfig{
+		PerWarpSigner:            250,
+		PerWarpMessageChunk:      512, // matches call data byte cost
+		PerSignatureVerification: 125_000,
+	}
+)
+
+type GasConfig struct {
+	// Gas cost per warp signer in the validator set
+	PerWarpSigner uint64
+	// Gas cost per chunk of the warp message (each chunk is 128 bytes)
+	PerWarpMessageChunk uint64
+	// Gas cost to verify a BLS signature
+	PerSignatureVerification uint64
+}
 
 var (
 	errInvalidSendInput  = errors.New("invalid sendWarpMessage input")
@@ -342,4 +361,13 @@ func createWarpPrecompile() contract.StatefulPrecompiledContract {
 		panic(err)
 	}
 	return statefulContract
+}
+
+func CurrentGasConfig(rules precompileconfig.Rules) GasConfig {
+	switch {
+	case rules.IsGraniteActivated():
+		return graniteGasConfig
+	default:
+		return preGraniteGasConfig
+	}
 }
