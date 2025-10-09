@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
@@ -132,7 +133,7 @@ func TestImportTxVerify(t *testing.T) {
 				return importTx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNilTx,
 		},
 		"valid import tx": {
@@ -140,14 +141,14 @@ func TestImportTxVerify(t *testing.T) {
 				return importTx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"valid import tx banff": {
 			generate: func() atomic.UnsignedAtomicTx {
 				return importTx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.Banff),
+			rules: extrastest.ForkToRules(upgradetest.Banff),
 		},
 		"invalid network ID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -156,7 +157,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongNetworkID,
 		},
 		"invalid blockchain ID": {
@@ -166,7 +167,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongChainID,
 		},
 		"P-chain source before AP5": {
@@ -176,7 +177,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrWrongChainID,
 		},
 		"P-chain source after AP5": {
@@ -186,7 +187,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.ApricotPhase5),
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase5),
 		},
 		"invalid source chain ID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -195,7 +196,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase5),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase5),
 			expectedErr: atomic.ErrWrongChainID,
 		},
 		"no inputs": {
@@ -205,7 +206,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNoImportInputs,
 		},
 		"inputs sorted incorrectly": {
@@ -218,7 +219,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrInputsNotSortedUnique,
 		},
 		"invalid input": {
@@ -231,7 +232,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: avax.ErrNilTransferableInput,
 		},
 		"unsorted outputs phase 0 passes verification": {
@@ -244,7 +245,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"non-unique outputs phase 0 passes verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -256,7 +257,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"unsorted outputs phase 1 fails verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -268,7 +269,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase1),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase1),
 			expectedErr: atomic.ErrOutputsNotSorted,
 		},
 		"non-unique outputs phase 1 passes verification": {
@@ -281,7 +282,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.ApricotPhase1),
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase1),
 		},
 		"outputs not sorted and unique phase 2 fails verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -293,7 +294,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase2),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase2),
 			expectedErr: atomic.ErrOutputsNotSortedUnique,
 		},
 		"outputs not sorted phase 2 fails verification": {
@@ -306,7 +307,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase2),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase2),
 			expectedErr: atomic.ErrOutputsNotSortedUnique,
 		},
 		"invalid EVMOutput fails verification": {
@@ -322,7 +323,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
 			expectedErr: atomic.ErrNoValueOutput,
 		},
 		"no outputs apricot phase 3": {
@@ -332,7 +333,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase3),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase3),
 			expectedErr: atomic.ErrNoEVMOutputs,
 		},
 		"non-AVAX input Apricot Phase 6": {
@@ -356,7 +357,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.ApricotPhase6),
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase6),
 		},
 		"non-AVAX output Apricot Phase 6": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -371,7 +372,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.ApricotPhase6),
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase6),
 		},
 		"non-AVAX input Banff": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -394,7 +395,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
+			rules:       extrastest.ForkToRules(upgradetest.Banff),
 			expectedErr: atomic.ErrImportNonAVAXInputBanff,
 		},
 		"non-AVAX output Banff": {
@@ -410,7 +411,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
+			rules:       extrastest.ForkToRules(upgradetest.Banff),
 			expectedErr: atomic.ErrImportNonAVAXOutputBanff,
 		},
 	}
