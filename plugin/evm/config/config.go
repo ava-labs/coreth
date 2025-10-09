@@ -138,7 +138,13 @@ type Config struct {
 	StateSyncRequestSize     uint16 `json:"state-sync-request-size"`
 
 	// Database Settings
-	InspectDatabase bool `json:"inspect-database"` // Inspects the database on startup if enabled.
+	InspectDatabase         bool `json:"inspect-database"`            // Inspects the database on startup if enabled.
+	BlockDatabaseEnabled    bool `json:"block-database-enabled"`      // Use block database for storing block data
+	BlockDatabaseSyncToDisk bool `json:"block-database-sync-to-disk"` // Sync block database to disk
+
+	// BlockDatabaseMigrationDisabled disables migrating block data from key-value
+	// database to the block database. Only new blocks will be stored in the block database.
+	BlockDatabaseMigrationDisabled bool `json:"block-database-migration-disabled"`
 
 	// SkipUpgradeCheck disables checking that upgrades must take place before the last
 	// accepted block. Skipping this check is useful when a node operator does not update

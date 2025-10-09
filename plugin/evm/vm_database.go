@@ -4,12 +4,17 @@
 package evm
 
 import (
+	"errors"
+	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/plugin/evm/database"
@@ -17,12 +22,13 @@ import (
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 )
 
+const (
+	blockDBFolder = "blockdb"
+)
+
 // initializeDBs initializes the databases used by the VM.
 // coreth always uses the avalanchego provided database.
-func (vm *VM) initializeDBs(db avalanchedatabase.Database) {
-	// Use NewNested rather than New so that the structure of the database
-	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
+func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 	vm.versiondb = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.versiondb)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.versiondb)
@@ -30,12 +36,70 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) {
 	// that warp signatures are committed to the database atomically with
 	// the last accepted block.
 	vm.warpDB = prefixdb.New(warpPrefix, db)
+
+	// chaindb must be created after acceptedBlockDB since it uses it
+	chaindb, err := vm.newChainDB(db)
+	if err != nil {
+		return err
+	}
+	vm.chaindb = chaindb
+	return nil
+}
+
+// newChainDB creates a new chain database
+// If block database is enabled, it will wrap the chaindb with separate databases
+// dedicated for storing blocks data.
+// If block database is disable but was previously enabled, it will return an error.
+func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) {
+	// Use NewNested rather than New so that the structure of the database
+	// remains the same regardless of the provided baseDB type.
+	chainDB := rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
+
+	// Error if block database has been enabled/created and then disabled
+	stateDB := prefixdb.New(blockDBPrefix, db)
+	created, err := database.IsBlockDatabaseCreated(stateDB)
+	if err != nil {
+		return nil, err
+	}
+	if !vm.config.BlockDatabaseEnabled {
+		if created {
+			return nil, errors.New("cannot disable block database after it has been enabled")
+		}
+		return chainDB, nil
+	}
+
+	versionPath := strconv.FormatUint(blockdb.IndexFileVersion, 10)
+	blockDBPath := filepath.Join(vm.ctx.ChainDataDir, blockDBFolder, versionPath)
+	hasLastAccepted, err := vm.acceptedBlockDB.Has(lastAcceptedKey)
+	if err != nil {
+		return nil, err
+	}
+	stateSyncEnabled := !hasLastAccepted
+	if vm.config.StateSyncEnabled != nil {
+		stateSyncEnabled = *vm.config.StateSyncEnabled
+	}
+	config := blockdb.DefaultConfig().WithSyncToDisk(vm.config.BlockDatabaseSyncToDisk)
+	blockDB := database.NewBlockDatabase(stateDB, chainDB, config, blockDBPath, vm.ctx.Log, vm.sdkMetrics)
+	initialized, err := blockDB.InitWithStateSync(stateSyncEnabled)
+	log.Info("blockDB initialized", "initialized", initialized, "stateSyncEnabled", stateSyncEnabled)
+	if err != nil {
+		return nil, err
+	}
+	if initialized && !vm.config.BlockDatabaseMigrationDisabled {
+		if err := blockDB.Migrate(); err != nil {
+			return nil, err
+		}
+	}
+	return blockDB, nil
 }
 
 func (vm *VM) inspectDatabases() error {
 	start := time.Now()
 	log.Info("Starting database inspection")
 	if err := rawdb.InspectDatabase(vm.chaindb, nil, nil); err != nil {
+		return err
+	}
+	if err := inspectDB(vm.acceptedBlockDB, "acceptedBlockDB"); err != nil {
 		return err
 	}
 	if err := inspectDB(vm.acceptedBlockDB, "acceptedBlockDB"); err != nil {
