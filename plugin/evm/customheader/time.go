@@ -29,6 +29,7 @@ var (
 )
 
 // GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
+// This can return the parent time if now is before the parent time and TimeMilliseconds is not set (pre-Granite).
 func GetNextTimestamp(parent *types.Header, now time.Time) time.Time {
 	parentExtra := customtypes.GetHeaderExtra(parent)
 	// In Granite, there is a minimum delay enforced, so we cannot adjust the time with the parent's timestamp.
@@ -61,7 +62,8 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 	parentTimeMS := customtypes.HeaderTimeMilliseconds(parent)
 
 	// Verify the header's timestamp is not earlier than parent's
-	// it does include equality(==), so multiple blocks per second is ok
+	// This includes equality(==), so multiple blocks per milliseconds is ok
+	// pre-Granite.
 	if headerTimeMS < parentTimeMS {
 		return fmt.Errorf("%w: %d < parent %d", errBlockTooOld, headerTimeMS, parentTimeMS)
 	}
