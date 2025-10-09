@@ -32,16 +32,19 @@ const (
 	SendWarpMessageGasCost uint64 = contract.LogGas + 3*contract.LogTopicGas + AddWarpMessageGasCost + contract.WriteGasCostPerSlot
 	// SendWarpMessageGasCostPerByte cost accounts for producing a signed message of a given size
 	SendWarpMessageGasCostPerByte uint64 = contract.LogDataGas
+)
 
-	// Warp gas costs before Granite activation
-	preGraniteGasCostPerWarpSigner            uint64 = 500
-	preGraniteGasCostPerWarpMessageChunk      uint64 = 3_200
-	preGraniteGasCostPerSignatureVerification uint64 = 200_000
-
-	// Granite gas costs
-	graniteGasCostPerWarpSigner            uint64 = 250
-	graniteGasCostPerWarpMessageChunk      uint64 = 3_200
-	graniteGasCostPerSignatureVerification uint64 = 100_000
+var (
+	preGraniteGasConfig = GasConfig{
+		PerWarpSigner:            500,
+		PerWarpMessageChunk:      3_200,
+		PerSignatureVerification: 200_000,
+	}
+	graniteGasConfig = GasConfig{
+		PerWarpSigner:            250,
+		PerWarpMessageChunk:      3_200,
+		PerSignatureVerification: 100_000,
+	}
 )
 
 type GasConfig struct {
@@ -363,20 +366,8 @@ func createWarpPrecompile() contract.StatefulPrecompiledContract {
 func CurrentGasConfig(rules precompileconfig.Rules) GasConfig {
 	switch {
 	case rules.IsGraniteActivated():
-		return GasConfig{
-			PerWarpSigner:            graniteGasCostPerWarpSigner,
-			PerWarpMessageChunk:      graniteGasCostPerWarpMessageChunk,
-			PerSignatureVerification: graniteGasCostPerSignatureVerification,
-		}
+		return graniteGasConfig
 	default:
-		return GasConfig{
-			PerWarpSigner:            preGraniteGasCostPerWarpSigner,
-			PerWarpMessageChunk:      preGraniteGasCostPerWarpMessageChunk,
-			PerSignatureVerification: preGraniteGasCostPerSignatureVerification,
-		}
+		return preGraniteGasConfig
 	}
-}
-
-func (g GasConfig) PredicateGasCost(chunks int, signers int) uint64 {
-	return g.PerSignatureVerification + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
 }

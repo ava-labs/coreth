@@ -53,8 +53,7 @@ var (
 	testVdrs    []*testValidator
 	vdrs        map[ids.NodeID]*validators.GetValidatorOutput
 
-	graniteRules     = extrastest.ForkToAvalancheRules(upgradetest.Granite)
-	graniteGasConfig = CurrentGasConfig(graniteRules)
+	graniteRules = extrastest.ForkToAvalancheRules(upgradetest.Granite)
 )
 
 func init() {
@@ -134,6 +133,10 @@ func newTestValidator() *testValidator {
 			NodeIDs:        []ids.NodeID{nodeID},
 		},
 	}
+}
+
+func (g GasConfig) PredicateGasCost(chunks int, signers int) uint64 {
+	return g.PerSignatureVerification + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
 }
 
 // createWarpMessage constructs a signed warp message using the global variable [unsignedMsg]
