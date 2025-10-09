@@ -42,9 +42,9 @@ var (
 		PerWarpMessageByte:  contract.LogDataGas,
 	}
 	graniteGasConfig = GasConfig{
-		GetBlockchainID: 300,
+		GetBlockchainID: 200,
 
-		GetVerifiedWarpMessageBase: 800,
+		GetVerifiedWarpMessageBase: 750,
 		PerWarpSigner:              250,
 		PerWarpMessageChunk:        512, // matches call data byte cost
 		PerSignatureVerification:   125_000,
