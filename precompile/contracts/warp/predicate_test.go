@@ -135,6 +135,14 @@ func newTestValidator() *testValidator {
 	}
 }
 
+func (g GasConfig) GetVerifiedWarpMessageCost(chunks int) uint64 {
+	return g.GetVerifiedWarpMessageBase + uint64(chunks)*g.PerWarpMessageChunk
+}
+
+func (g GasConfig) SendWarpMessageCost(bytes int) uint64 {
+	return g.SendWarpMessageBase + uint64(bytes)*g.PerWarpMessageByte
+}
+
 func (g GasConfig) PredicateGasCost(chunks int, signers int) uint64 {
 	return g.PerSignatureVerification + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
 }

@@ -17,6 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/modules"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -56,8 +57,7 @@ type PrecompileTest struct {
 	// If nil, the default chain config will be used.
 	ChainConfig precompileconfig.ChainConfig
 	// Rules is the rules to use for the precompile's block context
-	// If nil, the default rules will be used.
-	Rules precompileconfig.Rules
+	Rules extras.AvalancheRules
 }
 
 type PrecompileRunparams struct {
