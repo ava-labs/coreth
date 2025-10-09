@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/precompile/precompiletest"
@@ -231,7 +232,13 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 	return snowCtx
 }
 
-func createValidPredicateTest(snowCtx *snow.Context, numKeys int, predicate predicate.Predicate) precompiletest.PredicateTest {
+func createValidPredicateTest(
+	snowCtx *snow.Context,
+	numKeys int,
+	predicate predicate.Predicate,
+	rules extras.AvalancheRules,
+) precompiletest.PredicateTest {
+	gasCost := CurrentGasConfig(rules)
 	return precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
 		PredicateContext: &precompileconfig.PredicateContext{
@@ -241,8 +248,8 @@ func createValidPredicateTest(snowCtx *snow.Context, numKeys int, predicate pred
 			},
 		},
 		Predicate:   predicate,
-		Rules:       graniteRules,
-		Gas:         graniteGasConfig.PredicateGasCost(len(predicate), numKeys),
+		Rules:       rules,
+		Gas:         gasCost.PredicateGasCost(len(predicate), numKeys),
 		GasErr:      nil,
 		ExpectedErr: nil,
 	}
@@ -500,8 +507,7 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 		},
 	})
 
-	tests := make(map[string]precompiletest.PredicateTest)
-	for _, numSigners := range []int{
+	allNumSigners := []int{
 		1,
 		int(WarpDefaultQuorumNumerator) - 1,
 		int(WarpDefaultQuorumNumerator),
@@ -509,7 +515,9 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 		int(WarpQuorumDenominator) - 1,
 		int(WarpQuorumDenominator),
 		int(WarpQuorumDenominator) + 1,
-	} {
+	}
+	tests := make([]precompiletest.PredicateTest, len(allNumSigners))
+	for i, numSigners := range allNumSigners {
 		pred := createPredicate(numSigners)
 		// The predicate is valid iff the number of signers is >= the required numerator and does not exceed the denominator.
 		var expectedErr error
@@ -519,7 +527,8 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 			expectedErr = errFailedVerification
 		}
 
-		tests[fmt.Sprintf("default quorum %d signature(s)", numSigners)] = precompiletest.PredicateTest{
+		tests[i] = precompiletest.PredicateTest{
+			Name:   fmt.Sprintf("default quorum %d signature(s)", numSigners),
 			Config: NewDefaultConfig(utils.NewUint64(0)),
 			PredicateContext: &precompileconfig.PredicateContext{
 				SnowCtx: snowCtx,
@@ -548,7 +557,7 @@ func TestWarpMultiplePredicates(t *testing.T) {
 		},
 	})
 
-	tests := make(map[string]precompiletest.PredicateTest)
+	var tests []precompiletest.PredicateTest
 	for _, validMessageIndices := range [][]bool{
 		{},
 		{true, false},
@@ -578,7 +587,8 @@ func TestWarpMultiplePredicates(t *testing.T) {
 				expectedErr = errFailedVerification
 			}
 
-			tests[fmt.Sprintf("multiple predicates %v", validMessageIndices)] = precompiletest.PredicateTest{
+			tests = append(tests, precompiletest.PredicateTest{
+				Name:   fmt.Sprintf("multiple predicates %v", validMessageIndices),
 				Config: NewDefaultConfig(utils.NewUint64(0)),
 				PredicateContext: &precompileconfig.PredicateContext{
 					SnowCtx: snowCtx,
@@ -591,7 +601,7 @@ func TestWarpMultiplePredicates(t *testing.T) {
 				Gas:         expectedGas,
 				GasErr:      nil,
 				ExpectedErr: expectedErr,
-			}
+			})
 		}
 	}
 	precompiletest.RunPredicateTests(t, tests)
@@ -607,12 +617,19 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 		},
 	})
 
-	tests := make(map[string]precompiletest.PredicateTest)
 	nonDefaultQuorumNumerator := 50
-	// Ensure this test fails if the DefaultQuroumNumerator is changed to an unexpected value during development
+	// Ensure this test fails if the DefaultQuorumNumerator is changed to an
+	// unexpected value during development
 	require.NotEqual(t, nonDefaultQuorumNumerator, int(WarpDefaultQuorumNumerator))
-	// Add cases with default quorum
-	for _, numSigners := range []int{nonDefaultQuorumNumerator, nonDefaultQuorumNumerator + 1, 99, 100, 101} {
+	allNumSigners := []int{
+		nonDefaultQuorumNumerator,
+		nonDefaultQuorumNumerator + 1,
+		99,
+		100,
+		101,
+	}
+	tests := make([]precompiletest.PredicateTest, len(allNumSigners))
+	for i, numSigners := range allNumSigners {
 		pred := createPredicate(numSigners)
 		// The predicate is valid iff the number of signers is >= the required numerator and does not exceed the denominator.
 		var expectedErr error
@@ -622,8 +639,8 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 			expectedErr = errFailedVerification
 		}
 
-		name := fmt.Sprintf("non-default quorum %d signature(s)", numSigners)
-		tests[name] = precompiletest.PredicateTest{
+		tests[i] = precompiletest.PredicateTest{
+			Name:   fmt.Sprintf("non-default quorum %d signature(s)", numSigners),
 			Config: NewConfig(utils.NewUint64(0), uint64(nonDefaultQuorumNumerator), false),
 			PredicateContext: &precompileconfig.PredicateContext{
 				SnowCtx: snowCtx,
@@ -652,6 +669,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 		expectedGas = graniteGasConfig.PredicateGasCost(len(pred), 0)
 	)
 	noValidators := precompiletest.PredicateTest{
+		Name:   "no_validators",
 		Config: config,
 		PredicateContext: &precompileconfig.PredicateContext{
 			SnowCtx:            createSnowCtx(t, nil /*=validators*/), // No validators in state
@@ -664,6 +682,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 		ExpectedErr: bls.ErrNoPublicKeys,
 	}
 	weightOverflow := precompiletest.PredicateTest{
+		Name:   "weight_overflow",
 		Config: config,
 		PredicateContext: &precompileconfig.PredicateContext{
 			SnowCtx: createSnowCtx(t, []validatorRange{
@@ -682,17 +701,16 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 		GasErr:      nil,
 		ExpectedErr: safemath.ErrOverflow,
 	}
-	precompiletest.RunPredicateTests(t, map[string]precompiletest.PredicateTest{
-		"no_validators":   noValidators,
-		"weight_overflow": weightOverflow,
+	precompiletest.RunPredicateTests(t, []precompiletest.PredicateTest{
+		noValidators,
+		weightOverflow,
 	})
 }
 
-func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTest {
-	predicateTests := make(map[string]precompiletest.PredicateTest)
-	for _, totalNodes := range []int{10, 100, 1_000, 10_000} {
-		testName := fmt.Sprintf("%d signers/%d validators", totalNodes, totalNodes)
-
+func makeWarpPredicateTests(tb testing.TB, rules extras.AvalancheRules) []precompiletest.PredicateTest {
+	allTotalNodes := []int{10, 100, 1_000, 10_000}
+	tests := make([]precompiletest.PredicateTest, len(allTotalNodes))
+	for i, totalNodes := range allTotalNodes {
 		pred := createPredicate(totalNodes)
 		snowCtx := createSnowCtx(tb, []validatorRange{
 			{
@@ -702,13 +720,13 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 				publicKey: true,
 			},
 		})
-		predicateTests[testName] = createValidPredicateTest(snowCtx, totalNodes, pred)
+		test := createValidPredicateTest(snowCtx, totalNodes, pred, rules)
+		test.Name = fmt.Sprintf("%d signers/%d validators", totalNodes, totalNodes)
+		tests[i] = test
 	}
 
 	numSigners := 10
 	for _, totalNodes := range []int{100, 1_000, 10_000} {
-		testName := fmt.Sprintf("%d signers (heavily weighted)/%d validators", numSigners, totalNodes)
-
 		pred := createPredicate(numSigners)
 		snowCtx := createSnowCtx(tb, []validatorRange{
 			{
@@ -724,12 +742,12 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 				publicKey: true,
 			},
 		})
-		predicateTests[testName] = createValidPredicateTest(snowCtx, numSigners, pred)
+		test := createValidPredicateTest(snowCtx, numSigners, pred, rules)
+		test.Name = fmt.Sprintf("%d signers (heavily weighted)/%d validators", numSigners, totalNodes)
+		tests = append(tests, test)
 	}
 
 	for _, totalNodes := range []int{100, 1_000, 10_000} {
-		testName := fmt.Sprintf("%d signers (heavily weighted)/%d validators (non-signers without registered PublicKey)", numSigners, totalNodes)
-
 		pred := createPredicate(numSigners)
 		snowCtx := createSnowCtx(tb, []validatorRange{
 			{
@@ -745,12 +763,12 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 				publicKey: false,
 			},
 		})
-		predicateTests[testName] = createValidPredicateTest(snowCtx, numSigners, pred)
+		test := createValidPredicateTest(snowCtx, numSigners, pred, rules)
+		test.Name = fmt.Sprintf("%d signers (heavily weighted)/%d validators (non-signers without registered PublicKey)", numSigners, totalNodes)
+		tests = append(tests, test)
 	}
 
 	for _, totalNodes := range []int{100, 1_000, 10_000} {
-		testName := fmt.Sprintf("%d validators w/ %d signers/repeated PublicKeys", totalNodes, numSigners)
-
 		pred := createPredicate(numSigners)
 		validatorSet := make(map[ids.NodeID]*validators.GetValidatorOutput, totalNodes)
 		for i := 0; i < totalNodes; i++ {
@@ -773,17 +791,35 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 			},
 		}
 
-		predicateTests[testName] = createValidPredicateTest(snowCtx, numSigners, pred)
+		test := createValidPredicateTest(snowCtx, numSigners, pred, rules)
+		test.Name = fmt.Sprintf("%d validators w/ %d signers/repeated PublicKeys", totalNodes, numSigners)
+		tests = append(tests, test)
 	}
-	return predicateTests
+	return tests
 }
 
 func TestWarpPredicate(t *testing.T) {
-	predicateTests := makeWarpPredicateTests(t)
-	precompiletest.RunPredicateTests(t, predicateTests)
+	t.Run("pre_granite", func(t *testing.T) {
+		predicateTests := makeWarpPredicateTests(t, extras.AvalancheRules{})
+		precompiletest.RunPredicateTests(t, predicateTests)
+	})
+	t.Run("granite", func(t *testing.T) {
+		predicateTests := makeWarpPredicateTests(t, extras.AvalancheRules{
+			IsGranite: true,
+		})
+		precompiletest.RunPredicateTests(t, predicateTests)
+	})
 }
 
 func BenchmarkWarpPredicate(b *testing.B) {
-	predicateTests := makeWarpPredicateTests(b)
-	precompiletest.RunPredicateBenchmarks(b, predicateTests)
+	b.Run("pre_granite", func(b *testing.B) {
+		predicateTests := makeWarpPredicateTests(b, extras.AvalancheRules{})
+		precompiletest.RunPredicateBenchmarks(b, predicateTests)
+	})
+	b.Run("granite", func(b *testing.B) {
+		predicateTests := makeWarpPredicateTests(b, extras.AvalancheRules{
+			IsGranite: true,
+		})
+		precompiletest.RunPredicateBenchmarks(b, predicateTests)
+	})
 }
