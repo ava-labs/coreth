@@ -24,6 +24,7 @@ import (
 
 // PrecompileTest is a test case for a precompile
 type PrecompileTest struct {
+	Name string
 	// Caller is the address of the precompile caller
 	Caller common.Address
 	// Input the raw input bytes to the precompile
@@ -205,21 +206,21 @@ func (test PrecompileTest) setup(t testing.TB, module modules.Module, state *tes
 	}
 }
 
-func RunPrecompileTests(t *testing.T, module modules.Module, contractTests map[string]PrecompileTest) {
+func RunPrecompileTests(t *testing.T, module modules.Module, tests []PrecompileTest) {
 	t.Helper()
 
-	for name, test := range contractTests {
-		t.Run(name, func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
 			test.Run(t, module)
 		})
 	}
 }
 
-func RunPrecompileBenchmarks(b *testing.B, module modules.Module, contractTests map[string]PrecompileTest) {
+func RunPrecompileBenchmarks(b *testing.B, module modules.Module, tests []PrecompileTest) {
 	b.Helper()
 
-	for name, test := range contractTests {
-		b.Run(name, func(b *testing.B) {
+	for _, test := range tests {
+		b.Run(test.Name, func(b *testing.B) {
 			test.Bench(b, module)
 		})
 	}
