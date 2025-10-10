@@ -26,7 +26,7 @@ import (
 )
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
-	r := rand.New(rand.NewSource(1))
+	r := rand.New(rand.NewSource(1)) //nolint:gosec
 	testHandlerStats := &statstest.TestHandlerStats{}
 	memdb := rawdb.NewMemoryDatabase()
 	trieDB := triedb.NewDatabase(memdb, nil)
@@ -35,7 +35,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	tr, err := trie.New(trie.TrieID(corruptedTrieRoot), trieDB)
 	require.NoError(t, err)
 	// Corrupt [corruptedTrieRoot]
-	statesynctest.CorruptTrie(t, memdb, tr, 5)
+	statesynctest.CorruptTrie(t, memdb, tr, 2)
 
 	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, r, trieDB, 10_000, common.HashLength)
 	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, r, trieDB, 500, common.HashLength)

@@ -119,7 +119,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	require := require.New(t)
 	reqCount := 0
 	test := SyncTestParams{
-		SyncableInterval:   256,
+		SyncableInterval:   vmsync.BlocksToFetch,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		SyncMode:           block.StateSyncStatic,
 		responseIntercept: func(syncerVM extension.InnerVM, nodeID ids.NodeID, requestID uint32, response []byte) {
@@ -127,8 +127,8 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 			defer lock.Unlock()
 
 			reqCount++
-			// Fail all requests after number 50 to interrupt the sync
-			if reqCount > 50 {
+			// Fail all requests after number 5 to interrupt the sync
+			if reqCount > 5 {
 				if err := syncerVM.AppRequestFailed(context.Background(), nodeID, requestID, commonEng.ErrTimeout); err != nil {
 					panic(err)
 				}
@@ -251,7 +251,7 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 	)
 	reqCount := 0
 	test := SyncTestParams{
-		SyncableInterval:   256,
+		SyncableInterval:   vmsync.BlocksToFetch,
 		StateSyncMinBlocks: 50, // must be less than [syncableInterval] to perform sync
 		SyncMode:           block.StateSyncStatic,
 		responseIntercept: func(syncerVM extension.InnerVM, nodeID ids.NodeID, requestID uint32, response []byte) {
@@ -259,11 +259,11 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 			defer lock.Unlock()
 
 			reqCount++
-			// Shutdown the VM after 50 requests to interrupt the sync
-			if reqCount == 50 {
+			// Shutdown the VM after 5 requests to interrupt the sync
+			if reqCount == 5 {
 				// Note this verifies the VM shutdown does not time out while syncing.
 				require.NoError(t, testSyncVMSetup.syncerVM.shutdownOnceSyncerVM.Shutdown(context.Background()))
-			} else if reqCount < 50 {
+			} else if reqCount < 5 {
 				require.NoError(t, syncerVM.AppResponse(context.Background(), nodeID, requestID, response))
 			}
 		},
@@ -312,7 +312,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	generateAndAcceptBlocks(t, serverVM, numBlocks, testSetup.GenFn, nil, cb)
 
 	// make some accounts
-	r := rand.New(rand.NewSource(1))
+	r := rand.New(rand.NewSource(1)) //nolint:gosec
 	root, accounts := statesynctest.FillAccountsWithOverlappingStorage(t, r, serverVM.Ethereum().BlockChain().TrieDB(), types.EmptyRootHash, 1000, 16)
 
 	// patch serverVM's lastAcceptedBlock to have the new root

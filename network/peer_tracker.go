@@ -5,7 +5,6 @@ package network
 
 import (
 	"math"
-	"math/rand"
 	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -13,6 +12,8 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
+
+	"github.com/ava-labs/coreth/utils/rand"
 
 	safemath "github.com/ava-labs/avalanchego/utils/math"
 )
@@ -76,7 +77,7 @@ func (p *peerTracker) shouldTrackNewPeer() bool {
 		return false
 	}
 	newPeerProbability := math.Exp(-float64(numResponsivePeers) * newPeerConnectFactor)
-	return rand.Float64() < newPeerProbability
+	return rand.SecureFloat64() < newPeerProbability
 }
 
 // getResponsivePeer returns a random [ids.NodeID] of a peer that has responded
@@ -115,7 +116,7 @@ func (p *peerTracker) GetAnyPeer(minVersion *version.Application) (ids.NodeID, b
 		random   bool
 		averager safemath.Averager
 	)
-	if rand.Float64() < randomPeerProbability {
+	if rand.SecureFloat64() < randomPeerProbability {
 		random = true
 		nodeID, averager, ok = p.getResponsivePeer()
 	} else {
