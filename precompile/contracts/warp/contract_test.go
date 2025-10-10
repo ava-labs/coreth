@@ -76,7 +76,7 @@ func TestGetBlockchainID(t *testing.T) {
 			},
 			SuppliedGas: GetBlockchainIDGasCost - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 	}
 
@@ -110,21 +110,21 @@ func TestSendWarpMessage(t *testing.T) {
 			InputFn:     func(testing.TB) []byte { return sendWarpMessageInput },
 			SuppliedGas: SendWarpMessageGasCost + uint64(len(sendWarpMessageInput[4:])*int(SendWarpMessageGasCostPerByte)),
 			ReadOnly:    true,
-			ExpectedErr: vm.ErrWriteProtection.Error(),
+			ExpectedErr: vm.ErrWriteProtection,
 		},
 		"send warp message insufficient gas for first step": {
 			Caller:      callerAddr,
 			InputFn:     func(testing.TB) []byte { return sendWarpMessageInput },
 			SuppliedGas: SendWarpMessageGasCost - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 		"send warp message insufficient gas for payload bytes": {
 			Caller:      callerAddr,
 			InputFn:     func(testing.TB) []byte { return sendWarpMessageInput },
 			SuppliedGas: SendWarpMessageGasCost + uint64(len(sendWarpMessageInput[4:])*int(SendWarpMessageGasCostPerByte)) - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 		"send warp message invalid input": {
 			Caller: callerAddr,
@@ -133,7 +133,7 @@ func TestSendWarpMessage(t *testing.T) {
 			},
 			SuppliedGas: SendWarpMessageGasCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidSendInput.Error(),
+			ExpectedErr: errInvalidSendInput,
 		},
 		"send warp message success": {
 			Caller:      callerAddr,
@@ -380,7 +380,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 		"get message out of gas": {
 			Caller:     callerAddr,
@@ -392,7 +392,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)) - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 		"get message invalid predicate packing": {
 			Caller:     callerAddr,
@@ -404,7 +404,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidPackedPredicate)),
 			ReadOnly:    false,
-			ExpectedErr: errInvalidPredicateBytes.Error(),
+			ExpectedErr: errInvalidPredicateBytes,
 		},
 		"get message invalid warp message": {
 			Caller:     callerAddr,
@@ -416,7 +416,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidWarpMsgPredicate)),
 			ReadOnly:    false,
-			ExpectedErr: errInvalidWarpMsg.Error(),
+			ExpectedErr: errInvalidWarpMsg,
 		},
 		"get message invalid addressed payload": {
 			Caller:     callerAddr,
@@ -428,7 +428,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidAddressedPredicate)),
 			ReadOnly:    false,
-			ExpectedErr: errInvalidAddressedPayload.Error(),
+			ExpectedErr: errInvalidAddressedPayload,
 		},
 		"get message index invalid uint32": {
 			Caller: callerAddr,
@@ -438,7 +438,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidIndexInput.Error(),
+			ExpectedErr: errInvalidIndexInput,
 		},
 		"get message index invalid int32": {
 			Caller: callerAddr,
@@ -450,7 +450,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidIndexInput.Error(),
+			ExpectedErr: errInvalidIndexInput,
 		},
 		"get message invalid index input bytes": {
 			Caller: callerAddr,
@@ -462,7 +462,7 @@ func TestGetVerifiedWarpMessage(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidIndexInput.Error(),
+			ExpectedErr: errInvalidIndexInput,
 		},
 		"get message success granite": {
 			Caller:     callerAddr,
@@ -791,7 +791,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 		"get message out of gas": {
 			Caller:     callerAddr,
@@ -803,7 +803,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(warpMessagePredicate)) - 1,
 			ReadOnly:    false,
-			ExpectedErr: vm.ErrOutOfGas.Error(),
+			ExpectedErr: vm.ErrOutOfGas,
 		},
 		"get message invalid predicate packing": {
 			Caller:     callerAddr,
@@ -815,7 +815,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidPackedPredicate)),
 			ReadOnly:    false,
-			ExpectedErr: errInvalidPredicateBytes.Error(),
+			ExpectedErr: errInvalidPredicateBytes,
 		},
 		"get message invalid warp message": {
 			Caller:     callerAddr,
@@ -827,7 +827,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidWarpMsgPredicate)),
 			ReadOnly:    false,
-			ExpectedErr: errInvalidWarpMsg.Error(),
+			ExpectedErr: errInvalidWarpMsg,
 		},
 		"get message invalid block hash payload": {
 			Caller:     callerAddr,
@@ -839,7 +839,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost + preGraniteGasConfig.PerWarpMessageChunk*uint64(len(invalidHashPredicate)),
 			ReadOnly:    false,
-			ExpectedErr: errInvalidBlockHashPayload.Error(),
+			ExpectedErr: errInvalidBlockHashPayload,
 		},
 		"get message index invalid uint32": {
 			Caller: callerAddr,
@@ -849,7 +849,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidIndexInput.Error(),
+			ExpectedErr: errInvalidIndexInput,
 		},
 		"get message index invalid int32": {
 			Caller: callerAddr,
@@ -861,7 +861,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidIndexInput.Error(),
+			ExpectedErr: errInvalidIndexInput,
 		},
 		"get message invalid index input bytes": {
 			Caller: callerAddr,
@@ -873,7 +873,7 @@ func TestGetVerifiedWarpBlockHash(t *testing.T) {
 			Rules:       extras.AvalancheRules{IsGranite: false},
 			SuppliedGas: GetVerifiedWarpMessageBaseCost,
 			ReadOnly:    false,
-			ExpectedErr: errInvalidIndexInput.Error(),
+			ExpectedErr: errInvalidIndexInput,
 		},
 		"get message success granite": {
 			Caller:     callerAddr,
