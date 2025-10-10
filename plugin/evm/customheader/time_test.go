@@ -240,7 +240,7 @@ func TestVerifyTime(t *testing.T) {
 				utils.NewUint64(0),
 			),
 			parentHeader: generateHeaderWithMinDelayExcessAndTime(
-				timeSeconds-1,
+				timeSeconds,
 				utils.NewUint64(timeMillis-1), // 1ms delay, meets zero requirement
 				utils.NewUint64(0),            // Parent has zero delay excess
 			),

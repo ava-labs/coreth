@@ -33,6 +33,7 @@ var (
 func GetNextTimestamp(parent *types.Header, now time.Time) time.Time {
 	parentExtra := customtypes.GetHeaderExtra(parent)
 	// In Granite, there is a minimum delay enforced, so we cannot adjust the time with the parent's timestamp.
+	// Instead we should have waited enough time before calling this function and before the block building.
 	// We return the current time instead regardless and defer the verification to VerifyTime.
 	if parent.Time < uint64(now.Unix()) || parentExtra.TimeMilliseconds != nil {
 		return now
