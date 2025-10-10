@@ -15,6 +15,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/tests/fixture/e2e"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
 	"github.com/ava-labs/avalanchego/utils/constants"
@@ -36,7 +37,6 @@ import (
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/tests/utils"
 
-	avalanchevalidators "github.com/ava-labs/avalanchego/snow/validators"
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	warpBackend "github.com/ava-labs/coreth/warp"
 	ethereum "github.com/ava-labs/libevm"
@@ -335,16 +335,16 @@ func (w *warpTest) aggregateSignaturesViaAPI() {
 	// If the source subnet is the Primary Network, then we only need to aggregate signatures from the receiving
 	// subnet's validator set instead of the entire Primary Network.
 	// If the destination turns out to be the Primary Network as well, then this is a no-op.
-	var validators map[ids.NodeID]*avalanchevalidators.GetValidatorOutput
+	var vdrs map[ids.NodeID]*validators.GetValidatorOutput
 	if w.sendingSubnet.SubnetID == constants.PrimaryNetworkID {
-		validators, err = pChainClient.GetValidatorsAt(ctx, w.receivingSubnet.SubnetID, api.Height(pChainHeight))
+		vdrs, err = pChainClient.GetValidatorsAt(ctx, w.receivingSubnet.SubnetID, api.Height(pChainHeight))
 	} else {
-		validators, err = pChainClient.GetValidatorsAt(ctx, w.sendingSubnet.SubnetID, api.Height(pChainHeight))
+		vdrs, err = pChainClient.GetValidatorsAt(ctx, w.sendingSubnet.SubnetID, api.Height(pChainHeight))
 	}
 	require.NoError(err)
-	require.NotEmpty(validators)
+	require.NotEmpty(vdrs)
 
-	warpValidators, err := avalanchevalidators.FlattenValidatorSet(validators)
+	warpValidators, err := validators.FlattenValidatorSet(vdrs)
 	require.NoError(err)
 	require.NotEmpty(warpValidators)
 
