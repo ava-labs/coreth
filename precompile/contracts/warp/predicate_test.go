@@ -218,6 +218,10 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 			validatorSet[testVdrs[i].nodeID] = validatorOutput
 		}
 	}
+
+	// Because the warp validator set is pre-calculated after Granite, we avoid
+	// flattening in GetWarpValidatorSet to provide more accurate benchmark
+	// results.
 	warpValidators, warpValidatorsErr := validators.FlattenValidatorSet(validatorSet)
 
 	snowCtx := snowtest.Context(tb, snowtest.CChainID)
