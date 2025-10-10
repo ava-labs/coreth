@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -54,7 +55,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
+//go:generate go tool -modfile=../tools/go.mod gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 
@@ -325,8 +326,8 @@ func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Blo
 			headerExtra.TimeMilliseconds = new(uint64)
 			*headerExtra.TimeMilliseconds = g.Timestamp * 1000
 
-			headerExtra.MinDelayExcess = new(uint64)
-			*headerExtra.MinDelayExcess = 0 // TODO: decide whether we want this to be configurable by genesis/chainconfig
+			headerExtra.MinDelayExcess = new(acp226.DelayExcess)
+			*headerExtra.MinDelayExcess = acp226.InitialDelayExcess
 		}
 	}
 

@@ -6,7 +6,9 @@ package customtypes
 import (
 	"math/big"
 	"slices"
+	"time"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 
@@ -138,10 +140,10 @@ func BlockTimeMilliseconds(b *ethtypes.Block) *uint64 {
 	return time
 }
 
-func BlockMinDelayExcess(b *ethtypes.Block) *uint64 {
-	var excess *uint64
+func BlockMinDelayExcess(b *ethtypes.Block) *acp226.DelayExcess {
+	var excess *acp226.DelayExcess
 	if e := GetHeaderExtra(b.Header()).MinDelayExcess; e != nil {
-		excess = new(uint64)
+		excess = new(acp226.DelayExcess)
 		*excess = *e
 	}
 	return excess
@@ -152,6 +154,13 @@ func CalcExtDataHash(extdata []byte) common.Hash {
 		return EmptyExtDataHash
 	}
 	return ethtypes.RLPHash(extdata)
+}
+
+func BlockTime(eth *ethtypes.Header) time.Time {
+	if t := GetHeaderExtra(eth).TimeMilliseconds; t != nil {
+		return time.UnixMilli(int64(*t))
+	}
+	return time.Unix(int64(eth.Time), 0)
 }
 
 func NewBlockWithExtData(

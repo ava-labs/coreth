@@ -141,9 +141,9 @@ func testSendWarpMessage(t *testing.T, scheme string) {
 
 	// Verify the signature cannot be fetched before the block is accepted
 	_, err = vm.warpBackend.GetMessageSignature(context.TODO(), unsignedMessage)
-	require.Error(err)
+	require.ErrorContains(err, "unknown payload type")
 	_, err = vm.warpBackend.GetBlockSignature(context.TODO(), blk.ID())
-	require.Error(err)
+	require.ErrorContains(err, "failed to get block")
 
 	require.NoError(vm.SetPreference(context.Background(), blk.ID()))
 	require.NoError(blk.Accept(context.Background()))
@@ -343,22 +343,29 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return ids.Empty, nil
 		},
-		GetValidatorSetF: func(_ context.Context, height uint64, _ ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		GetWarpValidatorSetF: func(_ context.Context, height uint64, _ ids.ID) (validators.WarpSet, error) {
 			if height < minimumValidPChainHeight {
-				return nil, getValidatorSetTestErr
+				return validators.WarpSet{}, getValidatorSetTestErr
 			}
-			return map[ids.NodeID]*validators.GetValidatorOutput{
-				nodeID1: {
-					NodeID:    nodeID1,
-					PublicKey: blsPublicKey1,
-					Weight:    50,
+			vdrs := validators.WarpSet{
+				Validators: []*validators.Warp{
+					{
+						PublicKey:      blsPublicKey1,
+						PublicKeyBytes: bls.PublicKeyToUncompressedBytes(blsPublicKey1),
+						Weight:         50,
+						NodeIDs:        []ids.NodeID{nodeID1},
+					},
+					{
+						PublicKey:      blsPublicKey2,
+						PublicKeyBytes: bls.PublicKeyToUncompressedBytes(blsPublicKey2),
+						Weight:         50,
+						NodeIDs:        []ids.NodeID{nodeID2},
+					},
 				},
-				nodeID2: {
-					NodeID:    nodeID2,
-					PublicKey: blsPublicKey2,
-					Weight:    50,
-				},
-			}, nil
+				TotalWeight: 100,
+			}
+			avagoUtils.Sort(vdrs.Validators)
+			return vdrs, nil
 		},
 	}
 
@@ -451,7 +458,7 @@ func testWarpVMTransaction(t *testing.T, scheme string, unsignedMessage *avalanc
 	require.NoError(err)
 	unmarshalResults := make(map[string]interface{})
 	require.NoError(json.Unmarshal(blockTxTraceResultBytes, &unmarshalResults))
-	require.Equal("", unmarshalResults["returnValue"])
+	require.Empty(unmarshalResults["returnValue"])
 
 	txTraceResult, err := tracerAPI.TraceTransaction(context.Background(), tx.Hash(), nil)
 	require.NoError(err)
@@ -645,24 +652,28 @@ func testReceiveWarpMessage(
 			}
 			return vm.ctx.SubnetID, nil
 		},
-		GetValidatorSetF: func(_ context.Context, height uint64, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		GetWarpValidatorSetF: func(_ context.Context, height uint64, subnetID ids.ID) (validators.WarpSet, error) {
 			if height < minimumValidPChainHeight {
-				return nil, getValidatorSetTestErr
+				return validators.WarpSet{}, getValidatorSetTestErr
 			}
 			signers := subnetSigners
 			if subnetID == constants.PrimaryNetworkID {
 				signers = primarySigners
 			}
 
-			vdrOutput := make(map[ids.NodeID]*validators.GetValidatorOutput)
+			vdrs := validators.WarpSet{}
 			for _, s := range signers {
-				vdrOutput[s.nodeID] = &validators.GetValidatorOutput{
-					NodeID:    s.nodeID,
-					PublicKey: s.secret.PublicKey(),
-					Weight:    s.weight,
-				}
+				pk := s.secret.PublicKey()
+				vdrs.Validators = append(vdrs.Validators, &validators.Warp{
+					PublicKey:      pk,
+					PublicKeyBytes: bls.PublicKeyToUncompressedBytes(pk),
+					Weight:         s.weight,
+					NodeIDs:        []ids.NodeID{s.nodeID},
+				})
+				vdrs.TotalWeight += s.weight
 			}
-			return vdrOutput, nil
+			avagoUtils.Sort(vdrs.Validators)
+			return vdrs, nil
 		},
 	}
 
@@ -890,7 +901,6 @@ func testSignatureRequestsToVM(t *testing.T, scheme string) {
 
 			tvm.AppSender.SendAppErrorF = func(context.Context, ids.NodeID, uint32, int32, string) error {
 				calledSendAppErrorFn = true
-				require.ErrorIs(t, test.err, test.err)
 				return nil
 			}
 
@@ -902,7 +912,7 @@ func testSignatureRequestsToVM(t *testing.T, scheme string) {
 			// Send the app request and verify the response
 			deadline := time.Now().Add(60 * time.Second)
 			appErr := vm.Network.AppRequest(context.Background(), ids.GenerateTestNodeID(), 1, deadline, msg)
-			require.Nil(t, appErr)
+			require.NoError(t, appErr)
 
 			if test.err != nil {
 				require.True(t, calledSendAppErrorFn)
