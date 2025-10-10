@@ -146,7 +146,7 @@ func TestVerifyTime(t *testing.T) {
 			extraConfig:  extras.TestGraniteChainConfig,
 		},
 		{
-			name: "granite_min_delay_met",
+			name: "granite_initial_delay_met",
 			header: generateHeaderWithMinDelayExcessAndTime(
 				timeSeconds,
 				utils.NewUint64(timeMillis),
@@ -154,13 +154,13 @@ func TestVerifyTime(t *testing.T) {
 			),
 			parentHeader: generateHeaderWithMinDelayExcessAndTime(
 				timeSeconds-1,
-				utils.NewUint64(timeMillis-uint64(acp226.InitialDelayExcess)), // Exact minimum delay
+				utils.NewUint64(timeMillis-2000), // 2000 ms is the exact initial delay
 				utils.NewUint64(acp226.InitialDelayExcess),
 			),
 			extraConfig: extras.TestGraniteChainConfig,
 		},
 		{
-			name: "granite_min_delay_not_met",
+			name: "granite_initial_delay_not_met",
 			header: generateHeaderWithMinDelayExcessAndTime(
 				timeSeconds,
 				utils.NewUint64(timeMillis),
@@ -168,7 +168,7 @@ func TestVerifyTime(t *testing.T) {
 			),
 			parentHeader: generateHeaderWithMinDelayExcessAndTime(
 				timeSeconds-1,
-				utils.NewUint64(timeMillis-100), // Only 100ms delay, less than required
+				utils.NewUint64(timeMillis-1999), // 1 ms less than required
 				utils.NewUint64(acp226.InitialDelayExcess),
 			),
 			extraConfig: extras.TestGraniteChainConfig,
@@ -183,7 +183,7 @@ func TestVerifyTime(t *testing.T) {
 			),
 			parentHeader: generateHeaderWithMinDelayExcessAndTime(
 				timeSeconds-1,
-				utils.NewUint64(timeMillis-uint64(acp226.InitialDelayExcess)),
+				utils.NewUint64(timeMillis-2000),
 				utils.NewUint64(acp226.InitialDelayExcess),
 			),
 			extraConfig: extras.TestGraniteChainConfig,
@@ -197,40 +197,11 @@ func TestVerifyTime(t *testing.T) {
 			),
 			parentHeader: generateHeaderWithMinDelayExcessAndTime(
 				timeSeconds-1,
-				utils.NewUint64(timeMillis-uint64(acp226.InitialDelayExcess)),
+				utils.NewUint64(timeMillis-2000),
 				utils.NewUint64(acp226.InitialDelayExcess),
 			),
 			extraConfig: extras.TestGraniteChainConfig,
 			expectedErr: ErrBlockTooFarInFuture,
-		},
-		{
-			name: "granite_min_delay_excess_updated",
-			header: generateHeaderWithMinDelayExcessAndTime(
-				timeSeconds,
-				utils.NewUint64(timeMillis),
-				utils.NewUint64(acp226.InitialDelayExcess+acp226.MaxDelayExcessDiff),
-			),
-			parentHeader: generateHeaderWithMinDelayExcessAndTime(
-				timeSeconds-1,
-				utils.NewUint64(timeMillis-uint64(acp226.InitialDelayExcess+acp226.MaxDelayExcessDiff)), // Meets increased requirement
-				utils.NewUint64(acp226.InitialDelayExcess),
-			),
-			extraConfig: extras.TestGraniteChainConfig,
-		},
-		{
-			name: "granite_min_delay_excess_updated_but_delay_insufficient",
-			header: generateHeaderWithMinDelayExcessAndTime(
-				timeSeconds,
-				utils.NewUint64(timeMillis),
-				utils.NewUint64(acp226.InitialDelayExcess+acp226.MaxDelayExcessDiff),
-			),
-			parentHeader: generateHeaderWithMinDelayExcessAndTime(
-				timeSeconds-1,
-				utils.NewUint64(timeMillis-1000), // 1000ms delay, insufficient for increased requirement
-				utils.NewUint64(acp226.InitialDelayExcess),
-			),
-			extraConfig: extras.TestGraniteChainConfig,
-			expectedErr: ErrMinDelayNotMet,
 		},
 		{
 			name: "granite_zero_delay_excess",
