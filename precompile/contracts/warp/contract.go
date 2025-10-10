@@ -30,7 +30,7 @@ var (
 		GetVerifiedWarpMessageBase: 2,
 		PerWarpSigner:              500,
 		PerWarpMessageChunk:        3_200,
-		PerSignatureVerification:   200_000,
+		VerifyPredicateBase:        200_000,
 
 		// Sum of base log gas cost, cost of producing 3 topics, and
 		// producing + serving a BLS Signature (sign + trie write).
@@ -47,7 +47,7 @@ var (
 		GetVerifiedWarpMessageBase: 750,
 		PerWarpSigner:              250,
 		PerWarpMessageChunk:        512, // matches call data byte cost
-		PerSignatureVerification:   125_000,
+		VerifyPredicateBase:        125_000,
 
 		// Unchanged during Granite.
 		SendWarpMessageBase: preGraniteGasConfig.SendWarpMessageBase,
@@ -66,7 +66,7 @@ type GasConfig struct {
 	// Gas cost per chunk of the warp message (each chunk is 32 bytes)
 	PerWarpMessageChunk uint64
 	// Gas cost to verify a BLS signature
-	PerSignatureVerification uint64
+	VerifyPredicateBase uint64
 
 	// Base cost of entering sendWarpMessage
 	SendWarpMessageBase uint64

@@ -145,7 +145,7 @@ func (g GasConfig) SendWarpMessageCost(bytes int) uint64 {
 }
 
 func (g GasConfig) PredicateGasCost(chunks int, signers int) uint64 {
-	return g.PerSignatureVerification + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
+	return g.VerifyPredicateBase + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
 }
 
 // createWarpMessage constructs a signed warp message using the global variable [unsignedMsg]
