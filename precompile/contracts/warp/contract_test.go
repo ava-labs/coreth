@@ -10,6 +10,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow/snowtest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/precompile/contract"
 	"github.com/ava-labs/coreth/precompile/precompiletest"
 
@@ -25,32 +27,35 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
+var forks = []upgradetest.Fork{
+	upgradetest.Fortuna,
+	upgradetest.Latest,
+}
+
 func runTests(
 	t *testing.T,
 	makeTests func(tb testing.TB, rules extras.AvalancheRules) []precompiletest.PrecompileTest,
 ) {
-	t.Run("pre_granite", func(t *testing.T) {
-		tests := makeTests(t, extras.AvalancheRules{IsGranite: false})
-		precompiletest.RunPrecompileTests(t, Module, tests)
-	})
-	t.Run("granite", func(t *testing.T) {
-		tests := makeTests(t, extras.AvalancheRules{IsGranite: true})
-		precompiletest.RunPrecompileTests(t, Module, tests)
-	})
+	for _, fork := range forks {
+		t.Run(fork.String(), func(t *testing.T) {
+			rules := extrastest.ForkToAvalancheRules(fork)
+			tests := makeTests(t, rules)
+			precompiletest.RunPrecompileTests(t, Module, tests)
+		})
+	}
 }
 
 func runBenchmarks(
 	b *testing.B,
 	makeTests func(tb testing.TB, rules extras.AvalancheRules) []precompiletest.PrecompileTest,
 ) {
-	b.Run("pre_granite", func(b *testing.B) {
-		tests := makeTests(b, extras.AvalancheRules{IsGranite: false})
-		precompiletest.RunPrecompileBenchmarks(b, Module, tests)
-	})
-	b.Run("granite", func(b *testing.B) {
-		tests := makeTests(b, extras.AvalancheRules{IsGranite: true})
-		precompiletest.RunPrecompileBenchmarks(b, Module, tests)
-	})
+	for _, fork := range forks {
+		b.Run(fork.String(), func(b *testing.B) {
+			rules := extrastest.ForkToAvalancheRules(fork)
+			tests := makeTests(b, rules)
+			precompiletest.RunPrecompileBenchmarks(b, Module, tests)
+		})
+	}
 }
 
 func getBlockchainIDTests(tb testing.TB, rules extras.AvalancheRules) []precompiletest.PrecompileTest {

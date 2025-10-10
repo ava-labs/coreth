@@ -799,27 +799,21 @@ func makeWarpPredicateTests(tb testing.TB, rules extras.AvalancheRules) []precom
 }
 
 func TestWarpPredicate(t *testing.T) {
-	t.Run("pre_granite", func(t *testing.T) {
-		predicateTests := makeWarpPredicateTests(t, extras.AvalancheRules{})
-		precompiletest.RunPredicateTests(t, predicateTests)
-	})
-	t.Run("granite", func(t *testing.T) {
-		predicateTests := makeWarpPredicateTests(t, extras.AvalancheRules{
-			IsGranite: true,
+	for _, fork := range forks {
+		t.Run(fork.String(), func(t *testing.T) {
+			rules := extrastest.ForkToAvalancheRules(fork)
+			tests := makeWarpPredicateTests(t, rules)
+			precompiletest.RunPredicateTests(t, tests)
 		})
-		precompiletest.RunPredicateTests(t, predicateTests)
-	})
+	}
 }
 
 func BenchmarkWarpPredicate(b *testing.B) {
-	b.Run("pre_granite", func(b *testing.B) {
-		predicateTests := makeWarpPredicateTests(b, extras.AvalancheRules{})
-		precompiletest.RunPredicateBenchmarks(b, predicateTests)
-	})
-	b.Run("granite", func(b *testing.B) {
-		predicateTests := makeWarpPredicateTests(b, extras.AvalancheRules{
-			IsGranite: true,
+	for _, fork := range forks {
+		b.Run(fork.String(), func(b *testing.B) {
+			rules := extrastest.ForkToAvalancheRules(fork)
+			tests := makeWarpPredicateTests(b, rules)
+			precompiletest.RunPredicateBenchmarks(b, tests)
 		})
-		precompiletest.RunPredicateBenchmarks(b, predicateTests)
-	})
+	}
 }
