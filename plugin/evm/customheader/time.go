@@ -28,7 +28,7 @@ var (
 	ErrGraniteClockBehindParent      = errors.New("current timestamp is not allowed to be behind than parent timestamp in Granite")
 )
 
-// GetNextTimestamp calculates the timestamp (in seconds and milliseconds) for the header based on the parent's timestamp and the current time.
+// GetNextTimestamp calculates the time for the next header based on the parent's timestamp and the current time.
 // This can return the parent time if now is before the parent time and TimeMilliseconds is not set (pre-Granite).
 func GetNextTimestamp(parent *types.Header, now time.Time) time.Time {
 	parentExtra := customtypes.GetHeaderExtra(parent)
