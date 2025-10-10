@@ -41,6 +41,10 @@ var (
 		SendWarpMessageBase: contract.LogGas + 3*contract.LogTopicGas + addWarpMessageBaseGasCost + contract.WriteGasCostPerSlot,
 		PerWarpMessageByte:  contract.LogDataGas,
 	}
+	// graniteGasConfig updated the gas costs of warp operations to target a
+	// processing speed of around 100 mgas/s after the introduction of epoching
+	// which allows for pre-calculating the warp validator sets for all active
+	// networks.
 	graniteGasConfig = GasConfig{
 		GetBlockchainID: 200,
 
