@@ -77,7 +77,6 @@ func VerifyTime(extraConfig *extras.ChainConfig, parent *types.Header, header *t
 		)
 	}
 
-	// Do all checks that apply only before Granite
 	if !extraConfig.IsGranite(header.Time) {
 		// This field should not be set yet.
 		if headerExtra.TimeMilliseconds != nil {
