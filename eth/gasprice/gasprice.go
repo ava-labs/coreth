@@ -33,10 +33,10 @@ import (
 	"sync"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customheader"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
@@ -232,7 +232,7 @@ func (oracle *Oracle) estimateNextBaseFee(ctx context.Context) (*big.Int, error)
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
 	config := params.GetExtra(oracle.backend.ChainConfig())
-	return customheader.EstimateNextBaseFee(config, header, oracle.clock.Unix())
+	return customheader.EstimateNextBaseFee(config, header, uint64(oracle.clock.Time().UnixMilli()))
 }
 
 // SuggestPrice returns an estimated price for legacy transactions.

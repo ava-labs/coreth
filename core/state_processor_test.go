@@ -33,13 +33,13 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
@@ -368,10 +368,12 @@ func TestStateProcessorErrors(t *testing.T) {
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
-	time := parent.Time() + 10
 	configExtra := params.GetExtra(config)
-	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), time)
-	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), time)
+	gap := uint64(10) // 10 seconds
+	time := parent.Time() + gap
+	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + gap*1000
+	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), timeMS)
+	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), timeMS)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
@@ -386,6 +388,10 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		Time:      time,
 		UncleHash: types.EmptyUncleHash,
 		BaseFee:   baseFee,
+	}
+	if configExtra.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		headerExtra.TimeMilliseconds = utils.NewUint64(timeMS)
 	}
 	if configExtra.IsApricotPhase4(header.Time) {
 		headerExtra := customtypes.GetHeaderExtra(header)
@@ -424,6 +430,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 
 		header.ParentBeaconRoot = new(common.Hash)
 	}
+
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

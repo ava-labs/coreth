@@ -27,7 +27,10 @@ var _ atomic.Visitor = (*semanticVerifier)(nil)
 var (
 	ErrAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
 	ErrConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
+	errFailedToFetchImportUTXOs   = errors.New("failed to fetch import UTXOs")
 	errRejectedParent             = errors.New("rejected parent")
+	errIncorrectNumCredentials    = errors.New("incorrect number of credentials")
+	errIncorrectNumSignatures     = errors.New("incorrect number of signatures")
 	errPublicKeySignatureMismatch = errors.New("signature doesn't match public key")
 )
 
@@ -133,7 +136,7 @@ func (s *semanticVerifier) ImportTx(utx *atomic.UnsignedImportTx) error {
 	// allUTXOBytes is guaranteed to be the same length as utxoIDs
 	allUTXOBytes, err := ctx.SharedMemory.Get(utx.SourceChain, utxoIDs)
 	if err != nil {
-		return fmt.Errorf("failed to fetch import UTXOs from %s due to: %w", utx.SourceChain, err)
+		return fmt.Errorf("%w from %s due to: %w", errFailedToFetchImportUTXOs, utx.SourceChain, err)
 	}
 
 	for i, in := range utx.ImportedInputs {
@@ -241,7 +244,7 @@ func (s *semanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
 	}
 
 	if len(utx.Ins) != len(stx.Creds) {
-		return fmt.Errorf("export tx contained mismatched number of inputs/credentials (%d vs. %d)", len(utx.Ins), len(stx.Creds))
+		return fmt.Errorf("export tx contained %w want %d got %d", errIncorrectNumCredentials, len(utx.Ins), len(stx.Creds))
 	}
 
 	for i, input := range utx.Ins {
@@ -254,7 +257,7 @@ func (s *semanticVerifier) ExportTx(utx *atomic.UnsignedExportTx) error {
 		}
 
 		if len(cred.Sigs) != 1 {
-			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
+			return fmt.Errorf("%w want 1 signature for EVM Input Credential, but got %d", errIncorrectNumSignatures, len(cred.Sigs))
 		}
 		pubKey, err := s.backend.SecpCache.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
 		if err != nil {

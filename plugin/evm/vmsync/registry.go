@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package vm
+package vmsync
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 
 	"github.com/ava-labs/libevm/log"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/ava-labs/coreth/plugin/evm/message"
 
 	synccommon "github.com/ava-labs/coreth/sync"
 )
@@ -22,7 +24,7 @@ type SyncerTask struct {
 // SyncerRegistry manages a collection of syncers for sequential execution.
 type SyncerRegistry struct {
 	syncers         []SyncerTask
-	registeredNames map[string]bool // Track registered names to prevent duplicates.
+	registeredNames map[string]bool // Track registered IDs to prevent duplicates.
 }
 
 // NewSyncerRegistry creates a new empty syncer registry.
@@ -34,33 +36,38 @@ func NewSyncerRegistry() *SyncerRegistry {
 
 // Register adds a syncer to the registry.
 // Returns an error if a syncer with the same name is already registered.
-func (r *SyncerRegistry) Register(name string, syncer synccommon.Syncer) error {
-	if r.registeredNames[name] {
-		return fmt.Errorf("syncer with name '%s' is already registered", name)
+func (r *SyncerRegistry) Register(syncer synccommon.Syncer) error {
+	id := syncer.ID()
+	if r.registeredNames[id] {
+		return fmt.Errorf("syncer with id '%s' is already registered", id)
 	}
 
-	r.registeredNames[name] = true
-	r.syncers = append(r.syncers, SyncerTask{name, syncer})
+	r.registeredNames[id] = true
+	r.syncers = append(r.syncers, SyncerTask{syncer.Name(), syncer})
 
 	return nil
 }
 
 // RunSyncerTasks executes all registered syncers.
-func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) error {
+// The provided summary is used only for logging to decouple from concrete client types.
+func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary message.Syncable) error {
 	if len(r.syncers) == 0 {
 		return nil
 	}
+
+	summaryBlockHashHex := summary.GetBlockHash().Hex()
+	blockHeight := summary.Height()
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, task := range r.syncers {
 		g.Go(func() error {
-			log.Info("starting syncer", "name", task.name, "summary", client.summary)
+			log.Info("starting syncer", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
 			if err := task.syncer.Sync(ctx); err != nil {
-				log.Error("failed syncing", "name", task.name, "summary", client.summary, "err", err)
+				log.Error("failed syncing", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight, "err", err)
 				return fmt.Errorf("%s failed: %w", task.name, err)
 			}
-			log.Info("completed successfully", "name", task.name, "summary", client.summary)
+			log.Info("completed successfully", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
 
 			return nil
 		})
@@ -70,7 +77,7 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, client *client) err
 		return err
 	}
 
-	log.Info("all syncers completed successfully", "count", len(r.syncers), "summary", client.summary)
+	log.Info("all syncers completed successfully", "count", len(r.syncers), "summary", summaryBlockHashHex)
 
 	return nil
 }

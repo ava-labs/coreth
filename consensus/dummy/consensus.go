@@ -7,12 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
-	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/trie"
@@ -26,20 +24,11 @@ import (
 )
 
 var (
-	allowedFutureBlockTime = 10 * time.Second // Max time from current time allowed for blocks, before they're considered future blocks
-
-	errInvalidBlockTime                    = errors.New("timestamp less than parent's")
-	errUnclesUnsupported                   = errors.New("uncles unsupported")
-	errExtDataGasUsedNil                   = errors.New("extDataGasUsed is nil")
-	errExtDataGasUsedTooLarge              = errors.New("extDataGasUsed is not uint64")
-	ErrInvalidBlockGasCost                 = errors.New("invalid blockGasCost")
-	errInvalidExtDataGasUsed               = errors.New("invalid extDataGasUsed")
-	errInvalidExcessBlobGasBeforeCancun    = errors.New("invalid excessBlobGas before cancun")
-	errInvalidBlobGasUsedBeforeCancun      = errors.New("invalid blobGasUsed before cancun")
-	errInvalidParentBeaconRootBeforeCancun = errors.New("invalid parentBeaconRoot before cancun")
-	errMissingParentBeaconRoot             = errors.New("header is missing beaconRoot")
-	errNonEmptyParentBeaconRoot            = errors.New("invalid non-empty parentBeaconRoot")
-	errBlobsNotEnabled                     = errors.New("blobs not enabled on avalanche networks")
+	errUnclesUnsupported      = errors.New("uncles unsupported")
+	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
+	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	ErrInvalidBlockGasCost    = errors.New("invalid blockGasCost")
+	errInvalidExtDataGasUsed  = errors.New("invalid extDataGasUsed")
 )
 
 type Mode struct {
@@ -78,86 +67,64 @@ type (
 
 	DummyEngine struct {
 		cb                  ConsensusCallbacks
-		clock               *mockable.Clock
 		consensusMode       Mode
 		desiredTargetExcess *gas.Gas
+		desiredDelayExcess  *acp226.DelayExcess
 	}
 )
 
 func NewDummyEngine(
 	cb ConsensusCallbacks,
 	mode Mode,
-	clock *mockable.Clock,
-	desiredTargetExcess *gas.Gas,
+	desiredTargetExcess *gas.Gas, // Guides the target gas excess (ACP-176) toward the desired value
+	desiredDelayExcess *acp226.DelayExcess, // Guides the min delay excess (ACP-226) toward the desired value
 ) *DummyEngine {
 	return &DummyEngine{
 		cb:                  cb,
-		clock:               clock,
 		consensusMode:       mode,
 		desiredTargetExcess: desiredTargetExcess,
+		desiredDelayExcess:  desiredDelayExcess,
 	}
 }
 
 func NewETHFaker() *DummyEngine {
 	return &DummyEngine{
-		clock:         &mockable.Clock{},
 		consensusMode: Mode{ModeSkipBlockFee: true},
 	}
 }
 
 func NewFaker() *DummyEngine {
-	return &DummyEngine{
-		clock: &mockable.Clock{},
-	}
-}
-
-func NewFakerWithClock(cb ConsensusCallbacks, clock *mockable.Clock) *DummyEngine {
-	return &DummyEngine{
-		cb:    cb,
-		clock: clock,
-	}
+	return &DummyEngine{}
 }
 
 func NewFakerWithCallbacks(cb ConsensusCallbacks) *DummyEngine {
 	return &DummyEngine{
-		cb:    cb,
-		clock: &mockable.Clock{},
+		cb: cb,
 	}
 }
 
 func NewFakerWithMode(cb ConsensusCallbacks, mode Mode) *DummyEngine {
 	return &DummyEngine{
 		cb:            cb,
-		clock:         &mockable.Clock{},
-		consensusMode: mode,
-	}
-}
-
-func NewFakerWithModeAndClock(mode Mode, clock *mockable.Clock) *DummyEngine {
-	return &DummyEngine{
-		clock:         clock,
 		consensusMode: mode,
 	}
 }
 
 func NewCoinbaseFaker() *DummyEngine {
 	return &DummyEngine{
-		clock:         &mockable.Clock{},
 		consensusMode: Mode{ModeSkipCoinbase: true},
 	}
 }
 
 func NewFullFaker() *DummyEngine {
 	return &DummyEngine{
-		clock:         &mockable.Clock{},
 		consensusMode: Mode{ModeSkipHeader: true},
 	}
 }
 
 func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, parent *types.Header) error {
-	if err := customheader.VerifyGasUsed(config, parent, header); err != nil {
-		return err
-	}
+	// Verifying the gas used occurs earlier in the block validation process in verifyIntrinsicGas, so
+	// customheader.VerifyGasUsed is not called here.
 	if err := customheader.VerifyGasLimit(config, parent, header); err != nil {
 		return err
 	}
@@ -166,7 +133,8 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 	}
 
 	// Verify header.BaseFee matches the expected value.
-	expectedBaseFee, err := customheader.BaseFee(config, parent, header.Time)
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
+	expectedBaseFee, err := customheader.BaseFee(config, parent, timeMS)
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}
@@ -206,7 +174,7 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 }
 
 // modified from consensus.go
-func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
+func verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parent *types.Header, uncle bool) error {
 	// Ensure that we do not verify an uncle
 	if uncle {
 		return errUnclesUnsupported
@@ -225,44 +193,11 @@ func (eng *DummyEngine) verifyHeader(chain consensus.ChainHeaderReader, header *
 		return err
 	}
 
-	// Verify the header's timestamp
-	if header.Time > uint64(eng.clock.Time().Add(allowedFutureBlockTime).Unix()) {
-		return consensus.ErrFutureBlock
-	}
-	// Verify the header's timestamp is not earlier than parent's
-	// it does include equality(==), so multiple blocks per second is ok
-	if header.Time < parent.Time {
-		return errInvalidBlockTime
-	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// Verify the existence / non-existence of excessBlobGas
-	cancun := config.IsCancun(header.Number, header.Time)
-	if !cancun {
-		switch {
-		case header.ExcessBlobGas != nil:
-			return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *header.ExcessBlobGas)
-		case header.BlobGasUsed != nil:
-			return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *header.BlobGasUsed)
-		case header.ParentBeaconRoot != nil:
-			return fmt.Errorf("%w: have %#x, expected nil", errInvalidParentBeaconRootBeforeCancun, *header.ParentBeaconRoot)
-		}
-	} else {
-		if header.ParentBeaconRoot == nil {
-			return errMissingParentBeaconRoot
-		}
-		if *header.ParentBeaconRoot != (common.Hash{}) {
-			return fmt.Errorf("%w: have %#x, expected empty", errNonEmptyParentBeaconRoot, *header.ParentBeaconRoot)
-		}
-		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
-			return err
-		}
-		if *header.BlobGasUsed > 0 { // VerifyEIP4844Header ensures BlobGasUsed is non-nil
-			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *header.BlobGasUsed)
-		}
-	}
+
 	return nil
 }
 
@@ -285,7 +220,7 @@ func (eng *DummyEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *
 		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
-	return eng.verifyHeader(chain, header, parent, false)
+	return verifyHeader(chain, header, parent, false)
 }
 
 func (*DummyEngine) VerifyUncles(_ consensus.ChainReader, block *types.Block) error {
@@ -403,6 +338,18 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	}
 	header.Extra = append(extraPrefix, header.Extra...)
+
+	// Set the min delay excess
+	minDelayExcess, err := customheader.MinDelayExcess(
+		configExtra,
+		parent,
+		header.Time,
+		eng.desiredDelayExcess,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate min delay excess: %w", err)
+	}
+	headerExtra.MinDelayExcess = minDelayExcess
 
 	// commit the final state root
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))

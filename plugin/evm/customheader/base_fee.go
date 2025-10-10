@@ -4,16 +4,14 @@
 package customheader
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
-
-var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee for chain without apricot phase 3 scheduled")
 
 // BaseFee takes the previous header and the timestamp of its child block and
 // calculates the expected base fee for the child block.
@@ -22,11 +20,12 @@ var errEstimateBaseFeeWithoutActivation = errors.New("cannot estimate base fee f
 func BaseFee(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (*big.Int, error) {
+	timestamp := timeMS / 1000
 	switch {
 	case config.IsFortuna(timestamp):
-		state, err := feeStateBeforeBlock(config, parent, timestamp)
+		state, err := feeStateBeforeBlock(config, parent, timeMS)
 		if err != nil {
 			return nil, fmt.Errorf("calculating initial fee state: %w", err)
 		}
@@ -51,12 +50,9 @@ func BaseFee(
 func EstimateNextBaseFee(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (*big.Int, error) {
-	if config.ApricotPhase3BlockTimestamp == nil {
-		return nil, errEstimateBaseFeeWithoutActivation
-	}
-
-	timestamp = max(timestamp, parent.Time, *config.ApricotPhase3BlockTimestamp)
-	return BaseFee(config, parent, timestamp)
+	parentMS := customtypes.HeaderTimeMilliseconds(parent)
+	timeMS = max(timeMS, parentMS)
+	return BaseFee(config, parent, timeMS)
 }

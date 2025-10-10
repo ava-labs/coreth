@@ -118,7 +118,7 @@ func TestGenesisToBlockDecoding(t *testing.T) {
 		upgradetest.Durango:           common.HexToHash("0xab4ce08ac987c618e1d12642338da6b2308e7f3886fb6a671e9560212d508d2a"),
 		upgradetest.Etna:              common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
 		upgradetest.Fortuna:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
-		upgradetest.Granite:           common.HexToHash("0x1094f685d39b737cf599fd599744b9849923a11ea3314826f170b443a87cb0e0"),
+		upgradetest.Granite:           common.HexToHash("0xe870dd86820001c7ca3f2fb9a2f31e1fcfdb17743874a061db8e75425ae7fd23"),
 	}
 	for fork, chainConfig := range paramstest.ForkToChainConfig {
 		t.Run(fork.String(), func(t *testing.T) {
@@ -133,7 +133,7 @@ func TestGenesisToBlockDecoding(t *testing.T) {
 			readHeader := rawdb.ReadHeader(db, block.Hash(), 0)
 			require.Equal(t, block.Hash(), readHeader.Hash())
 			require.Equal(t, previousHashes[fork], block.Hash())
-			require.EqualValues(t, block.Header(), readHeader)
+			require.Equal(t, block.Header(), readHeader)
 		})
 	}
 }
