@@ -1,10 +1,22 @@
 module github.com/ava-labs/coreth
 
-go 1.24.7
+// CLI tools intended for invocation with `go tool` should be added to
+// tools/go.mod to avoid polluting the main module's dependencies. See
+// CONTRIBUTING.md for more details.
+
+// - Changes to the minimum golang version must also be replicated in:
+//   - go.mod (here)
+//   - tools/go.mod
+//   - tools/legacy-golangci-lint.mod
+//   - RELEASES.md
+//
+// - If updating between minor versions (e.g. 1.24.x -> 1.25.x):
+//   - Consider updating the version of golangci-lint (see tools/go.mod)
+go 1.24.8
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
-	github.com/ava-labs/avalanchego v1.13.6-0.20251003124629-84e9aebcfbc0
+	github.com/ava-labs/avalanchego v1.13.6-0.20251007213349-63cc1a166a56
 	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.12
 	github.com/ava-labs/libevm v1.13.15-0.20251002164226-35926db4d661
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
@@ -174,4 +186,11 @@ require (
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
+)
+
+// The following tools are managed here instead of in tools/go.mod
+// because they are already direct dependencies of the main module.
+tool (
+	github.com/ava-labs/libevm/rlp/rlpgen
+	github.com/onsi/ginkgo/v2/ginkgo
 )

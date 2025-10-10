@@ -5,7 +5,6 @@ package warp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow/snowtest"
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/snow/validators/validatorstest"
+	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
@@ -25,6 +25,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
 	"github.com/ava-labs/coreth/precompile/precompiletest"
 	"github.com/ava-labs/coreth/utils"
@@ -34,12 +35,9 @@ import (
 	avalancheWarp "github.com/ava-labs/avalanchego/vms/platformvm/warp"
 )
 
-const pChainHeight uint64 = 1337
-
 var (
 	_ agoUtils.Sortable[*testValidator] = (*testValidator)(nil)
 
-	errTest        = errors.New("non-nil error")
 	sourceChainID  = ids.GenerateTestID()
 	sourceSubnetID = ids.GenerateTestID()
 
@@ -54,6 +52,8 @@ var (
 	numTestVdrs = 10_000
 	testVdrs    []*testValidator
 	vdrs        map[ids.NodeID]*validators.GetValidatorOutput
+
+	graniteRules = extrastest.ForkToAvalancheRules(upgradetest.Granite)
 )
 
 func init() {
@@ -135,6 +135,10 @@ func newTestValidator() *testValidator {
 	}
 }
 
+func (g GasConfig) PredicateGasCost(chunks int, signers int) uint64 {
+	return g.PerSignatureVerification + uint64(chunks)*g.PerWarpMessageChunk + uint64(signers)*g.PerWarpSigner
+}
+
 // createWarpMessage constructs a signed warp message using the global variable [unsignedMsg]
 // and the first [numKeys] signatures from [blsSignatures]
 func createWarpMessage(numKeys int) *avalancheWarp.Message {
@@ -192,8 +196,7 @@ type validatorRange struct {
 
 // createSnowCtx creates a snow.Context instance with a validator state specified by the given validatorRanges
 func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Context {
-	getValidatorsOutput := make(map[ids.NodeID]*validators.GetValidatorOutput)
-
+	validatorSet := make(map[ids.NodeID]*validators.GetValidatorOutput)
 	for _, validatorRange := range validatorRanges {
 		for i := validatorRange.start; i < validatorRange.end; i++ {
 			validatorOutput := &validators.GetValidatorOutput{
@@ -203,24 +206,23 @@ func createSnowCtx(tb testing.TB, validatorRanges []validatorRange) *snow.Contex
 			if validatorRange.publicKey {
 				validatorOutput.PublicKey = testVdrs[i].vdr.PublicKey
 			}
-			getValidatorsOutput[testVdrs[i].nodeID] = validatorOutput
+			validatorSet[testVdrs[i].nodeID] = validatorOutput
 		}
 	}
 
 	snowCtx := snowtest.Context(tb, snowtest.CChainID)
-	state := &validatorstest.State{
+	snowCtx.ValidatorState = &validatorstest.State{
 		GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 			return sourceSubnetID, nil
 		},
-		GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
-			return getValidatorsOutput, nil
+		GetWarpValidatorSetF: func(context.Context, uint64, ids.ID) (validators.WarpSet, error) {
+			return validators.FlattenValidatorSet(validatorSet)
 		},
 	}
-	snowCtx.ValidatorState = state
 	return snowCtx
 }
 
-func createValidPredicateTest(snowCtx *snow.Context, numKeys uint64, predicate predicate.Predicate) precompiletest.PredicateTest {
+func createValidPredicateTest(snowCtx *snow.Context, numKeys int, predicate predicate.Predicate) precompiletest.PredicateTest {
 	return precompiletest.PredicateTest{
 		Config: NewDefaultConfig(utils.NewUint64(0)),
 		PredicateContext: &precompileconfig.PredicateContext{
@@ -230,7 +232,8 @@ func createValidPredicateTest(snowCtx *snow.Context, numKeys uint64, predicate p
 			},
 		},
 		Predicate:   predicate,
-		Gas:         GasCostPerSignatureVerification + uint64(len(predicate))*GasCostPerWarpMessageChunk + numKeys*GasCostPerWarpSigner,
+		Rules:       graniteRules,
+		Gas:         graniteGasConfig.PredicateGasCost(len(predicate), numKeys),
 		GasErr:      nil,
 		ExpectedErr: nil,
 	}
@@ -251,20 +254,29 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 	unsignedMsg, err := avalancheWarp.NewUnsignedMessage(constants.UnitTestID, cChainID, addressedCall.Bytes())
 	require.NoError(err)
 
-	getValidatorsOutput := make(map[ids.NodeID]*validators.GetValidatorOutput)
-	blsSignatures := make([]*bls.Signature, 0, numKeys)
-	for i := 0; i < numKeys; i++ {
-		sig, err := testVdrs[i].sk.Sign(unsignedMsg.Bytes())
-		require.NoError(err)
-
-		validatorOutput := &validators.GetValidatorOutput{
-			NodeID:    testVdrs[i].nodeID,
-			Weight:    20,
-			PublicKey: testVdrs[i].vdr.PublicKey,
+	var (
+		warpValidators = validators.WarpSet{
+			Validators:  make([]*validators.Warp, 0, numKeys),
+			TotalWeight: 20 * uint64(numKeys),
 		}
-		getValidatorsOutput[testVdrs[i].nodeID] = validatorOutput
+		blsSignatures = make([]*bls.Signature, 0, numKeys)
+	)
+	for i := 0; i < numKeys; i++ {
+		vdr := testVdrs[i]
+		sig, err := vdr.sk.Sign(unsignedMsg.Bytes())
+		require.NoError(err)
 		blsSignatures = append(blsSignatures, sig)
+
+		pk := vdr.sk.PublicKey()
+		warpValidators.Validators = append(warpValidators.Validators, &validators.Warp{
+			PublicKey:      pk,
+			PublicKeyBytes: bls.PublicKeyToUncompressedBytes(pk),
+			Weight:         20,
+			NodeIDs:        []ids.NodeID{vdr.nodeID},
+		})
 	}
+	agoUtils.Sort(warpValidators.Validators)
+
 	aggregateSignature, err := bls.AggregateSignatures(blsSignatures)
 	require.NoError(err)
 	bitSet := set.NewBits()
@@ -288,13 +300,13 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			require.Equal(chainID, cChainID)
 			return constants.PrimaryNetworkID, nil // Return Primary Network SubnetID
 		},
-		GetValidatorSetF: func(_ context.Context, _ uint64, subnetID ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
+		GetWarpValidatorSetF: func(_ context.Context, _ uint64, subnetID ids.ID) (validators.WarpSet, error) {
 			expectedSubnetID := snowCtx.SubnetID
 			if requirePrimaryNetworkSigners {
 				expectedSubnetID = constants.PrimaryNetworkID
 			}
 			require.Equal(expectedSubnetID, subnetID)
-			return getValidatorsOutput, nil
+			return warpValidators, nil
 		},
 	}
 
@@ -307,7 +319,8 @@ func testWarpMessageFromPrimaryNetwork(t *testing.T, requirePrimaryNetworkSigner
 			},
 		},
 		Predicate:   pred,
-		Gas:         GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
+		Rules:       graniteRules,
+		Gas:         graniteGasConfig.PredicateGasCost(len(pred), numKeys),
 		GasErr:      nil,
 		ExpectedErr: nil,
 	}
@@ -337,7 +350,8 @@ func TestInvalidPredicatePacking(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Gas:       GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
+		Rules:     graniteRules,
+		Gas:       graniteGasConfig.PredicateGasCost(len(pred), numKeys),
 		GasErr:    errInvalidPredicateBytes,
 	}
 
@@ -368,7 +382,8 @@ func TestInvalidWarpMessage(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Gas:       GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
+		Rules:     graniteRules,
+		Gas:       graniteGasConfig.PredicateGasCost(len(pred), numKeys),
 		GasErr:    errInvalidWarpMsg,
 	}
 
@@ -412,7 +427,8 @@ func TestInvalidAddressedPayload(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Gas:       GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
+		Rules:     graniteRules,
+		Gas:       graniteGasConfig.PredicateGasCost(len(pred), numKeys),
 		GasErr:    errInvalidWarpMsgPayload,
 	}
 
@@ -457,7 +473,8 @@ func TestInvalidBitSet(t *testing.T) {
 			},
 		},
 		Predicate: pred,
-		Gas:       GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numKeys)*GasCostPerWarpSigner,
+		Rules:     graniteRules,
+		Gas:       graniteGasConfig.PredicateGasCost(len(pred), numKeys),
 		GasErr:    errCannotGetNumSigners,
 	}
 
@@ -502,7 +519,8 @@ func TestWarpSignatureWeightsDefaultQuorumNumerator(t *testing.T) {
 				},
 			},
 			Predicate:   pred,
-			Gas:         GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numSigners)*GasCostPerWarpSigner,
+			Rules:       graniteRules,
+			Gas:         graniteGasConfig.PredicateGasCost(len(pred), numSigners),
 			GasErr:      nil,
 			ExpectedErr: expectedErr,
 		}
@@ -543,11 +561,11 @@ func TestWarpMultiplePredicates(t *testing.T) {
 			)
 			if valid {
 				pred = validPredicate
-				expectedGas = GasCostPerSignatureVerification + uint64(len(validPredicate))*GasCostPerWarpMessageChunk + uint64(numSigners)*GasCostPerWarpSigner
+				expectedGas = graniteGasConfig.PredicateGasCost(len(pred), numSigners)
 				expectedErr = nil
 			} else {
-				expectedGas = GasCostPerSignatureVerification + uint64(len(invalidPredicate))*GasCostPerWarpMessageChunk + uint64(1)*GasCostPerWarpSigner
 				pred = invalidPredicate
+				expectedGas = graniteGasConfig.PredicateGasCost(len(invalidPredicate), 1)
 				expectedErr = errFailedVerification
 			}
 
@@ -560,6 +578,7 @@ func TestWarpMultiplePredicates(t *testing.T) {
 					},
 				},
 				Predicate:   pred,
+				Rules:       graniteRules,
 				Gas:         expectedGas,
 				GasErr:      nil,
 				ExpectedErr: expectedErr,
@@ -604,7 +623,8 @@ func TestWarpSignatureWeightsNonDefaultQuorumNumerator(t *testing.T) {
 				},
 			},
 			Predicate:   pred,
-			Gas:         GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk + uint64(numSigners)*GasCostPerWarpSigner,
+			Rules:       graniteRules,
+			Gas:         graniteGasConfig.PredicateGasCost(len(pred), numSigners),
 			GasErr:      nil,
 			ExpectedErr: expectedErr,
 		}
@@ -620,7 +640,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			PChainHeight: 1,
 		}
 		pred        = createPredicate(0)
-		expectedGas = GasCostPerSignatureVerification + uint64(len(pred))*GasCostPerWarpMessageChunk
+		expectedGas = graniteGasConfig.PredicateGasCost(len(pred), 0)
 	)
 	noValidators := precompiletest.PredicateTest{
 		Config: config,
@@ -628,6 +648,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			SnowCtx:            createSnowCtx(t, nil /*=validators*/), // No validators in state
 			ProposerVMBlockCtx: proposervmContext,
 		},
+		Rules:       graniteRules,
 		Predicate:   pred,
 		Gas:         expectedGas,
 		GasErr:      nil,
@@ -647,6 +668,7 @@ func TestWarpNoValidatorsAndOverflowUseSameGas(t *testing.T) {
 			ProposerVMBlockCtx: proposervmContext,
 		},
 		Predicate:   pred,
+		Rules:       graniteRules,
 		Gas:         expectedGas,
 		GasErr:      nil,
 		ExpectedErr: safemath.ErrOverflow,
@@ -671,7 +693,7 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 				publicKey: true,
 			},
 		})
-		predicateTests[testName] = createValidPredicateTest(snowCtx, uint64(totalNodes), pred)
+		predicateTests[testName] = createValidPredicateTest(snowCtx, totalNodes, pred)
 	}
 
 	numSigners := 10
@@ -693,7 +715,7 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 				publicKey: true,
 			},
 		})
-		predicateTests[testName] = createValidPredicateTest(snowCtx, uint64(numSigners), pred)
+		predicateTests[testName] = createValidPredicateTest(snowCtx, numSigners, pred)
 	}
 
 	for _, totalNodes := range []int{100, 1_000, 10_000} {
@@ -714,34 +736,35 @@ func makeWarpPredicateTests(tb testing.TB) map[string]precompiletest.PredicateTe
 				publicKey: false,
 			},
 		})
-		predicateTests[testName] = createValidPredicateTest(snowCtx, uint64(numSigners), pred)
+		predicateTests[testName] = createValidPredicateTest(snowCtx, numSigners, pred)
 	}
 
 	for _, totalNodes := range []int{100, 1_000, 10_000} {
 		testName := fmt.Sprintf("%d validators w/ %d signers/repeated PublicKeys", totalNodes, numSigners)
 
 		pred := createPredicate(numSigners)
-		getValidatorsOutput := make(map[ids.NodeID]*validators.GetValidatorOutput, totalNodes)
+		validatorSet := make(map[ids.NodeID]*validators.GetValidatorOutput, totalNodes)
 		for i := 0; i < totalNodes; i++ {
-			getValidatorsOutput[testVdrs[i].nodeID] = &validators.GetValidatorOutput{
+			validatorSet[testVdrs[i].nodeID] = &validators.GetValidatorOutput{
 				NodeID:    testVdrs[i].nodeID,
 				Weight:    20,
 				PublicKey: testVdrs[i%numSigners].vdr.PublicKey,
 			}
 		}
+		warpValidators, err := validators.FlattenValidatorSet(validatorSet)
+		require.NoError(tb, err)
 
 		snowCtx := snowtest.Context(tb, snowtest.CChainID)
-		state := &validatorstest.State{
+		snowCtx.ValidatorState = &validatorstest.State{
 			GetSubnetIDF: func(context.Context, ids.ID) (ids.ID, error) {
 				return sourceSubnetID, nil
 			},
-			GetValidatorSetF: func(context.Context, uint64, ids.ID) (map[ids.NodeID]*validators.GetValidatorOutput, error) {
-				return getValidatorsOutput, nil
+			GetWarpValidatorSetF: func(context.Context, uint64, ids.ID) (validators.WarpSet, error) {
+				return warpValidators, nil
 			},
 		}
-		snowCtx.ValidatorState = state
 
-		predicateTests[testName] = createValidPredicateTest(snowCtx, uint64(numSigners), pred)
+		predicateTests[testName] = createValidPredicateTest(snowCtx, numSigners, pred)
 	}
 	return predicateTests
 }
