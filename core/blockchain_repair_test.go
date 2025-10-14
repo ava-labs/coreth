@@ -35,17 +35,24 @@ import (
 	"math/big"
 	"testing"
 
+	avalanchedatabase "github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/utils/logging"
+	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/ethdb"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/triedb"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -510,12 +517,21 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
 		t.Run(scheme, func(t *testing.T) {
-			testRepairWithScheme(t, tt, snapshots, scheme)
+			testRepairWithScheme(t, tt, snapshots, scheme, false)
+		})
+		t.Run(scheme+"- blockdb", func(t *testing.T) {
+			testRepairWithScheme(t, tt, snapshots, scheme, true)
 		})
 	}
 }
 
-func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string) {
+func useBlockDatabase(t *testing.T, kvdb avalanchedatabase.Database, chaindb ethdb.Database, datadir string) ethdb.Database {
+	db := database.NewBlockDatabase(kvdb, chaindb, blockdb.DefaultConfig(), datadir, logging.NoLog{}, prometheus.NewRegistry())
+	require.NoError(t, db.InitWithMinHeight(1))
+	return db
+}
+
+func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme string, useBlockDB bool) {
 	// It's hard to follow the test case, visualize the input
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
@@ -534,6 +550,11 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
 	}
+	kvdb := memdb.New()
+	if useBlockDB {
+		db = useBlockDatabase(t, kvdb, db, datadir)
+	}
+
 	defer db.Close() // Might double close, should be fine
 
 	// Initialize a fresh chain
@@ -627,8 +648,10 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)
 	}
+	if useBlockDB {
+		db = useBlockDatabase(t, kvdb, db, datadir)
+	}
 	defer db.Close()
-
 	newChain, err := NewBlockChain(db, config, gspec, engine, vm.Config{}, lastAcceptedHash, false)
 	if err != nil {
 		t.Fatalf("Failed to recreate chain: %v", err)
