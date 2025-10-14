@@ -1652,6 +1652,9 @@ func ReexecCorruptedStateTest(t *testing.T, create ReexecTestFunc) {
 
 	// Simulate a crash by updating the acceptor tip
 	blockchain.writeBlockAcceptedIndices(chain[1])
+
+	// need to write accepted block to disk as we are no longer writing it on verify
+	rawdb.WriteBlock(blockchain.db, chain[1])
 	blockchain.Stop()
 
 	// Restart blockchain with existing state
