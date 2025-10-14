@@ -5,8 +5,6 @@ package core
 
 import (
 	"fmt"
-	"io"
-	"io/fs"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -168,61 +166,28 @@ func copyMemDB(db ethdb.Database) (ethdb.Database, error) {
 	return newDB, nil
 }
 
-func copyDir(t *testing.T, dir string) string {
+// This copies all files from a flat directory [src] to a new temporary directory and returns
+// the path to the new directory.
+func copyFlatDir(t *testing.T, src string) string {
 	t.Helper()
-	if dir == "" {
+	if src == "" {
 		return ""
 	}
-	newPath := t.TempDir()
 
-	// Walk the source directory recursively and mirror its structure/contents
-	// into the destination directory created above.
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		// Skip the root element itself
-		if rel == "." {
-			return nil
-		}
-		dstPath := filepath.Join(newPath, rel)
+	dst := t.TempDir()
+	ents, err := os.ReadDir(src)
+	require.NoError(t, err)
 
-		if d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			return os.MkdirAll(dstPath, info.Mode())
-		}
-
-		// Regular file copy
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		src, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer src.Close()
-
-		dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer dst.Close()
-
-		if _, err := io.Copy(dst, src); err != nil {
-			return err
-		}
-		return dst.Sync()
-	})
-	require.NoError(t, err, "failed to copy directory %s to %s", dir, newPath)
-	return newPath
+	for _, e := range ents {
+		require.False(t, e.IsDir(), "expected flat directory")
+		name := e.Name()
+		data, err := os.ReadFile(filepath.Join(src, name))
+		require.NoError(t, err)
+		info, err := e.Info()
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(dst, name), data, info.Mode().Perm()))
+	}
+	return dst
 }
 
 // checkBlockChainState creates a new BlockChain instance and checks that exporting each block from
@@ -272,7 +237,7 @@ func checkBlockChainState(
 	// Copy the database over to prevent any issues when re-using [originalDB] after this call.
 	originalDB, err = copyMemDB(originalDB)
 	require.NoError(err)
-	newChainDataDir := copyDir(t, oldChainDataDir)
+	newChainDataDir := copyFlatDir(t, oldChainDataDir)
 	restartedChain, err := create(originalDB, gspec, lastAcceptedBlock.Hash(), newChainDataDir)
 	require.NoError(err)
 	defer restartedChain.Stop()
