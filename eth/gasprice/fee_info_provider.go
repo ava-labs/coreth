@@ -33,6 +33,7 @@ import (
 	"sort"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/core/types"
@@ -105,7 +106,14 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header, t
 	// Don't bias the estimate with blocks containing a limited number of transactions paying to
 	// expedite block production.
 	var err error
-	if minGasUsed.Cmp(totalGasUsed) <= 0 {
+	extraConfig := params.GetExtra(f.backend.ChainConfig())
+	var tip *big.Int
+	// After Granite BlockGasCost became obsolete, so MinRequiredTip will return nil.
+	// Instead we should use the effective tips from the transactions.
+	// Note (ceyonur): This will mix the median tips with MinRequiredTips in the percentile calculations.
+	if extraConfig.IsGranite(header.Time) {
+		tip = medianTip(txs, header.BaseFee)
+	} else if minGasUsed.Cmp(totalGasUsed) <= 0 {
 		// Compute minimum required tip to be included in previous block
 		//
 		// NOTE: Using this approach, we will never recommend that the caller
@@ -114,9 +122,10 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header, t
 		// suggested tip). In the future, we may wish to start suggesting a non-zero
 		// tip when most blocks are full otherwise callers may observe an unexpected
 		// delay in transaction inclusion.
-		feeInfo.tip, err = f.minRequiredTip(ctx, header, txs)
+		tip, err = f.backend.MinRequiredTip(ctx, header)
 	}
 
+	feeInfo.tip = tip
 	f.cache.Add(header.Number.Uint64(), feeInfo)
 	return feeInfo, err
 }
@@ -152,23 +161,6 @@ func (f *feeInfoProvider) populateCache(size int) error {
 		}
 	}
 	return nil
-}
-
-// minRequiredTip returns the minimum required tip to be included in a given block.
-// If the MinRequiredTip is nil, it will return the average tip of the transactions.
-func (f *feeInfoProvider) minRequiredTip(ctx context.Context, header *types.Header, txs types.Transactions) (*big.Int, error) {
-	tip, err := f.backend.MinRequiredTip(ctx, header)
-	if err != nil {
-		return tip, err
-	}
-
-	// After Granite BlockGasCost became obsolete, so MinRequiredTip will return nil.
-	// Instead we should use the effective tips from the transactions.
-	// Note (ceyonur): This will mix the median tips with MinRequiredTips in the percentile calculations.
-	if tip == nil {
-		return medianTip(txs, header.BaseFee), nil
-	}
-	return tip, nil
 }
 
 // medianTip returns the median tip of given transactions.
