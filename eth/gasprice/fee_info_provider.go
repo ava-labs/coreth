@@ -79,7 +79,7 @@ func newFeeInfoProvider(backend OracleBackend, minGasUsed uint64, size int) (*fe
 	backend.SubscribeChainAcceptedEvent(acceptedEvent)
 	go func() {
 		for ev := range acceptedEvent {
-			fc.addHeader(context.Background(), ev.Block.Header())
+			fc.addHeader(context.Background(), ev.Block.Header(), ev.Block.Transactions())
 			if fc.newHeaderAdded != nil {
 				fc.newHeaderAdded()
 			}
@@ -89,7 +89,7 @@ func newFeeInfoProvider(backend OracleBackend, minGasUsed uint64, size int) (*fe
 }
 
 // addHeader processes header into a feeInfo struct and caches the result.
-func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (*feeInfo, error) {
+func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header, txs []*types.Transaction) (*feeInfo, error) {
 	feeInfo := &feeInfo{
 		timestamp: header.Time,
 		baseFee:   header.BaseFee,
@@ -113,7 +113,7 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (
 		// suggested tip). In the future, we may wish to start suggesting a non-zero
 		// tip when most blocks are full otherwise callers may observe an unexpected
 		// delay in transaction inclusion.
-		feeInfo.tip, err = f.backend.MinRequiredTip(ctx, header)
+		feeInfo.tip, err = f.minRequiredTip(ctx, header, txs)
 	}
 
 	f.cache.Add(header.Number.Uint64(), feeInfo)
@@ -141,14 +141,46 @@ func (f *feeInfoProvider) populateCache(size int) error {
 	}
 
 	for i := lowerBlockNumber; i <= lastAccepted; i++ {
-		header, err := f.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(i))
+		block, err := f.backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil {
 			return err
 		}
-		_, err = f.addHeader(context.Background(), header)
+		_, err = f.addHeader(context.Background(), block.Header(), block.Transactions())
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// minRequiredTip returns the minimum required tip to be included in a given block.
+// If the MinRequiredTip is nil, it will return the average tip of the transactions.
+func (f *feeInfoProvider) minRequiredTip(ctx context.Context, header *types.Header, txs types.Transactions) (*big.Int, error) {
+	tip, err := f.backend.MinRequiredTip(ctx, header)
+	if err != nil {
+		return tip, err
+	}
+
+	// After Granite BlockGasCost became obsolete, so MinRequiredTip will return nil.
+	// Instead we should use the effective tips from the transactions.
+	if tip == nil {
+		return averageTip(txs, header.BaseFee), nil
+	}
+	return tip, nil
+}
+
+// averageTip returns the average tip of given transactions.
+func averageTip(txs types.Transactions, baseFee *big.Int) *big.Int {
+	if len(txs) == 0 {
+		return new(big.Int)
+	}
+	sum := new(big.Int)
+	for _, tx := range txs {
+		effectiveTip, err := tx.EffectiveGasTip(baseFee)
+		// skip if the effective tip is negative
+		if err == nil {
+			sum.Add(sum, effectiveTip)
+		}
+	}
+	return sum.Div(sum, big.NewInt(int64(len(txs))))
 }

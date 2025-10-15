@@ -102,7 +102,7 @@ func EstimateRequiredTip(
 ) (*big.Int, error) {
 	extra := customtypes.GetHeaderExtra(header)
 	switch {
-	case !config.IsApricotPhase4(header.Time):
+	case config.IsGranite(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:
 		return nil, errBaseFeeNil
@@ -112,6 +112,7 @@ func EstimateRequiredTip(
 		return nil, errExtDataGasUsedNil
 	}
 
+	// TODO(ceyonur): Once we activate Granite, we can remove these.
 	// totalGasUsed = GasUsed + ExtDataGasUsed
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
 	totalGasUsed.Add(totalGasUsed, extra.ExtDataGasUsed)
