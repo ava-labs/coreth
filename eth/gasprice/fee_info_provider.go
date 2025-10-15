@@ -30,6 +30,7 @@ package gasprice
 import (
 	"context"
 	"math/big"
+	"sort"
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
@@ -163,24 +164,38 @@ func (f *feeInfoProvider) minRequiredTip(ctx context.Context, header *types.Head
 
 	// After Granite BlockGasCost became obsolete, so MinRequiredTip will return nil.
 	// Instead we should use the effective tips from the transactions.
+	// Note (ceyonur): This will mix the median tips with MinRequiredTips in the percentile calculations.
 	if tip == nil {
-		return averageTip(txs, header.BaseFee), nil
+		return medianTip(txs, header.BaseFee), nil
 	}
 	return tip, nil
 }
 
-// averageTip returns the average tip of given transactions.
-func averageTip(txs types.Transactions, baseFee *big.Int) *big.Int {
+// medianTip returns the median tip of given transactions.
+func medianTip(txs types.Transactions, baseFee *big.Int) *big.Int {
 	if len(txs) == 0 {
 		return new(big.Int)
 	}
-	sum := new(big.Int)
-	for _, tx := range txs {
-		effectiveTip, err := tx.EffectiveGasTip(baseFee)
-		// skip if the effective tip is negative
-		if err == nil {
-			sum.Add(sum, effectiveTip)
-		}
+
+	// Extract all effective tips
+	tips := make([]*big.Int, len(txs))
+	for i, tx := range txs {
+		tips[i] = tx.EffectiveGasTipValue(baseFee)
 	}
-	return sum.Div(sum, big.NewInt(int64(len(txs))))
+
+	// Sort tips in ascending order
+	sort.Slice(tips, func(i, j int) bool {
+		return tips[i].Cmp(tips[j]) < 0
+	})
+
+	// Calculate median
+	n := len(tips)
+	if n%2 == 0 {
+		// Even number of elements: average of two middle elements
+		median := new(big.Int).Add(tips[n/2-1], tips[n/2])
+		return median.Div(median, big.NewInt(2))
+	} else {
+		// Odd number of elements: middle element
+		return new(big.Int).Set(tips[n/2])
+	}
 }
