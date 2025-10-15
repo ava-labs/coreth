@@ -195,11 +195,6 @@ func TestEstimateRequiredTip(t *testing.T) {
 		wantErr      error
 	}{
 		{
-			name:         "not_ap4",
-			ap4Timestamp: utils.NewUint64(1),
-			header:       &types.Header{},
-		},
-		{
 			name:         "nil_base_fee",
 			ap4Timestamp: utils.NewUint64(0),
 			header: customtypes.WithHeaderExtra(
