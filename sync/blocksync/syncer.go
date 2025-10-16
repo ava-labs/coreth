@@ -13,6 +13,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 
+	"github.com/ava-labs/coreth/plugin/evm/message"
 	syncpkg "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 )
@@ -20,9 +21,10 @@ import (
 const blocksPerRequest = 32
 
 var (
-	_                        syncpkg.Syncer = (*BlockSyncer)(nil)
-	errBlocksToFetchRequired                = errors.New("blocksToFetch must be > 0")
-	errFromHashRequired                     = errors.New("fromHash must be non-zero when fromHeight > 0")
+	_ syncpkg.Syncer = (*BlockSyncer)(nil)
+
+	errBlocksToFetchRequired = errors.New("blocksToFetch must be > 0")
+	errFromHashRequired      = errors.New("fromHash must be non-zero when fromHeight > 0")
 )
 
 type BlockSyncer struct {
@@ -111,4 +113,16 @@ func (s *BlockSyncer) Sync(ctx context.Context) error {
 
 	log.Info("fetched blocks from peer", "total", blocksToFetch)
 	return batch.Write()
+}
+
+// UpdateSyncTarget updates the target summary to sync to.
+// TODO(alarso16): see https://github.com/ava-labs/coreth/issues/1260
+func (*BlockSyncer) UpdateSyncTarget(summary message.Syncable) error {
+	return errors.New("not yet implemented")
+}
+
+// Finalize asserts that all blocks have been requested and written to disk.
+// This is a no-op until UpdateSyncTarget is implemented.
+func (*BlockSyncer) Finalize(context.Context, message.Syncable) error {
+	return nil
 }

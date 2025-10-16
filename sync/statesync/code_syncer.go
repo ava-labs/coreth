@@ -5,6 +5,7 @@ package statesync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -23,7 +24,9 @@ import (
 
 const defaultNumCodeFetchingWorkers = 5
 
-var _ syncpkg.Syncer = (*CodeSyncer)(nil)
+var (
+	_ syncpkg.Syncer = (*CodeSyncer)(nil)
+)
 
 // CodeSyncer syncs code bytes from the network in a separate thread.
 // It consumes code hashes from a queue and persists code into the DB.
@@ -113,6 +116,17 @@ func (c *CodeSyncer) Sync(ctx context.Context) error {
 	}
 
 	return eg.Wait()
+}
+
+// UpdateSyncTarget is not yet implemented.
+// TODO(alarso16): see https://github.com/ava-labs/coreth/issues/1341
+func (*CodeSyncer) UpdateSyncTarget(summary message.Syncable) error {
+	return errors.New("not yet implemented")
+}
+
+// Finalize is currently a no-op since UpdateSyncTarget is not implemented.
+func (*CodeSyncer) Finalize(context.Context, message.Syncable) error {
+	return nil
 }
 
 // work fulfills any incoming requests from the producer channel by fetching code bytes from the network

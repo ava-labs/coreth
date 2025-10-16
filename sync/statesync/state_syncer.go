@@ -17,6 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
+	"github.com/ava-labs/coreth/plugin/evm/message"
 
 	syncpkg "github.com/ava-labs/coreth/sync"
 	syncclient "github.com/ava-labs/coreth/sync/client"
@@ -30,9 +31,11 @@ const (
 )
 
 var (
-	_                           syncpkg.Syncer = (*stateSync)(nil)
-	errCodeRequestQueueRequired                = errors.New("code request queue is required")
-	errLeafsRequestSizeRequired                = errors.New("leafs request size must be > 0")
+	_ syncpkg.Syncer = (*stateSync)(nil)
+
+	errCodeRequestQueueRequired  = errors.New("code request queue is required")
+	errDynamicSyncerNotSupported = errors.New("dynamic syncer not supported")
+	errLeafsRequestSizeRequired  = errors.New("leafs request size must be > 0")
 )
 
 // stateSync keeps the state of the entire state sync operation.
@@ -160,6 +163,23 @@ func (t *stateSync) Sync(ctx context.Context) error {
 	// The errgroup wait will take care of returning the first error that occurs, or returning
 	// nil if syncing finish without an error.
 	return eg.Wait()
+}
+
+// UpdateSyncTarget is not supported for this syncer.
+func (*stateSync) UpdateSyncTarget(message.Syncable) error {
+	return errDynamicSyncerNotSupported
+}
+
+// Finalize assures all data matches the expected state after a sync.
+// This may block while resolving in-flight data.
+func (t *stateSync) Finalize(ctx context.Context, summary message.Syncable) error {
+	if t.root != summary.GetBlockRoot() {
+		return fmt.Errorf("finalizing sync with unexpected root: local %s, expected %s", t.root, summary.GetBlockRoot())
+	}
+
+	// The triedb should have the root available after syncing.
+	_, err := t.trieDB.Reader(t.root)
+	return err
 }
 
 // onStorageTrieFinished is called after a storage trie finishes syncing.

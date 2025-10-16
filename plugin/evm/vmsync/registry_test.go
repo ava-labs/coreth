@@ -24,9 +24,11 @@ var _ syncpkg.Syncer = (*mockSyncer)(nil)
 
 // mockSyncer implements [syncpkg.Syncer] for testing.
 type mockSyncer struct {
-	name      string
-	syncError error
-	started   bool // Track if already started
+	name           string
+	syncError      error
+	started        bool // Track if already started
+	updateCount    int  // Track number of UpdateSyncTarget calls
+	finalizeTarget message.Syncable
 }
 
 func newMockSyncer(name string, syncError error) *mockSyncer {
@@ -38,6 +40,16 @@ func (m *mockSyncer) Sync(context.Context) error {
 	return m.syncError
 }
 
+func (m *mockSyncer) UpdateSyncTarget(message.Syncable) error {
+	m.updateCount++
+	return nil
+}
+
+func (m *mockSyncer) Finalize(_ context.Context, target message.Syncable) error {
+	m.finalizeTarget = target
+	return nil
+}
+
 func (m *mockSyncer) Name() string { return m.name }
 func (m *mockSyncer) ID() string   { return m.name }
 
@@ -47,9 +59,17 @@ type namedSyncer struct {
 	syncer syncpkg.Syncer
 }
 
-func (n *namedSyncer) Sync(ctx context.Context) error { return n.syncer.Sync(ctx) }
 func (n *namedSyncer) Name() string                   { return n.name }
 func (n *namedSyncer) ID() string                     { return n.name }
+func (n *namedSyncer) Sync(ctx context.Context) error { return n.syncer.Sync(ctx) }
+
+func (n *namedSyncer) UpdateSyncTarget(target message.Syncable) error {
+	return n.syncer.UpdateSyncTarget(target)
+}
+
+func (n *namedSyncer) Finalize(ctx context.Context, summary message.Syncable) error {
+	return n.syncer.Finalize(ctx, summary)
+}
 
 // syncerConfig describes a test syncer setup for RunSyncerTasks table tests.
 type syncerConfig struct {
@@ -305,6 +325,73 @@ func TestSyncerRegistry_NoSyncersRegistered(t *testing.T) {
 	t.Cleanup(cancel)
 
 	require.NoError(t, registry.RunSyncerTasks(ctx, newTestClientSummary(t)))
+}
+
+func TestSyncerRegistry_UpdateSyncTarget(t *testing.T) {
+	t.Parallel()
+
+	registry := NewSyncerRegistry()
+	ctx, cancel := utilstest.NewTestContext(t)
+	t.Cleanup(cancel)
+
+	var allStartedWG sync.WaitGroup
+	allStartedWG.Add(1)
+	releaseCh := make(chan struct{})
+	barrierSyncer := NewBarrierSyncer(&allStartedWG, releaseCh)
+	registry.Register(barrierSyncer)
+
+	// Create a tracked syncer to verify UpdateSyncTarget calls
+	syncer := newMockSyncer("UpdateTargetSyncer", nil)
+	registry.Register(syncer)
+
+	doneCh := make(chan error, 1)
+	go func() { doneCh <- registry.RunSyncerTasks(ctx, newTestClientSummary(t)) }()
+
+	utilstest.WaitGroupWithTimeout(t, &allStartedWG, 2*time.Second, "timed out waiting for barrier syncers to start")
+
+	customSummary, err := message.NewBlockSyncSummary(common.HexToHash("0xabcdef"), 1234, common.HexToHash("0xabcdef"))
+	require.NoError(t, err)
+	require.NoError(t, registry.UpdateSyncTarget(customSummary))
+	close(releaseCh)
+
+	require.NoError(t, utilstest.WaitErrWithTimeout(t, doneCh, 4*time.Second))
+	require.Equal(t, 1, syncer.updateCount)
+	require.Equal(t, customSummary, syncer.finalizeTarget)
+}
+
+func TestSyncerRegistry_UpdateSyncTargetNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	registry := NewSyncerRegistry()
+	ctx, cancel := utilstest.NewTestContext(t)
+	t.Cleanup(cancel)
+
+	const numUpdateSyncers = 3
+	var mockSyncers []*mockSyncer
+	for i := 0; i < numUpdateSyncers; i++ {
+		name := fmt.Sprintf("UpdateSyncer-%d", i)
+		mockSyncer := newMockSyncer(name, nil)
+		mockSyncers = append(mockSyncers, mockSyncer)
+		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: mockSyncer}))
+	}
+
+	summary := newTestClientSummary(t)
+
+	// Call UpdateSyncTarget before starting syncers
+	err := registry.UpdateSyncTarget(summary)
+	require.ErrorIs(t, err, errUpdateSyncTargetNotAllowed)
+
+	// First call to RunSyncerTasks
+	require.NoError(t, registry.RunSyncerTasks(ctx, summary))
+
+	// Call UpdateSyncTarget after syncers have completed
+	err = registry.UpdateSyncTarget(summary)
+	require.ErrorIs(t, err, errUpdateSyncTargetNotAllowed)
+
+	// Verify UpdateSyncTarget was not called for each syncer
+	for i, mockSyncer := range mockSyncers {
+		require.Zero(t, mockSyncer.updateCount, "UpdateSyncTarget was called for syncer %d", i)
+	}
 }
 
 func newTestClientSummary(t *testing.T) message.Syncable {
