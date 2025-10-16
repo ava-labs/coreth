@@ -22,8 +22,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
@@ -107,26 +107,33 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	numCallsPerRequest := 1 // on sending response
 	totalCalls := totalRequests * numCallsPerRequest
 
-	requestWg := &sync.WaitGroup{}
-	requestWg.Add(totalCalls)
+	eg := errgroup.Group{}
 	for i := 0; i < totalCalls; i++ {
-		go func(wg *sync.WaitGroup) {
-			defer wg.Done()
+		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
-			assert.NoError(t, err)
+			if err != nil {
+				return fmt.Errorf("failed to convert request to bytes: %w", err)
+			}
 			responseBytes, _, err := net.SendSyncedAppRequestAny(context.Background(), defaultPeerVersion, requestBytes)
-			assert.NoError(t, err)
-			assert.NotNil(t, responseBytes)
+			if err != nil {
+				return fmt.Errorf("failed to send synced app request: %w", err)
+			}
+			if responseBytes == nil {
+				return errors.New("response bytes should not be nil")
+			}
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
-				panic(fmt.Errorf("unexpected error during unmarshal: %w", err))
+				return fmt.Errorf("unexpected error during unmarshal: %w", err)
 			}
-			assert.Equal(t, "Hi", response.Message)
-		}(requestWg)
+			if response.Message != "Hi" {
+				return fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+			}
+			return nil
+		})
 	}
 
-	requestWg.Wait()
+	require.NoError(t, eg.Wait())
 	senderWg.Wait()
 	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 }
@@ -218,29 +225,36 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	numCallsPerRequest := 1 // on sending response
 	totalCalls := totalRequests * numCallsPerRequest
 
-	requestWg := &sync.WaitGroup{}
-	requestWg.Add(totalCalls)
+	eg := errgroup.Group{}
 	nodeIdx := 0
 	for i := 0; i < totalCalls; i++ {
 		nodeIdx = (nodeIdx + 1) % (len(nodes))
 		nodeID := nodes[nodeIdx]
-		go func(wg *sync.WaitGroup, nodeID ids.NodeID) {
-			defer wg.Done()
+		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
-			assert.NoError(t, err)
+			if err != nil {
+				return fmt.Errorf("failed to convert request to bytes: %w", err)
+			}
 			responseBytes, err := net.SendSyncedAppRequest(context.Background(), nodeID, requestBytes)
-			assert.NoError(t, err)
-			assert.NotNil(t, responseBytes)
+			if err != nil {
+				return fmt.Errorf("failed to send synced app request: %w", err)
+			}
+			if responseBytes == nil {
+				return errors.New("response bytes should not be nil")
+			}
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
-				panic(fmt.Errorf("unexpected error during unmarshal: %w", err))
+				return fmt.Errorf("unexpected error during unmarshal: %w", err)
 			}
-			assert.Equal(t, "Hi", response.Message)
-		}(requestWg, nodeID)
+			if response.Message != "Hi" {
+				return fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+			}
+			return nil
+		})
 	}
 
-	requestWg.Wait()
+	require.NoError(t, eg.Wait())
 	senderWg.Wait()
 	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 	for _, nodeID := range nodes {
@@ -281,16 +295,25 @@ func TestAppRequestOnShutdown(t *testing.T) {
 	requestMessage := HelloRequest{Message: "this is a request"}
 	require.NoError(t, net.Connected(context.Background(), nodeID, defaultPeerVersion))
 
-	wg.Add(1)
+	errChan := make(chan error, 1)
 	go func() {
-		defer wg.Done()
 		requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
-		assert.NoError(t, err)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to convert request to bytes: %w", err)
+			return
+		}
 		responseBytes, _, err := net.SendSyncedAppRequestAny(context.Background(), defaultPeerVersion, requestBytes)
-		assert.ErrorIs(t, err, errRequestFailed)
-		assert.Nil(t, responseBytes)
+		if !errors.Is(err, errRequestFailed) {
+			errChan <- fmt.Errorf("expected errRequestFailed, got: %w", err)
+			return
+		}
+		if responseBytes != nil {
+			errChan <- errors.New("response bytes should be nil")
+			return
+		}
+		errChan <- nil
 	}()
-	wg.Wait()
+	require.NoError(t, <-errChan)
 	require.True(t, called)
 }
 
@@ -351,18 +374,18 @@ func TestSyncedAppRequestAnyOnCtxCancellation(t *testing.T) {
 	// Cancel context after sending
 	require.Empty(t, net.(*network).outstandingRequestHandlers) // no outstanding requests
 	ctx, cancel = context.WithCancel(context.Background())
-	doneChan := make(chan struct{})
+	errChan := make(chan error, 1)
 	go func() {
 		_, _, err = net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
-		assert.ErrorIs(t, err, context.Canceled)
-		close(doneChan)
+		errChan <- err
 	}()
 	// Wait until we've "sent" the app request over the network
 	// before cancelling context.
 	sentAppRequestInfo := <-sentAppRequest
 	require.Len(t, net.(*network).outstandingRequestHandlers, 1)
 	cancel()
-	<-doneChan
+	err = <-errChan
+	require.ErrorIs(t, err, context.Canceled)
 	// Should still be able to process a response after cancelling.
 	require.Len(t, net.(*network).outstandingRequestHandlers, 1) // context cancellation SendAppRequestAny failure doesn't clear
 	require.NoError(t, net.AppResponse(
@@ -392,7 +415,7 @@ func TestRequestMinVersion(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
-				assert.NoError(t, net.AppResponse(context.Background(), nodeID, reqID, responseBytes))
+				require.NoError(t, net.AppResponse(context.Background(), nodeID, reqID, responseBytes))
 			}()
 			return nil
 		},
