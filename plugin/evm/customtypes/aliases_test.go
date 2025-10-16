@@ -3,9 +3,7 @@
 
 package customtypes
 
-import (
-	"github.com/ava-labs/libevm/core/types"
-)
+import "github.com/ava-labs/libevm/core/types"
 
 // TODO(arr4n) These tests were originally part of the `coreth/core/types`
 // package so assume the presence of identifiers. Aliases reduce PR noise during
