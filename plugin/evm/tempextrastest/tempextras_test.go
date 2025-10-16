@@ -1,10 +1,11 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-// These tests are run in a different package because the primary `evm` tests
-// leak goroutines that result in race conditions with the temporary
-// registration of extras, which is intended to be done separately.
-package evm_test
+// Package tempextrastest exists solely to test [evm.WithTempRegisteredLibEVMExtras]
+// because the primary [evm] tests leak goroutines. These result in race
+// conditions with the temporary registration of extras, which is intended to be
+// done separately.
+package tempextrastest
 
 import (
 	"testing"
