@@ -9,8 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm/message"
+
 	syncpkg "github.com/ava-labs/coreth/sync"
 )
+
+var _ syncpkg.Syncer = FuncSyncer{}
 
 // FuncSyncer adapts a function to the simple Syncer shape used in tests. It is
 // useful for defining small, behavior-driven syncers inline.
@@ -21,11 +25,13 @@ type FuncSyncer struct {
 // Sync calls the wrapped function and returns its result.
 func (f FuncSyncer) Sync(ctx context.Context) error { return f.fn(ctx) }
 
+// Unnecessary for these tests.
+func (FuncSyncer) UpdateSyncTarget(message.Syncable) error          { return nil }
+func (FuncSyncer) Finalize(context.Context, message.Syncable) error { return nil }
+
 // Name returns the provided name or a default if unspecified.
 func (FuncSyncer) Name() string { return "Test Name" }
 func (FuncSyncer) ID() string   { return "test_id" }
-
-var _ syncpkg.Syncer = FuncSyncer{}
 
 // NewBarrierSyncer returns a syncer that, upon entering Sync, calls wg.Done() to
 // signal it has started, then blocks until either:
