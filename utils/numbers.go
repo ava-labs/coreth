@@ -8,11 +8,12 @@ import (
 	"time"
 )
 
-func NewUint64(val uint64) *uint64 { return &val }
+// PointerTo returns a pointer to the given value.
+func PointerTo[T any](x T) *T { return &x }
 
 func TimeToNewUint64(time time.Time) *uint64 {
 	unix := uint64(time.Unix())
-	return NewUint64(unix)
+	return PointerTo(unix)
 }
 
 func Uint64ToTime(val *uint64) time.Time {

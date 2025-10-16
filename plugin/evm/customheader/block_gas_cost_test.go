@@ -196,12 +196,12 @@ func TestEstimateRequiredTip(t *testing.T) {
 	}{
 		{
 			name:         "not_ap4",
-			ap4Timestamp: utils.NewUint64(1),
+			ap4Timestamp: utils.PointerTo(uint64(1)),
 			header:       &types.Header{},
 		},
 		{
 			name:         "nil_base_fee",
-			ap4Timestamp: utils.NewUint64(0),
+			ap4Timestamp: utils.PointerTo(uint64(0)),
 			header: customtypes.WithHeaderExtra(
 				&types.Header{},
 				&customtypes.HeaderExtra{
@@ -213,7 +213,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 		},
 		{
 			name:         "nil_block_gas_cost",
-			ap4Timestamp: utils.NewUint64(0),
+			ap4Timestamp: utils.PointerTo(uint64(0)),
 			header: customtypes.WithHeaderExtra(
 				&types.Header{
 					BaseFee: big.NewInt(1),
@@ -226,7 +226,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 		},
 		{
 			name:         "nil_extra_data_gas_used",
-			ap4Timestamp: utils.NewUint64(0),
+			ap4Timestamp: utils.PointerTo(uint64(0)),
 			header: customtypes.WithHeaderExtra(
 				&types.Header{
 					BaseFee: big.NewInt(1),
@@ -239,7 +239,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 		},
 		{
 			name:         "no_gas_used",
-			ap4Timestamp: utils.NewUint64(0),
+			ap4Timestamp: utils.PointerTo(uint64(0)),
 			header: customtypes.WithHeaderExtra(
 				&types.Header{
 					GasUsed: 0,
@@ -254,7 +254,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 		},
 		{
 			name:         "success",
-			ap4Timestamp: utils.NewUint64(0),
+			ap4Timestamp: utils.PointerTo(uint64(0)),
 			header: customtypes.WithHeaderExtra(
 				&types.Header{
 					GasUsed: 123,
@@ -272,7 +272,7 @@ func TestEstimateRequiredTip(t *testing.T) {
 		},
 		{
 			name:         "success_rounds_up",
-			ap4Timestamp: utils.NewUint64(0),
+			ap4Timestamp: utils.PointerTo(uint64(0)),
 			header: customtypes.WithHeaderExtra(
 				&types.Header{
 					GasUsed: 124,

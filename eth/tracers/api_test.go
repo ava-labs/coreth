@@ -45,6 +45,7 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/rpc"
+	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -299,8 +300,6 @@ func testTraceCall(t *testing.T, scheme string) {
 		}
 	})
 
-	uintPtr := func(i int) *hexutil.Uint { x := hexutil.Uint(i); return &x }
-
 	defer backend.teardown()
 	api := NewAPI(backend)
 	var testSuite = []struct {
@@ -353,7 +352,7 @@ func testTraceCall(t *testing.T, scheme string) {
 				To:    &accounts[0].addr,
 				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
 			},
-			config:    &TraceCallConfig{TxIndex: uintPtr(0)},
+			config:    &TraceCallConfig{TxIndex: utils.PointerTo(hexutil.Uint(0))},
 			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
 		},
 		// Before the target transaction, should be failed
@@ -364,7 +363,7 @@ func testTraceCall(t *testing.T, scheme string) {
 				To:    &accounts[0].addr,
 				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
 			},
-			config:    &TraceCallConfig{TxIndex: uintPtr(1)},
+			config:    &TraceCallConfig{TxIndex: utils.PointerTo(hexutil.Uint(1))},
 			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
 		},
 		// After the target transaction, should be succeed
@@ -375,7 +374,7 @@ func testTraceCall(t *testing.T, scheme string) {
 				To:    &accounts[0].addr,
 				Value: (*hexutil.Big)(new(big.Int).Add(big.NewInt(params.Ether), big.NewInt(100))),
 			},
-			config:    &TraceCallConfig{TxIndex: uintPtr(2)},
+			config:    &TraceCallConfig{TxIndex: utils.PointerTo(hexutil.Uint(2))},
 			expectErr: nil,
 			expect:    `{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}`,
 		},

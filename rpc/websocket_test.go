@@ -37,6 +37,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/utils"
 	"github.com/gorilla/websocket"
 )
 
@@ -177,13 +178,12 @@ func TestWebsocketLargeRead(t *testing.T) {
 			}
 		}
 	}
-	ptr := func(v int64) *int64 { return &v }
 
-	testLimit(ptr(-1)) // Should be ignored (use default)
-	testLimit(ptr(0))  // Should be ignored (use default)
-	testLimit(nil)     // Should be ignored (use default)
-	testLimit(ptr(200))
-	testLimit(ptr(wsDefaultReadLimit + 1024))
+	testLimit(utils.PointerTo(int64(-1))) // Should be ignored (use default)
+	testLimit(utils.PointerTo(int64(0)))  // Should be ignored (use default)
+	testLimit(nil)                        // Should be ignored (use default)
+	testLimit(utils.PointerTo(int64(200)))
+	testLimit(utils.PointerTo(int64(wsDefaultReadLimit + 1024)))
 }
 
 func TestWebsocketPeerInfo(t *testing.T) {
