@@ -18,7 +18,7 @@ import (
 func TestMinDelayExcess(t *testing.T) {
 	activatingGraniteConfig := *extras.TestGraniteChainConfig
 	activatingGraniteTimestamp := uint64(1000)
-	activatingGraniteConfig.NetworkUpgrades.GraniteTimestamp = utils.PointerTo(uint64(activatingGraniteTimestamp))
+	activatingGraniteConfig.NetworkUpgrades.GraniteTimestamp = utils.PointerTo(activatingGraniteTimestamp)
 
 	tests := []struct {
 		name                  string
