@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// PointerTo returns a pointer to the given value.
 func PointerTo[T any](x T) *T { return &x }
 
 func TimeToNewUint64(time time.Time) *uint64 {
