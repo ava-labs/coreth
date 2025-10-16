@@ -14,6 +14,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
+
 	syncpkg "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 )
@@ -117,7 +118,7 @@ func (s *BlockSyncer) Sync(ctx context.Context) error {
 
 // UpdateSyncTarget updates the target summary to sync to.
 // TODO(alarso16): see https://github.com/ava-labs/coreth/issues/1260
-func (*BlockSyncer) UpdateSyncTarget(summary message.Syncable) error {
+func (*BlockSyncer) UpdateSyncTarget(message.Syncable) error {
 	return errors.New("not yet implemented")
 }
 

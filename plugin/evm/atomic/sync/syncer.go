@@ -148,13 +148,13 @@ func (s *Syncer) Sync(ctx context.Context) error {
 
 // UpdateSyncTarget updates the target summary to sync to.
 // TODO(alarso16): see https://github.com/ava-labs/coreth/issues/1143
-func (*Syncer) UpdateSyncTarget(summary message.Syncable) error {
+func (*Syncer) UpdateSyncTarget(message.Syncable) error {
 	return errors.New("not yet implemented")
 }
 
 // Finalize is called after Sync completes to ensure all data matches the expected state.
 // This may block after UpdateSyncTarget is implemented.
-func (s *Syncer) Finalize(ctx context.Context, summary message.Syncable) error {
+func (s *Syncer) Finalize(_ context.Context, summary message.Syncable) error {
 	// Ensure we synced to the expected target height.
 	if summary.Height() != s.targetHeight {
 		return fmt.Errorf("expected to sync to height %d but synced to %d", s.targetHeight, summary.Height())

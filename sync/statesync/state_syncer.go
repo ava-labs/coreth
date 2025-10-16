@@ -172,7 +172,7 @@ func (*stateSync) UpdateSyncTarget(message.Syncable) error {
 
 // Finalize assures all data matches the expected state after a sync.
 // This may block while resolving in-flight data.
-func (t *stateSync) Finalize(ctx context.Context, summary message.Syncable) error {
+func (t *stateSync) Finalize(_ context.Context, summary message.Syncable) error {
 	if t.root != summary.GetBlockRoot() {
 		return fmt.Errorf("finalizing sync with unexpected root: local %s, expected %s", t.root, summary.GetBlockRoot())
 	}

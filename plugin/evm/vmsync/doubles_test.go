@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
+
 	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
