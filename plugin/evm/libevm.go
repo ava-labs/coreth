@@ -30,11 +30,13 @@ func RegisterAllLibEVMExtras() {
 // WithTempRegisteredLibEVMExtras runs `fn` with temporary registration
 // otherwise equivalent to a call to [RegisterAllLibEVMExtras], but limited to
 // the life of `fn`.
-func WithTempRegisteredLibEVMExtras(lock libevm.ExtrasLock, fn func() error) error {
-	return core.WithTempRegisteredExtras(lock, func() error {
-		return customtypes.WithTempRegisteredExtras(lock, func() error {
-			return extstate.WithTempRegisteredExtras(lock, func() error {
-				return params.WithTempRegisteredExtras(lock, fn)
+func WithTempRegisteredLibEVMExtras(fn func() error) error {
+	return libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
+		return core.WithTempRegisteredExtras(lock, func() error {
+			return customtypes.WithTempRegisteredExtras(lock, func() error {
+				return extstate.WithTempRegisteredExtras(lock, func() error {
+					return params.WithTempRegisteredExtras(lock, fn)
+				})
 			})
 		})
 	})

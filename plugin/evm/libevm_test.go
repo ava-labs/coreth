@@ -12,7 +12,6 @@ import (
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
-	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/require"
 
@@ -47,16 +46,13 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 	}
 
 	t.Run("with_temp_registration", func(t *testing.T) {
-		err := libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
-			return evm.WithTempRegisteredLibEVMExtras(lock, func() error { //nolint:whitespace // Avoid visual crowding due to nested calls
-
-				t.Run("payloads", func(t *testing.T) {
-					for pkg, fn := range payloadTests {
-						t.Run(pkg, fn)
-					}
-				})
-				return nil
+		err := evm.WithTempRegisteredLibEVMExtras(func() error {
+			t.Run("payloads", func(t *testing.T) {
+				for pkg, fn := range payloadTests {
+					t.Run(pkg, fn)
+				}
 			})
+			return nil
 		})
 		require.NoError(t, err)
 	})
