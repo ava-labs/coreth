@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package database
+package blockdb
 
 import (
 	"path/filepath"
@@ -18,6 +18,8 @@ import (
 	"github.com/ava-labs/libevm/params"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+
+	evmdb "github.com/ava-labs/coreth/plugin/evm/database"
 )
 
 // Tests migration status is correctly set to "not started" after initializing a new migrator.
@@ -42,12 +44,12 @@ func TestBlockDatabaseMigrator_StatusInProgress(t *testing.T) {
 
 	// migrate with a slow block database
 	slowDB := &slowBlockDatabase{
-		HeightIndex: wrapper.blockDB,
+		HeightIndex: wrapper.bodyDB,
 		shouldSlow: func() bool {
 			return true
 		},
 	}
-	wrapper.migrator.blockDB = slowDB
+	wrapper.migrator.bodyDB = slowDB
 	require.NoError(t, wrapper.migrator.Migrate())
 
 	// Wait for it to be in progress
@@ -68,7 +70,7 @@ func TestBlockDatabaseMigrator_StatusCompleted(t *testing.T) {
 
 	blocks, receipts := createBlocks(t, 3)
 	writeBlocks(chainDB, blocks, receipts)
-	wrapper.migrator.blockDB = wrapper.blockDB
+	wrapper.migrator.bodyDB = wrapper.bodyDB
 	require.NoError(t, wrapper.migrator.Migrate())
 	waitForMigratorCompletion(t, wrapper.migrator, 5*time.Second)
 	assertMigrationStatus(t, wrapper.migrator.stateDB, wrapper.migrator, migrationCompleted)
@@ -216,7 +218,7 @@ func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
 	// Create a slow block database that slows down after 3 blocks
 	blockCount := 0
 	slowBdb := &slowBlockDatabase{
-		HeightIndex: wrapper.blockDB,
+		HeightIndex: wrapper.bodyDB,
 		shouldSlow: func() bool {
 			blockCount++
 			return blockCount > 3
@@ -224,7 +226,7 @@ func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
 	}
 
 	// Start migration with slow block database and wait for 3 blocks to be migrated
-	wrapper.migrator.blockDB = slowBdb
+	wrapper.migrator.bodyDB = slowBdb
 	require.NoError(t, wrapper.migrator.Migrate())
 	require.Eventually(t, func() bool {
 		return wrapper.migrator.blocksProcessed() >= 3
@@ -235,7 +237,7 @@ func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
 	wrapper, chainDB = newDatabasesFromDir(t, dataDir)
 	assertMigrationStatus(t, wrapper.migrator.stateDB, wrapper.migrator, migrationInProgress)
 
-	// Check blockDB and chainDB to ensure we have the correct amount of blocks
+	// Check bodyDB and chainDB to ensure we have the correct amount of blocks
 	chainDBBlocks := 0
 	blockdbBlocks := 0
 	wrapperBlocks := 0
@@ -243,7 +245,9 @@ func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
 		if rawdb.HasHeader(chainDB, block.Hash(), block.NumberU64()) {
 			chainDBBlocks++
 		}
-		if has, _ := wrapper.blockDB.Has(block.NumberU64()); has {
+		has, err := wrapper.bodyDB.Has(block.NumberU64())
+		require.NoError(t, err)
+		if has {
 			blockdbBlocks++
 		}
 		if rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()) {
@@ -280,7 +284,7 @@ func TestBlockDatabaseMigrator_Genesis(t *testing.T) {
 	dataDir := t.TempDir()
 	base, err := leveldb.New(dataDir, nil, logging.NoLog{}, prometheus.NewRegistry())
 	require.NoError(t, err)
-	chainDB := rawdb.NewDatabase(WrapDatabase(base))
+	chainDB := rawdb.NewDatabase(evmdb.WrapDatabase(base))
 	blocks, receipts := createBlocks(t, 10)
 
 	// Write only genesis and block 5-9
@@ -308,7 +312,7 @@ func TestBlockDatabaseMigrator_Genesis(t *testing.T) {
 	// verify genesis block is not migrated
 	genesisHash := rawdb.ReadCanonicalHash(chainDB, 0)
 	require.True(t, rawdb.HasHeader(chainDB, genesisHash, 0))
-	has, _ := wrapper.blockDB.Has(0)
+	has, _ := wrapper.bodyDB.Has(0)
 	require.False(t, has)
 
 	// verify blocks 1-4 are missing
@@ -322,7 +326,7 @@ func TestBlockDatabaseMigrator_Genesis(t *testing.T) {
 		actualBlock := rawdb.ReadBlock(wrapper, expectedBlock.Hash(), expectedBlock.NumberU64())
 		require.NotNil(t, actualBlock)
 		assertRLPEqual(t, expectedBlock, actualBlock)
-		has, err := wrapper.blockDB.Has(expectedBlock.NumberU64())
+		has, err := wrapper.bodyDB.Has(expectedBlock.NumberU64())
 		require.NoError(t, err)
 		require.True(t, has)
 	}

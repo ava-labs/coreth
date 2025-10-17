@@ -18,6 +18,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/plugin/evm/database"
+	evmblockdb "github.com/ava-labs/coreth/plugin/evm/database/blockdb"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 )
@@ -57,7 +58,7 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 
 	// Error if block database has been enabled/created and then disabled
 	stateDB := prefixdb.New(blockDBPrefix, db)
-	created, err := database.IsBlockDatabaseCreated(stateDB)
+	created, err := blockdb.IsBlockDatabaseCreated(stateDB)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +80,7 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 		stateSyncEnabled = *vm.config.StateSyncEnabled
 	}
 	config := blockdb.DefaultConfig().WithSyncToDisk(vm.config.BlockDatabaseSyncToDisk)
-	blockDB := database.NewBlockDatabase(stateDB, chainDB, config, blockDBPath, vm.ctx.Log, vm.sdkMetrics)
+	blockDB := evmblockdb.NewBlockDatabase(stateDB, chainDB, config, blockDBPath, vm.ctx.Log, vm.sdkMetrics)
 	initialized, err := blockDB.InitWithStateSync(stateSyncEnabled)
 	log.Info("blockDB initialized", "initialized", initialized, "stateSyncEnabled", stateSyncEnabled)
 	if err != nil {

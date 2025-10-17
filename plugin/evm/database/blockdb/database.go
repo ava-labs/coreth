@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package database
+package blockdb
 
 import (
 	"bytes"
@@ -44,12 +44,10 @@ var (
 )
 
 const (
-	// Number of elements in the RLP encoded block data
-	blockDataElements = 3
-	// Number of elements in the RLP encoded receipt data
-	receiptDataElements = 2
-	blockNumberSize     = 8
-	blockHashSize       = 32
+	// Number of elements in the RLP encoded receipt/header/body data (hash + data)
+	hashDataElements = 2
+	blockNumberSize  = 8
+	blockHashSize    = 32
 )
 
 // BlockDatabase is a wrapper around an ethdb.Database that stores block header
@@ -59,14 +57,14 @@ type BlockDatabase struct {
 	ethdb.Database
 	// DB for storing block database state data (ie min height)
 	stateDB    database.Database
-	blockDB    database.HeightIndex
+	headerDB   database.HeightIndex
+	bodyDB     database.HeightIndex
 	receiptsDB database.HeightIndex
 
 	config      blockdb.DatabaseConfig
 	blockDBPath string
 	minHeight   uint64
 
-	bCache   *blockCache // cache for block header and body
 	migrator *blockDatabaseMigrator
 
 	reg prometheus.Registerer
@@ -93,7 +91,6 @@ func NewBlockDatabase(
 	return &BlockDatabase{
 		stateDB:     stateDB,
 		Database:    chainDB,
-		bCache:      newBlockCache(),
 		blockDBPath: blockDBPath,
 		config:      config,
 		reg:         reg,
@@ -157,15 +154,20 @@ func (db *BlockDatabase) InitWithMinHeight(minHeight uint64) error {
 	if err := db.stateDB.Put(blockDBMinHeightKey, encodeBlockNumber(minHeight)); err != nil {
 		return err
 	}
-	blockDB, err := db.createMeteredBlockDatabase("blockdb", minHeight)
+	headerDB, err := db.createMeteredBlockDatabase("headerdb", minHeight)
 	if err != nil {
 		return err
 	}
-	db.blockDB = blockDB
+	bodyDB, err := db.createMeteredBlockDatabase("bodydb", minHeight)
+	if err != nil {
+		return err
+	}
 	receiptsDB, err := db.createMeteredBlockDatabase("receiptsdb", minHeight)
 	if err != nil {
 		return err
 	}
+	db.headerDB = headerDB
+	db.bodyDB = bodyDB
 	db.receiptsDB = receiptsDB
 
 	if err := db.initMigrator(); err != nil {
@@ -193,13 +195,13 @@ func (db *BlockDatabase) Put(key []byte, value []byte) error {
 	blockNumber, blockHash := blockNumberAndHashFromKey(key)
 
 	if isReceiptKey(key) {
-		return db.writeReceipts(blockNumber, blockHash, value)
+		return writeHashAndData(db.receiptsDB, blockNumber, blockHash, value)
 	}
-
-	db.bCache.save(key, blockHash, value)
-	if bodyData, headerData, ok := db.bCache.get(blockHash); ok {
-		db.bCache.clear(blockHash)
-		return db.writeBlock(blockNumber, blockHash, headerData, bodyData)
+	if isHeaderKey(key) {
+		return writeHashAndData(db.headerDB, blockNumber, blockHash, value)
+	}
+	if isBodyKey(key) {
+		return writeHashAndData(db.bodyDB, blockNumber, blockHash, value)
 	}
 	return nil
 }
@@ -208,12 +210,21 @@ func (db *BlockDatabase) Get(key []byte) ([]byte, error) {
 	if !db.shouldWriteToBlockDatabase(key) {
 		return db.Database.Get(key)
 	}
-	blockNumber, blockHash := blockNumberAndHashFromKey(key)
 
-	if isReceiptKey(key) {
-		return db.getReceipts(key, blockNumber, blockHash)
+	blockNumber, blockHash := blockNumberAndHashFromKey(key)
+	var heightDB database.HeightIndex
+	switch {
+	case isReceiptKey(key):
+		heightDB = db.receiptsDB
+	case isHeaderKey(key):
+		heightDB = db.headerDB
+	case isBodyKey(key):
+		heightDB = db.bodyDB
+	default:
+		return nil, fmt.Errorf("unexpected key: %x", key)
 	}
-	return db.getBlock(key, blockNumber, blockHash)
+
+	return readHashAndData(heightDB, db.Database, key, blockNumber, blockHash, db.migrator)
 }
 
 func (db *BlockDatabase) Has(key []byte) (bool, error) {
@@ -240,9 +251,13 @@ func (db *BlockDatabase) Close() error {
 	if db.migrator != nil {
 		db.migrator.Stop()
 	}
-	if db.blockDB != nil {
-		err := db.blockDB.Close()
-		if err != nil {
+	if db.headerDB != nil {
+		if err := db.headerDB.Close(); err != nil {
+			return err
+		}
+	}
+	if db.bodyDB != nil {
+		if err := db.bodyDB.Close(); err != nil {
 			return err
 		}
 	}
@@ -260,7 +275,7 @@ func (db *BlockDatabase) initMigrator() error {
 		return nil
 	}
 	migratorStateDB := prefixdb.New(migratorDBPrefix, db.stateDB)
-	migrator, err := NewBlockDatabaseMigrator(migratorStateDB, db.blockDB, db.receiptsDB, db.Database)
+	migrator, err := NewBlockDatabaseMigrator(migratorStateDB, db.headerDB, db.bodyDB, db.receiptsDB, db.Database)
 	if err != nil {
 		return err
 	}
@@ -271,7 +286,7 @@ func (db *BlockDatabase) initMigrator() error {
 func (db *BlockDatabase) createMeteredBlockDatabase(namespace string, minHeight uint64) (database.HeightIndex, error) {
 	path := filepath.Join(db.blockDBPath, namespace)
 	config := db.config.WithDir(path).WithMinimumHeight(minHeight)
-	newDB, err := blockdb.New(config, db.logger)
+	newDB, err := blockdb.New(config, logging.NoLog{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create block database at %s: %w", path, err)
 	}
@@ -287,89 +302,24 @@ func (db *BlockDatabase) createMeteredBlockDatabase(namespace string, minHeight 
 	return meteredDB, nil
 }
 
-func (db *BlockDatabase) getReceipts(key []byte, blockNumber uint64, blockHash common.Hash) ([]byte, error) {
-	encodedReceiptData, err := db.receiptsDB.Get(blockNumber)
-	if err != nil {
-		if errors.Is(err, database.ErrNotFound) && db.isMigrationNeeded() {
-			return db.Database.Get(key)
-		}
-		return nil, err
-	}
-
-	decodedHash, receiptData, err := decodeReceiptData(encodedReceiptData)
-	if err != nil {
-		return nil, err
-	}
-	if decodedHash != blockHash {
-		return nil, nil
-	}
-
-	return receiptData, nil
-}
-
-func (db *BlockDatabase) getBlock(key []byte, blockNumber uint64, blockHash common.Hash) ([]byte, error) {
-	encodedBlock, err := db.blockDB.Get(blockNumber)
-	if err != nil {
-		if errors.Is(err, database.ErrNotFound) && db.isMigrationNeeded() {
-			return db.Database.Get(key)
-		}
-		return nil, err
-	}
-
-	decodedHash, header, body, err := decodeBlockData(encodedBlock)
-	if err != nil {
-		return nil, err
-	}
-	if decodedHash != blockHash {
-		return nil, nil
-	}
-
-	if isBodyKey(key) {
-		return body, nil
-	}
-	if isHeaderKey(key) {
-		return header, nil
-	}
-
-	return nil, fmt.Errorf("unexpected key for block data: %s", key)
-}
-
-func (db *BlockDatabase) isMigrationNeeded() bool {
-	return db.migrator != nil && db.migrator.Status() != migrationCompleted
-}
-
-func (db *BlockDatabase) writeReceipts(blockNumber uint64, blockHash common.Hash, data []byte) error {
-	encodedReceipts, err := encodeReceiptData(data, blockHash)
-	if err != nil {
-		return err
-	}
-	return db.receiptsDB.Put(blockNumber, encodedReceipts)
-}
-
-func (db *BlockDatabase) writeBlock(blockNumber uint64, blockHash common.Hash, header []byte, body []byte) error {
-	encodedBlock, err := encodeBlockData(header, body, blockHash)
-	if err != nil {
-		return err
-	}
-	return db.blockDB.Put(blockNumber, encodedBlock)
-}
-
 func (db *BlockDatabase) shouldWriteToBlockDatabase(key []byte) bool {
 	if !db.initialized {
 		return false
 	}
 
-	isTargetKey := isBodyKey(key) || isHeaderKey(key) || isReceiptKey(key)
-	if !isTargetKey {
+	var prefixLen int
+	switch {
+	case isBodyKey(key):
+		prefixLen = len(chainDBBlockBodyPrefix)
+	case isHeaderKey(key):
+		prefixLen = len(chainDBHeaderPrefix)
+	case isReceiptKey(key):
+		prefixLen = len(chainDBReceiptsPrefix)
+	default:
 		return false
 	}
-
-	// Only blocks with height >= min height are stored in block database
-	if blockNumber, _ := blockNumberAndHashFromKey(key); blockNumber < db.minHeight {
-		return false
-	}
-
-	return true
+	blockNumber := binary.BigEndian.Uint64(key[prefixLen : prefixLen+8])
+	return blockNumber >= db.minHeight
 }
 
 func (db *BlockDatabase) NewBatch() ethdb.Batch {
@@ -415,48 +365,6 @@ func blockNumberAndHashFromKey(key []byte) (uint64, common.Hash) {
 	return blockNumber, blockHash
 }
 
-func decodeBlockData(encodedBlock []byte) (hash common.Hash, header []byte, body []byte, err error) {
-	var blockData [][]byte
-	if err := rlp.DecodeBytes(encodedBlock, &blockData); err != nil {
-		return common.Hash{}, nil, nil, err
-	}
-
-	if len(blockData) != blockDataElements {
-		return common.Hash{}, nil, nil, fmt.Errorf(
-			"invalid block data format: expected %d elements, got %d",
-			blockDataElements,
-			len(blockData),
-		)
-	}
-
-	return common.BytesToHash(blockData[0]), blockData[1], blockData[2], nil
-}
-
-func encodeBlockData(header []byte, body []byte, blockHash common.Hash) ([]byte, error) {
-	return rlp.EncodeToBytes([][]byte{blockHash.Bytes(), header, body})
-}
-
-func encodeReceiptData(receipts []byte, blockHash common.Hash) ([]byte, error) {
-	return rlp.EncodeToBytes([][]byte{blockHash.Bytes(), receipts})
-}
-
-func decodeReceiptData(encodedReceipts []byte) (common.Hash, []byte, error) {
-	var receiptData [][]byte
-	if err := rlp.DecodeBytes(encodedReceipts, &receiptData); err != nil {
-		return common.Hash{}, nil, err
-	}
-
-	if len(receiptData) != receiptDataElements {
-		return common.Hash{}, nil, fmt.Errorf(
-			"invalid receipt data format: expected %d elements, got %d",
-			receiptDataElements,
-			len(receiptData),
-		)
-	}
-
-	return common.BytesToHash(receiptData[0]), receiptData[1], nil
-}
-
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, blockNumberSize)
 	binary.BigEndian.PutUint64(enc, number)
@@ -500,7 +408,53 @@ func getDatabaseMinHeight(db database.Database) (*uint64, error) {
 	return &minHeight, nil
 }
 
-// IsBlockDatabaseCreated checks if block database has already been created
+// writeHashAndData encodes [hash, data] and writes to the provided height-index db at the given height.
+func writeHashAndData(db database.HeightIndex, height uint64, blockHash common.Hash, data []byte) error {
+	encoded, err := rlp.EncodeToBytes([][]byte{blockHash.Bytes(), data})
+	if err != nil {
+		return err
+	}
+	return db.Put(height, encoded)
+}
+
+// readHashAndData reads data from the height-indexed database and falls back
+// to the chain database if the data is not found and migration is still needed.
+func readHashAndData(
+	heightDB database.HeightIndex,
+	chainDB ethdb.Database,
+	key []byte,
+	blockNumber uint64,
+	blockHash common.Hash,
+	migrator *blockDatabaseMigrator,
+) ([]byte, error) {
+	encodedData, err := heightDB.Get(blockNumber)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) && migrator != nil && migrator.Status() != migrationCompleted {
+			return chainDB.Get(key)
+		}
+		return nil, err
+	}
+
+	var elems [][]byte
+	if err := rlp.DecodeBytes(encodedData, &elems); err != nil {
+		return nil, err
+	}
+	if len(elems) != hashDataElements {
+		return nil, fmt.Errorf(
+			"invalid hash+data format: expected %d elements, got %d",
+			hashDataElements,
+			len(elems),
+		)
+	}
+	decodedHash := common.BytesToHash(elems[0])
+	if decodedHash != blockHash {
+		return nil, nil
+	}
+
+	return elems[1], nil
+}
+
+// IsBlockDatabaseCreated checks if block databases have already been created
 func IsBlockDatabaseCreated(db database.Database) (bool, error) {
 	has, err := db.Has(blockDBMinHeightKey)
 	if err != nil {

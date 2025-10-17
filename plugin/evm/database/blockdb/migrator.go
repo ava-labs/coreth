@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package database
+package blockdb
 
 import (
 	"context"
@@ -30,7 +30,6 @@ const (
 
 	logProgressInterval = 5 * time.Minute // Log every 5 minutes
 	compactionInterval  = 250_000         // Compact every 250k blocks processed
-	batchDeleteInterval = 25_000          // Write delete batch every 25k blocks
 )
 
 var (
@@ -46,7 +45,8 @@ var (
 type blockDatabaseMigrator struct {
 	stateDB    database.Database
 	chainDB    ethdb.Database
-	blockDB    database.HeightIndex
+	headerDB   database.HeightIndex
+	bodyDB     database.HeightIndex
 	receiptsDB database.HeightIndex
 
 	status  migrationStatus
@@ -63,12 +63,14 @@ type blockDatabaseMigrator struct {
 // current migration status and target migration end block number.
 func NewBlockDatabaseMigrator(
 	stateDB database.Database,
-	blockDB database.HeightIndex,
+	headerDB database.HeightIndex,
+	bodyDB database.HeightIndex,
 	receiptsDB database.HeightIndex,
 	chainDB ethdb.Database,
 ) (*blockDatabaseMigrator, error) {
 	m := &blockDatabaseMigrator{
-		blockDB:    blockDB,
+		headerDB:   headerDB,
+		bodyDB:     bodyDB,
 		receiptsDB: receiptsDB,
 		stateDB:    stateDB,
 		chainDB:    chainDB,
@@ -192,19 +194,15 @@ func (b *blockDatabaseMigrator) run(ctx context.Context) error {
 		// Release iterator (safe to call multiple times)
 		iter.Release()
 
-		// Write any remaining deletes in batch
-		if deleteBatch.ValueSize() > 0 {
-			if err := deleteBatch.Write(); err != nil {
-				log.Error("failed to write final delete batch", "err", err)
-			}
+		if err := deleteBatch.Write(); err != nil {
+			log.Error("failed to write final delete batch", "err", err)
 		}
 
-		// Compact final range if we processed any blocks
-		if lastBlockInRange > 0 {
+		// Compact final range if we processed any blocks after last interval compaction
+		if firstBlockInRange > 0 && lastBlockInRange > 0 {
 			b.compactBlockRange(firstBlockInRange, lastBlockInRange)
 		}
 
-		// Log final statistics
 		processingTime := time.Since(startTime)
 		log.Info("blockdb migration completed",
 			"blocks_processed", atomic.LoadUint64(&b.processed),
@@ -256,11 +254,9 @@ func (b *blockDatabaseMigrator) run(ctx context.Context) error {
 		if err := b.deleteBlock(deleteBatch, blockNum, hash); err != nil {
 			return fmt.Errorf("failed to add block deletes to batch: %w", err)
 		}
-
 		processed := atomic.AddUint64(&b.processed, 1)
 
-		// Write delete batch every batchDeleteInterval blocks
-		if processed%batchDeleteInterval == 0 {
+		if deleteBatch.ValueSize() > ethdb.IdealBatchSize {
 			if err := deleteBatch.Write(); err != nil {
 				return fmt.Errorf("failed to write delete batch: %w", err)
 			}
@@ -269,10 +265,6 @@ func (b *blockDatabaseMigrator) run(ctx context.Context) error {
 
 		// Compact every compactionInterval blocks
 		if processed-lastCompactionNum >= compactionInterval {
-			log.Info("compaction interval reached, releasing iterator and compacting",
-				"blocks_since_last_compaction", processed-lastCompactionNum,
-				"total_processed", processed)
-
 			// Write any remaining deletes in batch before compaction
 			if deleteBatch.ValueSize() > 0 {
 				if err := deleteBatch.Write(); err != nil {
@@ -292,6 +284,7 @@ func (b *blockDatabaseMigrator) run(ctx context.Context) error {
 			iter = b.chainDB.NewIterator(chainDBBlockBodyPrefix, start)
 			lastCompactionNum = processed
 			firstBlockInRange = 0
+			lastBlockInRange = 0
 		}
 
 		// Log progress every logProgressInterval
@@ -361,12 +354,11 @@ func (b *blockDatabaseMigrator) migrateBlock(blockNum uint64, hash common.Hash, 
 	if err != nil {
 		return fmt.Errorf("failed to encode block header: %w", err)
 	}
-	encodedBlock, err := encodeBlockData(headerBytes, bodyBytes, hash)
-	if err != nil {
-		return fmt.Errorf("failed to encode block data: %w", err)
+	if err := writeHashAndData(b.headerDB, blockNum, hash, headerBytes); err != nil {
+		return fmt.Errorf("failed to write header to headersdb: %w", err)
 	}
-	if err := b.blockDB.Put(blockNum, encodedBlock); err != nil {
-		return fmt.Errorf("failed to write block to blockDB: %w", err)
+	if err := writeHashAndData(b.bodyDB, blockNum, hash, bodyBytes); err != nil {
+		return fmt.Errorf("failed to write body to bodiesdb: %w", err)
 	}
 	return nil
 }
@@ -379,11 +371,7 @@ func (b *blockDatabaseMigrator) migrateReceipts(blockNum uint64, hash common.Has
 		return nil
 	}
 
-	encodedReceipts, err := encodeReceiptData(receiptBytes, hash)
-	if err != nil {
-		return fmt.Errorf("failed to encode receipts with hash: %w", err)
-	}
-	if err := b.receiptsDB.Put(blockNum, encodedReceipts); err != nil {
+	if err := writeHashAndData(b.receiptsDB, blockNum, hash, receiptBytes); err != nil {
 		return fmt.Errorf("failed to write receipts to receiptsDB: %w", err)
 	}
 

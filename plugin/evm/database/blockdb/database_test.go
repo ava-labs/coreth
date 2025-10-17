@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package database
+package blockdb
 
 import (
 	"math/big"
@@ -26,6 +26,7 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+	evmdb "github.com/ava-labs/coreth/plugin/evm/database"
 )
 
 func TestMain(m *testing.M) {
@@ -56,19 +57,23 @@ var (
 )
 
 func newDatabasesFromDir(t *testing.T, dataDir string) (*BlockDatabase, ethdb.Database) {
+	t.Helper()
+
 	base, err := leveldb.New(dataDir, nil, logging.NoLog{}, prometheus.NewRegistry())
 	require.NoError(t, err)
-	chainDB := rawdb.NewDatabase(WrapDatabase(base))
+	chainDB := rawdb.NewDatabase(evmdb.WrapDatabase(base))
 
 	// Create wrapped block database
-	blockDBPath := filepath.Join(dataDir, "blockdb")
+	blockDBPath := filepath.Join(dataDir, "dbs")
 	wrapper := NewBlockDatabase(base, chainDB, blockdb.DefaultConfig(), blockDBPath, logging.NoLog{}, prometheus.NewRegistry())
-	wrapper.InitWithMinHeight(1)
+	require.NoError(t, wrapper.InitWithMinHeight(1))
 
 	return wrapper, chainDB
 }
 
 func createBlocks(t *testing.T, numBlocks int) ([]*types.Block, []types.Receipts) {
+	t.Helper()
+
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 		Number: 0,
@@ -181,7 +186,7 @@ func TestBlockDatabase_Read(t *testing.T) {
 	}
 }
 
-func TestBlockDatabase_Delete(t *testing.T) {
+func TestBlockDatabaseDelete(t *testing.T) {
 	// Test BlockDatabase delete operations.
 	// We are verifying that block header, body and receipts cannot be deleted,
 	// but hash to height mapping should be deleted.
@@ -222,34 +227,34 @@ func TestBlockDatabase_Delete(t *testing.T) {
 	}
 }
 
-func TestBlockDatabase_WriteOrder_CachesUntilBoth(t *testing.T) {
-	// Test that partial writes (header or body only) are cached and not persisted
-	// until both header and body are available, then written as a single RLP block
+func TestBlockDatabaseWrite(t *testing.T) {
+	// Test that header and body are stored separately and block can be read
+	// after both are written.
 	dataDir := t.TempDir()
 	wrapper, chainDB := newDatabasesFromDir(t, dataDir)
 	blocks, _ := createBlocks(t, 2)
 	block := blocks[1]
 
-	// Write header first - should be cached but not persisted
 	rawdb.WriteHeader(wrapper, block.Header())
-
-	// Verify header is not yet available (cached but not written to blockdb)
-	require.False(t, rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()))
-	require.Nil(t, rawdb.ReadHeader(wrapper, block.Hash(), block.NumberU64()))
+	require.True(t, rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()))
+	header := rawdb.ReadHeader(wrapper, block.Hash(), block.NumberU64())
+	assertRLPEqual(t, block.Header(), header)
+	require.False(t, rawdb.HasBody(wrapper, block.Hash(), block.NumberU64()))
+	require.Nil(t, rawdb.ReadBody(wrapper, block.Hash(), block.NumberU64()))
 
 	// Verify underlying chainDB also has no header
 	require.Nil(t, rawdb.ReadHeader(chainDB, block.Hash(), block.NumberU64()))
 
-	// Write body - should trigger writing both header and body to blockdb
+	// Write body - should persist body now
 	rawdb.WriteBody(wrapper, block.Hash(), block.NumberU64(), block.Body())
 
-	// Now both should be available
+	// Verify block is available
 	require.True(t, rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()))
 	require.True(t, rawdb.HasBody(wrapper, block.Hash(), block.NumberU64()))
 	actualBlock := rawdb.ReadBlock(wrapper, block.Hash(), block.NumberU64())
 	assertRLPEqual(t, block, actualBlock)
 
-	// Underlying chainDB should still have no header/body
+	// Verify underlying chainDB has no header/body
 	require.Nil(t, rawdb.ReadHeader(chainDB, block.Hash(), block.NumberU64()))
 	require.Nil(t, rawdb.ReadBody(chainDB, block.Hash(), block.NumberU64()))
 }
@@ -434,7 +439,7 @@ func TestBlockDatabase_Close_PersistsData(t *testing.T) {
 	// Test we should no longer be able to read the block
 	require.False(t, rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()))
 	require.False(t, rawdb.HasBody(wrapper, block.Hash(), block.NumberU64()))
-	_, err := wrapper.blockDB.Get(block.NumberU64())
+	_, err := wrapper.bodyDB.Get(block.NumberU64())
 	require.Error(t, err)
 	require.ErrorIs(t, err, database.ErrClosed)
 
@@ -468,8 +473,8 @@ func TestBlockDatabase_ReadDuringMigration(t *testing.T) {
 
 	// Create a slow block database to control migration speed
 	blockCount := 0
-	slowBdb := &slowBlockDatabase{
-		HeightIndex: wrapper.blockDB,
+	slowDB := &slowBlockDatabase{
+		HeightIndex: wrapper.bodyDB,
 		shouldSlow: func() bool {
 			blockCount++
 			return blockCount > 5 // Slow down after 5 blocks
@@ -477,7 +482,7 @@ func TestBlockDatabase_ReadDuringMigration(t *testing.T) {
 	}
 
 	// Create and start migrator manually with slow block database
-	wrapper.migrator.blockDB = slowBdb
+	wrapper.migrator.bodyDB = slowDB
 	require.NoError(t, wrapper.migrator.Migrate())
 
 	// Wait for at least 5 blocks to be migrated
@@ -591,7 +596,7 @@ func TestBlockDatabase_Initialization(t *testing.T) {
 			dataDir := t.TempDir()
 			base, err := leveldb.New(dataDir, nil, logging.NoLog{}, prometheus.NewRegistry())
 			require.NoError(t, err)
-			chainDB := rawdb.NewDatabase(WrapDatabase(base))
+			chainDB := rawdb.NewDatabase(evmdb.WrapDatabase(base))
 			blockDBPath := filepath.Join(dataDir, "blockdb")
 
 			// Create the block database with an existing min height if needed
@@ -608,7 +613,7 @@ func TestBlockDatabase_Initialization(t *testing.T) {
 					prometheus.NewRegistry(),
 				)
 				require.NoError(t, wrapper.InitWithMinHeight(*tc.existingDBMinHeight))
-				require.NoError(t, wrapper.blockDB.Close())
+				require.NoError(t, wrapper.bodyDB.Close())
 				require.NoError(t, wrapper.receiptsDB.Close())
 				minHeight, err = getDatabaseMinHeight(base)
 				require.NoError(t, err)
@@ -660,7 +665,7 @@ func TestBlockDatabase_Genesis(t *testing.T) {
 	genesisHash := rawdb.ReadCanonicalHash(chainDB, 0)
 	genesisBlock := rawdb.ReadBlock(wrapper, genesisHash, 0)
 	assertRLPEqual(t, blocks[0], genesisBlock)
-	has, _ := wrapper.blockDB.Has(0)
+	has, _ := wrapper.bodyDB.Has(0)
 	require.False(t, has)
 	require.Equal(t, uint64(1), wrapper.minHeight)
 }
