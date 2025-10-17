@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -119,7 +119,7 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 		}
 	}
 
-	sort.Strings(extraImports)
+	slices.Sort(extraImports)
 
 	if len(extraImports) > 0 {
 		var errorMsg strings.Builder
@@ -131,7 +131,7 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 			for file := range files {
 				fileList = append(fileList, file)
 			}
-			sort.Strings(fileList)
+			slices.Sort(fileList)
 
 			errorMsg.WriteString(fmt.Sprintf("- %s\n", importPath))
 			errorMsg.WriteString(fmt.Sprintf("   Used in %d file(s):\n", len(fileList)))
@@ -141,7 +141,7 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 			errorMsg.WriteString("\n")
 		}
 
-		t.Error(errorMsg.String())
+		require.Fail(t, errorMsg.String())
 	}
 }
 
@@ -178,7 +178,7 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 	imports := make(map[string]map[string]struct{})
 	libevmRegex := regexp.MustCompile(`^github\.com/ava-labs/libevm/`)
 
-	return imports, filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+	return imports, filepath.Walk(rootDir, func(path string, _ os.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, ".go") {
 			return err
 		}
@@ -191,7 +191,7 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 
 		node, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
 		if err != nil {
-			return nil // Skip unparseable files
+			return nil //nolint:nilerr // Skip unparseable files
 		}
 
 		for _, imp := range node.Imports {
