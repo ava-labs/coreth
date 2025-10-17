@@ -49,6 +49,10 @@ type blockBuilder struct {
 	// but at least after a minimum delay of minBlockBuildingRetryDelay.
 	lastBuildParentHash common.Hash
 	lastBuildTime       time.Time
+
+	blockNumLock    sync.RWMutex
+	pendingBlockNum uint64
+	finalBlockNum   uint64
 }
 
 // NewBlockBuilder creates a new block builder. extraMempool is an optional mempool (can be nil) that
@@ -104,10 +108,13 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 		extraChan = b.extraMempool.SubscribePendingTxs()
 	}
 
+	events := make(chan core.NewTxPoolReorgEvent)
+	sub := b.txPool.SubscribeNewReorgEvent(events)
+
 	b.shutdownWg.Add(1)
 	go b.ctx.Log.RecoverAndPanic(func() {
 		defer b.shutdownWg.Done()
-
+		defer sub.Unsubscribe()
 		for {
 			select {
 			case <-txSubmitChan:
@@ -118,6 +125,13 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 				b.signalCanBuild()
 			case <-b.shutdownChan:
 				return
+			case event := <-events:
+				if event.Head == nil || event.Head.Number == nil {
+					log.Warn("nil head or block number in tx pool reorg event")
+					continue
+				}
+				b.setFinalBlockNum(event.Head.Number.Uint64())
+				b.signalCanBuild()
 			}
 		}
 	})
@@ -156,7 +170,7 @@ func (b *blockBuilder) waitForEvent(ctx context.Context, currentHeader *types.He
 func (b *blockBuilder) waitForNeedToBuild(ctx context.Context) (time.Time, common.Hash, error) {
 	b.buildBlockLock.Lock()
 	defer b.buildBlockLock.Unlock()
-	for !b.needToBuild() {
+	for !b.needToBuild() || b.pendingPoolUpdate() {
 		if err := b.pendingSignal.Wait(ctx); err != nil {
 			return time.Time{}, common.Hash{}, err
 		}
@@ -198,4 +212,22 @@ func minNextBlockTime(parent *types.Header) time.Time {
 	// so this should not overflow
 	requiredDelay := time.Duration(acp226DelayExcess.Delay()) * time.Millisecond
 	return parentTime.Add(requiredDelay)
+}
+
+func (b *blockBuilder) setPendingBlockNum(pendingBlockNum uint64) {
+	b.blockNumLock.Lock()
+	defer b.blockNumLock.Unlock()
+	b.pendingBlockNum = pendingBlockNum
+}
+
+func (b *blockBuilder) setFinalBlockNum(num uint64) {
+	b.blockNumLock.Lock()
+	defer b.blockNumLock.Unlock()
+	b.finalBlockNum = num
+}
+
+func (b *blockBuilder) pendingPoolUpdate() bool {
+	b.blockNumLock.RLock()
+	defer b.blockNumLock.RUnlock()
+	return b.pendingBlockNum != b.finalBlockNum
 }
