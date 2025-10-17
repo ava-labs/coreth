@@ -351,9 +351,9 @@ func (oracle *Oracle) getFeeInfo(ctx context.Context, number uint64) (*feeInfo, 
 	}
 
 	// on cache miss, read from database
-	header, err := oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
+	block, err := oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(number))
 	if err != nil {
 		return nil, err
 	}
-	return oracle.feeInfoProvider.addHeader(ctx, header)
+	return oracle.feeInfoProvider.addHeader(ctx, block.Header(), block.Transactions())
 }

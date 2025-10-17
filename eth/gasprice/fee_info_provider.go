@@ -30,8 +30,10 @@ package gasprice
 import (
 	"context"
 	"math/big"
+	"sort"
 
 	"github.com/ava-labs/coreth/core"
+	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/core/types"
@@ -79,7 +81,7 @@ func newFeeInfoProvider(backend OracleBackend, minGasUsed uint64, size int) (*fe
 	backend.SubscribeChainAcceptedEvent(acceptedEvent)
 	go func() {
 		for ev := range acceptedEvent {
-			fc.addHeader(context.Background(), ev.Block.Header())
+			fc.addHeader(context.Background(), ev.Block.Header(), ev.Block.Transactions())
 			if fc.newHeaderAdded != nil {
 				fc.newHeaderAdded()
 			}
@@ -89,7 +91,7 @@ func newFeeInfoProvider(backend OracleBackend, minGasUsed uint64, size int) (*fe
 }
 
 // addHeader processes header into a feeInfo struct and caches the result.
-func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (*feeInfo, error) {
+func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header, txs []*types.Transaction) (*feeInfo, error) {
 	feeInfo := &feeInfo{
 		timestamp: header.Time,
 		baseFee:   header.BaseFee,
@@ -104,7 +106,14 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (
 	// Don't bias the estimate with blocks containing a limited number of transactions paying to
 	// expedite block production.
 	var err error
-	if minGasUsed.Cmp(totalGasUsed) <= 0 {
+	extraConfig := params.GetExtra(f.backend.ChainConfig())
+	var tip *big.Int
+	// After Granite BlockGasCost became obsolete, so MinRequiredTip will return nil.
+	// Instead we should use the effective tips from the transactions.
+	// Note (ceyonur): This will mix the median tips with MinRequiredTips in the percentile calculations.
+	if extraConfig.IsGranite(header.Time) {
+		tip = medianTip(txs, header.BaseFee)
+	} else if minGasUsed.Cmp(totalGasUsed) <= 0 {
 		// Compute minimum required tip to be included in previous block
 		//
 		// NOTE: Using this approach, we will never recommend that the caller
@@ -113,9 +122,10 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header) (
 		// suggested tip). In the future, we may wish to start suggesting a non-zero
 		// tip when most blocks are full otherwise callers may observe an unexpected
 		// delay in transaction inclusion.
-		feeInfo.tip, err = f.backend.MinRequiredTip(ctx, header)
+		tip, err = f.backend.MinRequiredTip(ctx, header)
 	}
 
+	feeInfo.tip = tip
 	f.cache.Add(header.Number.Uint64(), feeInfo)
 	return feeInfo, err
 }
@@ -141,14 +151,43 @@ func (f *feeInfoProvider) populateCache(size int) error {
 	}
 
 	for i := lowerBlockNumber; i <= lastAccepted; i++ {
-		header, err := f.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(i))
+		block, err := f.backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil {
 			return err
 		}
-		_, err = f.addHeader(context.Background(), header)
+		_, err = f.addHeader(context.Background(), block.Header(), block.Transactions())
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// medianTip returns the median tip of given transactions.
+func medianTip(txs types.Transactions, baseFee *big.Int) *big.Int {
+	if len(txs) == 0 {
+		return new(big.Int)
+	}
+
+	// Extract all effective tips
+	tips := make([]*big.Int, len(txs))
+	for i, tx := range txs {
+		tips[i] = tx.EffectiveGasTipValue(baseFee)
+	}
+
+	// Sort tips in ascending order
+	sort.Slice(tips, func(i, j int) bool {
+		return tips[i].Cmp(tips[j]) < 0
+	})
+
+	// Calculate median
+	n := len(tips)
+	if n%2 == 0 {
+		// Even number of elements: average of two middle elements
+		median := new(big.Int).Add(tips[n/2-1], tips[n/2])
+		return median.Div(median, big.NewInt(2))
+	} else {
+		// Odd number of elements: middle element
+		return new(big.Int).Set(tips[n/2])
+	}
 }
