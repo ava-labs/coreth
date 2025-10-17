@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	_ ethdb.Database = (*BlockDatabase)(nil)
+	_ ethdb.Database = (*Database)(nil)
 
 	// Key prefixes for block data in the ethdb.
 	// REVIEW: I opted to just copy these from libevm since these should never change
@@ -50,10 +50,10 @@ const (
 	blockHashSize    = 32
 )
 
-// BlockDatabase is a wrapper around an ethdb.Database that stores block header
+// Database is a wrapper around an ethdb.Database that stores block header
 // body, and receipts in separate height-indexed block databases.
 // All other keys are stored in the underlying ethdb.Database (chainDB).
-type BlockDatabase struct {
+type Database struct {
 	ethdb.Database
 	// DB for storing block database state data (ie min height)
 	stateDB    database.Database
@@ -65,7 +65,7 @@ type BlockDatabase struct {
 	blockDBPath string
 	minHeight   uint64
 
-	migrator *blockDatabaseMigrator
+	migrator *migrator
 
 	reg prometheus.Registerer
 	// todo: use logger for blockdb instances
@@ -75,20 +75,20 @@ type BlockDatabase struct {
 	initialized bool
 }
 
-type blockDatabaseBatch struct {
-	database *BlockDatabase
+type databaseBatch struct {
+	database *Database
 	ethdb.Batch
 }
 
-func NewBlockDatabase(
+func New(
 	stateDB database.Database,
 	chainDB ethdb.Database,
 	config blockdb.DatabaseConfig,
 	blockDBPath string,
 	logger logging.Logger,
 	reg prometheus.Registerer,
-) *BlockDatabase {
-	return &BlockDatabase{
+) *Database {
+	return &Database{
 		stateDB:     stateDB,
 		Database:    chainDB,
 		blockDBPath: blockDBPath,
@@ -108,7 +108,7 @@ func NewBlockDatabase(
 //  4. No data to migrate + state sync disabled → initializes with min height 1
 //
 // Returns true if databases were initialized, false otherwise.
-func (db *BlockDatabase) InitWithStateSync(stateSyncEnabled bool) (bool, error) {
+func (db *Database) InitWithStateSync(stateSyncEnabled bool) (bool, error) {
 	minHeight, err := getDatabaseMinHeight(db.stateDB)
 	if err != nil {
 		return false, err
@@ -144,7 +144,7 @@ func (db *BlockDatabase) InitWithStateSync(stateSyncEnabled bool) (bool, error) 
 }
 
 // InitWithMinHeight initializes the height-indexed databases with the provided minimum height.
-func (db *BlockDatabase) InitWithMinHeight(minHeight uint64) error {
+func (db *Database) InitWithMinHeight(minHeight uint64) error {
 	if db.initialized {
 		log.Warn("InitWithMinHeight called on a block database that is already initialized")
 		return nil
@@ -154,15 +154,15 @@ func (db *BlockDatabase) InitWithMinHeight(minHeight uint64) error {
 	if err := db.stateDB.Put(blockDBMinHeightKey, encodeBlockNumber(minHeight)); err != nil {
 		return err
 	}
-	headerDB, err := db.createMeteredBlockDatabase("headerdb", minHeight)
+	headerDB, err := db.newMeteredDatabase("headerdb", minHeight)
 	if err != nil {
 		return err
 	}
-	bodyDB, err := db.createMeteredBlockDatabase("bodydb", minHeight)
+	bodyDB, err := db.newMeteredDatabase("bodydb", minHeight)
 	if err != nil {
 		return err
 	}
-	receiptsDB, err := db.createMeteredBlockDatabase("receiptsdb", minHeight)
+	receiptsDB, err := db.newMeteredDatabase("receiptsdb", minHeight)
 	if err != nil {
 		return err
 	}
@@ -180,14 +180,14 @@ func (db *BlockDatabase) InitWithMinHeight(minHeight uint64) error {
 }
 
 // Migrate migrates block headers, bodies, and receipts from ethDB to the block databases.
-func (db *BlockDatabase) Migrate() error {
+func (db *Database) Migrate() error {
 	if !db.initialized {
 		return errors.New("block database must be initialized before migrating")
 	}
 	return db.migrator.Migrate()
 }
 
-func (db *BlockDatabase) Put(key []byte, value []byte) error {
+func (db *Database) Put(key []byte, value []byte) error {
 	if !db.shouldWriteToBlockDatabase(key) {
 		return db.Database.Put(key, value)
 	}
@@ -206,7 +206,7 @@ func (db *BlockDatabase) Put(key []byte, value []byte) error {
 	return nil
 }
 
-func (db *BlockDatabase) Get(key []byte) ([]byte, error) {
+func (db *Database) Get(key []byte) ([]byte, error) {
 	if !db.shouldWriteToBlockDatabase(key) {
 		return db.Database.Get(key)
 	}
@@ -227,7 +227,7 @@ func (db *BlockDatabase) Get(key []byte) ([]byte, error) {
 	return readHashAndData(heightDB, db.Database, key, blockNumber, blockHash, db.migrator)
 }
 
-func (db *BlockDatabase) Has(key []byte) (bool, error) {
+func (db *Database) Has(key []byte) (bool, error) {
 	if !db.shouldWriteToBlockDatabase(key) {
 		return db.Database.Has(key)
 	}
@@ -238,7 +238,7 @@ func (db *BlockDatabase) Has(key []byte) (bool, error) {
 	return data != nil, nil
 }
 
-func (db *BlockDatabase) Delete(key []byte) error {
+func (db *Database) Delete(key []byte) error {
 	if !db.shouldWriteToBlockDatabase(key) {
 		return db.Database.Delete(key)
 	}
@@ -247,7 +247,7 @@ func (db *BlockDatabase) Delete(key []byte) error {
 	return nil
 }
 
-func (db *BlockDatabase) Close() error {
+func (db *Database) Close() error {
 	if db.migrator != nil {
 		db.migrator.Stop()
 	}
@@ -270,12 +270,12 @@ func (db *BlockDatabase) Close() error {
 	return db.Database.Close()
 }
 
-func (db *BlockDatabase) initMigrator() error {
+func (db *Database) initMigrator() error {
 	if db.migrator != nil {
 		return nil
 	}
 	migratorStateDB := prefixdb.New(migratorDBPrefix, db.stateDB)
-	migrator, err := NewBlockDatabaseMigrator(migratorStateDB, db.headerDB, db.bodyDB, db.receiptsDB, db.Database)
+	migrator, err := NewMigrator(migratorStateDB, db.headerDB, db.bodyDB, db.receiptsDB, db.Database)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (db *BlockDatabase) initMigrator() error {
 	return nil
 }
 
-func (db *BlockDatabase) createMeteredBlockDatabase(namespace string, minHeight uint64) (database.HeightIndex, error) {
+func (db *Database) newMeteredDatabase(namespace string, minHeight uint64) (database.HeightIndex, error) {
 	path := filepath.Join(db.blockDBPath, namespace)
 	config := db.config.WithDir(path).WithMinimumHeight(minHeight)
 	newDB, err := blockdb.New(config, logging.NoLog{})
@@ -302,7 +302,7 @@ func (db *BlockDatabase) createMeteredBlockDatabase(namespace string, minHeight 
 	return meteredDB, nil
 }
 
-func (db *BlockDatabase) shouldWriteToBlockDatabase(key []byte) bool {
+func (db *Database) shouldWriteToBlockDatabase(key []byte) bool {
 	if !db.initialized {
 		return false
 	}
@@ -322,28 +322,28 @@ func (db *BlockDatabase) shouldWriteToBlockDatabase(key []byte) bool {
 	return blockNumber >= db.minHeight
 }
 
-func (db *BlockDatabase) NewBatch() ethdb.Batch {
-	return blockDatabaseBatch{
+func (db *Database) NewBatch() ethdb.Batch {
+	return databaseBatch{
 		database: db,
 		Batch:    db.Database.NewBatch(),
 	}
 }
 
-func (db *BlockDatabase) NewBatchWithSize(size int) ethdb.Batch {
-	return blockDatabaseBatch{
+func (db *Database) NewBatchWithSize(size int) ethdb.Batch {
+	return databaseBatch{
 		database: db,
 		Batch:    db.Database.NewBatchWithSize(size),
 	}
 }
 
-func (batch blockDatabaseBatch) Put(key []byte, value []byte) error {
+func (batch databaseBatch) Put(key []byte, value []byte) error {
 	if !batch.database.shouldWriteToBlockDatabase(key) {
 		return batch.Batch.Put(key, value)
 	}
 	return batch.database.Put(key, value)
 }
 
-func (batch blockDatabaseBatch) Delete(key []byte) error {
+func (batch databaseBatch) Delete(key []byte) error {
 	if !batch.database.shouldWriteToBlockDatabase(key) {
 		return batch.Batch.Delete(key)
 	}
@@ -425,7 +425,7 @@ func readHashAndData(
 	key []byte,
 	blockNumber uint64,
 	blockHash common.Hash,
-	migrator *blockDatabaseMigrator,
+	migrator *migrator,
 ) ([]byte, error) {
 	encodedData, err := heightDB.Get(blockNumber)
 	if err != nil {
@@ -454,8 +454,8 @@ func readHashAndData(
 	return elems[1], nil
 }
 
-// IsBlockDatabaseCreated checks if block databases have already been created
-func IsBlockDatabaseCreated(db database.Database) (bool, error) {
+// IsEnabled checks if block databases have already been enabled
+func IsEnabled(db database.Database) (bool, error) {
 	has, err := db.Has(blockDBMinHeightKey)
 	if err != nil {
 		return false, err

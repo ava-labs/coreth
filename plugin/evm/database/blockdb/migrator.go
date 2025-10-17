@@ -40,9 +40,9 @@ var (
 	endBlockNumberKey = []byte("migration_end_block_number")
 )
 
-// blockDatabaseMigrator migrates canonical block data and receipts from
+// migrator migrates canonical block data and receipts from
 // ethdb.Database into the height-indexed block and receipt databases.
-type blockDatabaseMigrator struct {
+type migrator struct {
 	stateDB    database.Database
 	chainDB    ethdb.Database
 	headerDB   database.HeightIndex
@@ -59,16 +59,16 @@ type blockDatabaseMigrator struct {
 	endHeight uint64
 }
 
-// NewBlockDatabaseMigrator creates a new block database migrator with
+// NewMigrator creates a new block database migrator with
 // current migration status and target migration end block number.
-func NewBlockDatabaseMigrator(
+func NewMigrator(
 	stateDB database.Database,
 	headerDB database.HeightIndex,
 	bodyDB database.HeightIndex,
 	receiptsDB database.HeightIndex,
 	chainDB ethdb.Database,
-) (*blockDatabaseMigrator, error) {
-	m := &blockDatabaseMigrator{
+) (*migrator, error) {
+	m := &migrator{
 		headerDB:   headerDB,
 		bodyDB:     bodyDB,
 		receiptsDB: receiptsDB,
@@ -99,13 +99,13 @@ func NewBlockDatabaseMigrator(
 	return m, nil
 }
 
-func (b *blockDatabaseMigrator) Status() migrationStatus {
+func (b *migrator) Status() migrationStatus {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.status
 }
 
-func (b *blockDatabaseMigrator) Stop() {
+func (b *migrator) Stop() {
 	b.mu.Lock()
 	cancel := b.cancel
 	b.mu.Unlock()
@@ -116,7 +116,7 @@ func (b *blockDatabaseMigrator) Stop() {
 	}
 }
 
-func (b *blockDatabaseMigrator) Migrate() error {
+func (b *migrator) Migrate() error {
 	if b.status == migrationCompleted {
 		return nil
 	}
@@ -141,7 +141,7 @@ func (b *blockDatabaseMigrator) Migrate() error {
 	return nil
 }
 
-func (b *blockDatabaseMigrator) beginRun() (context.Context, error) {
+func (b *migrator) beginRun() (context.Context, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -154,14 +154,14 @@ func (b *blockDatabaseMigrator) beginRun() (context.Context, error) {
 	return ctx, nil
 }
 
-func (b *blockDatabaseMigrator) endRun() {
+func (b *migrator) endRun() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.cancel = nil
 	b.running = false
 }
 
-func (b *blockDatabaseMigrator) setStatus(s migrationStatus) error {
+func (b *migrator) setStatus(s migrationStatus) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.status == s {
@@ -174,7 +174,7 @@ func (b *blockDatabaseMigrator) setStatus(s migrationStatus) error {
 	return nil
 }
 
-func (b *blockDatabaseMigrator) run(ctx context.Context) error {
+func (b *migrator) run(ctx context.Context) error {
 	var (
 		etaTarget         uint64
 		etaTracker        = timer.NewEtaTracker(10, 1.2)
@@ -318,7 +318,7 @@ func (b *blockDatabaseMigrator) run(ctx context.Context) error {
 	return nil
 }
 
-func (b *blockDatabaseMigrator) compactBlockRange(startBlock, endBlock uint64) {
+func (b *migrator) compactBlockRange(startBlock, endBlock uint64) {
 	startTime := time.Now()
 
 	// Compact block headers
@@ -348,7 +348,7 @@ func (b *blockDatabaseMigrator) compactBlockRange(startBlock, endBlock uint64) {
 		"duration", time.Since(startTime))
 }
 
-func (b *blockDatabaseMigrator) migrateBlock(blockNum uint64, hash common.Hash, bodyBytes []byte) error {
+func (b *migrator) migrateBlock(blockNum uint64, hash common.Hash, bodyBytes []byte) error {
 	header := rawdb.ReadHeader(b.chainDB, hash, blockNum)
 	headerBytes, err := rlp.EncodeToBytes(header)
 	if err != nil {
@@ -363,7 +363,7 @@ func (b *blockDatabaseMigrator) migrateBlock(blockNum uint64, hash common.Hash, 
 	return nil
 }
 
-func (b *blockDatabaseMigrator) migrateReceipts(blockNum uint64, hash common.Hash) error {
+func (b *migrator) migrateReceipts(blockNum uint64, hash common.Hash) error {
 	// Read raw receipt bytes directly from chainDB
 	receiptBytes := rawdb.ReadReceiptsRLP(b.chainDB, hash, blockNum)
 	if receiptBytes == nil {
@@ -379,7 +379,7 @@ func (b *blockDatabaseMigrator) migrateReceipts(blockNum uint64, hash common.Has
 }
 
 // deleteBlock adds delete operations for a block to the provided batch
-func (b *blockDatabaseMigrator) deleteBlock(batch ethdb.Batch, blockNum uint64, hash common.Hash) error {
+func (b *migrator) deleteBlock(batch ethdb.Batch, blockNum uint64, hash common.Hash) error {
 	headerKey := blockHeaderKey(blockNum, hash)
 	if err := batch.Delete(headerKey); err != nil {
 		return fmt.Errorf("failed to delete header from chainDB: %w", err)
@@ -390,7 +390,7 @@ func (b *blockDatabaseMigrator) deleteBlock(batch ethdb.Batch, blockNum uint64, 
 	return nil
 }
 
-func (b *blockDatabaseMigrator) blocksProcessed() uint64 {
+func (b *migrator) blocksProcessed() uint64 {
 	return atomic.LoadUint64(&b.processed)
 }
 

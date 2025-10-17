@@ -23,7 +23,7 @@ import (
 )
 
 // Tests migration status is correctly set to "not started" after initializing a new migrator.
-func TestBlockDatabaseMigrator_StatusNotStarted(t *testing.T) {
+func TestMigrator_StatusNotStarted(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
 	t.Cleanup(func() {
@@ -33,7 +33,7 @@ func TestBlockDatabaseMigrator_StatusNotStarted(t *testing.T) {
 }
 
 // Tests migration status transitions to "in progress" while a migration is actively running.
-func TestBlockDatabaseMigrator_StatusInProgress(t *testing.T) {
+func TestMigrator_StatusInProgress(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, chainDB := newDatabasesFromDir(t, dataDir)
 	t.Cleanup(func() {
@@ -43,7 +43,7 @@ func TestBlockDatabaseMigrator_StatusInProgress(t *testing.T) {
 	writeBlocks(chainDB, blocks, receipts)
 
 	// migrate with a slow block database
-	slowDB := &slowBlockDatabase{
+	slowDB := &slowDatabase{
 		HeightIndex: wrapper.bodyDB,
 		shouldSlow: func() bool {
 			return true
@@ -61,7 +61,7 @@ func TestBlockDatabaseMigrator_StatusInProgress(t *testing.T) {
 }
 
 // Tests migration status is correctly set to "completed" after a successful migration.
-func TestBlockDatabaseMigrator_StatusCompleted(t *testing.T) {
+func TestMigrator_StatusCompleted(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, chainDB := newDatabasesFromDir(t, dataDir)
 	t.Cleanup(func() {
@@ -76,7 +76,7 @@ func TestBlockDatabaseMigrator_StatusCompleted(t *testing.T) {
 	assertMigrationStatus(t, wrapper.migrator.stateDB, wrapper.migrator, migrationCompleted)
 }
 
-func TestBlockDatabaseMigrator_Migration(t *testing.T) {
+func TestMigrator_Migration(t *testing.T) {
 	testCases := []struct {
 		name             string
 		initStatus       migrationStatus
@@ -202,7 +202,7 @@ func TestBlockDatabaseMigrator_Migration(t *testing.T) {
 // Tests that a migration in progress can be stopped and resumed, verifying
 // that the migration state is properly persisted and that the migration
 // can continue from where it left off after restart.
-func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
+func TestMigrator_AbruptStop(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, chainDB := newDatabasesFromDir(t, dataDir)
 	t.Cleanup(func() {
@@ -217,7 +217,7 @@ func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
 
 	// Create a slow block database that slows down after 3 blocks
 	blockCount := 0
-	slowBdb := &slowBlockDatabase{
+	slowBdb := &slowDatabase{
 		HeightIndex: wrapper.bodyDB,
 		shouldSlow: func() bool {
 			blockCount++
@@ -280,7 +280,7 @@ func TestBlockDatabaseMigrator_AbruptStop(t *testing.T) {
 }
 
 // Test that the genesis block is not migrated; the rest of the blocks should be migrated.
-func TestBlockDatabaseMigrator_Genesis(t *testing.T) {
+func TestMigrator_Genesis(t *testing.T) {
 	dataDir := t.TempDir()
 	base, err := leveldb.New(dataDir, nil, logging.NoLog{}, prometheus.NewRegistry())
 	require.NoError(t, err)
@@ -292,7 +292,7 @@ func TestBlockDatabaseMigrator_Genesis(t *testing.T) {
 	writeBlocks(chainDB, blocks[5:10], receipts[5:10])
 
 	blockDBPath := filepath.Join(dataDir, "blockdb")
-	wrapper := NewBlockDatabase(base, chainDB, blockdb.DefaultConfig(), blockDBPath, logging.NoLog{}, prometheus.NewRegistry())
+	wrapper := New(base, chainDB, blockdb.DefaultConfig(), blockDBPath, logging.NoLog{}, prometheus.NewRegistry())
 	initialized, err := wrapper.InitWithStateSync(false)
 	require.NoError(t, err)
 	require.True(t, initialized)
@@ -332,7 +332,7 @@ func TestBlockDatabaseMigrator_Genesis(t *testing.T) {
 	}
 }
 
-func waitForMigratorCompletion(t *testing.T, migrator *blockDatabaseMigrator, timeout time.Duration) {
+func waitForMigratorCompletion(t *testing.T, migrator *migrator, timeout time.Duration) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -349,7 +349,7 @@ func waitForMigratorCompletion(t *testing.T, migrator *blockDatabaseMigrator, ti
 	require.Failf(t, "migration did not complete within timeout", "timeout: %v", timeout)
 }
 
-func assertMigrationStatus(t *testing.T, db database.Database, migrator *blockDatabaseMigrator, expectedStatus migrationStatus) {
+func assertMigrationStatus(t *testing.T, db database.Database, migrator *migrator, expectedStatus migrationStatus) {
 	t.Helper()
 
 	require.Equal(t, expectedStatus, migrator.Status(), "migrator status should match expected")

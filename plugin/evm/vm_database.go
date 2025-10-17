@@ -58,12 +58,12 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 
 	// Error if block database has been enabled/created and then disabled
 	stateDB := prefixdb.New(blockDBPrefix, db)
-	created, err := blockdb.IsBlockDatabaseCreated(stateDB)
+	enabled, err := evmblockdb.IsEnabled(stateDB)
 	if err != nil {
 		return nil, err
 	}
 	if !vm.config.BlockDatabaseEnabled {
-		if created {
+		if enabled {
 			return nil, errors.New("cannot disable block database after it has been enabled")
 		}
 		return chainDB, nil
@@ -80,7 +80,7 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 		stateSyncEnabled = *vm.config.StateSyncEnabled
 	}
 	config := blockdb.DefaultConfig().WithSyncToDisk(vm.config.BlockDatabaseSyncToDisk)
-	blockDB := evmblockdb.NewBlockDatabase(stateDB, chainDB, config, blockDBPath, vm.ctx.Log, vm.sdkMetrics)
+	blockDB := evmblockdb.New(stateDB, chainDB, config, blockDBPath, vm.ctx.Log, vm.sdkMetrics)
 	initialized, err := blockDB.InitWithStateSync(stateSyncEnabled)
 	log.Info("blockDB initialized", "initialized", initialized, "stateSyncEnabled", stateSyncEnabled)
 	if err != nil {

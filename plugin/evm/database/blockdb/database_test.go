@@ -35,13 +35,13 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// slowBlockDatabase wraps a BlockDatabase to add artificial delays
-type slowBlockDatabase struct {
+// slowDatabase wraps a Database to add artificial delays
+type slowDatabase struct {
 	database.HeightIndex
 	shouldSlow func() bool
 }
 
-func (s *slowBlockDatabase) Put(blockNumber uint64, encodedBlock []byte) error {
+func (s *slowDatabase) Put(blockNumber uint64, encodedBlock []byte) error {
 	// Sleep to make migration hang for a bit
 	if s.shouldSlow == nil || s.shouldSlow() {
 		time.Sleep(100 * time.Millisecond)
@@ -56,7 +56,7 @@ var (
 	addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 )
 
-func newDatabasesFromDir(t *testing.T, dataDir string) (*BlockDatabase, ethdb.Database) {
+func newDatabasesFromDir(t *testing.T, dataDir string) (*Database, ethdb.Database) {
 	t.Helper()
 
 	base, err := leveldb.New(dataDir, nil, logging.NoLog{}, prometheus.NewRegistry())
@@ -65,7 +65,7 @@ func newDatabasesFromDir(t *testing.T, dataDir string) (*BlockDatabase, ethdb.Da
 
 	// Create wrapped block database
 	blockDBPath := filepath.Join(dataDir, "dbs")
-	wrapper := NewBlockDatabase(base, chainDB, blockdb.DefaultConfig(), blockDBPath, logging.NoLog{}, prometheus.NewRegistry())
+	wrapper := New(base, chainDB, blockdb.DefaultConfig(), blockDBPath, logging.NoLog{}, prometheus.NewRegistry())
 	require.NoError(t, wrapper.InitWithMinHeight(1))
 
 	return wrapper, chainDB
@@ -118,8 +118,8 @@ func writeBlocks(db ethdb.Database, blocks []*types.Block, receipts []types.Rece
 
 // todo: break this down into read blocks and test everything
 // make sure to include reading genesis block
-func TestBlockDatabase_Read(t *testing.T) {
-	// Test that BlockDatabase reads block data correctly
+func TestDatabase_Read(t *testing.T) {
+	// Test that Database reads block data correctly
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
 	blocks, receipts := createBlocks(t, 10)
@@ -186,8 +186,8 @@ func TestBlockDatabase_Read(t *testing.T) {
 	}
 }
 
-func TestBlockDatabaseDelete(t *testing.T) {
-	// Test BlockDatabase delete operations.
+func TestDatabaseDelete(t *testing.T) {
+	// Test Database delete operations.
 	// We are verifying that block header, body and receipts cannot be deleted,
 	// but hash to height mapping should be deleted.
 
@@ -227,7 +227,7 @@ func TestBlockDatabaseDelete(t *testing.T) {
 	}
 }
 
-func TestBlockDatabaseWrite(t *testing.T) {
+func TestDatabaseWrite(t *testing.T) {
 	// Test that header and body are stored separately and block can be read
 	// after both are written.
 	dataDir := t.TempDir()
@@ -259,7 +259,7 @@ func TestBlockDatabaseWrite(t *testing.T) {
 	require.Nil(t, rawdb.ReadBody(chainDB, block.Hash(), block.NumberU64()))
 }
 
-func TestBlockDatabase_Batch(t *testing.T) {
+func TestDatabase_Batch(t *testing.T) {
 	// Test that batch operations work correctly for both writing and reading block data and receipts
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
@@ -289,7 +289,7 @@ func TestBlockDatabase_Batch(t *testing.T) {
 	require.Equal(t, block.NumberU64(), *blockNumber)
 }
 
-func TestBlockDatabase_SameBlockWrites(t *testing.T) {
+func TestDatabase_SameBlockWrites(t *testing.T) {
 	// Test that writing the same block twice via rawdb.WriteBlock doesn't cause issues
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
@@ -307,7 +307,7 @@ func TestBlockDatabase_SameBlockWrites(t *testing.T) {
 	assertRLPEqual(t, block, actualBlock)
 }
 
-func TestBlockDatabase_DifferentBlocksSameHeight(t *testing.T) {
+func TestDatabase_DifferentBlocksSameHeight(t *testing.T) {
 	// Test that writing different blocks to the same height overwrites the first block
 	// and reading by the first block's hash returns nothing.
 	dataDir := t.TempDir()
@@ -367,7 +367,7 @@ func TestBlockDatabase_DifferentBlocksSameHeight(t *testing.T) {
 	assertRLPEqual(t, receipt2, secondReceipts)
 }
 
-func TestBlockDatabase_EmptyReceipts(t *testing.T) {
+func TestDatabase_EmptyReceipts(t *testing.T) {
 	// Test that blocks with no transactions (empty receipts) are handled correctly
 	dataDir := t.TempDir()
 	wrapper, chainDB := newDatabasesFromDir(t, dataDir)
@@ -416,7 +416,7 @@ func TestBlockDatabase_EmptyReceipts(t *testing.T) {
 	}
 }
 
-func TestBlockDatabase_Close_PersistsData(t *testing.T) {
+func TestDatabase_Close_PersistsData(t *testing.T) {
 	// Test that Close() properly closes both databases and data persists
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
@@ -452,7 +452,7 @@ func TestBlockDatabase_Close_PersistsData(t *testing.T) {
 	require.NoError(t, wrapper.Close())
 }
 
-func TestBlockDatabase_ReadDuringMigration(t *testing.T) {
+func TestDatabase_ReadDuringMigration(t *testing.T) {
 	// Test that blocks are readable during migration for both migrated and un-migrated blocks.
 	// This test:
 	// 1. Generates 21 blocks with receipts
@@ -473,7 +473,7 @@ func TestBlockDatabase_ReadDuringMigration(t *testing.T) {
 
 	// Create a slow block database to control migration speed
 	blockCount := 0
-	slowDB := &slowBlockDatabase{
+	slowDB := &slowDatabase{
 		HeightIndex: wrapper.bodyDB,
 		shouldSlow: func() bool {
 			blockCount++
@@ -530,7 +530,7 @@ func TestBlockDatabase_ReadDuringMigration(t *testing.T) {
 	require.NoError(t, wrapper.Close())
 }
 
-func TestBlockDatabase_Initialization(t *testing.T) {
+func TestDatabase_Initialization(t *testing.T) {
 	blocks, _ := createBlocks(t, 10)
 
 	testCases := []struct {
@@ -604,7 +604,7 @@ func TestBlockDatabase_Initialization(t *testing.T) {
 				minHeight, err := getDatabaseMinHeight(base)
 				require.NoError(t, err)
 				require.Nil(t, minHeight)
-				wrapper := NewBlockDatabase(
+				wrapper := New(
 					base,
 					chainDB,
 					blockdb.DefaultConfig(),
@@ -626,7 +626,7 @@ func TestBlockDatabase_Initialization(t *testing.T) {
 			}
 
 			// Create wrapper database
-			wrapper := NewBlockDatabase(
+			wrapper := New(
 				base,
 				chainDB,
 				blockdb.DefaultConfig(),
@@ -653,7 +653,7 @@ func TestBlockDatabase_Initialization(t *testing.T) {
 
 // Test that genesis block (block number 0) behavior works correctly.
 // Genesis blocks should only exist in chainDB and not in the wrapper's block database.
-func TestBlockDatabase_Genesis(t *testing.T) {
+func TestDatabase_Genesis(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, chainDB := newDatabasesFromDir(t, dataDir)
 	require.True(t, wrapper.initialized)
