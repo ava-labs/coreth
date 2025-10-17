@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/utils/utilstest"
 
 	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
 	// package so assume the presence of identifiers. A dot-import reduces PR
@@ -331,8 +330,8 @@ func TestBlockGetters(t *testing.T) {
 			headerExtra: &HeaderExtra{
 				ExtDataGasUsed:   big.NewInt(1),
 				BlockGasCost:     big.NewInt(2),
-				TimeMilliseconds: utils.NewUint64(3),
-				MinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(4)),
+				TimeMilliseconds: utils.PointerTo(uint64(3)),
+				MinDelayExcess:   utils.PointerTo(acp226.DelayExcess(4)),
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
@@ -342,8 +341,8 @@ func TestBlockGetters(t *testing.T) {
 			wantBlockGasCost:     big.NewInt(2),
 			wantVersion:          3,
 			wantExtData:          []byte{4},
-			wantTimeMilliseconds: utils.NewUint64(3),
-			wantMinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(4)),
+			wantTimeMilliseconds: utils.PointerTo(uint64(3)),
+			wantMinDelayExcess:   utils.PointerTo(acp226.DelayExcess(4)),
 		},
 	}
 

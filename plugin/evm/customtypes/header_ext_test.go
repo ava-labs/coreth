@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/utils/utilstest"
+	"github.com/ava-labs/coreth/utils"
 
 	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
 	// package so assume the presence of identifiers. A dot-import reduces PR
@@ -112,16 +112,16 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		Nonce:            BlockNonce{15},
 		BaseFee:          big.NewInt(16),
 		WithdrawalsHash:  &common.Hash{17},
-		BlobGasUsed:      utilstest.PointerTo(uint64(18)),
-		ExcessBlobGas:    utilstest.PointerTo(uint64(19)),
+		BlobGasUsed:      utils.PointerTo(uint64(18)),
+		ExcessBlobGas:    utils.PointerTo(uint64(19)),
 		ParentBeaconRoot: &common.Hash{20},
 	}
 	extra := &HeaderExtra{
 		ExtDataHash:      common.Hash{21},
 		ExtDataGasUsed:   big.NewInt(22),
 		BlockGasCost:     big.NewInt(23),
-		TimeMilliseconds: utilstest.PointerTo(uint64(24)),
-		MinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(25)),
+		TimeMilliseconds: utils.PointerTo(uint64(24)),
+		MinDelayExcess:   utils.PointerTo(acp226.DelayExcess(25)),
 	}
 	return WithHeaderExtra(header, extra), extra
 }
