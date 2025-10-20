@@ -7,12 +7,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ava-labs/libevm/log"
 	"go.uber.org/goleak"
 
 	"github.com/ava-labs/coreth/core/extstate"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/libevm/log"
 )
 
 // TestMain uses goleak to verify tests in this package do not leak unexpected
