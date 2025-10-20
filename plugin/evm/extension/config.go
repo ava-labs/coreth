@@ -24,7 +24,6 @@ import (
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/vmsync"
 	"github.com/ava-labs/coreth/sync/handlers"
 
 	avalanchecommon "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -67,7 +66,28 @@ type ExtensibleVM interface {
 	// VersionDB returns the versioned database for the VM
 	VersionDB() *versiondb.Database
 	// SyncerClient returns the syncer client for the VM
-	SyncerClient() vmsync.Client
+	SyncerClient() Client
+}
+
+type StateTransition uint8
+
+const (
+	Verify StateTransition = iota + 1
+	Accept
+	Reject
+)
+
+type Client interface {
+	// Methods that implement the client side of [block.StateSyncableVM].
+	StateSyncEnabled(context.Context) (bool, error)
+	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
+	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
+
+	// Additional methods required by the evm package.
+	AddTransition(context.Context, ExtendedBlock, StateTransition) (bool, error)
+	ClearOngoingSummary() error
+	Shutdown() error
+	Error() error
 }
 
 // InnerVM is the interface that must be implemented by the VM

@@ -244,7 +244,7 @@ type VM struct {
 	logger corethlog.Logger
 	// State sync server and client
 	vmsync.Server
-	vmsync.Client
+	extension.Client
 
 	// Avalanche Warp Messaging backend
 	// Used to serve BLS signatures of warp messages over RPC

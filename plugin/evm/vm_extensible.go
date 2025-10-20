@@ -16,7 +16,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
-	"github.com/ava-labs/coreth/plugin/evm/vmsync"
 )
 
 var _ extension.InnerVM = (*VM)(nil)
@@ -86,6 +85,6 @@ func (vm *VM) VersionDB() *versiondb.Database {
 	return vm.versiondb
 }
 
-func (vm *VM) SyncerClient() vmsync.Client {
+func (vm *VM) SyncerClient() extension.Client {
 	return vm.Client
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/eth"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/blocksync"
 	"github.com/ava-labs/coreth/sync/statesync"
@@ -88,27 +89,20 @@ type client struct {
 	err     error
 }
 
-func NewClient(config *ClientConfig) Client {
+func NewClient(config *ClientConfig) extension.Client {
 	return &client{
 		ClientConfig: config,
 	}
 }
 
-type Client interface {
-	// Methods that implement the client side of [block.StateSyncableVM].
-	StateSyncEnabled(context.Context) (bool, error)
-	GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error)
-	ParseStateSummary(ctx context.Context, summaryBytes []byte) (block.StateSummary, error)
-
-	// Additional methods required by the evm package.
-	ClearOngoingSummary() error
-	Shutdown() error
-	Error() error
-}
-
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
 func (client *client) StateSyncEnabled(context.Context) (bool, error) {
 	return client.Enabled, nil
+}
+
+// AddTransition is a no-op for static state sync.
+func (*client) AddTransition(context.Context, extension.ExtendedBlock, extension.StateTransition) (bool, error) {
+	return false, nil
 }
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
