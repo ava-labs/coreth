@@ -169,9 +169,8 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 		}
 
 		// Skip generated files, main_test.go, and state_account_ext.go
-		// todo(JonathanOppenheimer): remove this exception once the pseudo import is refactored our of state_account_ext.go.
 		filename := filepath.Base(path)
-		if strings.HasPrefix(filename, "gen_") || strings.Contains(path, "core/main_test.go") || strings.Contains(path, "customtypes/state_account_ext.go") {
+		if strings.HasPrefix(filename, "gen_") || strings.Contains(path, "core/main_test.go") {
 			return nil
 		}
 

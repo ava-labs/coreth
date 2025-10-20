@@ -11,8 +11,6 @@ import (
 
 type isMultiCoin bool
 
-// todo(JonathanOppenheimer): As per ARR4N, replacing this woith extras.StateAccount suggests some
-// incorrect assumptions to the reader and that's worse than allowing the import.
 var IsMultiCoinPayloads pseudo.Accessor[ethtypes.StateOrSlimAccount, isMultiCoin]
 
 func IsMultiCoin(s ethtypes.StateOrSlimAccount) bool {
