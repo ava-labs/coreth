@@ -22,10 +22,8 @@ import (
 const repo = "github.com/ava-labs/coreth"
 
 // getDependencies takes a fully qualified package name and returns a map of all
-// its package imports (including itself) in the same format.
-// If recursive is true, returns all transitive dependencies.
-// If recursive is false, returns only direct dependencies.
-func getDependencies(packageName string, recursive bool) (map[string]struct{}, error) {
+// its recursive package imports (including itself) in the same format.
+func getDependencies(packageName string) (map[string]struct{}, error) {
 	// Configure the load mode to include dependencies
 	cfg := &packages.Config{Mode: packages.NeedImports | packages.NeedName}
 	pkgs, err := packages.Load(cfg, packageName)
@@ -38,34 +36,21 @@ func getDependencies(packageName string, recursive bool) (map[string]struct{}, e
 	}
 
 	deps := make(map[string]struct{})
-
-	if recursive {
-		// Recursive collection (original behavior)
-		var collectDeps func(pkg *packages.Package)
-		collectDeps = func(pkg *packages.Package) {
-			if _, ok := deps[pkg.PkgPath]; ok {
-				return // Avoid re-processing the same dependency
-			}
-			deps[pkg.PkgPath] = struct{}{}
-			for _, dep := range pkg.Imports {
-				collectDeps(dep)
-			}
+	var collectDeps func(pkg *packages.Package)
+	collectDeps = func(pkg *packages.Package) {
+		if _, ok := deps[pkg.PkgPath]; ok {
+			return // Avoid re-processing the same dependency
 		}
-
-		// Start collecting dependencies
-		for _, pkg := range pkgs {
-			collectDeps(pkg)
-		}
-	} else {
-		// Direct dependencies only
-		for _, pkg := range pkgs {
-			deps[pkg.PkgPath] = struct{}{} // Include the package itself
-			for _, dep := range pkg.Imports {
-				deps[dep.PkgPath] = struct{}{}
-			}
+		deps[pkg.PkgPath] = struct{}{}
+		for _, dep := range pkg.Imports {
+			collectDeps(dep)
 		}
 	}
 
+	// Start collecting dependencies
+	for _, pkg := range pkgs {
+		collectDeps(pkg)
+	}
 	return deps, nil
 }
 
@@ -90,7 +75,7 @@ func TestMustNotImport(t *testing.T) {
 	}
 
 	for packageName, forbiddenImports := range mustNotImport {
-		imports, err := getDependencies(withRepo(packageName), true) // recursive=true for transitive deps
+		imports, err := getDependencies(withRepo(packageName))
 		require.NoError(t, err)
 
 		for _, forbiddenImport := range forbiddenImports {
