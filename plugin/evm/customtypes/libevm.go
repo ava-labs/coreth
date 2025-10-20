@@ -22,5 +22,4 @@ func Register() {
 		BlockBodyExtra, *BlockBodyExtra,
 		isMultiCoin,
 	]()
-	IsMultiCoinPayloads = extras.StateAccount
 }
