@@ -19,19 +19,19 @@ var _ extension.Client = (*dynamicClient)(nil)
 
 type dynamicClient struct {
 	*client
-	stateMachine *StateMachine
+	syncTracker *SyncTracker
 }
 
 func NewDynamicClient(config *ClientConfig) extension.Client {
 	client := NewClient(config).(*client)
 	return &dynamicClient{
 		client,
-		&StateMachine{},
+		&SyncTracker{},
 	}
 }
 
 func (client *dynamicClient) AddTransition(ctx context.Context, block extension.ExtendedBlock, st extension.StateTransition) (bool, error) {
-	return client.stateMachine.AddTransition(ctx, block, st)
+	return client.syncTracker.Run(ctx, block, st)
 }
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
@@ -127,18 +127,15 @@ func (client *dynamicClient) acceptSyncSummary(proposedSummary message.Syncable)
 }
 func (client *dynamicClient) stateSync(ctx context.Context) error {
 	// Create and register all syncers.
-	registry := NewSyncerRegistry()
-
-	if err := client.registerSyncers(registry); err != nil {
-		return err
+	if err := client.registerSyncers(); err != nil {
+		return fmt.Errorf("failed to register syncers: %w", err)
 	}
+	client.syncTracker.Sync(ctx)
 
-	// starting syncer
-	err = registry.RunSyncerTasks(ctx, client.summary)
-
+	return nil
 }
 
-func (client *dynamicClient) registerSyncers(registry *SyncerRegistry) error {
+func (client *dynamicClient) registerSyncers() error {
 	// Register block syncer.
 	blockSyncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
 	if err != nil {
@@ -179,7 +176,7 @@ func (client *dynamicClient) registerSyncers(registry *SyncerRegistry) error {
 	}
 
 	for _, s := range syncers {
-		if err := registry.Register(s); err != nil {
+		if err := client.syncTracker.RegisterSyncer(s); err != nil {
 			return fmt.Errorf("failed to register %s syncer: %w", s.Name(), err)
 		}
 	}
