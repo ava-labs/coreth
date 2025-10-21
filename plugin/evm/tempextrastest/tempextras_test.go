@@ -38,7 +38,7 @@ func TestWithTempRegisteredLibEVMExtras(t *testing.T) {
 	payloadTests := map[string]func(t *testing.T){
 		"customtypes": func(t *testing.T) {
 			t.Helper()
-			require.False(t, customtypes.IsMultiCoin(&types.StateAccount{}))
+			require.False(t, customtypes.IsAccountMultiCoin(&types.StateAccount{}))
 		},
 		"params": func(t *testing.T) {
 			t.Helper()

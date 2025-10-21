@@ -11,11 +11,6 @@ import (
 
 var extras ethtypes.ExtraPayloads[*HeaderExtra, *BlockBodyExtra, isMultiCoin]
 
-func setExtras(e ethtypes.ExtraPayloads[*HeaderExtra, *BlockBodyExtra, isMultiCoin]) {
-	extras = e
-	IsMultiCoinPayloads = e.StateAccount
-}
-
 // Register registers the types with libevm. It MUST NOT be called more than
 // once and therefore is only allowed to be used in tests and `package main`, to
 // avoid polluting other packages that transitively depend on this one but don't
@@ -24,11 +19,11 @@ func setExtras(e ethtypes.ExtraPayloads[*HeaderExtra, *BlockBodyExtra, isMultiCo
 // Without a call to Register, none of the functionality of this package will
 // work, and most will simply panic.
 func Register() {
-	setExtras(ethtypes.RegisterExtras[
+	extras = ethtypes.RegisterExtras[
 		HeaderExtra, *HeaderExtra,
 		BlockBodyExtra, *BlockBodyExtra,
 		isMultiCoin,
-	]())
+	]()
 }
 
 // WithTempRegisteredExtras runs `fn` with temporary registration otherwise
@@ -39,12 +34,12 @@ func Register() {
 // all other temporary-registration functions.
 func WithTempRegisteredExtras(lock libevm.ExtrasLock, fn func() error) error {
 	old := extras
-	defer setExtras(old)
+	defer func() { extras = old }()
 
 	return ethtypes.WithTempRegisteredExtras[HeaderExtra, BlockBodyExtra, isMultiCoin](
 		lock,
 		func(e ethtypes.ExtraPayloads[*HeaderExtra, *BlockBodyExtra, isMultiCoin]) error {
-			setExtras(e)
+			extras = e
 			return fn()
 		},
 	)
