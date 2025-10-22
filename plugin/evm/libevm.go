@@ -32,19 +32,15 @@ func RegisterAllLibEVMExtras() {
 // the life of `fn`.
 func WithTempRegisteredLibEVMExtras(fn func() error) error {
 	return libevm.WithTemporaryExtrasLock(func(lock libevm.ExtrasLock) error {
-		wrappers := []func(libevm.ExtrasLock, func() error) error{
+		for _, wrap := range []func(libevm.ExtrasLock, func() error) error{
 			core.WithTempRegisteredExtras,
 			customtypes.WithTempRegisteredExtras,
 			extstate.WithTempRegisteredExtras,
 			params.WithTempRegisteredExtras,
+		} {
+			inner := fn
+			fn = func() error { return wrap(lock, inner) }
 		}
-
-		wrapped := fn
-		for i := len(wrappers) - 1; i >= 0; i-- {
-			next := wrapped
-			wrapped = func() error { return wrappers[i](lock, next) }
-		}
-
-		return wrapped()
+		return fn()
 	})
 }
