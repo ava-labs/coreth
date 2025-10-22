@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -29,13 +30,14 @@ import (
 	evmdb "github.com/ava-labs/coreth/plugin/evm/database"
 )
 
-func TestMain(m *testing.M) {
-	customtypes.Register()
-	params.RegisterExtras()
-	os.Exit(m.Run())
-}
+var (
+	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+	addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+)
 
-// slowDatabase wraps a Database to add artificial delays
+// slowDatabase wraps a HeightIndex to add artificial delays
 type slowDatabase struct {
 	database.HeightIndex
 	shouldSlow func() bool
@@ -49,23 +51,13 @@ func (s *slowDatabase) Put(blockNumber uint64, encodedBlock []byte) error {
 	return s.HeightIndex.Put(blockNumber, encodedBlock)
 }
 
-var (
-	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-	addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-	addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-)
-
 func newDatabasesFromDir(t *testing.T, dataDir string) (*Database, ethdb.Database) {
 	t.Helper()
 
 	base, err := leveldb.New(dataDir, nil, logging.NoLog{}, prometheus.NewRegistry())
 	require.NoError(t, err)
 	chainDB := rawdb.NewDatabase(evmdb.WrapDatabase(base))
-
-	// Create wrapped block database
-	blockDBPath := filepath.Join(dataDir, "dbs")
-	wrapper := New(base, chainDB, blockdb.DefaultConfig(), blockDBPath, logging.NoLog{}, prometheus.NewRegistry())
+	wrapper := New(base, chainDB, blockdb.DefaultConfig(), dataDir, logging.NoLog{}, prometheus.NewRegistry())
 	require.NoError(t, wrapper.InitWithMinHeight(1))
 
 	return wrapper, chainDB
@@ -94,12 +86,12 @@ func createBlocks(t *testing.T, numBlocks int) ([]*types.Block, []types.Receipts
 	})
 	require.NoError(t, err)
 
-	// add genesis block from db to blocks
+	// add genesis block
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
 	genesisBlock := rawdb.ReadBlock(db, genesisHash, 0)
 	genesisReceipts := rawdb.ReadReceipts(db, genesisHash, 0, 0, params.TestChainConfig)
-	blocks = append([]*types.Block{genesisBlock}, blocks...)
-	receipts = append([]types.Receipts{genesisReceipts}, receipts...)
+	blocks = slices.Concat(blocks, []*types.Block{genesisBlock})
+	receipts = slices.Concat(receipts, []types.Receipts{genesisReceipts})
 
 	return blocks, receipts
 }
@@ -110,87 +102,60 @@ func writeBlocks(db ethdb.Database, blocks []*types.Block, receipts []types.Rece
 		if len(receipts) > 0 {
 			rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), receipts[i])
 		}
-
-		// ensure written blocks are canonical
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 	}
 }
 
-// todo: break this down into read blocks and test everything
-// make sure to include reading genesis block
-func TestDatabase_Read(t *testing.T) {
-	// Test that Database reads block data correctly
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
+
+func TestDatabaseReadBlock(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
 	blocks, receipts := createBlocks(t, 10)
 	writeBlocks(wrapper, blocks, receipts)
 
-	testCases := []struct {
-		name string
-		test func(t *testing.T, block *types.Block, blockReceipts types.Receipts)
-	}{
-		{
-			name: "header",
-			test: func(t *testing.T, block *types.Block, _ types.Receipts) {
-				require.True(t, rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()))
-				header := rawdb.ReadHeader(wrapper, block.Hash(), block.NumberU64())
-				assertRLPEqual(t, block.Header(), header)
-			},
-		},
-		{
-			name: "body",
-			test: func(t *testing.T, block *types.Block, _ types.Receipts) {
-				require.True(t, rawdb.HasBody(wrapper, block.Hash(), block.NumberU64()))
-				body := rawdb.ReadBody(wrapper, block.Hash(), block.NumberU64())
-				assertRLPEqual(t, block.Body(), body)
-			},
-		},
-		{
-			name: "block",
-			test: func(t *testing.T, block *types.Block, _ types.Receipts) {
-				actualBlock := rawdb.ReadBlock(wrapper, block.Hash(), block.NumberU64())
-				assertRLPEqual(t, block, actualBlock)
-			},
-		},
-		{
-			name: "receipts_and_logs",
-			test: func(t *testing.T, block *types.Block, blockReceipts types.Receipts) {
-				require.True(t, rawdb.HasReceipts(wrapper, block.Hash(), block.NumberU64()))
-				recs := rawdb.ReadReceipts(wrapper, block.Hash(), block.NumberU64(), block.Time(), params.TestChainConfig)
-				assertRLPEqual(t, blockReceipts, recs)
-
-				logs := rawdb.ReadLogs(wrapper, block.Hash(), block.NumberU64())
-				expectedLogs := make([][]*types.Log, len(blockReceipts))
-				for j, receipt := range blockReceipts {
-					expectedLogs[j] = receipt.Logs
-				}
-				assertRLPEqual(t, expectedLogs, logs)
-			},
-		},
-		{
-			name: "block_number",
-			test: func(t *testing.T, block *types.Block, _ types.Receipts) {
-				blockNumber := rawdb.ReadHeaderNumber(wrapper, block.Hash())
-				require.Equal(t, block.NumberU64(), *blockNumber)
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			for i, block := range blocks {
-				blockReceipts := receipts[i]
-				tc.test(t, block, blockReceipts)
-			}
-		})
+	for _, block := range blocks {
+		actualBlock := rawdb.ReadBlock(wrapper, block.Hash(), block.NumberU64())
+		assertRLPEqual(t, block, actualBlock)
 	}
 }
 
-func TestDatabaseDelete(t *testing.T) {
-	// Test Database delete operations.
-	// We are verifying that block header, body and receipts cannot be deleted,
-	// but hash to height mapping should be deleted.
+func TestDatabaseReadReceipts(t *testing.T) {
+	dataDir := t.TempDir()
+	wrapper, _ := newDatabasesFromDir(t, dataDir)
+	blocks, receipts := createBlocks(t, 10)
+	writeBlocks(wrapper, blocks, receipts)
 
+	for i, block := range blocks {
+		actualReceipts := rawdb.ReadReceipts(wrapper, block.Hash(), block.NumberU64(), block.Time(), params.TestChainConfig)
+		assertRLPEqual(t, receipts[i], actualReceipts)
+	}
+}
+
+func TestDatabaseReadLogs(t *testing.T) {
+	dataDir := t.TempDir()
+	wrapper, _ := newDatabasesFromDir(t, dataDir)
+	blocks, receipts := createBlocks(t, 10)
+	writeBlocks(wrapper, blocks, receipts)
+
+	for i, block := range blocks {
+		actualLogs := rawdb.ReadLogs(wrapper, block.Hash(), block.NumberU64())
+		blockReceipts := receipts[i]
+		expectedLogs := make([][]*types.Log, len(blockReceipts))
+		for j, receipt := range blockReceipts {
+			expectedLogs[j] = receipt.Logs
+		}
+		assertRLPEqual(t, expectedLogs, actualLogs)
+	}
+}
+
+// TestDatabaseDelete verifies that block header, body and receipts cannot be deleted,
+// but hash to height mapping should be deleted.
+func TestDatabaseDelete(t *testing.T) {
 	dataDir := t.TempDir()
 	wrapper, _ := newDatabasesFromDir(t, dataDir)
 	blocks, receipts := createBlocks(t, 4)
@@ -198,11 +163,9 @@ func TestDatabaseDelete(t *testing.T) {
 	targetReceipts := receipts[1:]
 	writeBlocks(wrapper, targetBlocks, targetReceipts)
 
-	// delete block data
 	for i, block := range targetBlocks {
-		rawdb.DeleteBlock(wrapper, block.Hash(), block.NumberU64())
-
 		// we cannot delete header or body
+		rawdb.DeleteBlock(wrapper, block.Hash(), block.NumberU64())
 		require.True(t, rawdb.HasHeader(wrapper, block.Hash(), block.NumberU64()))
 		require.True(t, rawdb.HasBody(wrapper, block.Hash(), block.NumberU64()))
 		header := rawdb.ReadHeader(wrapper, block.Hash(), block.NumberU64())
@@ -210,7 +173,7 @@ func TestDatabaseDelete(t *testing.T) {
 		body := rawdb.ReadBody(wrapper, block.Hash(), block.NumberU64())
 		assertRLPEqual(t, block.Body(), body)
 
-		// hash to height mapping should be deleted
+		// Verify hash to height mapping is deleted
 		blockNumber := rawdb.ReadHeaderNumber(wrapper, block.Hash())
 		require.Nil(t, blockNumber)
 

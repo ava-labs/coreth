@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -204,7 +205,7 @@ func (b *migrator) run(ctx context.Context) error {
 		}
 
 		processingTime := time.Since(startTime)
-		log.Info("blockdb migration completed",
+		log.Info("blockdb migration finished",
 			"blocks_processed", atomic.LoadUint64(&b.processed),
 			"total_processing_time", processingTime.String())
 	}()
@@ -297,8 +298,10 @@ func (b *migrator) run(ctx context.Context) error {
 			if b.endHeight != 0 && etaTarget > 0 {
 				etaPtr, progressPercentage := etaTracker.AddSample(processed, etaTarget, now)
 				if etaPtr != nil {
-					logFields = append(logFields, "eta", etaPtr.String())
-					logFields = append(logFields, "pctComplete", progressPercentage)
+					logFields = slices.Concat(logFields, []interface{}{
+						"eta", etaPtr.String(),
+						"pctComplete", progressPercentage,
+					})
 				}
 			}
 

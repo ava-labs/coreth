@@ -598,14 +598,19 @@ func (bc *BlockChain) warmAcceptedCaches() {
 }
 
 func (bc *BlockChain) writeAcceptedBlockAndReceipts(b *types.Block) {
-	rawdb.WriteBlock(bc.db, b)
+	batch := bc.db.NewBatch()
+	rawdb.WriteBlock(batch, b)
 
 	if receipts, ok := bc.verifiedReceiptsCache.Get(b.Hash()); ok {
-		rawdb.WriteReceipts(bc.db, b.Hash(), b.NumberU64(), receipts)
+		rawdb.WriteReceipts(batch, b.Hash(), b.NumberU64(), receipts)
 	}
 
 	bc.verifiedBlockCache.Remove(b.Hash())
 	bc.verifiedReceiptsCache.Remove(b.Hash())
+
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write accepted block and receipts", "err", err)
+	}
 }
 
 // startAcceptor starts processing items on the [acceptorQueue]. If a [nil]

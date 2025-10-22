@@ -24,6 +24,7 @@ import (
 
 var (
 	_ ethdb.Database = (*Database)(nil)
+	_ ethdb.Batch    = (*databaseBatch)(nil)
 
 	// Key prefixes for block data in the ethdb.
 	// REVIEW: I opted to just copy these from libevm since these should never change
@@ -192,18 +193,12 @@ func (db *Database) Put(key []byte, value []byte) error {
 		return db.Database.Put(key, value)
 	}
 
+	heightDB, err := db.heightDBForKey(key)
+	if err != nil {
+		return err
+	}
 	blockNumber, blockHash := blockNumberAndHashFromKey(key)
-
-	if isReceiptKey(key) {
-		return writeHashAndData(db.receiptsDB, blockNumber, blockHash, value)
-	}
-	if isHeaderKey(key) {
-		return writeHashAndData(db.headerDB, blockNumber, blockHash, value)
-	}
-	if isBodyKey(key) {
-		return writeHashAndData(db.bodyDB, blockNumber, blockHash, value)
-	}
-	return nil
+	return writeHashAndData(heightDB, blockNumber, blockHash, value)
 }
 
 func (db *Database) Get(key []byte) ([]byte, error) {
@@ -211,20 +206,11 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 		return db.Database.Get(key)
 	}
 
-	blockNumber, blockHash := blockNumberAndHashFromKey(key)
-	var heightDB database.HeightIndex
-	switch {
-	case isReceiptKey(key):
-		heightDB = db.receiptsDB
-	case isHeaderKey(key):
-		heightDB = db.headerDB
-	case isBodyKey(key):
-		heightDB = db.bodyDB
-	default:
-		return nil, fmt.Errorf("unexpected key: %x", key)
+	heightDB, err := db.heightDBForKey(key)
+	if err != nil {
+		return nil, err
 	}
-
-	return readHashAndData(heightDB, db.Database, key, blockNumber, blockHash, db.migrator)
+	return readHashAndData(heightDB, db.Database, key, db.migrator)
 }
 
 func (db *Database) Has(key []byte) (bool, error) {
@@ -262,8 +248,7 @@ func (db *Database) Close() error {
 		}
 	}
 	if db.receiptsDB != nil {
-		err := db.receiptsDB.Close()
-		if err != nil {
+		if err := db.receiptsDB.Close(); err != nil {
 			return err
 		}
 	}
@@ -300,6 +285,18 @@ func (db *Database) newMeteredDatabase(namespace string, minHeight uint64) (data
 	}
 
 	return meteredDB, nil
+}
+
+func (db *Database) heightDBForKey(key []byte) (database.HeightIndex, error) {
+	switch {
+	case isReceiptKey(key):
+		return db.receiptsDB, nil
+	case isHeaderKey(key):
+		return db.headerDB, nil
+	case isBodyKey(key):
+		return db.bodyDB, nil
+	}
+	return nil, fmt.Errorf("unexpected key: %x", key)
 }
 
 func (db *Database) shouldWriteToBlockDatabase(key []byte) bool {
@@ -423,10 +420,9 @@ func readHashAndData(
 	heightDB database.HeightIndex,
 	chainDB ethdb.Database,
 	key []byte,
-	blockNumber uint64,
-	blockHash common.Hash,
 	migrator *migrator,
 ) ([]byte, error) {
+	blockNumber, blockHash := blockNumberAndHashFromKey(key)
 	encodedData, err := heightDB.Get(blockNumber)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) && migrator != nil && migrator.Status() != migrationCompleted {
