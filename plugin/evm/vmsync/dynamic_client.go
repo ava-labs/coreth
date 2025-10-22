@@ -123,6 +123,7 @@ func (client *dynamicClient) acceptSyncSummary(proposedSummary message.Syncable)
 		log.Info("stateSync completed, notifying engine", "err", client.err)
 		close(client.StateSyncDone)
 	}()
+
 	return block.StateSyncDynamic, nil
 }
 func (client *dynamicClient) stateSync(ctx context.Context) error {

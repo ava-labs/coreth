@@ -10,7 +10,6 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	syncpkg "github.com/ava-labs/coreth/sync"
-	"github.com/ava-labs/libevm/log"
 )
 
 type State uint8
@@ -30,15 +29,22 @@ type SyncTracker struct {
 	currentState State
 	target       extension.ExtendedBlock
 
+	started  chan struct{}
+	finished chan struct{}
+	onFinish func() error
+
 	queue    *BlockQueue
 	registry *SyncerRegistry
 }
 
-func NewSyncTracker() *SyncTracker {
+func NewSyncTracker(started, finished chan struct{}, onFinish func() error) *SyncTracker {
 	sm := &SyncTracker{
 		currentState: NotStarted,
 		queue:        &BlockQueue{},
 		registry:     NewSyncerRegistry(),
+		started:      started,
+		finished:     finished,
+		onFinish:     onFinish,
 	}
 	return sm
 }
@@ -64,7 +70,9 @@ func (sm *SyncTracker) Run(ctx context.Context, block extension.ExtendedBlock, s
 			}
 			return true, nil
 		}
-		sm.queue.Enqueue(block, st)
+		if ok := sm.queue.Enqueue(block, st); !ok {
+			return false, errors.New("unable to enqueue block")
+		}
 		return true, nil
 	case Finalizing, Executing:
 		// Add to queue
@@ -77,7 +85,6 @@ func (sm *SyncTracker) Run(ctx context.Context, block extension.ExtendedBlock, s
 }
 
 func (sm *SyncTracker) Sync(ctx context.Context) error {
-	// TODO: ensure the state transition is valid
 	// Start syncers
 	if err := sm.registry.StartSyncerTasks(ctx, sm.target); err != nil {
 		sm.SetState(Completed)
@@ -85,7 +92,7 @@ func (sm *SyncTracker) Sync(ctx context.Context) error {
 	}
 
 	sm.SetState(Syncing)
-	// tell avago we started
+	close(sm.started)
 	if err := sm.registry.WaitSyncerTasks(ctx); err != nil {
 		sm.SetState(Completed)
 		return err
@@ -94,21 +101,27 @@ func (sm *SyncTracker) Sync(ctx context.Context) error {
 	sm.SetState(Finalizing)
 
 	// Finalize syncers
-	if err := sm.registry.FinalizeSync(ctx); err != nil {
+	if err := sm.registry.FinalizeSync(ctx, sm.target); err != nil {
 		sm.SetState(Completed)
 		return err
 	}
 	sm.SetState(Executing)
 
-	// `finishSync`
 	// Execute queued blocks
+	if err := sm.onFinish(); err != nil {
+		sm.SetState(Completed)
+		return err
+	}
+
 	for {
-		block, st, ok := sm.queue.Dequeue()
-		if !ok {
+		done, err := sm.queue.PopAndExecute()
+		if err != nil {
+			sm.SetState(Completed)
+			return err
+		}
+		if done {
 			break
 		}
-		// Apply block to engine
-		log.Debug("applying queued block", "height", block.Height(), "st", st)
 	}
 	sm.SetState(Completed)
 	// Notify engine that state sync is complete
@@ -122,7 +135,9 @@ func (sm *SyncTracker) SetState(state State) {
 }
 
 type BlockQueue struct {
+	lock  sync.Mutex
 	queue []QueueElement
+	done  bool
 }
 
 type QueueElement struct {
@@ -131,21 +146,31 @@ type QueueElement struct {
 }
 
 // Returns true if it has never flushed.
-// TODO: actually do that
 func (bq *BlockQueue) Enqueue(block extension.ExtendedBlock, st extension.StateTransition) bool {
+	bq.lock.Lock()
+	defer bq.lock.Unlock()
+	if bq.done {
+		return false
+	}
 	bq.queue = append(bq.queue, QueueElement{block: block, st: st})
 	return true
 }
 
 func (bq *BlockQueue) Drop() {
+	bq.lock.Lock()
+	defer bq.lock.Unlock()
 	bq.queue = nil
 }
 
-func (bq *BlockQueue) Dequeue() (extension.ExtendedBlock, extension.StateTransition, bool) {
+func (bq *BlockQueue) PopAndExecute() (bool, error) {
+	bq.lock.Lock()
+	defer bq.lock.Unlock()
 	if len(bq.queue) == 0 {
-		return nil, 0, false
+		bq.done = true
+		return true, nil
 	}
 	elem := bq.queue[0]
 	bq.queue = bq.queue[1:]
-	return elem.block, elem.st, true
+	// TODO: actually execute the block
+	return false, nil
 }
