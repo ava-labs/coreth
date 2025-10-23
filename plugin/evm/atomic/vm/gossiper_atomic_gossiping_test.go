@@ -183,7 +183,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// This test adds it directly to the mempool + gossiper to simulate that.
 	require.NoError(vm.AtomicMempool.AddRemoteTx(conflictingTx))
 	vm.AtomicTxPushGossiper.Add(conflictingTx)
-	vm.AtomicTxPushGossiper.Gossip(context.Background()) // We don't want to wait to gossip.
+	require.NoError(vm.AtomicTxPushGossiper.Gossip(context.Background()))
 
 	vm.Ctx.Lock.Lock()
 
