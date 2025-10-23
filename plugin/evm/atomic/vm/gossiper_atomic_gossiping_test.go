@@ -121,9 +121,10 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	}()
 
 	var (
-		txGossiped     int
-		txGossipedLock sync.Mutex
-		txRequested    bool
+		txGossiped      int
+		txGossipedLock  sync.Mutex
+		txRequested     bool
+		txRequestedLock sync.Mutex
 	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
@@ -134,6 +135,9 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 		return nil
 	}
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
+		txRequestedLock.Lock()
+		defer txRequestedLock.Unlock()
+
 		txRequested = true
 		return nil
 	}
@@ -177,13 +181,16 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// Conflicting tx must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	// This test adds it directly to the mempool + gossiper to simulate that.
-	vm.AtomicMempool.AddRemoteTx(conflictingTx)
+	require.NoError(vm.AtomicMempool.AddRemoteTx(conflictingTx))
 	vm.AtomicTxPushGossiper.Add(conflictingTx)
-	time.Sleep(500 * time.Millisecond)
+	vm.AtomicTxPushGossiper.Gossip(context.Background()) // We don't want to wait to gossip.
 
 	vm.Ctx.Lock.Lock()
 
+	txRequestedLock.Lock()
 	require.False(txRequested, "tx shouldn't be requested")
+	txRequestedLock.Unlock()
+
 	txGossipedLock.Lock()
 	require.Equal(1, txGossiped, "conflicting tx should have been gossiped")
 	txGossipedLock.Unlock()

@@ -93,17 +93,21 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	vm.txPool.SetMinFee(common.Big0)
 
 	var (
-		wg          sync.WaitGroup
 		txRequested bool
+		txResponded bool
+		statusLock  sync.Mutex
 	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
+		statusLock.Lock()
+		defer statusLock.Unlock()
 		txRequested = true
 		return nil
 	}
-	wg.Add(1)
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
-		wg.Done()
+		statusLock.Lock()
+		defer statusLock.Unlock()
+		txResponded = true
 		return nil
 	}
 
@@ -113,26 +117,9 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	// Txs must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	require.NoError(vm.eth.APIBackend.SendTx(context.Background(), tx))
+	require.NoError(vm.ethTxPushGossiper.Get().Gossip(context.Background()))
+	statusLock.Lock()
 	require.False(txRequested, "tx should not be requested")
-
-	// wait for transaction to be re-gossiped
-	attemptAwait(t, &wg, 5*time.Second)
-}
-
-func attemptAwait(t *testing.T, wg *sync.WaitGroup, delay time.Duration) {
-	ticker := make(chan struct{})
-
-	// Wait for [wg] and then close [ticket] to indicate that
-	// the wait group has finished.
-	go func() {
-		wg.Wait()
-		close(ticker)
-	}()
-
-	select {
-	case <-time.After(delay):
-		require.FailNow(t, "Timed out waiting for wait group to complete")
-	case <-ticker:
-		// The wait group completed without issue
-	}
+	require.True(txResponded, "expected tx to be gossiped")
+	statusLock.Unlock()
 }
