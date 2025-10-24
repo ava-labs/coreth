@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ava-labs/coreth/utils/utilstest"
 )
 
 func TestCopyHeader(t *testing.T) {
