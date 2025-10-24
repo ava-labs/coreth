@@ -2170,7 +2170,7 @@ func golangBindings(t *testing.T, overload bool) {
 		})
 	}
 
-	// We msut also write a main_test.go file for libevm registrations.
+	// We must also write a main_test.go file for libevm registrations.
 	mainTest := `
 		package bindtest
 
