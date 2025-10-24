@@ -92,19 +92,14 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
-	var (
-		txResponded bool
-		statusLock  sync.Mutex
-	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		require.FailNow("tx should not be requested")
 		return nil
 	}
+	done := make(chan struct{})
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
-		statusLock.Lock()
-		defer statusLock.Unlock()
-		txResponded = true
+		close(done)
 		return nil
 	}
 
@@ -115,7 +110,11 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	// (i.e., txs received via p2p are not included in push gossip)
 	require.NoError(vm.eth.APIBackend.SendTx(context.Background(), tx))
 	require.NoError(vm.ethTxPushGossiper.Get().Gossip(context.Background()))
-	statusLock.Lock()
-	require.True(txResponded, "expected tx to be gossiped")
-	statusLock.Unlock()
+	
+	select {
+	case <-time.After(5 * time.Second):
+		require.FailNow("Timed out waiting for gossip to complete")
+	case <-done:
+		// The wait group completed without issue
+	}
 }
