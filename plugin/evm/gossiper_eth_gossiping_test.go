@@ -93,15 +93,12 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	vm.txPool.SetMinFee(common.Big0)
 
 	var (
-		txRequested bool
 		txResponded bool
 		statusLock  sync.Mutex
 	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
-		statusLock.Lock()
-		defer statusLock.Unlock()
-		txRequested = true
+		require.FailNow("tx should not be requested")
 		return nil
 	}
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
@@ -119,7 +116,6 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	require.NoError(vm.eth.APIBackend.SendTx(context.Background(), tx))
 	require.NoError(vm.ethTxPushGossiper.Get().Gossip(context.Background()))
 	statusLock.Lock()
-	require.False(txRequested, "tx should not be requested")
 	require.True(txResponded, "expected tx to be gossiped")
 	statusLock.Unlock()
 }

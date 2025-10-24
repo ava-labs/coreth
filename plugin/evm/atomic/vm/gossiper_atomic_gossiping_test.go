@@ -121,10 +121,8 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	}()
 
 	var (
-		txGossiped      int
-		txGossipedLock  sync.Mutex
-		txRequested     bool
-		txRequestedLock sync.Mutex
+		txGossiped     int
+		txGossipedLock sync.Mutex
 	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
@@ -135,10 +133,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 		return nil
 	}
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
-		txRequestedLock.Lock()
-		defer txRequestedLock.Unlock()
-
-		txRequested = true
+		require.FailNow("tx should not be requested")
 		return nil
 	}
 
@@ -169,7 +164,6 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 
 	vm.Ctx.Lock.Lock()
 
-	require.False(txRequested, "tx shouldn't be requested")
 	txGossipedLock.Lock()
 	require.Zero(txGossiped, "tx should not have been gossiped")
 	txGossipedLock.Unlock()
@@ -186,10 +180,6 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	require.NoError(vm.AtomicTxPushGossiper.Gossip(context.Background()))
 
 	vm.Ctx.Lock.Lock()
-
-	txRequestedLock.Lock()
-	require.False(txRequested, "tx shouldn't be requested")
-	txRequestedLock.Unlock()
 
 	txGossipedLock.Lock()
 	require.Equal(1, txGossiped, "conflicting tx should have been gossiped")
