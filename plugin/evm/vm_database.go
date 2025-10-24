@@ -12,7 +12,7 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/log"
 
-	"github.com/ava-labs/coreth/plugin/evm/database"
+	"github.com/ava-labs/avalanchego/vms/evm/database"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 )
@@ -22,7 +22,7 @@ import (
 func (vm *VM) initializeDBs(db avalanchedatabase.Database) {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	vm.chaindb = rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
+	vm.chaindb = rawdb.NewDatabase(database.New(prefixdb.NewNested(ethDBPrefix, db)))
 	vm.versiondb = versiondb.New(db)
 	vm.acceptedBlockDB = prefixdb.New(acceptedPrefix, vm.versiondb)
 	vm.metadataDB = prefixdb.New(metadataPrefix, vm.versiondb)
