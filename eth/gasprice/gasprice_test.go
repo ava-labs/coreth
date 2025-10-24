@@ -34,7 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
@@ -44,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
-	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
@@ -105,9 +103,9 @@ func (b *testBackend) teardown() {
 	b.chain.Stop()
 }
 
-func newTestBackendFakerEngine(t *testing.T, config *params.ChainConfig, numBlocks int, extDataGasUsage *big.Int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
+func newTestBackendFakerEngine(t *testing.T, numBlocks int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
 	gspec := &core.Genesis{
-		Config: config,
+		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr: {Balance: bal}},
 	}
 
@@ -132,20 +130,13 @@ func newTestBackendFakerEngine(t *testing.T, config *params.ChainConfig, numBloc
 
 // newTestBackend creates a test backend. OBS: don't forget to invoke tearDown
 // after use, otherwise the blockchain instance will mem-leak via goroutines.
-func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, extDataGasUsage *big.Int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
+func newTestBackend(t *testing.T, numBlocks int, genBlocks func(i int, b *core.BlockGen)) *testBackend {
 	gspec := &core.Genesis{
-		Config: config,
+		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{addr: {Balance: bal}},
 	}
 
-	engine := dummy.NewFakerWithCallbacks(dummy.ConsensusCallbacks{
-		OnFinalizeAndAssemble: func(*types.Header, *types.Header, *state.StateDB, []*types.Transaction) ([]byte, *big.Int, *big.Int, error) {
-			return nil, common.Big0, extDataGasUsage, nil
-		},
-		OnExtraStateChange: func(*types.Block, *types.Header, *state.StateDB) (*big.Int, *big.Int, error) {
-			return common.Big0, extDataGasUsage, nil
-		},
-	})
+	engine := dummy.NewFaker()
 
 	// Generate testing blocks
 	_, blocks, _, err := core.GenerateChainWithGenesis(gspec, engine, numBlocks, ap4.TargetBlockRate-1, genBlocks)
@@ -185,11 +176,9 @@ func (b *testBackend) GetBlockByNumber(number uint64) *types.Block {
 }
 
 type suggestTipCapTest struct {
-	chainConfig     *params.ChainConfig
-	numBlocks       int
-	extDataGasUsage *big.Int
-	genBlock        func(i int, b *core.BlockGen)
-	expectedTip     *big.Int
+	numBlocks   int
+	genBlock    func(i int, b *core.BlockGen)
+	expectedTip *big.Int
 }
 
 func defaultOracleConfig() Config {
@@ -214,7 +203,7 @@ func applyGasPriceTest(t *testing.T, test suggestTipCapTest, config Config) {
 	if test.genBlock == nil {
 		test.genBlock = func(i int, b *core.BlockGen) {}
 	}
-	backend := newTestBackend(t, test.chainConfig, test.numBlocks, test.extDataGasUsage, test.genBlock)
+	backend := newTestBackend(t, test.numBlocks, test.genBlock)
 	oracle, err := NewOracle(backend, config)
 	require.NoError(t, err)
 
@@ -283,178 +272,86 @@ func testGenBlockWithTips(t *testing.T, tips []int64) func(int, *core.BlockGen) 
 
 func TestSuggestTipCap(t *testing.T) {
 	cases := []struct {
-		name            string
-		chainConfig     *params.ChainConfig
-		numBlocks       int
-		genBlock        func(int, *core.BlockGen)
-		extDataGasUsage *big.Int
-		expectedTip     *big.Int
+		name        string
+		numBlocks   int
+		genBlock    func(int, *core.BlockGen)
+		expectedTip *big.Int
 	}{
 		{
-			name:            "empty_ext_data_gas_usage_fortuna",
-			chainConfig:     params.TestFortunaChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 55, 80),
-			extDataGasUsage: nil,
-			expectedTip:     DefaultMinPrice,
+			name:        "simple_latest_no_tip",
+			numBlocks:   3,
+			genBlock:    testGenBlock(t, 0, 80),
+			expectedTip: DefaultMinPrice,
 		},
 		{
-			name:            "empty_ext_data_gas_usage_latest",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 55, 80),
-			extDataGasUsage: nil,
-			expectedTip:     big.NewInt(55 * params.GWei),
+			name:        "simple_latest_1_gwei_tip",
+			numBlocks:   3,
+			genBlock:    testGenBlock(t, 1, 80),
+			expectedTip: big.NewInt(1 * params.GWei),
 		},
 		{
-			name:            "ext_data_gas_usage_fortuna",
-			chainConfig:     params.TestFortunaChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 55, 80),
-			extDataGasUsage: big.NewInt(10_000),
-			expectedTip:     DefaultMinPrice,
+			name:        "simple_latest_100_gwei_tip",
+			numBlocks:   3,
+			genBlock:    testGenBlock(t, 100, 80),
+			expectedTip: big.NewInt(100 * params.GWei),
 		},
 		{
-			name:            "ext_data_gas_usage_latest",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 55, 80),
-			extDataGasUsage: big.NewInt(10_000),
-			expectedTip:     big.NewInt(55 * params.GWei),
+			name:        "simple_floor_latest_1_gwei_tip",
+			numBlocks:   3,
+			genBlock:    testGenBlock(t, 1, 80),
+			expectedTip: big.NewInt(1 * params.GWei),
 		},
 		{
-			name:            "tip_includes_extra_data_gas_usage_fortuna",
-			chainConfig:     params.TestFortunaChainConfig,
-			numBlocks:       1000,
-			genBlock:        testGenBlock(t, 100_000, 1),
-			extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(ethparams.TxGas)),
-			expectedTip:     big.NewInt(44_252),
+			name:        "simple_floor_latest_100_gwei_tip",
+			numBlocks:   3,
+			genBlock:    testGenBlock(t, 100, 80),
+			expectedTip: big.NewInt(100 * params.GWei),
 		},
 		{
-			name:            "simple_fortuna",
-			chainConfig:     params.TestFortunaChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 55, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     DefaultMinPrice,
+			name:        "max_tip_cap",
+			numBlocks:   200,
+			genBlock:    testGenBlock(t, 550, 80),
+			expectedTip: DefaultMaxPrice,
 		},
 		{
-			name:            "simple_latest_no_tip",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 0, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     DefaultMinPrice,
+			name:        "single_transaction_with_tip",
+			numBlocks:   3,
+			genBlock:    testGenBlockWithTips(t, []int64{100}),
+			expectedTip: big.NewInt(100 * params.GWei),
 		},
 		{
-			name:            "simple_latest_1_gwei_tip",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 1, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     big.NewInt(1 * params.GWei),
+			name:        "three_transactions_with_odd_count_tips",
+			numBlocks:   3,
+			genBlock:    testGenBlockWithTips(t, []int64{10, 20, 30}),
+			expectedTip: big.NewInt(20 * params.GWei),
 		},
 		{
-			name:            "simple_latest_100_gwei_tip",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 100, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     big.NewInt(100 * params.GWei),
+			name:        "four_transactions_with_even_count_tips",
+			numBlocks:   3,
+			genBlock:    testGenBlockWithTips(t, []int64{10, 20, 30, 40}),
+			expectedTip: big.NewInt(30 * params.GWei),
 		},
 		{
-			name:            "simple_floor_latest",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 0, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     DefaultMinPrice,
+			name:        "unsorted_transactions_with_tips",
+			numBlocks:   3,
+			genBlock:    testGenBlockWithTips(t, []int64{50, 10, 40, 30, 20}),
+			expectedTip: big.NewInt(30 * params.GWei),
 		},
 		{
-			name:            "simple_floor_latest_1_gwei_tip",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 1, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     big.NewInt(1 * params.GWei),
+			name:        "zero_tips",
+			numBlocks:   3,
+			genBlock:    testGenBlockWithTips(t, []int64{0, 0, 0}),
+			expectedTip: DefaultMinPrice,
 		},
 		{
-			name:            "simple_floor_latest_100_gwei_tip",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			genBlock:        testGenBlock(t, 100, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     big.NewInt(100 * params.GWei),
+			name:        "duplicate_tips",
+			numBlocks:   3,
+			genBlock:    testGenBlockWithTips(t, []int64{20, 20, 20}),
+			expectedTip: big.NewInt(20 * params.GWei),
 		},
 		{
-			name:            "max_tip_cap_fortuna",
-			chainConfig:     params.TestFortunaChainConfig,
-			numBlocks:       200,
-			genBlock:        testGenBlock(t, 550, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     big.NewInt(3),
-		},
-		{
-			name:            "max_tip_cap_latest",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       200,
-			genBlock:        testGenBlock(t, 550, 80),
-			extDataGasUsage: common.Big0,
-			expectedTip:     DefaultMaxPrice,
-		},
-		{
-			name:            "single_transaction_with_tip",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
-			genBlock:        testGenBlockWithTips(t, []int64{100}),
-			expectedTip:     big.NewInt(100 * params.GWei),
-		},
-		{
-			name:            "three_transactions_with_tips_odd_count",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
-			genBlock:        testGenBlockWithTips(t, []int64{10, 20, 30}),
-			expectedTip:     big.NewInt(20 * params.GWei),
-		},
-		{
-			name:            "four_transactions_with_tips_even_count",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
-			genBlock:        testGenBlockWithTips(t, []int64{10, 20, 30, 40}),
-			expectedTip:     big.NewInt(25 * params.GWei),
-		},
-		{
-			name:            "unsorted_transactions_with_tips",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
-			genBlock:        testGenBlockWithTips(t, []int64{50, 10, 40, 30, 20}),
-			expectedTip:     big.NewInt(30 * params.GWei),
-		},
-		{
-			name:            "zero_tips",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
-			genBlock:        testGenBlockWithTips(t, []int64{0, 0, 0}),
-			expectedTip:     DefaultMinPrice,
-		},
-		{
-			name:            "duplicate_tips",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
-			genBlock:        testGenBlockWithTips(t, []int64{20, 20, 20}),
-			expectedTip:     big.NewInt(20 * params.GWei),
-		},
-		{
-			name:            "no_transactions",
-			chainConfig:     params.TestChainConfig,
-			numBlocks:       3,
-			extDataGasUsage: common.Big0,
+			name:      "no_transactions",
+			numBlocks: 3,
 			genBlock: func(i int, b *core.BlockGen) {
 				b.SetCoinbase(common.Address{1})
 				// No transactions added
@@ -465,88 +362,18 @@ func TestSuggestTipCap(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			applyGasPriceTest(t, suggestTipCapTest{
-				chainConfig:     c.chainConfig,
-				numBlocks:       c.numBlocks,
-				extDataGasUsage: c.extDataGasUsage,
-				genBlock:        c.genBlock,
-				expectedTip:     c.expectedTip,
+				numBlocks:   c.numBlocks,
+				genBlock:    c.genBlock,
+				expectedTip: c.expectedTip,
 			}, defaultOracleConfig())
 		})
 	}
 }
 
-func TestSuggestTipCapSmallTipsFortuna(t *testing.T) {
-	tip := big.NewInt(550 * params.GWei)
-	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFortunaChainConfig,
-		numBlocks:       3,
-		extDataGasUsage: common.Big0,
-		genBlock: func(i int, b *core.BlockGen) {
-			b.SetCoinbase(common.Address{1})
-
-			signer := types.LatestSigner(params.TestFortunaChainConfig)
-			baseFee := b.BaseFee()
-			feeCap := new(big.Int).Add(baseFee, tip)
-			for j := 0; j < 40; j++ {
-				tx := types.NewTx(&types.DynamicFeeTx{
-					ChainID:   params.TestFortunaChainConfig.ChainID,
-					Nonce:     b.TxNonce(addr),
-					To:        &common.Address{},
-					Gas:       ethparams.TxGas,
-					GasFeeCap: feeCap,
-					GasTipCap: tip,
-					Data:      []byte{},
-				})
-				tx, err := types.SignTx(tx, signer, key)
-				if err != nil {
-					t.Fatalf("failed to create tx: %s", err)
-				}
-				b.AddTx(tx)
-				tx = types.NewTx(&types.DynamicFeeTx{
-					ChainID:   params.TestFortunaChainConfig.ChainID,
-					Nonce:     b.TxNonce(addr),
-					To:        &common.Address{},
-					Gas:       ethparams.TxGas,
-					GasFeeCap: feeCap,
-					GasTipCap: common.Big1,
-					Data:      []byte{},
-				})
-				tx, err = types.SignTx(tx, signer, key)
-				require.NoError(t, err, "failed to create tx")
-				b.AddTx(tx)
-			}
-		},
-		// NOTE: small tips do not bias estimate
-		expectedTip: big.NewInt(1),
-	}, defaultOracleConfig())
-}
-
 func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
-	cases := []struct {
-		name        string
-		chainConfig *params.ChainConfig
-		expectedTip *big.Int
-	}{
-		{
-			name:        "fortuna",
-			chainConfig: params.TestFortunaChainConfig,
-			expectedTip: big.NewInt(1),
-		},
-		{
-			name:        "latest",
-			chainConfig: params.TestChainConfig,
-			expectedTip: big.NewInt(55 * params.GWei),
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			applyGasPriceTest(t, suggestTipCapTest{
-				chainConfig:     c.chainConfig,
-				numBlocks:       20,
-				extDataGasUsage: big.NewInt(1),
-				genBlock:        testGenBlock(t, 55, 80),
-				expectedTip:     c.expectedTip,
-			}, timeCrunchOracleConfig())
-		})
-	}
+	applyGasPriceTest(t, suggestTipCapTest{
+		numBlocks:   20,
+		genBlock:    testGenBlock(t, 55, 80),
+		expectedTip: big.NewInt(55 * params.GWei),
+	}, timeCrunchOracleConfig())
 }

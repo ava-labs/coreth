@@ -186,7 +186,7 @@ func NewOracle(backend OracleBackend, config Config) (*Oracle, error) {
 			lastHead = ev.Block.Hash()
 		}
 	}()
-	feeInfoProvider, err := newFeeInfoProvider(backend, minGasUsed.Uint64(), config.Blocks)
+	feeInfoProvider, err := newFeeInfoProvider(backend, config.Blocks)
 	if err != nil {
 		return nil, err
 	}
@@ -315,11 +315,7 @@ func (oracle *Oracle) suggestTip(ctx context.Context) (*big.Int, error) {
 			break
 		}
 
-		if feeInfo.tip != nil {
-			tipResults = append(tipResults, feeInfo.tip)
-		} else {
-			tipResults = append(tipResults, new(big.Int).Set(common.Big0))
-		}
+		tipResults = append(tipResults, feeInfo.tips...)
 	}
 
 	price := lastPrice
