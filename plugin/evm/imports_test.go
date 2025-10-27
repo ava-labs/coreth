@@ -168,9 +168,9 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 			return err
 		}
 
-		// Skip generated files and main_test.go
+		// Skip generated files, main_test.go, and tempextrastest directory
 		filename := filepath.Base(path)
-		if strings.HasPrefix(filename, "gen_") || strings.Contains(path, "core/main_test.go") {
+		if strings.HasPrefix(filename, "gen_") || strings.Contains(path, "core/main_test.go") || strings.Contains(path, "tempextrastest/") {
 			return nil
 		}
 
