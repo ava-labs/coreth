@@ -31,7 +31,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{})
 	defer func() {
-		require.NoError(vm.Shutdown(context.Background()))
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	nodeID := ids.GenerateTestNodeID()
@@ -68,7 +68,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	require.NoError(err)
 
 	// show that no txID is requested
-	require.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
+	require.NoError(vm.AppGossip(t.Context(), nodeID, msgBytes))
 	time.Sleep(500 * time.Millisecond)
 
 	vm.Ctx.Lock.Lock()
@@ -82,7 +82,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	vm.Ctx.Lock.Unlock()
 
 	// show that tx is not re-gossiped
-	require.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
+	require.NoError(vm.AppGossip(t.Context(), nodeID, msgBytes))
 
 	vm.Ctx.Lock.Lock()
 
@@ -99,7 +99,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 
 	msgBytes, err = buildAtomicPushGossip(txBytes)
 	require.NoError(err)
-	require.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
+	require.NoError(vm.AppGossip(t.Context(), nodeID, msgBytes))
 
 	vm.Ctx.Lock.Lock()
 
@@ -117,7 +117,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{})
 	defer func() {
-		require.NoError(vm.Shutdown(context.Background()))
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	var (
@@ -161,7 +161,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 
 	msgBytes, err := buildAtomicPushGossip(txBytes)
 	require.NoError(err)
-	require.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
+	require.NoError(vm.AppGossip(t.Context(), nodeID, msgBytes))
 
 	vm.Ctx.Lock.Lock()
 

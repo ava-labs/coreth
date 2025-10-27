@@ -54,7 +54,7 @@ func TestFeeInfoProviderCacheSize(t *testing.T) {
 	// to test eviction behavior.
 	for i := 0; i < size+feeCacheExtraSlots+overflow; i++ {
 		header := &types.Header{Number: big.NewInt(int64(i))}
-		_, err := f.addHeader(context.Background(), header)
+		_, err := f.addHeader(t.Context(), header)
 		require.NoError(t, err)
 	}
 
