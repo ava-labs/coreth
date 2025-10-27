@@ -151,17 +151,18 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	txBytes, err := marshaller.MarshalGossip(tx)
 	require.NoError(err)
 
-	vm.Ctx.Lock.Unlock()
-
 	msgBytes, err := buildAtomicPushGossip(txBytes)
 	require.NoError(err)
-	require.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
+
+	// Mempool Add waits on vm context lock
+	vm.Ctx.Lock.Unlock()
+	err = vm.AppGossip(context.Background(), nodeID, msgBytes)
+	vm.Ctx.Lock.Lock()
+	require.NoError(err)
 
 	require.Zero(txGossiped.Load(), "tx should not have been gossiped")
 
-	vm.Ctx.Lock.Lock()
 	require.False(vm.AtomicMempool.Has(txID))
-	vm.Ctx.Lock.Unlock()
 
 	// Conflicting tx must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
@@ -172,7 +173,6 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 
 	require.Equal(int32(1), txGossiped.Load(), "conflicting tx should have been gossiped")
 
-	vm.Ctx.Lock.Lock()
 	require.False(vm.AtomicMempool.Has(txID))
 	require.True(vm.AtomicMempool.Has(conflictingTx.ID()))
 }
