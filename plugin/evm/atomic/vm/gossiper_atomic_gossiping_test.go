@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/binary"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	sharedatomic "github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
@@ -59,7 +60,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	tx, conflictingTx := importTxs[0], importTxs[1]
 
 	// gossip tx and check it is accepted and gossiped
-	marshaller := atomic.TxMarshaller{}
+	marshaller := sharedatomic.TxMarshaller{}
 	txBytes, err := marshaller.MarshalGossip(tx)
 	require.NoError(err)
 	vm.Ctx.Lock.Unlock()
@@ -91,7 +92,7 @@ func TestMempoolAtmTxsAppGossipHandling(t *testing.T) {
 	txGossipedLock.Unlock()
 
 	// show that conflicting tx is not added to mempool
-	marshaller = atomic.TxMarshaller{}
+	marshaller = sharedatomic.TxMarshaller{}
 	txBytes, err = marshaller.MarshalGossip(conflictingTx)
 	require.NoError(err)
 
@@ -121,15 +122,11 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	}()
 
 	var (
-		txGossiped     int
-		txGossipedLock sync.Mutex
+		txGossiped atomic.Int32
 	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
-		txGossipedLock.Lock()
-		defer txGossipedLock.Unlock()
-
-		txGossiped++
+		txGossiped.Add(1)
 		return nil
 	}
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
@@ -152,7 +149,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	// Gossip the transaction to the VM and ensure that it is not added to the mempool
 	// and is not re-gossipped.
 	nodeID := ids.GenerateTestNodeID()
-	marshaller := atomic.TxMarshaller{}
+	marshaller := sharedatomic.TxMarshaller{}
 	txBytes, err := marshaller.MarshalGossip(tx)
 	require.NoError(err)
 
@@ -162,14 +159,10 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	require.NoError(err)
 	require.NoError(vm.AppGossip(context.Background(), nodeID, msgBytes))
 
+	require.Zero(txGossiped.Load(), "tx should not have been gossiped")
+
 	vm.Ctx.Lock.Lock()
-
-	txGossipedLock.Lock()
-	require.Zero(txGossiped, "tx should not have been gossiped")
-	txGossipedLock.Unlock()
-
 	require.False(vm.AtomicMempool.Has(txID))
-
 	vm.Ctx.Lock.Unlock()
 
 	// Conflicting tx must be submitted over the API to be included in push gossip.
@@ -179,12 +172,9 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 	vm.AtomicTxPushGossiper.Add(conflictingTx)
 	require.NoError(vm.AtomicTxPushGossiper.Gossip(context.Background()))
 
+	require.Equal(int32(1), txGossiped.Load(), "conflicting tx should have been gossiped")
+
 	vm.Ctx.Lock.Lock()
-
-	txGossipedLock.Lock()
-	require.Equal(1, txGossiped, "conflicting tx should have been gossiped")
-	txGossipedLock.Unlock()
-
 	require.False(vm.AtomicMempool.Has(txID))
 	require.True(vm.AtomicMempool.Has(conflictingTx.ID()))
 }

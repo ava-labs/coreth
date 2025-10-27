@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"math/big"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -92,19 +91,15 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	vm.txPool.SetGasTip(common.Big1)
 	vm.txPool.SetMinFee(common.Big0)
 
-	var (
-		txResponded bool
-		statusLock  sync.Mutex
-	)
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppRequestF = func(context.Context, set.Set[ids.NodeID], uint32, []byte) error {
 		require.FailNow("tx should not be requested")
 		return nil
 	}
+	sentCh := make(chan struct{})
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
-		statusLock.Lock()
-		defer statusLock.Unlock()
-		txResponded = true
+		// This should never double-close because only one tx is gossiped.
+		close(sentCh)
 		return nil
 	}
 
@@ -114,8 +109,12 @@ func TestMempoolEthTxsAppGossipHandling(t *testing.T) {
 	// Txs must be submitted over the API to be included in push gossip.
 	// (i.e., txs received via p2p are not included in push gossip)
 	require.NoError(vm.eth.APIBackend.SendTx(context.Background(), tx))
+
+	// Explicitly gossip to avoid timing issues.
 	require.NoError(vm.ethTxPushGossiper.Get().Gossip(context.Background()))
-	statusLock.Lock()
-	require.True(txResponded, "expected tx to be gossiped")
-	statusLock.Unlock()
+	select {
+	case <-sentCh:
+	case <-time.After(2 * time.Second):
+		require.Fail("timeout waiting for tx to be gossiped")
+	}
 }
