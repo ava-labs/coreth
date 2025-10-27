@@ -1,4 +1,3 @@
-TestGolangBindings
 TestMempoolAtmTxsAppGossipHandlingDiscardedTx
 TestMempoolEthTxsAppGossipHandling
 TestResumeSyncAccountsTrieInterrupted
