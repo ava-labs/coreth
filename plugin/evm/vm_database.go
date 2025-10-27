@@ -8,11 +8,10 @@ import (
 
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
+	"github.com/ava-labs/avalanchego/vms/evm/database"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/log"
-
-	"github.com/ava-labs/avalanchego/vms/evm/database"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 )
