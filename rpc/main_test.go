@@ -39,13 +39,13 @@ func TestMain(m *testing.M) {
 
 	// Since there are so many flaky tests in the RPC package, we run the tests
 	// multiple times to try to get a passing run.
-	var ret int
+	var code int
 	for range 5 {
-		ret = m.Run()
-		if ret == 0 {
+		code = m.Run()
+		if code == 0 {
 			break
 		}
 	}
 
-	os.Exit(ret)
+	os.Exit(code)
 }
