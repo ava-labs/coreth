@@ -34,7 +34,6 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/coreth/core/bloombits"
-	"github.com/ava-labs/coreth/plugin/evm/customlogs"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
@@ -343,8 +342,10 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 		return nil, err
 	}
 
-	unfiltered := customlogs.FlattenLogs(logsList)
-	logs := filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	var logs []*types.Log
+	for _, txLogs := range logsList {
+		logs = append(logs, filterLogs(txLogs, nil, nil, f.addresses, f.topics)...)
+	}
 	if len(logs) == 0 {
 		return nil, nil
 	}
@@ -357,11 +358,14 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	unfiltered = unfiltered[:0]
+	var receiptLogs [][]*types.Log
 	for _, receipt := range receipts {
-		unfiltered = append(unfiltered, receipt.Logs...)
+		receiptLogs = append(receiptLogs, receipt.Logs)
 	}
-	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	logs = logs[:0] // reset the slice
+	for _, txLogs := range receiptLogs {
+		logs = append(logs, filterLogs(txLogs, nil, nil, f.addresses, f.topics)...)
+	}
 
 	return logs, nil
 }
