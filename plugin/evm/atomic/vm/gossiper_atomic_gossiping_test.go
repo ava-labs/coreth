@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	sharedatomic "github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
+	sharedatomic "github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
 // show that a txID discovered from gossip is requested to the same node only if
@@ -121,9 +121,7 @@ func TestMempoolAtmTxsAppGossipHandlingDiscardedTx(t *testing.T) {
 		require.NoError(vm.Shutdown(context.Background()))
 	}()
 
-	var (
-		txGossiped atomic.Int32
-	)
+	var txGossiped atomic.Int32
 	tvm.AppSender.CantSendAppGossip = false
 	tvm.AppSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error {
 		txGossiped.Add(1)
