@@ -161,7 +161,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 		defer close(done)
 		want := context.Canceled
 		_, err := bind.WaitDeployed(ctx, backend.Client(), tx)
-		if err == nil || errors.Is(want, err) {
+		if err == nil || !errors.Is(want, err) {
 			t.Errorf("error mismatch: want %v, got %v", want, err)
 		}
 	}()
