@@ -2188,8 +2188,9 @@ func golangBindings(t *testing.T, overload bool) {
 			os.Exit(m.Run())
 		}
 	`
-	if err := os.WriteFile(filepath.Join(pkg, "main_test.go"), []byte(mainTest), 0600); err != nil {
-		t.Fatalf("failed to write main test: %v", err)
+	mainPath := filepath.Join(pkg, "main_test.go")
+	if err := os.WriteFile(mainPath, []byte(mainTest), 0600); err != nil {
+		t.Fatalf("os.WriteFile(%q, 0600): %v", mainPath, err)
 	}
 
 	// Convert the package to go modules and use the current source for go-ethereum
