@@ -4,5 +4,4 @@ TestGolangBindings
 TestResumeSyncAccountsTrieInterrupted
 TestResyncNewRootAfterDeletes
 TestTransactionSkipIndexing
-TestWaitDeployedCornerCases
 TestWebsocketLargeRead
