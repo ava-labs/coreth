@@ -1,7 +1,4 @@
-TestClientCancelWebsocket
-TestClientWebsocketLargeMessage
-TestGolangBindings
 TestResumeSyncAccountsTrieInterrupted
 TestResyncNewRootAfterDeletes
 TestTransactionSkipIndexing
-TestWebsocketLargeRead
+
