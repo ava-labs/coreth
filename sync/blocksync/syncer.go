@@ -13,7 +13,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 
-	evmdb "github.com/ava-labs/avalanchego/vms/evm/database"
+	blockdb "github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
 	syncpkg "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 )
@@ -82,7 +82,7 @@ func (s *BlockSyncer) Sync(ctx context.Context) error {
 	// will be fetching these from peers
 	firstBlockToFetch := nextHeight - blocksToFetch + 1
 	log.Info("Checking if blockdbs are initialized on block syncer", "nextHeight", nextHeight, "firstBlockToFetch", firstBlockToFetch)
-	if blockDB, ok := s.db.(*evmdb.Database); ok {
+	if blockDB, ok := s.db.(*blockdb.Database); ok {
 		log.Info("Initializing blockdbs on block syncer", "nextHeight", nextHeight, "firstBlockToFetch", firstBlockToFetch)
 		blockDB.InitBlockDBs(firstBlockToFetch)
 
