@@ -19,12 +19,12 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/database"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
-	evmdb "github.com/ava-labs/avalanchego/vms/evm/database"
-	blockdb "github.com/ava-labs/avalanchego/x/blockdb"
+	"github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
+	heightindexdb "github.com/ava-labs/avalanchego/x/blockdb"
 )
 
 const (
-	blockDBFolder = "blockdb"
+	dbFolder = "blockdb"
 )
 
 // initializeDBs initializes the databases used by the VM.
@@ -58,7 +58,7 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 
 	// Error if block database has been enabled/created and then disabled
 	stateDB := prefixdb.New(blockDBPrefix, db)
-	enabled, err := evmdb.IsEnabled(stateDB)
+	enabled, err := blockdb.IsEnabled(stateDB)
 	if err != nil {
 		return nil, err
 	}
@@ -69,8 +69,8 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 		return chainDB, nil
 	}
 
-	versionPath := strconv.FormatUint(blockdb.IndexFileVersion, 10)
-	blockDBPath := filepath.Join(vm.ctx.ChainDataDir, blockDBFolder, versionPath)
+	version := strconv.FormatUint(heightindexdb.IndexFileVersion, 10)
+	dbPath := filepath.Join(vm.ctx.ChainDataDir, dbFolder, version)
 	hasLastAccepted, err := vm.acceptedBlockDB.Has(lastAcceptedKey)
 	if err != nil {
 		return nil, err
@@ -79,8 +79,12 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 	if vm.config.StateSyncEnabled != nil {
 		stateSyncEnabled = *vm.config.StateSyncEnabled
 	}
-	config := blockdb.DefaultConfig().WithSyncToDisk(vm.config.BlockDatabaseSyncToDisk)
-	blockDB, initialized, err := evmdb.New(stateDB, chainDB, blockDBPath, stateSyncEnabled, config, vm.ctx.Log, vm.sdkMetrics)
+	config := heightindexdb.DefaultConfig().WithSyncToDisk(vm.config.BlockDatabaseSyncToDisk)
+	blockDB, initialized, err := blockdb.New(
+		stateDB, chainDB,
+		dbPath, stateSyncEnabled, config,
+		vm.ctx.Log, vm.sdkMetrics,
+	)
 	if err != nil {
 		return nil, err
 	}
