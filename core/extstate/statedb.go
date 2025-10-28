@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/holiman/uint256"
 
@@ -17,11 +18,25 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
 
-// Register the state key normalization to libevm's [state.StateDB]. This will
-// normalize all state keys passing through the implementation unless
-// [stateconf.SkipStateKeyTransformation] is provided as an option.
-func init() {
+// RegisterExtras registers hooks with libevm to achieve Avalanche state
+// management. It MUST NOT be called more than once and therefore is only
+// allowed to be used in tests and `package main`, to avoid polluting other
+// packages that transitively depend on this one but don't need registration.
+//
+// Of note, a call to RegisterExtras will result in state-key normalization
+// unless [stateconf.SkipStateKeyTransformation] is used.
+func RegisterExtras() {
 	state.RegisterExtras(normalizeStateKeysHook{})
+}
+
+// WithTempRegisteredExtras runs `fn` with temporary registration otherwise
+// equivalent to a call to [RegisterExtras], but limited to the life of `fn`.
+//
+// This function is not intended for direct use. Use
+// `evm.WithTempRegisteredLibEVMExtras()` instead as it calls this along with
+// all other temporary-registration functions.
+func WithTempRegisteredExtras(lock libevm.ExtrasLock, fn func() error) error {
+	return state.WithTempRegisteredExtras(lock, normalizeStateKeysHook{}, fn)
 }
 
 type normalizeStateKeysHook struct{}
@@ -86,8 +101,8 @@ func (s *StateDB) AddBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 		return
 	}
 
-	if !state.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
-		state.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	if !customtypes.IsMultiCoin(s.StateDB, addr) {
+		customtypes.SetMultiCoin(s.StateDB, addr, true)
 	}
 
 	newAmount := new(big.Int).Add(s.GetBalanceMultiCoin(addr, coinID), amount)
@@ -103,8 +118,8 @@ func (s *StateDB) SubBalanceMultiCoin(addr common.Address, coinID common.Hash, a
 	// Note: It's not needed to set the IsMultiCoin (extras) flag here, as this
 	// call would always be preceded by a call to AddBalanceMultiCoin, which would
 	// set the extra flag. Seems we should remove the redundant code.
-	if !state.GetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr) {
-		state.SetExtra(s.StateDB, customtypes.IsMultiCoinPayloads, addr, true)
+	if !customtypes.IsMultiCoin(s.StateDB, addr) {
+		customtypes.SetMultiCoin(s.StateDB, addr, true)
 	}
 	newAmount := new(big.Int).Sub(s.GetBalanceMultiCoin(addr, coinID), amount)
 	normalizeCoinID(&coinID)

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
@@ -21,6 +22,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
 	"github.com/ava-labs/coreth/sync/statesync/statesynctest"
@@ -29,6 +31,12 @@ import (
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	ethparams "github.com/ava-labs/libevm/params"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 func TestGetCode(t *testing.T) {
 	testNetClient := &testNetwork{}
@@ -173,7 +181,7 @@ func TestGetBlocks(t *testing.T) {
 		request        message.BlockRequest
 		getResponse    func(t *testing.T, request message.BlockRequest) []byte
 		assertResponse func(t *testing.T, response []*types.Block)
-		expectedErr    string
+		expectedErr    error
 	}{
 		"normal resonse": {
 			request: message.BlockRequest{
@@ -220,7 +228,7 @@ func TestGetBlocks(t *testing.T) {
 			getResponse: func(_ *testing.T, _ message.BlockRequest) []byte {
 				return []byte("gibberish")
 			},
-			expectedErr: errUnmarshalResponse.Error(),
+			expectedErr: errUnmarshalResponse,
 		},
 		"invalid value replacing block": {
 			request: message.BlockRequest{
@@ -241,7 +249,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: "failed to unmarshal response: rlp: expected List",
+			expectedErr: errUnmarshalResponse,
 		},
 		"incorrect starting point": {
 			request: message.BlockRequest{
@@ -260,7 +268,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return response
 			},
-			expectedErr: errHashMismatch.Error(),
+			expectedErr: errHashMismatch,
 		},
 		"missing link in between blocks": {
 			request: message.BlockRequest{
@@ -283,7 +291,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: errHashMismatch.Error(),
+			expectedErr: errHashMismatch,
 		},
 		"no blocks": {
 			request: message.BlockRequest{
@@ -300,7 +308,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: errEmptyResponse.Error(),
+			expectedErr: errEmptyResponse,
 		},
 		"more than requested blocks": {
 			request: message.BlockRequest{
@@ -319,7 +327,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: errTooManyBlocks.Error(),
+			expectedErr: errTooManyBlocks,
 		},
 	}
 	for name, test := range tests {
@@ -328,7 +336,7 @@ func TestGetBlocks(t *testing.T) {
 			defer cancel()
 
 			responseBytes := test.getResponse(t, test.request)
-			if len(test.expectedErr) == 0 {
+			if test.expectedErr == nil {
 				testNetClient.testResponse(1, nil, responseBytes)
 			} else {
 				attempted := false
@@ -341,11 +349,10 @@ func TestGetBlocks(t *testing.T) {
 			}
 
 			blockResponse, err := stateSyncClient.GetBlocks(ctx, test.request.Hash, test.request.Height, test.request.Parents)
-			if len(test.expectedErr) != 0 {
-				require.ErrorContains(t, err, test.expectedErr)
+			require.ErrorIs(t, err, test.expectedErr)
+			if test.expectedErr != nil {
 				return
 			}
-			require.NoError(t, err)
 
 			test.assertResponse(t, blockResponse)
 		})

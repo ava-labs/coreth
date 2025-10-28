@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
@@ -133,7 +134,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 		avaxBalance   *uint256.Int
 		balances      map[ids.ID]*big.Int
 		expectedNonce uint64
-		shouldErr     bool
+		expectedError error
 	}{
 		{
 			name:        "no transfers",
@@ -143,7 +144,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(int64(customAmount)),
 			},
 			expectedNonce: 0,
-			shouldErr:     false,
 		},
 		{
 			name: "spend half AVAX",
@@ -160,7 +160,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(int64(customAmount)),
 			},
 			expectedNonce: 1,
-			shouldErr:     false,
 		},
 		{
 			name: "spend all AVAX",
@@ -177,7 +176,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(int64(customAmount)),
 			},
 			expectedNonce: 1,
-			shouldErr:     false,
 		},
 		{
 			name: "spend too much AVAX",
@@ -194,7 +192,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(int64(customAmount)),
 			},
 			expectedNonce: 1,
-			shouldErr:     true,
+			expectedError: atomic.ErrInsufficientFunds,
 		},
 		{
 			name: "spend half custom",
@@ -211,7 +209,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(int64(customAmount / 2)),
 			},
 			expectedNonce: 1,
-			shouldErr:     false,
 		},
 		{
 			name: "spend all custom",
@@ -228,7 +225,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(0),
 			},
 			expectedNonce: 1,
-			shouldErr:     false,
 		},
 		{
 			name: "spend too much custom",
@@ -245,7 +241,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(0),
 			},
 			expectedNonce: 1,
-			shouldErr:     true,
+			expectedError: atomic.ErrInsufficientFunds,
 		},
 		{
 			name: "spend everything",
@@ -268,7 +264,6 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(0),
 			},
 			expectedNonce: 1,
-			shouldErr:     false,
 		},
 		{
 			name: "spend everything wrong nonce",
@@ -291,7 +286,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(0),
 			},
 			expectedNonce: 1,
-			shouldErr:     true,
+			expectedError: atomic.ErrInvalidNonce,
 		},
 		{
 			name: "spend everything changing nonces",
@@ -314,7 +309,7 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 				customAssetID: big.NewInt(0),
 			},
 			expectedNonce: 1,
-			shouldErr:     true,
+			expectedError: atomic.ErrInvalidNonce,
 		},
 	}
 	for _, test := range tests {
@@ -393,11 +388,10 @@ func TestExportTxEVMStateTransfer(t *testing.T) {
 
 			wrappedStateDB := extstate.New(statedb)
 			err = newTx.EVMStateTransfer(vm.Ctx, wrappedStateDB)
-			if test.shouldErr {
-				require.Error(t, err)
+			require.ErrorIs(t, err, test.expectedError)
+			if test.expectedError != nil {
 				return
 			}
-			require.NoError(t, err)
 
 			avaxBalance := wrappedStateDB.GetBalance(ethAddr)
 			require.Zero(t, avaxBalance.Cmp(test.avaxBalance), "address balance %s equal %s not %s", addr.String(), avaxBalance, test.avaxBalance)
@@ -862,7 +856,7 @@ func TestExportTxSemanticVerify(t *testing.T) {
 			tx := &atomic.Tx{UnsignedAtomicTx: test.tx}
 			require.NoError(t, tx.Sign(atomic.Codec, test.signers))
 
-			rules := vmtest.ForkToRules(test.fork)
+			rules := extrastest.ForkToRules(test.fork)
 			backend := NewVerifierBackend(vm, *rules)
 
 			err := backend.SemanticVerify(tx, parent, vmtest.InitialBaseFee)
@@ -1053,24 +1047,22 @@ func TestExportTxVerify(t *testing.T) {
 				return (*atomic.UnsignedExportTx)(nil)
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrNilTx.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrNilTx,
 		},
 		"valid export tx": {
 			generate: func() atomic.UnsignedAtomicTx {
 				return exportTx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"valid export tx banff": {
 			generate: func() atomic.UnsignedAtomicTx {
 				return exportTx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.Banff),
 		},
 		"incorrect networkID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1079,8 +1071,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrWrongNetworkID.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrWrongNetworkID,
 		},
 		"incorrect blockchainID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1089,8 +1081,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrWrongChainID.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrWrongChainID,
 		},
 		"incorrect destination chain": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1099,8 +1091,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrWrongChainID.Error(), // TODO make this error more specific to destination not just chainID
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrWrongChainID, // TODO make this error more specific to destination not just chainID
 		},
 		"no exported outputs": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1109,8 +1101,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrNoExportOutputs.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrNoExportOutputs,
 		},
 		"unsorted outputs": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1122,8 +1114,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrOutputsNotSorted.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrOutputsNotSorted,
 		},
 		"invalid exported output": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1132,8 +1124,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "nil transferable output is not valid",
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: avax.ErrNilTransferableOutput,
 		},
 		"unsorted EVM inputs before AP1": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1144,9 +1136,8 @@ func TestExportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"unsorted EVM inputs after AP1": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1158,8 +1149,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase1),
-			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase1),
+			expectedErr: atomic.ErrInputsNotSortedUnique,
 		},
 		"EVM input with amount 0": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1175,8 +1166,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrNoValueInput.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrNoValueInput,
 		},
 		"non-unique EVM input before AP1": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1184,9 +1175,8 @@ func TestExportTxVerify(t *testing.T) {
 				tx.Ins = []atomic.EVMInput{tx.Ins[0], tx.Ins[0]}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"non-unique EVM input after AP1": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1195,8 +1185,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase1),
-			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase1),
+			expectedErr: atomic.ErrInputsNotSortedUnique,
 		},
 		"non-AVAX input Apricot Phase 6": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1211,9 +1201,8 @@ func TestExportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase6),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase6),
 		},
 		"non-AVAX output Apricot Phase 6": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1233,9 +1222,8 @@ func TestExportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase6),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase6),
 		},
 		"non-AVAX input Banff": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1251,8 +1239,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
-			expectedErr: atomic.ErrExportNonAVAXInputBanff.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.Banff),
+			expectedErr: atomic.ErrExportNonAVAXInputBanff,
 		},
 		"non-AVAX output Banff": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -1273,8 +1261,8 @@ func TestExportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
-			expectedErr: atomic.ErrExportNonAVAXOutputBanff.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.Banff),
+			expectedErr: atomic.ErrExportNonAVAXOutputBanff,
 		},
 	}
 

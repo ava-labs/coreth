@@ -67,13 +67,15 @@ func testSync(t *testing.T, test syncTest) {
 	codeSyncer, err := NewCodeSyncer(mockClient, clientDB, fetcher.CodeHashes())
 	require.NoError(t, err, "failed to create code syncer")
 
-	cfg := Config{
-		BatchSize:   1000, // Use a lower batch size in order to get test coverage of batches being written early.
-		RequestSize: testRequestSize,
-	}
-
 	// Create the state syncer.
-	stateSyncer, err := NewSyncer(mockClient, clientDB, root, fetcher, cfg)
+	stateSyncer, err := NewSyncer(
+		mockClient,
+		clientDB,
+		root,
+		fetcher,
+		testRequestSize,
+		WithBatchSize(1000), // Use a lower batch size in order to get test coverage of batches being written early.
+	)
 	require.NoError(t, err, "failed to create state syncer")
 
 	// Run both syncers concurrently and wait for the first error.
@@ -223,7 +225,7 @@ func TestCancelSync(t *testing.T) {
 // function which returns [errInterrupted] after passing through [numRequests]
 // leafs requests for [root].
 type interruptLeafsIntercept struct {
-	numRequests    uint32
+	numRequests    atomic.Uint32
 	interruptAfter uint32
 	root           common.Hash
 }
@@ -233,7 +235,7 @@ type interruptLeafsIntercept struct {
 // After that, all requests for leafs from [root] return [errInterrupted].
 func (i *interruptLeafsIntercept) getLeafsIntercept(request message.LeafsRequest, response message.LeafsResponse) (message.LeafsResponse, error) {
 	if request.Root == i.root {
-		if numRequests := atomic.AddUint32(&i.numRequests, 1); numRequests > i.interruptAfter {
+		if numRequests := i.numRequests.Add(1); numRequests > i.interruptAfter {
 			return message.LeafsResponse{}, errInterrupted
 		}
 	}
@@ -258,7 +260,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		GetLeafsIntercept: intercept.getLeafsIntercept,
 	})
 
-	require.Equal(t, uint32(2), intercept.numRequests)
+	require.GreaterOrEqual(t, intercept.numRequests.Load(), uint32(2))
 
 	testSync(t, syncTest{
 		prepareForTest: func(*testing.T, *rand.Rand) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {

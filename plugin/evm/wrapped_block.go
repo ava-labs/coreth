@@ -334,8 +334,14 @@ func (b *wrappedBlock) semanticVerify(predicateContext *precompileconfig.Predica
 	if parent == nil {
 		return fmt.Errorf("%w: %s at height %d", errInvalidParent, b.ethBlock.ParentHash(), b.ethBlock.NumberU64()-1)
 	}
+
+	header := b.ethBlock.Header()
+	// Ensure MinDelayExcess is consistent with rules and minimum block delay is enforced.
+	if err := customheader.VerifyMinDelayExcess(extraConfig, parent, header); err != nil {
+		return err
+	}
 	// Ensure Time and TimeMilliseconds are consistent with rules.
-	if err := customheader.VerifyTime(extraConfig, parent, b.ethBlock.Header(), b.vm.clock.Time()); err != nil {
+	if err := customheader.VerifyTime(extraConfig, parent, header, b.vm.clock.Time()); err != nil {
 		return err
 	}
 
@@ -482,12 +488,12 @@ func (b *wrappedBlock) syntacticVerify() error {
 		}
 	} else {
 		switch {
+		case ethHeader.ParentBeaconRoot != nil:
+			return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
 		case ethHeader.ExcessBlobGas != nil:
 			return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *ethHeader.ExcessBlobGas)
 		case ethHeader.BlobGasUsed != nil:
 			return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *ethHeader.BlobGasUsed)
-		case ethHeader.ParentBeaconRoot != nil:
-			return fmt.Errorf("%w: have %x, expected nil", errInvalidParentBeaconRootBeforeCancun, *ethHeader.ParentBeaconRoot)
 		}
 	}
 
