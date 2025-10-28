@@ -37,7 +37,6 @@ linters:
         - -QF1010  # Convert slice of bytes to string when printing it
         - -SA1019  # Use of deprecated identifiers: triggers when you import or use something marked deprecated. 
         - -SA4009  # A function argument is overwritten before its first use. 
-        - -SA4010  # Break statement with no effect. Did you mean to break out of an outer loop?.
         - -SA9003  # Empty body in an if or else branch.
         - -ST1003  # Poorly chosen identifier.
         - -ST1008  # A function’s error value should be its last return value.
