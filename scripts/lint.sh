@@ -97,7 +97,7 @@ function test_golangci_lint {
   # can be managed by a given go.mod file, we use a separate mod file
   # for the older version.
   # TODO(marun) Switch everything to v2 when possible
-  go tool -modfile=tools/legacy-golangci-lint.mod golangci-lint run --config .golangci.yml
+  go tool -modfile=tools/go.mod golangci-lint run --config .golangci.yml
 }
 
 function test_avalanche_golangci_lint {
