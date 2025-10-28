@@ -1,9 +1,1 @@
-TestClientCancelWebsocket
-TestClientWebsocketLargeMessage
-TestGolangBindings
-TestMempoolAtmTxsAppGossipHandlingDiscardedTx
-TestMempoolEthTxsAppGossipHandling
 TestTransactionSkipIndexing
-TestUpdatedKeyfileContents
-TestWaitDeployedCornerCases
-TestWebsocketLargeRead
