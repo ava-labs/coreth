@@ -358,7 +358,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	// Replace the incomplete logs with complete logs from receipts
+	// Logs don't have TxHash, so get the full logs from receipts instead
 	logs = logs[:0]
 	for _, r := range receipts {
 		logs = append(logs, filterLogs(r.Logs, nil, nil, f.addresses, f.topics)...)
