@@ -37,7 +37,6 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/rpc"
@@ -152,11 +151,6 @@ func newTestBackend(t *testing.T, numBlocks int, genBlocks func(i int, b *core.B
 		t.Fatalf("Failed to insert chain, %v", err)
 	}
 	return &testBackend{chain: chain}
-}
-
-func (b *testBackend) MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error) {
-	config := params.GetExtra(b.chain.Config())
-	return customheader.EstimateRequiredTip(config, header)
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
