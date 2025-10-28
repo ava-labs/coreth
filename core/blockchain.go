@@ -623,7 +623,10 @@ func (bc *BlockChain) startAcceptor() {
 		bc.acceptorTipLock.Unlock()
 
 		// Update accepted feeds
-		flattenedLogs := flattenLogs(logs)
+		var flattenedLogs []*types.Log
+		for _, txLogs := range logs {
+			flattenedLogs = append(flattenedLogs, txLogs...)
+		}
 		bc.chainAcceptedFeed.Send(ChainEvent{Block: next, Hash: next.Hash(), Logs: flattenedLogs})
 		if len(flattenedLogs) > 0 {
 			bc.logsAcceptedFeed.Send(flattenedLogs)
@@ -1474,19 +1477,16 @@ func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*
 }
 
 // flattenLogs converts a nested array of logs to a single array of logs.
-func flattenLogs(list [][]*types.Log) []*types.Log {
-	var flat []*types.Log
-	for _, logs := range list {
-		flat = append(flat, logs...)
-	}
-	return flat
-}
 
 // collectLogs collects the logs that were generated or removed during
 // the processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 	unflattenedLogs := bc.collectUnflattenedLogs(b, removed)
-	return flattenLogs(unflattenedLogs)
+	var logs []*types.Log
+	for _, txLogs := range unflattenedLogs {
+		logs = append(logs, txLogs...)
+	}
+	return logs
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the

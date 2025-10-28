@@ -358,13 +358,10 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	var receiptLogs [][]*types.Log
-	for _, receipt := range receipts {
-		receiptLogs = append(receiptLogs, receipt.Logs)
-	}
-	logs = logs[:0] // reset the slice
-	for _, txLogs := range receiptLogs {
-		logs = append(logs, filterLogs(txLogs, nil, nil, f.addresses, f.topics)...)
+	// Replace the incomplete logs with complete logs from receipts
+	logs = logs[:0]
+	for _, r := range receipts {
+		logs = append(logs, filterLogs(r.Logs, nil, nil, f.addresses, f.topics)...)
 	}
 
 	return logs, nil
