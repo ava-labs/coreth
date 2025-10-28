@@ -260,7 +260,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		GetLeafsIntercept: intercept.getLeafsIntercept,
 	})
 
-	require.LessOrEqual(t, uint32(2), intercept.numRequests.Load())
+	require.GreaterOrEqual(t, intercept.numRequests.Load(), uint32(2))
 
 	testSync(t, syncTest{
 		prepareForTest: func(*testing.T, *rand.Rand) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
