@@ -11,16 +11,16 @@ import (
 
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
-	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 
 	"github.com/ava-labs/coreth/plugin/evm/database"
-	evmblockdb "github.com/ava-labs/coreth/plugin/evm/database/blockdb"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
+	evmdb "github.com/ava-labs/avalanchego/vms/evm/database"
+	blockdb "github.com/ava-labs/avalanchego/x/blockdb"
 )
 
 const (
@@ -58,7 +58,7 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 
 	// Error if block database has been enabled/created and then disabled
 	stateDB := prefixdb.New(blockDBPrefix, db)
-	enabled, err := evmblockdb.IsEnabled(stateDB)
+	enabled, err := evmdb.IsEnabled(stateDB)
 	if err != nil {
 		return nil, err
 	}
@@ -80,14 +80,12 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 		stateSyncEnabled = *vm.config.StateSyncEnabled
 	}
 	config := blockdb.DefaultConfig().WithSyncToDisk(vm.config.BlockDatabaseSyncToDisk)
-	blockDB := evmblockdb.New(stateDB, chainDB, config, blockDBPath, vm.ctx.Log, vm.sdkMetrics)
-	initialized, err := blockDB.InitWithStateSync(stateSyncEnabled)
-	log.Info("blockDB initialized", "initialized", initialized, "stateSyncEnabled", stateSyncEnabled)
+	blockDB, initialized, err := evmdb.New(stateDB, chainDB, blockDBPath, stateSyncEnabled, config, vm.ctx.Log, vm.sdkMetrics)
 	if err != nil {
 		return nil, err
 	}
 	if initialized && !vm.config.BlockDatabaseMigrationDisabled {
-		if err := blockDB.Migrate(); err != nil {
+		if err := blockDB.StartMigration(); err != nil {
 			return nil, err
 		}
 	}

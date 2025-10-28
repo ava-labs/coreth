@@ -13,8 +13,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
 
-	"github.com/ava-labs/coreth/plugin/evm/database/blockdb"
-
+	evmdb "github.com/ava-labs/avalanchego/vms/evm/database"
 	syncpkg "github.com/ava-labs/coreth/sync"
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 )
@@ -82,10 +81,10 @@ func (s *BlockSyncer) Sync(ctx context.Context) error {
 	// see if we can init the blockdb with the next block syncer height since we
 	// will be fetching these from peers
 	firstBlockToFetch := nextHeight - blocksToFetch + 1
-	log.Info("Checking if blockdb is initialized on block syncer", "nextHeight", nextHeight, "firstBlockToFetch", firstBlockToFetch)
-	if blockDB, ok := s.db.(*blockdb.Database); ok {
-		log.Info("Initializing blockdb on block syncer", "nextHeight", nextHeight, "firstBlockToFetch", firstBlockToFetch)
-		blockDB.InitWithMinHeight(firstBlockToFetch)
+	log.Info("Checking if blockdbs are initialized on block syncer", "nextHeight", nextHeight, "firstBlockToFetch", firstBlockToFetch)
+	if blockDB, ok := s.db.(*evmdb.Database); ok {
+		log.Info("Initializing blockdbs on block syncer", "nextHeight", nextHeight, "firstBlockToFetch", firstBlockToFetch)
+		blockDB.InitBlockDBs(firstBlockToFetch)
 
 		// we don't need to migrate here since we can only get here when we have no
 		// data to migrate
