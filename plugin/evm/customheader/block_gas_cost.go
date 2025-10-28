@@ -112,7 +112,7 @@ func EstimateRequiredTip(
 		return nil, errExtDataGasUsedNil
 	}
 
-	// TODO(ceyonur): Once we activate Granite, we can remove these.
+	// TODO(ceyonur): Once we activate Granite, we can remove these. (See https://github.com/ava-labs/coreth/issues/1318)
 	// totalGasUsed = GasUsed + ExtDataGasUsed
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
 	totalGasUsed.Add(totalGasUsed, extra.ExtDataGasUsed)

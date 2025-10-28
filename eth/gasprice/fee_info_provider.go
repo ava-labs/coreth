@@ -86,13 +86,11 @@ func newFeeInfoProvider(backend OracleBackend, size int) (*feeInfoProvider, erro
 
 // addHeader processes header into a feeInfo struct and caches the result.
 func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header, txs []*types.Transaction) (*feeInfo, error) {
-	feeInfo := &feeInfo{
-		timestamp: header.Time,
-		baseFee:   header.BaseFee,
-	}
+	var (
+		tips []*big.Int
+		err  error
+	)
 
-	var tips []*big.Int
-	var err error
 	for _, tx := range txs {
 		tip, err := tx.EffectiveGasTip(header.BaseFee)
 		if err != nil {
@@ -101,7 +99,11 @@ func (f *feeInfoProvider) addHeader(ctx context.Context, header *types.Header, t
 		tips = append(tips, tip)
 	}
 
-	feeInfo.tips = tips
+	feeInfo := &feeInfo{
+		timestamp: header.Time,
+		baseFee:   header.BaseFee,
+		tips:      tips,
+	}
 	f.cache.Add(header.Number.Uint64(), feeInfo)
 	return feeInfo, err
 }
