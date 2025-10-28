@@ -125,9 +125,10 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 	defer close(indexer.closed)
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop     chan struct{} // Non-nil if background routine is active.
-		done     chan struct{} // Non-nil if background routine is active.
-		lastHead uint64        // The latest announced chain head (whose tx indexes are assumed created)
+		stop        chan struct{} // Non-nil if background routine is active.
+		done        chan struct{} // Non-nil if background routine is active.
+		lastHead    uint64        // The latest announced chain head (whose tx indexes are assumed created)
+		runningHead uint64        // The head number being processed in background.
 
 		headCh = make(chan ChainEvent)
 		sub    = chain.SubscribeChainAcceptedEvent(headCh)
@@ -146,10 +147,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		stop = make(chan struct{})
 		done = make(chan struct{})
 		lastHead = head.Number.Uint64()
+		runningHead = lastHead
 		indexer.chain.wg.Add(1)
-		go func() {
-			indexer.lockedRun(head.Number.Uint64(), stop, done)
-		}()
+		go indexer.lockedRun(runningHead, stop, done)
 	}
 	for {
 		select {
@@ -162,15 +162,22 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
+				runningHead = headNum
 				indexer.chain.wg.Add(1)
-				go func() {
-					indexer.lockedRun(headNum, stop, done)
-				}()
+				go indexer.lockedRun(runningHead, stop, done)
 			}
 			lastHead = head.Block.NumberU64()
 		case <-done:
 			stop = nil
 			done = nil
+			if runningHead < lastHead {
+				// There is a new head to process, launch a new routine.
+				stop = make(chan struct{})
+				done = make(chan struct{})
+				runningHead = lastHead
+				indexer.chain.wg.Add(1)
+				go indexer.lockedRun(runningHead, stop, done)
+			}
 		case ch := <-indexer.progress:
 			ch <- indexer.report(lastHead, rawdb.ReadTxIndexTail(indexer.db))
 		case ch := <-indexer.term:
