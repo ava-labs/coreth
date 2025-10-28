@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
 	"github.com/ava-labs/coreth/utils"
@@ -35,7 +36,6 @@ import (
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	agoUtils "github.com/ava-labs/avalanchego/utils"
-	"github.com/ava-labs/coreth/plugin/evm/atomic"
 )
 
 func TestAtomicTxGossip(t *testing.T) {
