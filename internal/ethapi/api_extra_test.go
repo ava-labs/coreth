@@ -4,7 +4,6 @@
 package ethapi
 
 import (
-	"context"
 	"errors"
 	"math/big"
 	"os"

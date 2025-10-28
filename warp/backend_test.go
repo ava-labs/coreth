@@ -4,7 +4,6 @@
 package warp
 
 import (
-	"context"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/cache/lru"

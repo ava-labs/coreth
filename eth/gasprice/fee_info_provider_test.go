@@ -4,7 +4,6 @@
 package gasprice
 
 import (
-	"context"
 	"math/big"
 	"sync"
 	"testing"

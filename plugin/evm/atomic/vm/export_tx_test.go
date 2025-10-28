@@ -4,7 +4,6 @@
 package vm
 
 import (
-	"context"
 	"math/big"
 	"testing"
 

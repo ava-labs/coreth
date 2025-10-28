@@ -4,7 +4,6 @@
 package sync
 
 import (
-	"context"
 	"encoding/base64"
 	"testing"
 

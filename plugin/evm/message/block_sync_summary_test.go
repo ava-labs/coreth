@@ -4,7 +4,6 @@
 package message
 
 import (
-	"context"
 	"encoding/base64"
 	"testing"
 
