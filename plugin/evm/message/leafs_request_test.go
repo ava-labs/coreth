@@ -16,7 +16,7 @@ import (
 // ensure compatibility with the network.
 func TestMarshalLeafsRequest(t *testing.T) {
 	// Create some random bytes and then set the seed to ensure deterministic behaviour
-	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+	rand := rand.New(rand.NewSource(1))
 
 	startBytes := make([]byte, common.HashLength)
 	endBytes := make([]byte, common.HashLength)
@@ -55,7 +55,7 @@ func TestMarshalLeafsRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalLeafsResponse(t *testing.T) {
 	// Create some random bytes and then set the seed to ensure deterministic behaviour
-	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+	rand := rand.New(rand.NewSource(1))
 
 	keysBytes := make([][]byte, 16)
 	valsBytes := make([][]byte, 16)

@@ -39,7 +39,7 @@ func TestMarshalBlockRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalBlockResponse(t *testing.T) {
 	// Create some random bytes and then set the seed to ensure deterministic behaviour
-	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+	rand := rand.New(rand.NewSource(1))
 	blocksBytes := make([][]byte, 32)
 	for i := range blocksBytes {
 		blocksBytes[i] = make([]byte, rand.Intn(32)+32) // min 32 length, max 64

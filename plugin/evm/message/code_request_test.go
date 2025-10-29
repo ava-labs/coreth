@@ -35,7 +35,7 @@ func TestMarshalCodeRequest(t *testing.T) {
 // ensure compatibility with the network.
 func TestMarshalCodeResponse(t *testing.T) {
 	// Create some random bytes and then set the seed to ensure deterministic behaviour
-	rand := rand.New(rand.NewSource(1)) //nolint:gosec
+	rand := rand.New(rand.NewSource(1))
 
 	codeData := make([]byte, 50)
 	_, err := rand.Read(codeData)

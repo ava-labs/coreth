@@ -374,7 +374,7 @@ func buildGetter(blocks []*types.Block) handlers.BlockProvider {
 
 func TestGetLeafs(t *testing.T) {
 	const leafsLimit = 1024
-	r := rand.New(rand.NewSource(1)) //nolint:gosec
+	r := rand.New(rand.NewSource(1))
 
 	trieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, r, trieDB, 100_000, common.HashLength)
@@ -684,7 +684,7 @@ func TestGetLeafs(t *testing.T) {
 }
 
 func TestGetLeafsRetries(t *testing.T) {
-	r := rand.New(rand.NewSource(1)) //nolint:gosec
+	r := rand.New(rand.NewSource(1))
 	trieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	root, _, _ := statesynctest.GenerateTrie(t, r, trieDB, 100_000, common.HashLength)
 

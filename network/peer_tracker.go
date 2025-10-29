@@ -123,14 +123,15 @@ func (p *peerTracker) GetAnyPeer(minVersion *version.Application) (ids.NodeID, b
 		averager safemath.Averager
 	)
 	randomValue, err := rand.SecureFloat64()
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Error("failed to generate secure random number for peer selection", "err", err)
 		// Fallback to deterministic behavior - use bandwidth heap
 		nodeID, averager, ok = p.bandwidthHeap.Pop()
-	} else if randomValue < randomPeerProbability {
+	case randomValue < randomPeerProbability:
 		random = true
 		nodeID, averager, ok = p.getResponsivePeer()
-	} else {
+	default:
 		nodeID, averager, ok = p.bandwidthHeap.Pop()
 	}
 	if ok {
