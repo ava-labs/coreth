@@ -77,7 +77,13 @@ func (p *peerTracker) shouldTrackNewPeer() bool {
 		return false
 	}
 	newPeerProbability := math.Exp(-float64(numResponsivePeers) * newPeerConnectFactor)
-	return rand.SecureFloat64() < newPeerProbability
+	randomValue, err := rand.SecureFloat64()
+	if err != nil {
+		log.Error("failed to generate secure random number for peer tracking", "err", err)
+		// Fallback to conservative behavior - don't track new peer
+		return false
+	}
+	return randomValue < newPeerProbability
 }
 
 // getResponsivePeer returns a random [ids.NodeID] of a peer that has responded
@@ -116,7 +122,12 @@ func (p *peerTracker) GetAnyPeer(minVersion *version.Application) (ids.NodeID, b
 		random   bool
 		averager safemath.Averager
 	)
-	if rand.SecureFloat64() < randomPeerProbability {
+	randomValue, err := rand.SecureFloat64()
+	if err != nil {
+		log.Error("failed to generate secure random number for peer selection", "err", err)
+		// Fallback to deterministic behavior - use bandwidth heap
+		nodeID, averager, ok = p.bandwidthHeap.Pop()
+	} else if randomValue < randomPeerProbability {
 		random = true
 		nodeID, averager, ok = p.getResponsivePeer()
 	} else {
