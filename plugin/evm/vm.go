@@ -1023,7 +1023,12 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
 
-	return vm.blockChain.SetPreference(block.GetEthBlock())
+	err = vm.blockChain.SetPreference(block.GetEthBlock())
+	if err != nil {
+		return err
+	}
+	vm.setPendingBlock(block.GetEthBlock().NumberU64())
+	return err
 }
 
 // GetBlockIDAtHeight returns the canonical block at [height].
@@ -1198,6 +1203,17 @@ func attachEthService(handler *rpc.Server, apis []rpc.API, names []string) error
 	}
 
 	return nil
+}
+
+func (vm *VM) setPendingBlock(blockNum uint64) {
+	vm.builderLock.Lock()
+	defer vm.builderLock.Unlock()
+
+	if vm.builder == nil {
+		return
+	}
+
+	vm.builder.setPendingBlockNum(blockNum)
 }
 
 func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
