@@ -34,8 +34,8 @@ func TestMarshalCodeRequest(t *testing.T) {
 // TestMarshalCodeResponse requires that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalCodeResponse(t *testing.T) {
-	// create some random bytes
-	// set seed to ensure deterministic random behaviour
+	// generate some random code data
+	// set random seed for deterministic random
 	rand := rand.New(rand.NewSource(1))
 
 	codeData := make([]byte, 50)
