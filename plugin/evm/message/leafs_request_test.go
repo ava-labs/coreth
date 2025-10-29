@@ -15,7 +15,8 @@ import (
 // TestMarshalLeafsRequest requires that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalLeafsRequest(t *testing.T) {
-	// Create some random bytes and then set the seed to ensure deterministic behaviour
+	// create some random bytes
+	// set seed to ensure deterministic random behaviour
 	rand := rand.New(rand.NewSource(1))
 
 	startBytes := make([]byte, common.HashLength)
@@ -54,7 +55,8 @@ func TestMarshalLeafsRequest(t *testing.T) {
 // TestMarshalLeafsResponse requires that the structure or serialization logic hasn't changed, primarily to
 // ensure compatibility with the network.
 func TestMarshalLeafsResponse(t *testing.T) {
-	// Create some random bytes and then set the seed to ensure deterministic behaviour
+	// create some random bytes
+	// set seed to ensure deterministic random behaviour
 	rand := rand.New(rand.NewSource(1))
 
 	keysBytes := make([][]byte, 16)

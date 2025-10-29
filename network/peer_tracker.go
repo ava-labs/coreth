@@ -79,7 +79,6 @@ func (p *peerTracker) shouldTrackNewPeer() (bool, error) {
 	newPeerProbability := math.Exp(-float64(numResponsivePeers) * newPeerConnectFactor)
 	randomValue, err := rand.SecureFloat64()
 	if err != nil {
-		// Fallback to conservative behavior - don't track new peer
 		return false, err
 	}
 	return randomValue < newPeerProbability, nil
