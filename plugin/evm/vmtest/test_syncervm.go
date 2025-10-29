@@ -127,8 +127,8 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 			defer lock.Unlock()
 
 			reqCount++
-			// Fail all requests after number 5 to interrupt the sync
-			if reqCount > 5 {
+			// Fail all requests after number 50 to interrupt the sync
+			if reqCount > 50 {
 				if err := syncerVM.AppRequestFailed(t.Context(), nodeID, requestID, commonEng.ErrTimeout); err != nil {
 					panic(err)
 				}
@@ -259,11 +259,11 @@ func VMShutdownWhileSyncingTest(t *testing.T, testSetup *SyncTestSetup) {
 			defer lock.Unlock()
 
 			reqCount++
-			// Shutdown the VM after 5 requests to interrupt the sync
-			if reqCount == 5 {
+			// Shutdown the VM after 50 requests to interrupt the sync
+			if reqCount == 50 {
 				// Note this verifies the VM shutdown does not time out while syncing.
 				require.NoError(t, testSyncVMSetup.syncerVM.shutdownOnceSyncerVM.Shutdown(t.Context()))
-			} else if reqCount < 5 {
+			} else if reqCount < 50 {
 				require.NoError(t, syncerVM.AppResponse(t.Context(), nodeID, requestID, response))
 			}
 		},
