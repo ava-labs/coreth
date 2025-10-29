@@ -37,7 +37,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/utils"
 	"github.com/gorilla/websocket"
 )
 
