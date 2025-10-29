@@ -4,7 +4,6 @@
 package vm
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -35,31 +34,8 @@ import (
 // createImportTxOptions adds a UTXO to shared memory and generates a list of import transactions sending this UTXO
 // to each of the three test keys (conflicting transactions)
 func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
-	utxo := &avax.UTXO{
-		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
-		Asset:  avax.Asset{ID: vm.Ctx.AVAXAssetID},
-		Out: &secp256k1fx.TransferOutput{
-			Amt: uint64(50000000),
-			OutputOwners: secp256k1fx.OutputOwners{
-				Threshold: 1,
-				Addrs:     []ids.ShortID{vmtest.TestKeys[0].Address()},
-			},
-		},
-	}
-	utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
+	_, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, 50000000, vmtest.TestKeys[0].Address())
 	require.NoError(t, err)
-
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.Ctx.XChainID)
-	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
-		Key:   inputID[:],
-		Value: utxoBytes,
-		Traits: [][]byte{
-			vmtest.TestKeys[0].Address().Bytes(),
-		},
-	}}}}); err != nil {
-		require.NoError(t, err)
-	}
 
 	importTxs := make([]*atomic.Tx, 0, 3)
 	for _, ethAddr := range vmtest.TestEthAddrs {
@@ -1262,17 +1238,17 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	if test.bootstrapping {
 		return
 	}
-	msg, err := vm.WaitForEvent(context.Background())
+	msg, err := vm.WaitForEvent(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, commonEng.PendingTxs, msg)
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
-	blk, err := vm.BuildBlock(context.Background())
+	blk, err := vm.BuildBlock(t.Context())
 	require.NoError(t, err)
 
-	require.NoError(t, blk.Verify(context.Background()))
+	require.NoError(t, blk.Verify(t.Context()))
 
-	err = blk.Accept(context.Background())
+	err = blk.Accept(t.Context())
 	require.ErrorIs(t, err, test.acceptErr)
 
 	if test.acceptErr != nil {
