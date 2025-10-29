@@ -11,6 +11,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
+	"github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
@@ -19,7 +20,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/database"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
-	"github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
 	heightindexdb "github.com/ava-labs/avalanchego/x/blockdb"
 )
 
