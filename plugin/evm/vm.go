@@ -394,10 +394,6 @@ func (vm *VM) Initialize(
 	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
 		log.Warn("Firewood state scheme is enabled")
 		log.Warn("This is untested in production, use at your own risk")
-		// Firewood only supports pruning for now.
-		if !vm.config.Pruning {
-			return errFirewoodPruningRequired
-		}
 		// Firewood does not support iterators, so the snapshot cannot be constructed
 		if vm.config.SnapshotCache > 0 {
 			return errFirewoodSnapshotCacheDisabled
