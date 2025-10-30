@@ -91,8 +91,16 @@ func wrapBlock(ethBlock *types.Block, vm *VM) (*wrappedBlock, error) {
 func (b *wrappedBlock) ID() ids.ID { return b.id }
 
 // Accept implements the snowman.Block interface
-func (b *wrappedBlock) Accept(context.Context) error {
+func (b *wrappedBlock) Accept(ctx context.Context) error {
 	vm := b.vm
+	addedToQueue, err := vm.Client.AddTransition(ctx, b, extension.Accept)
+	if err != nil {
+		return fmt.Errorf("could not add block[%s] to extension accept queue: %w", b.ID(), err)
+	}
+	if addedToQueue {
+		return nil
+	}
+
 	// Although returning an error from Accept is considered fatal, it is good
 	// practice to cleanup the batch we were modifying in the case of an error.
 	defer vm.versiondb.Abort()
@@ -173,6 +181,14 @@ func (b *wrappedBlock) handlePrecompileAccept(rules extras.Rules) error {
 // Reject implements the snowman.Block interface
 // If [b] contains an atomic transaction, attempt to re-issue it
 func (b *wrappedBlock) Reject(context.Context) error {
+	vm := b.vm
+	addedToQueue, err := vm.Client.AddTransition(context.Background(), b, extension.Reject)
+	if err != nil {
+		return fmt.Errorf("could not add block[%s] to extension accept queue: %w", b.ID(), err)
+	}
+	if addedToQueue {
+		return nil
+	}
 	blkID := b.ID()
 	log.Debug("rejecting block",
 		"hash", blkID.Hex(),
@@ -247,6 +263,15 @@ func (b *wrappedBlock) VerifyWithContext(_ context.Context, proposerVMBlockCtx *
 // Enforces that the predicates are valid within [predicateContext].
 // Writes the block details to disk and the state to the trie manager iff writes=true.
 func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContext, writes bool) error {
+	vm := b.vm
+	addedToQueue, err := vm.Client.AddTransition(context.Background(), b, extension.Verify)
+	if err != nil {
+		return fmt.Errorf("could not add block[%s] to extension accept queue: %w", b.ID(), err)
+	}
+	if addedToQueue {
+		return nil
+	}
+
 	if predicateContext.ProposerVMBlockCtx != nil {
 		log.Debug("Verifying block with context", "block", b.ID(), "height", b.Height())
 	} else {
@@ -270,7 +295,7 @@ func (b *wrappedBlock) verify(predicateContext *precompileconfig.PredicateContex
 		return nil
 	}
 
-	err := b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
+	err = b.vm.blockChain.InsertBlockManual(b.ethBlock, writes)
 	// If this was not called with intention to writing to the database or
 	// got an error while inserting to blockchain, we may need to cleanup the extension.
 	// so that the extension can be garbage collected.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	syncpkg "github.com/ava-labs/coreth/sync"
+	"github.com/ava-labs/libevm/log"
 )
 
 type State uint8
@@ -150,6 +151,7 @@ func (bq *BlockQueue) Enqueue(block extension.ExtendedBlock, st extension.StateT
 	bq.lock.Lock()
 	defer bq.lock.Unlock()
 	if bq.done {
+		// wait for current execution to finish
 		return false
 	}
 	bq.queue = append(bq.queue, QueueElement{block: block, st: st})
@@ -159,18 +161,29 @@ func (bq *BlockQueue) Enqueue(block extension.ExtendedBlock, st extension.StateT
 func (bq *BlockQueue) Drop() {
 	bq.lock.Lock()
 	defer bq.lock.Unlock()
-	bq.queue = nil
+	bq.queue = nil // todo: look at height and ensure that it only drops up to a certain height
 }
 
 func (bq *BlockQueue) PopAndExecute() (bool, error) {
 	bq.lock.Lock()
-	defer bq.lock.Unlock()
-	if len(bq.queue) == 0 {
-		bq.done = true
-		return true, nil
-	}
 	elem := bq.queue[0]
 	bq.queue = bq.queue[1:]
-	// TODO: actually execute the block
-	return false, nil
+	bq.lock.Unlock()
+
+	var err error = nil // TODO: actually execute the block
+	bq.lock.Lock()
+	defer bq.lock.Unlock()
+	var done = false
+	if len(bq.queue) == 0 {
+		bq.done = true
+	}
+	if err != nil {
+		if elem.st != extension.Accept {
+			return true, err
+		}
+		// Other errors aren't fatal
+		log.Warn("Error verifying block after state sync", "block", elem.block.ID(), "err", err)
+		return done, nil
+	}
+	return done, err
 }
