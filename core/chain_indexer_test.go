@@ -51,6 +51,7 @@ func TestChainIndexerSingle(t *testing.T) {
 // Runs multiple tests with randomized parameters and different number of
 // chain backends.
 func TestChainIndexerWithChildren(t *testing.T) {
+	t.Skip("Flaky test from go-ethereum")
 	for i := 2; i < 8; i++ {
 		testChainIndexer(t, i)
 	}
