@@ -156,7 +156,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				startRun(headNum)
 			}
-			lastHead = head.Block.NumberU64()
+			lastHead = headNum
 		case <-done:
 			stop = nil
 			done = nil
