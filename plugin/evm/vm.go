@@ -141,7 +141,6 @@ var (
 	errInvalidHeaderPredicateResults     = errors.New("invalid header predicate results")
 	errInitializingLogger                = errors.New("failed to initialize logger")
 	errShuttingDownVM                    = errors.New("shutting down VM")
-	errFirewoodPruningRequired           = errors.New("pruning must be enabled for Firewood")
 	errFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
 	errFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
 	errFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
