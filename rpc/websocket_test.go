@@ -91,7 +91,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 // This test checks whether calls exceeding the request size limit are rejected.
 //
 // This test times out occasionally due to context timeout differences with go-ethereum.
-// These differences are not criticaly, so this test can simply be skipped.
+// These differences are not critical, so this test can simply be skipped.
 func TestWebsocketLargeCall(t *testing.T) {
 	t.SkipNow()
 
@@ -130,7 +130,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 // This test checks whether the wsMessageSizeLimit option is obeyed.
 //
 // This test times out occasionally due to context timeout differences with go-ethereum.
-// These differences are not criticaly, so this test can simply be skipped.
+// These differences are not critical, so this test can simply be skipped.
 func TestWebsocketLargeRead(t *testing.T) {
 	t.SkipNow()
 
