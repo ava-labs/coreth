@@ -56,8 +56,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-func u64(val uint64) *uint64 { return &val }
-
 // TestStateProcessorErrors tests the output from the 'core' errors
 // as defined in core/error.go. These errors are generated when the
 // blockchain imports bad blocks, meaning blocks which have valid headers but
@@ -65,8 +63,8 @@ func u64(val uint64) *uint64 { return &val }
 func TestStateProcessorErrors(t *testing.T) {
 	cpcfg := *params.TestChainConfig
 	config := &cpcfg
-	config.ShanghaiTime = u64(0)
-	config.CancunTime = u64(0)
+	config.ShanghaiTime = utils.PointerTo(uint64(0))
+	config.CancunTime = utils.PointerTo(uint64(0))
 
 	var (
 		signer  = types.LatestSigner(config)
@@ -283,8 +281,8 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 					&extras.ChainConfig{
 						NetworkUpgrades: extras.NetworkUpgrades{
-							ApricotPhase1BlockTimestamp: utils.NewUint64(0),
-							ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+							ApricotPhase1BlockTimestamp: utils.PointerTo(uint64(0)),
+							ApricotPhase2BlockTimestamp: utils.PointerTo(uint64(0)),
 						},
 					},
 				),
@@ -391,7 +389,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	if configExtra.IsGranite(header.Time) {
 		headerExtra := customtypes.GetHeaderExtra(header)
-		headerExtra.TimeMilliseconds = utils.NewUint64(timeMS)
+		headerExtra.TimeMilliseconds = utils.PointerTo(timeMS)
 	}
 	if configExtra.IsApricotPhase4(header.Time) {
 		headerExtra := customtypes.GetHeaderExtra(header)
