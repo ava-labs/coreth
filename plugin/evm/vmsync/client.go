@@ -372,6 +372,7 @@ func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry)
 		registry,
 		Callbacks{
 			FinalizeVM: func(_ message.Syncable) error {
+				// TODO(powerslider): call Finalize on all syncers.
 				return c.finishSync()
 			},
 			ApplyBlock: func(b EthBlockWrapper) error {
