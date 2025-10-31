@@ -15,7 +15,7 @@
 - Updated gas price estimation to use median of transactions in the last 20 seconds/40 blocks instead of estimation with block gas cost:
   - Changed default percentile from 60 to 40
   - This impacts `eth_suggestGasPrice` and `eth_suggestGasTipCap` , `eth_suggestPriceOptions`, `eth_maxPriorityFeePerGas`, `eth_gasPrice` APIs
-
+- Enabled logs for Firewood.
 
 ## [v0.15.3](https://github.com/ava-labs/coreth/releases/tag/v0.15.3)
 
