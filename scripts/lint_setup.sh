@@ -44,6 +44,7 @@ function setup_lint {
   unset 'upstream_find_args[${#upstream_find_args[@]}-1]'
 
   # Find upstream files
+  # shellcheck disable=SC2034  # used by external scripts after sourcing
   mapfile -t UPSTREAM_FILES < <(
     find . \
       \( "${upstream_find_args[@]}" \) \
@@ -58,6 +59,7 @@ function setup_lint {
   done
 
   # Now find default files (exclude already licensed ones)
+  # shellcheck disable=SC2034  # used by external scripts after sourcing
   mapfile -t AVALANCHE_FILES < <(find . "${find_filters[@]}" "${default_exclude_args[@]}")
 
   # copy avalanche file to temp directory to edit
