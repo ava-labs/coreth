@@ -132,7 +132,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 // This test times out occasionally due to context timeout differences with go-ethereum.
 // These differences are not critical, so this test can simply be skipped.
 func TestWebsocketLargeRead(t *testing.T) {
-	t.SkipNow()
+	t.Skip("Flaky")
 
 	var (
 		srv     = newTestServer()
