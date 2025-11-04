@@ -4,6 +4,7 @@
 package firewood
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -66,6 +67,7 @@ type Config struct {
 	FreeListCacheEntries uint // Number of free list entries to cache
 	Revisions            uint
 	ReadCacheStrategy    ffi.CacheStrategy
+	RootStoreDir         string
 }
 
 // Note that `FilePath` is not specified, and must always be set by the user.
@@ -108,6 +110,7 @@ func New(config Config) (*Database, error) {
 		FreeListCacheEntries: config.FreeListCacheEntries,
 		Revisions:            config.Revisions,
 		ReadCacheStrategy:    config.ReadCacheStrategy,
+		RootStoreDir:         config.RootStoreDir,
 	})
 	if err != nil {
 		return nil, err
@@ -386,7 +389,9 @@ func (db *Database) Close() error {
 	db.proposalTree.Children = nil
 
 	// Close the database
-	return db.fwDisk.Close()
+	// TODO: figure out what to do with this context
+	ctx := context.Background()
+	return db.fwDisk.Close(ctx)
 }
 
 // createProposal creates a new proposal from the given layer

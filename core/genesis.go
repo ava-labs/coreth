@@ -141,11 +141,12 @@ func SetupGenesisBlock(
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
-		log.Info("Writing genesis to database")
+		log.Info("Writing genesis to database!")
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+		log.Info("Wrote genesis to database!")
 		return genesis.Config, block.Hash(), nil
 	}
 	// The genesis block is present(perhaps in ancient database) while the
@@ -235,10 +236,13 @@ func (g *Genesis) trieConfig() *triedb.Config {
 
 // TODO: migrate this function to "flush" for more similarity with upstream.
 func (g *Genesis) toBlock(db ethdb.Database, triedb *triedb.Database) *types.Block {
+	log.Info("entered toBlock()")
 	statedb, err := state.New(types.EmptyRootHash, extstate.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
+		log.Error(err.Error())
 		panic(err)
 	}
+	log.Info("created statedb")
 
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
