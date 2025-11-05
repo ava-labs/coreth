@@ -1580,6 +1580,50 @@ func TestWaitForEvent(t *testing.T) {
 			},
 		},
 		{
+			name: "WaitForEvent build block after re-org",
+			testCase: func(t *testing.T, vm *VM) {
+				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+
+				err := errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
+				require.NoError(t, err)
+
+				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+
+				msg, err := vm.WaitForEvent(ctx)
+				require.NoError(t, err)
+				require.Equal(t, commonEng.PendingTxs, msg)
+
+				cancel()
+
+				blk, err := vm.BuildBlock(t.Context())
+				require.NoError(t, err)
+
+				require.NoError(t, blk.Verify(t.Context()))
+
+				require.NoError(t, vm.SetPreference(t.Context(), blk.ID()))
+
+				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[2], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+
+				err = errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
+				require.NoError(t, err)
+
+				ctx, cancel = context.WithTimeout(t.Context(), time.Second*2)
+				defer cancel()
+
+				msg, err = vm.WaitForEvent(ctx)
+				require.NoError(t, err)
+				require.Equal(t, commonEng.PendingTxs, msg)
+
+				blk2, err := vm.BuildBlock(t.Context())
+				require.NoError(t, err)
+
+				require.NoError(t, blk2.Verify(t.Context()))
+
+				require.NoError(t, blk.Accept(t.Context()))
+				require.NoError(t, blk2.Accept(t.Context()))
+			},
+		},
+		{
 			name: "WaitForEvent doesn't return once a block is built and accepted",
 			testCase: func(t *testing.T, vm *VM) {
 				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
@@ -1596,16 +1640,16 @@ func TestWaitForEvent(t *testing.T) {
 				err = errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
 				require.NoError(t, err)
 
-				blk, err := vm.BuildBlock(context.Background())
+				blk, err := vm.BuildBlock(t.Context())
 				require.NoError(t, err)
 
-				require.NoError(t, blk.Verify(context.Background()))
+				require.NoError(t, blk.Verify(t.Context()))
 
-				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+				require.NoError(t, vm.SetPreference(t.Context(), blk.ID()))
 
-				require.NoError(t, blk.Accept(context.Background()))
+				require.NoError(t, blk.Accept(t.Context()))
 
-				ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond*100)
+				ctx, cancel = context.WithTimeout(t.Context(), time.Millisecond*100)
 				defer cancel()
 
 				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.

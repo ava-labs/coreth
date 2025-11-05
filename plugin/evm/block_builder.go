@@ -50,9 +50,9 @@ type blockBuilder struct {
 	lastBuildParentHash common.Hash
 	lastBuildTime       time.Time
 
-	blockNumLock    sync.RWMutex
-	pendingBlockNum uint64
-	finalBlockNum   uint64
+	pendingUpdateLock sync.RWMutex
+	pendingBlockHash  common.Hash
+	finalBlockHash    common.Hash
 }
 
 // NewBlockBuilder creates a new block builder. extraMempool is an optional mempool (can be nil) that
@@ -130,7 +130,7 @@ func (b *blockBuilder) awaitSubmittedTxs() {
 					log.Warn("nil head or block number in tx pool reorg event")
 					continue
 				}
-				b.setFinalBlockNum(event.Head.Number.Uint64())
+				b.setFinalBlockHash(event.Head.Hash())
 				b.signalCanBuild()
 			}
 		}
@@ -214,20 +214,20 @@ func minNextBlockTime(parent *types.Header) time.Time {
 	return parentTime.Add(requiredDelay)
 }
 
-func (b *blockBuilder) setPendingBlockNum(pendingBlockNum uint64) {
-	b.blockNumLock.Lock()
-	defer b.blockNumLock.Unlock()
-	b.pendingBlockNum = pendingBlockNum
+func (b *blockBuilder) setPendingBlockHash(hash common.Hash) {
+	b.pendingUpdateLock.Lock()
+	defer b.pendingUpdateLock.Unlock()
+	b.pendingBlockHash = hash
 }
 
-func (b *blockBuilder) setFinalBlockNum(num uint64) {
-	b.blockNumLock.Lock()
-	defer b.blockNumLock.Unlock()
-	b.finalBlockNum = num
+func (b *blockBuilder) setFinalBlockHash(hash common.Hash) {
+	b.pendingUpdateLock.Lock()
+	defer b.pendingUpdateLock.Unlock()
+	b.finalBlockHash = hash
 }
 
 func (b *blockBuilder) pendingPoolUpdate() bool {
-	b.blockNumLock.RLock()
-	defer b.blockNumLock.RUnlock()
-	return b.pendingBlockNum != b.finalBlockNum
+	b.pendingUpdateLock.RLock()
+	defer b.pendingUpdateLock.RUnlock()
+	return b.pendingBlockHash != b.finalBlockHash
 }
