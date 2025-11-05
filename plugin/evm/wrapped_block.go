@@ -104,11 +104,7 @@ func (b *wrappedBlock) Accept(context.Context) error {
 		"height", b.Height(),
 	)
 
-	if b.ethBlock != nil {
-		vm.setPendingBlock(b.ethBlock.NumberU64())
-	} else {
-		log.Warn("nil eth block")
-	}
+	vm.setPendingBlock(b.ethBlock.Hash())
 
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
