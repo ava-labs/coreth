@@ -2,7 +2,6 @@
 
 set -euo pipefail
 
-source ./scripts/lint_setup.sh
 
 if ! [[ "$0" =~ scripts/lint.sh ]]; then
   echo "must be run from repository root"
@@ -19,6 +18,9 @@ grep -P 'lint.sh' scripts/lint.sh &>/dev/null || (
   echo >&2 "       It will also be necessary to ensure that gnu grep is available in the path."
   exit 255
 )
+
+# Library for file list generation.
+source ./scripts/lint_setup.sh
 
 # by default, "./scripts/lint.sh" runs all lint tests
 # to run only "license_header" test

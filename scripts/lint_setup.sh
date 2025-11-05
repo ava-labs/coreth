@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
-
+# lint_setup.sh - Shared linting configuration setup
+#
+# Exports:
+#   AVALANCHE_FILES - Array of Go files created by Avalanche to be linted
+#   UPSTREAM_FILES - Array of Go files adapted from go-ethereum to be linted
+#   AVALANCHE_LINT_FILE - Path to temporary avalanche-specific lint config
+#
+# Usage:
+#   source ./scripts/lint_setup.sh
+#   setup_lint
 # This script function must be run from the repository root.
+
+set -euo pipefail
 
 # Read excluded directories into arrays
 AVALANCHE_FILES=()
@@ -63,8 +73,9 @@ function setup_lint {
   mapfile -t AVALANCHE_FILES < <(find . "${find_filters[@]}" "${default_exclude_args[@]}")
 
   # copy avalanche file to temp directory to edit
-  AVALANCHE_LINT_FILE="$(mktemp -d)/.avalanche-golangci.yml"
-  echo "Avalanche lint file at: $AVALANCHE_LINT_FILE"
+  TMP_DIR="$(mktemp -d)"
+  trap rm -rf "${TMP_DIR}" EXIT
+  AVALANCHE_LINT_FILE="${TMP_DIR}/.avalanche-golangci.yml"
   cp .avalanche-golangci.yml "$AVALANCHE_LINT_FILE"
 
   # Exclude all upstream files dynamically

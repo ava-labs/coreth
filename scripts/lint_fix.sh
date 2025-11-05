@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-source ./scripts/lint_setup.sh
-
 if ! [[ "$0" =~ scripts/lint_fix.sh ]]; then
   echo "must be run from repository root"
   exit 255
