@@ -102,7 +102,7 @@ func TestGetCode(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			codeHashes, res, expectedCode := test.setupRequest()
 
@@ -181,7 +181,7 @@ func TestGetBlocks(t *testing.T) {
 		request        message.BlockRequest
 		getResponse    func(t *testing.T, request message.BlockRequest) []byte
 		assertResponse func(t *testing.T, response []*types.Block)
-		expectedErr    string
+		expectedErr    error
 	}{
 		"normal resonse": {
 			request: message.BlockRequest{
@@ -190,7 +190,7 @@ func TestGetBlocks(t *testing.T) {
 				Parents: 16,
 			},
 			getResponse: func(t *testing.T, request message.BlockRequest) []byte {
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := blocksRequestHandler.OnBlockRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response, "Failed to generate valid response")
 
@@ -208,7 +208,7 @@ func TestGetBlocks(t *testing.T) {
 			},
 			getResponse: func(t *testing.T, request message.BlockRequest) []byte {
 				request.Parents -= 5
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := blocksRequestHandler.OnBlockRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -228,7 +228,7 @@ func TestGetBlocks(t *testing.T) {
 			getResponse: func(_ *testing.T, _ message.BlockRequest) []byte {
 				return []byte("gibberish")
 			},
-			expectedErr: errUnmarshalResponse.Error(),
+			expectedErr: errUnmarshalResponse,
 		},
 		"invalid value replacing block": {
 			request: message.BlockRequest{
@@ -237,7 +237,7 @@ func TestGetBlocks(t *testing.T) {
 				Parents: 16,
 			},
 			getResponse: func(t *testing.T, request message.BlockRequest) []byte {
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := blocksRequestHandler.OnBlockRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				var blockResponse message.BlockResponse
 				_, err = message.Codec.Unmarshal(response, &blockResponse)
@@ -249,7 +249,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: "failed to unmarshal response: rlp: expected List",
+			expectedErr: errUnmarshalResponse,
 		},
 		"incorrect starting point": {
 			request: message.BlockRequest{
@@ -258,7 +258,7 @@ func TestGetBlocks(t *testing.T) {
 				Parents: 16,
 			},
 			getResponse: func(t *testing.T, _ message.BlockRequest) []byte {
-				response, err := blocksRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, message.BlockRequest{
+				response, err := blocksRequestHandler.OnBlockRequest(t.Context(), ids.GenerateTestNodeID(), 1, message.BlockRequest{
 					Hash:    blocks[99].Hash(),
 					Height:  99,
 					Parents: 16,
@@ -268,7 +268,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return response
 			},
-			expectedErr: errHashMismatch.Error(),
+			expectedErr: errHashMismatch,
 		},
 		"missing link in between blocks": {
 			request: message.BlockRequest{
@@ -291,7 +291,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: errHashMismatch.Error(),
+			expectedErr: errHashMismatch,
 		},
 		"no blocks": {
 			request: message.BlockRequest{
@@ -308,7 +308,7 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: errEmptyResponse.Error(),
+			expectedErr: errEmptyResponse,
 		},
 		"more than requested blocks": {
 			request: message.BlockRequest{
@@ -327,16 +327,16 @@ func TestGetBlocks(t *testing.T) {
 
 				return responseBytes
 			},
-			expectedErr: errTooManyBlocks.Error(),
+			expectedErr: errTooManyBlocks,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
 			responseBytes := test.getResponse(t, test.request)
-			if len(test.expectedErr) == 0 {
+			if test.expectedErr == nil {
 				testNetClient.testResponse(1, nil, responseBytes)
 			} else {
 				attempted := false
@@ -349,11 +349,10 @@ func TestGetBlocks(t *testing.T) {
 			}
 
 			blockResponse, err := stateSyncClient.GetBlocks(ctx, test.request.Hash, test.request.Height, test.request.Parents)
-			if len(test.expectedErr) != 0 {
-				require.ErrorContains(t, err, test.expectedErr)
+			require.ErrorIs(t, err, test.expectedErr)
+			if test.expectedErr != nil {
 				return
 			}
-			require.NoError(t, err)
 
 			test.assertResponse(t, blockResponse)
 		})
@@ -405,7 +404,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -428,7 +427,7 @@ func TestGetLeafs(t *testing.T) {
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
 				modifiedRequest := request
 				modifiedRequest.Limit = leafsLimit
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, modifiedRequest)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, modifiedRequest)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -445,7 +444,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -466,7 +465,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -487,7 +486,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -508,7 +507,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -529,7 +528,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -554,7 +553,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 				var leafResponse message.LeafsResponse
@@ -562,7 +561,7 @@ func TestGetLeafs(t *testing.T) {
 				require.NoError(t, err)
 				modifiedRequest := request
 				modifiedRequest.Start = leafResponse.Keys[1]
-				modifiedResponse, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 2, modifiedRequest)
+				modifiedResponse, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 2, modifiedRequest)
 				require.NoError(t, err)
 				return modifiedResponse
 			},
@@ -577,7 +576,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 				var leafResponse message.LeafsResponse
@@ -601,7 +600,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 				var leafResponse message.LeafsResponse
@@ -626,7 +625,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 				var leafResponse message.LeafsResponse
@@ -650,7 +649,7 @@ func TestGetLeafs(t *testing.T) {
 				NodeType: message.StateTrieNode,
 			},
 			getResponse: func(t *testing.T, request message.LeafsRequest) []byte {
-				response, err := handler.OnLeafsRequest(context.Background(), ids.GenerateTestNodeID(), 1, request)
+				response, err := handler.OnLeafsRequest(t.Context(), ids.GenerateTestNodeID(), 1, request)
 				require.NoError(t, err)
 				require.NotEmpty(t, response)
 
@@ -709,7 +708,7 @@ func TestGetLeafsRetries(t *testing.T) {
 		NodeType: message.StateTrieNode,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	goodResponse, responseErr := handler.OnLeafsRequest(ctx, ids.GenerateTestNodeID(), 1, request)
 	require.NoError(t, responseErr)
@@ -757,7 +756,7 @@ func TestStateSyncNodes(t *testing.T) {
 		StateSyncNodeIDs: stateSyncNodes,
 		BlockParser:      newTestBlockParser(),
 	})
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	attempt := 0
 	responses := [][]byte{{1}, {2}, {3}, {4}}

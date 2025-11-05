@@ -84,7 +84,7 @@ func TestCodeQueue(t *testing.T) {
 				rawdb.WriteCode(db, hash, code)
 			}
 			for hash := range tt.alreadyToFetch {
-				customrawdb.AddCodeToFetch(db, hash)
+				require.NoError(t, customrawdb.WriteCodeToFetch(db, hash))
 			}
 
 			quit := make(chan struct{})

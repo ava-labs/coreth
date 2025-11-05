@@ -151,7 +151,7 @@ func New(
 		"snapshot clean", common.StorageSize(config.SnapshotCache)*1024*1024,
 	)
 
-	scheme, err := customrawdb.ParseStateSchemeExt(config.StateScheme, chainDb)
+	scheme, err := customrawdb.ParseStateScheme(config.StateScheme, chainDb)
 	if err != nil {
 		return nil, err
 	}

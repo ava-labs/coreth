@@ -72,7 +72,7 @@ func TestWipe(t *testing.T) {
 	if items := count(); items != 128 {
 		t.Fatalf("snapshot size mismatch: have %d, want %d", items, 128)
 	}
-	if hash := customrawdb.ReadSnapshotBlockHash(db); hash == (common.Hash{}) {
+	if hash, err := customrawdb.ReadSnapshotBlockHash(db); err != nil || hash == (common.Hash{}) {
 		t.Errorf("snapshot block hash marker mismatch: have %#x, want <not-nil>", hash)
 	}
 	if hash := rawdb.ReadSnapshotRoot(db); hash == (common.Hash{}) {
@@ -96,7 +96,7 @@ func TestWipe(t *testing.T) {
 		t.Fatalf("misc item count mismatch: have %d, want %d", items, 1000)
 	}
 
-	if hash := customrawdb.ReadSnapshotBlockHash(db); hash != (common.Hash{}) {
+	if hash, err := customrawdb.ReadSnapshotBlockHash(db); err != nil || hash != (common.Hash{}) {
 		t.Errorf("snapshot block hash marker remained after wipe: %#x", hash)
 	}
 	if hash := rawdb.ReadSnapshotRoot(db); hash != (common.Hash{}) {

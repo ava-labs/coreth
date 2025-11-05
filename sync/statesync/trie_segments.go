@@ -102,7 +102,7 @@ func (t *trieToSync) loadSegments() error {
 		// key immediately prior to the segment we found on disk.
 		// This is because we do not persist the beginning of
 		// the first segment.
-		_, segmentStart := customrawdb.UnpackSyncSegmentKey(it.Key())
+		_, segmentStart := customrawdb.ParseSyncSegmentKey(it.Key())
 		segmentStartPos := binary.BigEndian.Uint16(segmentStart[:wrappers.ShortLen])
 		t.addSegment(prevSegmentStart, addPadding(segmentStartPos-1, 0xff))
 

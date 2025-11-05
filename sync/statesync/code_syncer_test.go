@@ -140,7 +140,7 @@ func TestCodeSyncerAddsInProgressCodeHashes(t *testing.T) {
 	codeBytes := utils.RandomBytes(100)
 	codeHash := crypto.Keccak256Hash(codeBytes)
 	clientDB := rawdb.NewMemoryDatabase()
-	customrawdb.AddCodeToFetch(clientDB, codeHash)
+	require.NoError(t, customrawdb.WriteCodeToFetch(clientDB, codeHash))
 	testCodeSyncer(t, codeSyncerTest{
 		clientDB:          clientDB,
 		codeRequestHashes: nil,
@@ -161,7 +161,7 @@ func TestCodeSyncerAddsMoreInProgressThanQueueSize(t *testing.T) {
 
 	db := rawdb.NewMemoryDatabase()
 	for _, codeHash := range codeHashes {
-		customrawdb.AddCodeToFetch(db, codeHash)
+		require.NoError(t, customrawdb.WriteCodeToFetch(db, codeHash))
 	}
 
 	testCodeSyncer(t, codeSyncerTest{

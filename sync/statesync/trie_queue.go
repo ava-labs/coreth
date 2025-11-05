@@ -75,7 +75,7 @@ func (t *trieQueue) getNextTrie() (common.Hash, []common.Hash, bool, error) {
 	// Iterate over the keys to find the next storage trie root and all of the account hashes that contain the same storage root.
 	for it.Next() {
 		// Unpack the state root and account hash from the current key
-		nextRoot, nextAccount := customrawdb.UnpackSyncStorageTrieKey(it.Key())
+		nextRoot, nextAccount := customrawdb.ParseSyncStorageTrieKey(it.Key())
 		// Set the root for the first pass
 		if root == (common.Hash{}) {
 			root = nextRoot
@@ -104,7 +104,7 @@ func (t *trieQueue) countTries() (int, error) {
 	)
 
 	for it.Next() {
-		nextRoot, _ := customrawdb.UnpackSyncStorageTrieKey(it.Key())
+		nextRoot, _ := customrawdb.ParseSyncStorageTrieKey(it.Key())
 		if root == (common.Hash{}) || root != nextRoot {
 			root = nextRoot
 			tries++

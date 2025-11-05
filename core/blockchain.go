@@ -487,7 +487,10 @@ func NewBlockChain(
 
 	// if txlookup limit is 0 (uindexing disabled), we don't need to repair the tx index tail.
 	if bc.cacheConfig.TransactionHistory != 0 {
-		latestStateSynced := customrawdb.GetLatestSyncPerformed(bc.db)
+		latestStateSynced, err := customrawdb.GetLatestSyncPerformed(bc.db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get latest state synced: %w", err)
+		}
 		bc.repairTxIndexTail(latestStateSynced)
 	}
 
@@ -2044,7 +2047,7 @@ func (bc *BlockChain) populateMissingTries() error {
 	// Write marker to DB to indicate populate missing tries finished successfully.
 	// Note: writing the marker here means that we do allow consecutive runs of re-populating
 	// missing tries if it does not finish during the prior run.
-	if err := customrawdb.WritePopulateMissingTries(bc.db); err != nil {
+	if err := customrawdb.WritePopulateMissingTries(bc.db, time.Now()); err != nil {
 		return fmt.Errorf("failed to write offline pruning success marker: %w", err)
 	}
 

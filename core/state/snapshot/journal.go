@@ -61,7 +61,10 @@ type journalGenerator struct {
 func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, cache int, blockHash, root common.Hash, noBuild bool) (snapshot, bool, error) {
 	// Retrieve the block number and hash of the snapshot, failing if no snapshot
 	// is present in the database (or crashed mid-update).
-	baseBlockHash := customrawdb.ReadSnapshotBlockHash(diskdb)
+	baseBlockHash, err := customrawdb.ReadSnapshotBlockHash(diskdb)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to read snapshot block hash: %w", err)
+	}
 	if baseBlockHash == (common.Hash{}) {
 		return nil, false, errors.New("missing or corrupted snapshot, no snapshot block hash")
 	}
