@@ -19,6 +19,11 @@ AVALANCHE_FILES=()
 UPSTREAM_FILES=()
 AVALANCHE_LINT_FILE=""
 function setup_lint {
+  # If this has already been called, we don't need to create another file.
+  if [ -n "$AVALANCHE_LINT_FILE" ]; then
+    return
+  fi
+
   local upstream_folders_file="./scripts/upstream_files.txt"
   # Read the upstream_folders file into an array
   mapfile -t upstream_folders <"$upstream_folders_file"
@@ -74,7 +79,8 @@ function setup_lint {
 
   # copy avalanche file to temp directory to edit
   TMP_DIR="$(mktemp -d)"
-  trap rm -rf "${TMP_DIR}" EXIT
+  trap 'rm -rf -- "$TMP_DIR"' EXIT
+
   AVALANCHE_LINT_FILE="${TMP_DIR}/.avalanche-golangci.yml"
   cp .avalanche-golangci.yml "$AVALANCHE_LINT_FILE"
 
