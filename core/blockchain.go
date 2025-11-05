@@ -233,7 +233,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 
 		var rootStoreDir string
 		if !c.Pruning {
-			rootStoreDir = filepath.Join(c.ChainDataDir, rootStoreDir)
+			rootStoreDir = filepath.Join(c.ChainDataDir, rootStoreDirName)
 		}
 
 		config.DBOverride = firewood.Config{
