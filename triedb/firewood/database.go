@@ -4,6 +4,7 @@
 package firewood
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -386,7 +387,7 @@ func (db *Database) Close() error {
 	db.proposalTree.Children = nil
 
 	// Close the database
-	return db.fwDisk.Close()
+	return db.fwDisk.Close(context.Background())
 }
 
 // createProposal creates a new proposal from the given layer
