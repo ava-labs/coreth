@@ -51,7 +51,7 @@ The C-Chain supports the following API namespaces:
 - `debug`
 
 Only the `eth` namespace is enabled by default.
-To enable the other namespaces see the instructions for passing the C-Chain config to AvalancheGo in the [chain-config-flags documentation](https://docs.avax.network/nodes/configure/chain-config-flags#enabling-evm-apis).
+To enable the other namespaces see the instructions for passing the C-Chain config to AvalancheGo in the [chain-config-flags documentation](https://build.avax.network/docs/nodes/chain-configs/c-chain#api-configuration).
 Full documentation for the C-Chain's API can be found in the [C-Chain API documentation](https://docs.avax.network/reference/avalanchego/c-chain/api).
 
 ## Compatibility

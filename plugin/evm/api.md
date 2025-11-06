@@ -27,8 +27,7 @@ where `blockchainID` is the ID of the blockchain running the EVM.
 
 #### WebSocket Endpoints
 
-> **Info:** On the [public API node](/docs/tooling/rpc-providers), it only supports C-Chain
-> websocket API calls for API methods that don't exist on the C-Chain's HTTP API
+> **Info:** The [public API node](https://build.avax.network/integrations#RPC%20Providers) (api.avax.network) supports HTTP APIs for X-Chain, P-Chain, and C-Chain, but websocket connections are only available for C-Chain. Other EVM chains are not available via websocket on the public API node.
 
 To interact with C-Chain via the websocket endpoint:
 
@@ -42,8 +41,7 @@ For example, to interact with the C-Chain's Ethereum APIs via websocket on local
 ws://127.0.0.1:9650/ext/bc/C/ws
 ```
 
-> **Tip:** On localhost, use `ws://`. When using the [Public API](/docs/tooling/rpc-providers) or another
-> host that supports encryption, use `wss://`.
+> **Tip:** On localhost, use `ws://`. When using the [Public API](https://build.avax.network/integrations#RPC%20Providers) or another host that supports encryption, use `wss://`.
 
 To interact with other instances of the EVM via the websocket endpoint:
 
@@ -70,8 +68,7 @@ You can interact with these services the same exact way you'd interact with Geth
 and [Geth's JSON-RPC Documentation](https://geth.ethereum.org/docs/rpc/server)
 for a full description of this API.
 
-> **Info:** For batched requests on the [public API node](/docs/tooling/rpc-providers) , the maximum
-> number of items is 40.
+> **Info:** For batched requests on the [public API node](https://build.avax.network/integrations#RPC%20Providers) , the maximum number of items is 40.
 
 #### Exceptions
 
