@@ -124,6 +124,8 @@ Following the previous example in the [Release candidate section](#release-candi
 
 Note this release will likely never be used in AvalancheGo, which should always be using release candidates to accelerate the development process. However it is still useful to have a release to indicate the last stable version of coreth.
 
+### Post-release
+
 After you have successfully released a new coreth version, you need to bump all of the versions again in preperation for the next release. Note that the release here is not final, and will be reassessed, and possibly changer prior to release. Some releases require a major version update, but this will usually be `$VERSION` + `0.0.1`. For example:
 
 ```bash
