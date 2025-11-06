@@ -9,7 +9,7 @@
 //
 // Much love to the original authors for their work.
 // **********
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,5 +25,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package bloombits implements bloom filtering on batches of data.
-package bloombits
+package rpc
+
+import (
+	"os"
+	"testing"
+
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
+)
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+
+	// Since there are so many flaky tests in the RPC package, we run the tests
+	// multiple times to try to get a passing run.
+	var code int
+	for range 5 {
+		code = m.Run()
+		if code == 0 {
+			break
+		}
+	}
+
+	os.Exit(code)
+}

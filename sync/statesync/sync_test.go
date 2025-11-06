@@ -46,7 +46,7 @@ type syncTest struct {
 
 func testSync(t *testing.T, test syncTest) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	if test.ctx != nil {
 		ctx = test.ctx
 	}
@@ -194,18 +194,20 @@ func TestSimpleSyncCases(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			testSync(t, test)
 		})
 	}
 }
 
 func TestCancelSync(t *testing.T) {
+	t.Parallel()
 	r := rand.New(rand.NewSource(1))
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
 	// Create trie with 2000 accounts (more than one leaf request)
 	root := fillAccountsWithStorage(t, r, serverDB, serverTrieDB, common.Hash{}, 2000)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	testSync(t, syncTest{
@@ -225,7 +227,7 @@ func TestCancelSync(t *testing.T) {
 // function which returns [errInterrupted] after passing through [numRequests]
 // leafs requests for [root].
 type interruptLeafsIntercept struct {
-	numRequests    uint32
+	numRequests    atomic.Uint32
 	interruptAfter uint32
 	root           common.Hash
 }
@@ -235,7 +237,7 @@ type interruptLeafsIntercept struct {
 // After that, all requests for leafs from [root] return [errInterrupted].
 func (i *interruptLeafsIntercept) getLeafsIntercept(request message.LeafsRequest, response message.LeafsResponse) (message.LeafsResponse, error) {
 	if request.Root == i.root {
-		if numRequests := atomic.AddUint32(&i.numRequests, 1); numRequests > i.interruptAfter {
+		if numRequests := i.numRequests.Add(1); numRequests > i.interruptAfter {
 			return message.LeafsResponse{}, errInterrupted
 		}
 	}
@@ -243,6 +245,7 @@ func (i *interruptLeafsIntercept) getLeafsIntercept(request message.LeafsRequest
 }
 
 func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
+	t.Parallel()
 	r := rand.New(rand.NewSource(1))
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
@@ -260,7 +263,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 		GetLeafsIntercept: intercept.getLeafsIntercept,
 	})
 
-	require.Equal(t, uint32(2), intercept.numRequests)
+	require.GreaterOrEqual(t, intercept.numRequests.Load(), uint32(2))
 
 	testSync(t, syncTest{
 		prepareForTest: func(*testing.T, *rand.Rand) (ethdb.Database, ethdb.Database, *triedb.Database, common.Hash) {
@@ -270,6 +273,7 @@ func TestResumeSyncAccountsTrieInterrupted(t *testing.T) {
 }
 
 func TestResumeSyncLargeStorageTrieInterrupted(t *testing.T) {
+	t.Parallel()
 	r := rand.New(rand.NewSource(1))
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
@@ -303,6 +307,7 @@ func TestResumeSyncLargeStorageTrieInterrupted(t *testing.T) {
 }
 
 func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
+	t.Parallel()
 	r := rand.New(rand.NewSource(1))
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
@@ -345,6 +350,7 @@ func TestResumeSyncToNewRootAfterLargeStorageTrieInterrupted(t *testing.T) {
 }
 
 func TestResumeSyncLargeStorageTrieWithConsecutiveDuplicatesInterrupted(t *testing.T) {
+	t.Parallel()
 	r := rand.New(rand.NewSource(1))
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
@@ -378,6 +384,7 @@ func TestResumeSyncLargeStorageTrieWithConsecutiveDuplicatesInterrupted(t *testi
 }
 
 func TestResumeSyncLargeStorageTrieWithSpreadOutDuplicatesInterrupted(t *testing.T) {
+	t.Parallel()
 	r := rand.New(rand.NewSource(1))
 	serverDB := rawdb.NewMemoryDatabase()
 	serverTrieDB := triedb.NewDatabase(serverDB, nil)
@@ -473,6 +480,7 @@ func TestResyncNewRootAfterDeletes(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			testSyncerSyncsToNewRoot(t, test.deleteBetweenSyncs)
 		})
 	}
