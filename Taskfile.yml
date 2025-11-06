@@ -98,6 +98,7 @@ tasks:
       - lint
       - actionlint
       - shellcheck
+      - markdownlint
       - check-generate-codec
       - check-generate-mocks
       - check-generate-rlp
@@ -108,6 +109,7 @@ tasks:
       - task: lint
       - task: actionlint
       - task: shellcheck
+      - task: markdownlint
       - task: check-generate-codec
       - task: check-generate-mocks
       - task: check-generate-rlp

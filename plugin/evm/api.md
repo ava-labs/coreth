@@ -3,9 +3,7 @@ title: C-Chain API
 description: "This page is an overview of the C-Chain API associated with AvalancheGo."
 ---
 
-<Callout title="Note">
-Ethereum has its own notion of `networkID` and `chainID`. These have no relationship to Avalanche's view of networkID and chainID and are purely internal to the [C-Chain](/docs/quick-start/primary-network#c-chain). On Mainnet, the C-Chain uses `1` and `43114` for these values. On the Fuji Testnet, it uses `1` and `43113` for these values. `networkID` and `chainID` can also be obtained using the `net_version` and `eth_chainId` methods.
-</Callout>
+> **Note:** Ethereum has its own notion of `networkID` and `chainID`. These have no relationship to Avalanche's view of networkID and chainID and are purely internal to the [C-Chain](/docs/quick-start/primary-network#c-chain). On Mainnet, the C-Chain uses `1` and `43114` for these values. On the Fuji Testnet, it uses `1` and `43113` for these values. `networkID` and `chainID` can also be obtained using the `net_version` and `eth_chainId` methods.
 
 ## Ethereum APIs
 
@@ -29,10 +27,8 @@ where `blockchainID` is the ID of the blockchain running the EVM.
 
 #### WebSocket Endpoints
 
-<Callout title="info">
-On the [public API node](/docs/tooling/rpc-providers), it only supports C-Chain
-websocket API calls for API methods that don't exist on the C-Chain's HTTP API
-</Callout>
+> **Info:** On the [public API node](/docs/tooling/rpc-providers), it only supports C-Chain
+> websocket API calls for API methods that don't exist on the C-Chain's HTTP API
 
 To interact with C-Chain via the websocket endpoint:
 
@@ -46,10 +42,8 @@ For example, to interact with the C-Chain's Ethereum APIs via websocket on local
 ws://127.0.0.1:9650/ext/bc/C/ws
 ```
 
-<Callout title="Tip" icon = {<BadgeCheck className="size-5 text-card" fill="green" />} >
-On localhost, use `ws://`. When using the [Public API](/docs/tooling/rpc-providers) or another
-host that supports encryption, use `wss://`.
-</Callout>
+> **Tip:** On localhost, use `ws://`. When using the [Public API](/docs/tooling/rpc-providers) or another
+> host that supports encryption, use `wss://`.
 
 To interact with other instances of the EVM via the websocket endpoint:
 
@@ -76,10 +70,8 @@ You can interact with these services the same exact way you'd interact with Geth
 and [Geth's JSON-RPC Documentation](https://geth.ethereum.org/docs/rpc/server)
 for a full description of this API.
 
-<Callout title="info">
-For batched requests on the [public API node](/docs/tooling/rpc-providers) , the maximum
-number of items is 40.
-</Callout>
+> **Info:** For batched requests on the [public API node](/docs/tooling/rpc-providers) , the maximum
+> number of items is 40.
 
 #### Exceptions
 
@@ -172,13 +164,13 @@ documentation](/docs/api-reference/guides/txn-fees#c-chain-fees).
 
 The Admin API provides administrative functionality for the EVM.
 
-### Endpoint
+### Admin API Endpoint
 
 ```sh
 /ext/bc/C/admin
 ```
 
-### Methods
+### Admin API Methods
 
 #### `admin_startCPUProfiler`
 
@@ -316,13 +308,13 @@ curl -X POST --data '{
 
 ## Avalanche-Specific APIs
 
-### Endpoint
+### Avalanche-Specific API Endpoint
 
 ```sh
 /ext/bc/C/avax
 ```
 
-### Methods
+### Avalanche-Specific API Methods
 
 #### `avax.getUTXOs`
 

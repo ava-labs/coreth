@@ -17,4 +17,3 @@ Please refer to the [Bug Bounty Page](https://hackenproof.com/avalanche) for the
 ## Supported Versions
 
 Please use the [most recently released version](https://github.com/ava-labs/coreth/releases/latest) to perform testing and to validate security issues.
-
