@@ -121,7 +121,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 			}
 
 			if responseBytes == nil {
-				return fmt.Errorf("expected response bytes, got nil")
+				return errors.New("expected response bytes, got nil")
 			}
 
 			var response TestMessage
@@ -243,7 +243,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 			}
 
 			if responseBytes == nil {
-				return fmt.Errorf("expected response bytes, got nil")
+				return errors.New("expected response bytes, got nil")
 			}
 
 			var response TestMessage
@@ -424,6 +424,7 @@ func TestRequestMinVersion(t *testing.T) {
 					errChan <- err
 					return
 				}
+				errChan <- nil
 			}()
 			return nil
 		},
@@ -478,7 +479,7 @@ func TestRequestMinVersion(t *testing.T) {
 	case err := <-errChan:
 		require.NoError(t, err)
 	default:
-		// No error, which is expected
+		require.Failf(t, "expected to receive error or nil from goroutine", "goroutine should always send to errChan")
 	}
 }
 
