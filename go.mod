@@ -193,3 +193,7 @@ tool (
 	github.com/ava-labs/libevm/rlp/rlpgen
 	github.com/onsi/ginkgo/v2/ginkgo
 )
+
+replace github.com/ava-labs/firewood-go-ethhash/ffi => ../firewood/ffi
+
+replace github.com/ava-labs/libevm => ../libevm
