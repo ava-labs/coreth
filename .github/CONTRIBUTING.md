@@ -28,10 +28,10 @@ Before you submit a feature request, please check and make sure that it isn't po
 
 Mocks are auto-generated using [mockgen](https://pkg.go.dev/go.uber.org/mock/mockgen) and `//go:generate` commands in the code.
 
-- To **re-generate all mocks**, use the command below from the root of the project:
+- To **re-generate all mocks**, use the task below from the root of the project:
 
   ```sh
-  go generate -run mockgen ./...
+  task generate-mocks
   ```
 
 - To **add** an interface that needs a corresponding mock generated:
