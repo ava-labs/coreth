@@ -44,9 +44,13 @@ type BlockAcceptor interface {
 
 // EthBlockWrapper can be implemented by a concrete block wrapper type to
 // return *types.Block, which is needed to update chain pointers at the
-// end of the sync operation.
+// end of the sync operation. It also provides Accept/Reject/Verify operations
+// for deferred processing during dynamic state sync.
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
+	Accept(context.Context) error
+	Reject(context.Context) error
+	Verify(context.Context) error
 }
 
 type ClientConfig struct {
@@ -115,6 +119,10 @@ type Client interface {
 	Error() error
 	// OnEngineAccept should be called by the engine when a block is accepted.
 	OnEngineAccept(EthBlockWrapper) error
+	// OnEngineReject should be called by the engine when a block is rejected.
+	OnEngineReject(EthBlockWrapper) error
+	// OnEngineVerify should be called by the engine when a block is verified.
+	OnEngineVerify(EthBlockWrapper) error
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
@@ -168,16 +176,62 @@ func (c *client) OnEngineAccept(b EthBlockWrapper) error {
 		return nil
 	}
 
+	// Skip notification if we're already processing the queue to avoid recursion.
+	if c.coordinator.CurrentState() == StateExecutingBatch {
+		return nil
+	}
+
 	ethb := b.GetEthBlock()
 	// Best-effort enqueue, ignored unless Running.
-	if ok := c.coordinator.AddBlock(b); !ok {
+	if ok := c.coordinator.AddBlockOperation(b, OpAccept); !ok {
 		// TODO(powerslider): should we return an error here?
 		log.Warn("could not enqueue block for post-finalization execution", "hash", ethb.Hash(), "height", ethb.NumberU64())
 	}
 
+	// Only update sync target on accept operations.
 	syncTarget := newSyncTarget(ethb.Hash(), ethb.Root(), ethb.NumberU64())
 	if err := c.coordinator.UpdateSyncTarget(syncTarget); err != nil {
 		return err
+	}
+	return nil
+}
+
+// OnEngineReject should be invoked by the engine when a block is rejected.
+// It best-effort enqueues the block for post-finalization execution.
+func (c *client) OnEngineReject(b EthBlockWrapper) error {
+	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
+		return nil
+	}
+
+	// Skip notification if we're already processing the queue to avoid recursion.
+	if c.coordinator.CurrentState() == StateExecutingBatch {
+		return nil
+	}
+
+	ethb := b.GetEthBlock()
+	// Best-effort enqueue, ignored unless Running.
+	if ok := c.coordinator.AddBlockOperation(b, OpReject); !ok {
+		log.Warn("could not enqueue block reject operation for post-finalization execution", "hash", ethb.Hash(), "height", ethb.NumberU64())
+	}
+	return nil
+}
+
+// OnEngineVerify should be invoked by the engine when a block is verified.
+// It best-effort enqueues the block for post-finalization execution.
+func (c *client) OnEngineVerify(b EthBlockWrapper) error {
+	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
+		return nil
+	}
+
+	// Skip notification if we're already processing the queue to avoid recursion.
+	if c.coordinator.CurrentState() == StateExecutingBatch {
+		return nil
+	}
+
+	ethb := b.GetEthBlock()
+	// Best-effort enqueue, ignored unless Running.
+	if ok := c.coordinator.AddBlockOperation(b, OpVerify); !ok {
+		log.Warn("could not enqueue block verify operation for post-finalization execution", "hash", ethb.Hash(), "height", ethb.NumberU64())
 	}
 	return nil
 }
@@ -374,9 +428,6 @@ func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry)
 			FinalizeVM: func(_ message.Syncable) error {
 				// TODO(powerslider): call Finalize on all syncers.
 				return c.finishSync()
-			},
-			ApplyBlock: func(b EthBlockWrapper) error {
-				return c.Chain.BlockChain().InsertBlock(b.GetEthBlock())
 			},
 			OnDone: func(err error) {
 				c.signalDone(err)
