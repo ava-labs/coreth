@@ -634,18 +634,22 @@ func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, 
 	vm.Ethereum().BlockChain().DrainAcceptorQueue()
 }
 
-// requireSyncPerformedHeights iterates over all heights the VM has synced to and
-// verifies they all match the heights present in `expected`.
-func requireSyncPerformedHeights(t *testing.T, db ethdb.Iteratee, expected map[uint64]struct{}) {
-	it := customrawdb.NewSyncPerformedIterator(db)
-	defer it.Release()
+// requireSyncPerformedHeights verifies the latest sync performed height matches expectations.
+// If `expected` is empty, verifies the result is 0.
+// If `expected` has one entry, verifies the result equals that entry.
+func requireSyncPerformedHeights(t *testing.T, db ethdb.KeyValueStore, expected map[uint64]struct{}) {
+	latest, err := customrawdb.GetLatestSyncPerformed(db)
+	require.NoError(t, err)
 
-	found := make(map[uint64]struct{}, len(expected))
-	for it.Next() {
-		customKey, err := customrawdb.ParseSyncPerformedKey(it.Key())
-		require.NoError(t, err)
-		found[customKey] = struct{}{}
+	if len(expected) == 0 {
+		require.Equal(t, uint64(0), latest, "expected no sync performed, but got height %d", latest)
+	} else {
+		require.Len(t, expected, 1, "expected map should contain exactly one entry")
+		var expectedHeight uint64
+		for height := range expected {
+			expectedHeight = height
+			break
+		}
+		require.Equal(t, expectedHeight, latest, "latest sync performed height mismatch")
 	}
-	require.NoError(t, it.Error())
-	require.Equal(t, expected, found)
 }
