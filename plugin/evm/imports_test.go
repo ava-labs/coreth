@@ -104,11 +104,15 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 		}
 	}
 
-	slices.Sort(disallowedImports)
-
 	if len(disallowedImports) == 0 {
 		return
 	}
+
+	// After this point, there are disallowed imports, and the test will fail.
+	// The remaining code is just necessary to pretty-print the error message,
+	// to make it easier to find and fix the disallowed imports.
+
+	slices.Sort(disallowedImports)
 
 	var errorMsg strings.Builder
 	errorMsg.WriteString("New libevm imports should be added to ./scripts/eth-allowed-packages.txt to prevent accidental imports:\n\n")
@@ -204,5 +208,9 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 		return nil
 	})
 
-	return imports, err
+	if err != nil {
+		return nil, err
+	}
+
+	return imports, nil
 }
