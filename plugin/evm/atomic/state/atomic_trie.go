@@ -295,8 +295,5 @@ func (a *AtomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 }
 
 func (a *AtomicTrie) RejectTrie(root common.Hash) error {
-	if err := a.trieDB.Dereference(root); err != nil {
-		return err
-	}
-	return nil
+	return a.trieDB.Dereference(root)
 }
