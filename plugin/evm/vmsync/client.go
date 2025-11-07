@@ -409,7 +409,7 @@ func (c *client) stateSyncStatic(ctx context.Context, registry *SyncerRegistry) 
 			return
 		}
 
-		if err = c.finishSync(); err != nil {
+		if err = c.finishSync(ctx); err != nil {
 			log.Error("finalizing VM markers failed after static state sync", "err", err)
 			return
 		}
@@ -425,9 +425,9 @@ func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry)
 	c.coordinator = NewCoordinator(
 		registry,
 		Callbacks{
-			FinalizeVM: func(_ message.Syncable) error {
+			FinalizeVM: func(ctx context.Context, _ message.Syncable) error {
 				// TODO(powerslider): call Finalize on all syncers.
-				return c.finishSync()
+				return c.finishSync(ctx)
 			},
 			OnDone: func(err error) {
 				c.signalDone(err)
@@ -458,10 +458,20 @@ func (c *client) Shutdown() error {
 	return nil
 }
 
+// runWithCancellationCheck wraps an operation with a cancellation check before execution.
+// This pattern allows cancellation checks to be applied indirectly without explicit
+// checks at each call site. The operation name is used for descriptive error messages.
+func runWithCancellationCheck(ctx context.Context, operationName string, op func() error) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("finishSync cancelled before %s: %w", operationName, err)
+	}
+	return op()
+}
+
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (c *client) finishSync() error {
-	stateBlock, err := c.State.GetBlock(context.TODO(), ids.ID(c.summary.GetBlockHash()))
+func (c *client) finishSync(ctx context.Context) error {
+	stateBlock, err := c.State.GetBlock(ctx, ids.ID(c.summary.GetBlockHash()))
 	if err != nil {
 		return fmt.Errorf("could not get block by hash from client state: %s", c.summary.GetBlockHash())
 	}
@@ -498,26 +508,43 @@ func (c *client) finishSync() error {
 	parentHash := block.ParentHash()
 	c.Chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
-	if err := c.Chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
-		return err
+	// Execute operations sequentially with cancellation checks. Each operation
+	// is wrapped to check for cancellation before execution, ensuring graceful
+	// shutdown if the context is cancelled.
+	ops := []struct {
+		name string
+		fn   func() error
+	}{
+		{"ResetToStateSyncedBlock", func() error {
+			return c.Chain.BlockChain().ResetToStateSyncedBlock(block)
+		}},
+		{"OnFinishBeforeCommit", func() error {
+			if c.Extender != nil {
+				return c.Extender.OnFinishBeforeCommit(c.LastAcceptedHeight, c.summary)
+			}
+			return nil
+		}},
+		{"commitVMMarkers", func() error {
+			if err := c.commitVMMarkers(); err != nil {
+				return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
+			}
+			return nil
+		}},
+		{"SetLastAcceptedBlock", func() error {
+			return c.State.SetLastAcceptedBlock(wrappedBlock)
+		}},
+		{"OnFinishAfterCommit", func() error {
+			if c.Extender != nil {
+				return c.Extender.OnFinishAfterCommit(block.NumberU64())
+			}
+			return nil
+		}},
 	}
 
-	if c.Extender != nil {
-		if err := c.Extender.OnFinishBeforeCommit(c.LastAcceptedHeight, c.summary); err != nil {
+	for _, op := range ops {
+		if err := runWithCancellationCheck(ctx, op.name, op.fn); err != nil {
 			return err
 		}
-	}
-
-	if err := c.commitVMMarkers(); err != nil {
-		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
-	}
-
-	if err := c.State.SetLastAcceptedBlock(wrappedBlock); err != nil {
-		return err
-	}
-
-	if c.Extender != nil {
-		return c.Extender.OnFinishAfterCommit(block.NumberU64())
 	}
 
 	return nil
