@@ -231,13 +231,14 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	nodeIdx := 0
 	for i := 0; i < totalCalls; i++ {
 		nodeIdx = (nodeIdx + 1) % (len(nodes))
+		nodeID := nodes[nodeIdx]
 		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
 				return fmt.Errorf("unexpected error during marshal: %w", err)
 			}
 
-			responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
+			responseBytes, err := net.SendSyncedAppRequest(t.Context(), nodeID, requestBytes)
 			if err != nil {
 				return fmt.Errorf("unexpected error during send: %w", err)
 			}
@@ -473,13 +474,12 @@ func TestRequestMinVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "this is a response", response.Message)
 
-	// Check for errors from the goroutine (non-blocking since SendSyncedAppRequestAny
-	// already waited for the response, so the goroutine has completed)
+	// Check for errors from the goroutine (wait for it to complete with a timeout)
 	select {
 	case err := <-errChan:
 		require.NoError(t, err)
-	default:
-		require.Failf(t, "expected to receive error or nil from goroutine", "goroutine should always send to errChan")
+	case <-time.After(5 * time.Second):
+		require.Failf(t, "timeout waiting for goroutine to complete", "goroutine should send to errChan within 5 seconds")
 	}
 }
 
