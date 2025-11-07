@@ -97,37 +97,38 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 	require.NoError(t, err, "Failed to find libevm imports")
 
 	// Check for any imports not in the allowed list and build detailed error message
-	var extraImports []string
+	var disallowedImports []string
 	for importPath := range foundImports {
 		if _, allowed := allowedPackages[importPath]; !allowed {
-			extraImports = append(extraImports, importPath)
+			disallowedImports = append(disallowedImports, importPath)
 		}
 	}
 
-	slices.Sort(extraImports)
+	slices.Sort(disallowedImports)
 
-	if len(extraImports) > 0 {
-		var errorMsg strings.Builder
-		errorMsg.WriteString("New libevm imports should be added to ./scripts/eth-allowed-packages.txt to prevent accidental imports:\n\n")
-
-		for _, importPath := range extraImports {
-			files := foundImports[importPath]
-			fileList := make([]string, 0, len(files))
-			for file := range files {
-				fileList = append(fileList, file)
-			}
-			slices.Sort(fileList)
-
-			errorMsg.WriteString(fmt.Sprintf("- %s\n", importPath))
-			errorMsg.WriteString(fmt.Sprintf("   Used in %d file(s):\n", len(fileList)))
-			for _, file := range fileList {
-				errorMsg.WriteString(fmt.Sprintf("   • %s\n", file))
-			}
-			errorMsg.WriteString("\n")
-		}
-
-		require.Fail(t, errorMsg.String())
+	if len(disallowedImports) == 0 {
+		return
 	}
+
+	var errorMsg strings.Builder
+	errorMsg.WriteString("New libevm imports should be added to ./scripts/eth-allowed-packages.txt to prevent accidental imports:\n\n")
+
+	for _, importPath := range disallowedImports {
+		files := foundImports[importPath]
+		fileList := make([]string, 0, len(files))
+		for file := range files {
+			fileList = append(fileList, file)
+		}
+		slices.Sort(fileList)
+
+		errorMsg.WriteString(fmt.Sprintf("- %s\n", importPath))
+		errorMsg.WriteString(fmt.Sprintf("   Used in %d file(s):\n", len(fileList)))
+		for _, file := range fileList {
+			errorMsg.WriteString(fmt.Sprintf("   • %s\n", file))
+		}
+		errorMsg.WriteString("\n")
+	}
+	require.Fail(t, errorMsg.String())
 }
 
 // loadAllowedPackages reads the allowed packages from the specified file
@@ -163,7 +164,7 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 	imports := make(map[string]map[string]struct{})
 	libevmRegex := regexp.MustCompile(`^github\.com/ava-labs/libevm/`)
 
-	return imports, filepath.Walk(rootDir, func(path string, _ os.FileInfo, err error) error {
+	err := filepath.Walk(rootDir, func(path string, _ os.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, ".go") {
 			return err
 		}
@@ -176,7 +177,7 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 
 		node, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
 		if err != nil {
-			return nil //nolint:nilerr // Skip unparseable files
+			return fmt.Errorf("failed to parse %s: %w", path, err)
 		}
 
 		for _, imp := range node.Imports {
@@ -201,4 +202,6 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 		}
 		return nil
 	})
+
+	return imports, err
 }
