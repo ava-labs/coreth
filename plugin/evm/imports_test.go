@@ -207,7 +207,6 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 		}
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
