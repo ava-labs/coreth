@@ -29,7 +29,6 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -154,14 +153,25 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	syncDisabledVM, _ := testSetup.NewVM()
 	appSender := &enginetest.Sender{T: t}
 	appSender.SendAppGossipF = func(context.Context, commonEng.SendConfig, []byte) error { return nil }
+	errChan := make(chan error, 1)
 	appSender.SendAppRequestF = func(ctx context.Context, nodeSet set.Set[ids.NodeID], requestID uint32, request []byte) error {
 		nodeID, hasItem := nodeSet.Pop()
 		require.True(hasItem, "expected nodeSet to contain at least 1 nodeID")
 		go func() {
-			assert.NoError(t, testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request))
+			if err := testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request); err != nil {
+				errChan <- err
+			}
 		}()
 		return nil
 	}
+	defer func() {
+		select {
+		case err := <-errChan:
+			require.NoError(err)
+		default:
+		}
+	}()
+
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
 	genesisJSON := []byte(GenesisJSON(paramstest.ForkToChainConfig[upgradetest.Latest]))
@@ -222,17 +232,26 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	))
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
+	appResponseErrChan := make(chan error, 1)
 	testSyncVMSetup.serverVM.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go func() {
-				assert.NoError(t, syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response), "AppResponse failed")
+				if err := syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response); err != nil {
+					appResponseErrChan <- err
+				}
 			}()
 		} else {
 			go test.responseIntercept(syncReEnabledVM, nodeID, requestID, response)
 		}
-
 		return nil
 	}
+	defer func() {
+		select {
+		case err := <-appResponseErrChan:
+			require.NoError(err)
+		default:
+		}
+	}()
 
 	// connect peer to [syncerVM]
 	require.NoError(syncReEnabledVM.Connected(
@@ -366,17 +385,26 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	require.True(enabled)
 
 	// override [serverVM]'s SendAppResponse function to trigger AppResponse on [syncerVM]
+	syncErrChan := make(chan error, 1)
 	serverTest.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go func() {
-				assert.NoError(t, syncerVM.AppResponse(ctx, nodeID, requestID, response))
+				if err := syncerVM.AppResponse(ctx, nodeID, requestID, response); err != nil {
+					syncErrChan <- err
+				}
 			}()
 		} else {
 			go test.responseIntercept(syncerVM, nodeID, requestID, response)
 		}
-
 		return nil
 	}
+	t.Cleanup(func() {
+		select {
+		case err := <-syncErrChan:
+			require.NoError(err)
+		default:
+		}
+	})
 
 	// connect peer to [syncerVM]
 	require.NoError(
