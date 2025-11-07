@@ -56,7 +56,7 @@ Full documentation for the C-Chain's API can be found in the [C-Chain API docume
 
 ## Compatibility
 
-The C-Chain is compatible with almost all Ethereum tooling, including [Core,](https://docs.avax.network/build/dapp/launch-dapp#through-core) [Metamask,](https://docs.avax.network/build/dapp/launch-dapp#through-metamask) [Remix](https://docs.avax.network/dapps/smart-contract-dev/deploy-with-remix-ide) and [Truffle.](https://docs.avax.network/build/tutorials/smart-contracts/using-truffle-with-the-avalanche-c-chain)
+The C-Chain is compatible with almost all Ethereum tooling, including [Core,](https://docs.avax.network/build/dapp/launch-dapp#through-core) [Metamask,](https://docs.avax.network/build/dapp/launch-dapp#through-metamask) and [Remix](https://docs.avax.network/dapps/smart-contract-dev/deploy-with-remix-ide).
 
 ## Differences Between Avalanche C-Chain and Ethereum
 
