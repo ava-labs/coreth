@@ -229,11 +229,14 @@ func (be *blockExtension) Reject() error {
 // CleanupVerified is called when the block is cleaned up after a failed insertion.
 func (be *blockExtension) CleanupVerified() {
 	vm := be.blockExtender.vm
-	if atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash()); err == nil {
-		if err := atomicState.Reject(); err != nil {
-			log.Error("failed to reject atomic state", "err", err)
-		}
+	// If the state isn't found, no need to reject (it was never verified).
+	atomicState, err := vm.AtomicBackend.GetVerifiedAtomicState(be.block.GetEthBlock().Hash())
+	if err != nil {
+		return
 	}
+	// atomicState.Reject() never returns an error in practice.
+	//nolint:errcheck // Reject never returns an error
+	_ = atomicState.Reject()
 }
 
 // AtomicTxs returns the atomic transactions in this block.

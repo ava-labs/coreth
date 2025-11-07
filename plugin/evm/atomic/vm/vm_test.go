@@ -845,6 +845,7 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	// will fail verification when build block is called.
 	require.NoError(vm.AtomicMempool.ForceAddTx(importTxs[1]))
 	require.NoError(vm.AtomicMempool.ForceAddTx(importTxs[2]))
+	require.Equal(2, vm.AtomicMempool.Txs.PendingLen())
 
 	_, err = vm.BuildBlock(t.Context())
 	require.ErrorIs(err, ErrEmptyBlock)

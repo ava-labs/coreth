@@ -29,6 +29,7 @@ import (
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
@@ -157,7 +158,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		nodeID, hasItem := nodeSet.Pop()
 		require.True(hasItem, "expected nodeSet to contain at least 1 nodeID")
 		go func() {
-			require.NoError(testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request))
+			assert.NoError(t, testSyncVMSetup.serverVM.VM.AppRequest(ctx, nodeID, requestID, time.Now().Add(1*time.Second), request))
 		}()
 		return nil
 	}
@@ -224,7 +225,7 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 	testSyncVMSetup.serverVM.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go func() {
-				require.NoError(syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response), "AppResponse failed")
+				assert.NoError(t, syncReEnabledVM.AppResponse(ctx, nodeID, requestID, response), "AppResponse failed")
 			}()
 		} else {
 			go test.responseIntercept(syncReEnabledVM, nodeID, requestID, response)
@@ -368,7 +369,7 @@ func initSyncServerAndClientVMs(t *testing.T, test SyncTestParams, numBlocks int
 	serverTest.AppSender.SendAppResponseF = func(ctx context.Context, nodeID ids.NodeID, requestID uint32, response []byte) error {
 		if test.responseIntercept == nil {
 			go func() {
-				require.NoError(syncerVM.AppResponse(ctx, nodeID, requestID, response))
+				assert.NoError(t, syncerVM.AppResponse(ctx, nodeID, requestID, response))
 			}()
 		} else {
 			go test.responseIntercept(syncerVM, nodeID, requestID, response)
