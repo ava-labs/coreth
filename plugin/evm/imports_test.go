@@ -144,12 +144,11 @@ func loadAllowedPackages(filename string) (map[string]struct{}, error) {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
-		    continue
+			continue
 		}
-			// Remove quotes if present
-			line = strings.Trim(line, `"`)
-			allowed[line] = struct{}{}
-		}
+
+		line = strings.Trim(line, `"`)
+		allowed[line] = struct{}{}
 	}
 
 	if err := scanner.Err(); err != nil {
