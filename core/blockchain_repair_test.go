@@ -38,11 +38,11 @@ import (
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/memdb"
 	"github.com/ava-labs/avalanchego/utils/logging"
+	evmblockdb "github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
 	"github.com/ava-labs/avalanchego/x/blockdb"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
-	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -526,8 +526,9 @@ func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
 }
 
 func useBlockDatabase(t *testing.T, kvdb avalanchedatabase.Database, chaindb ethdb.Database, datadir string) ethdb.Database {
-	db := database.NewBlockDatabase(kvdb, chaindb, blockdb.DefaultConfig(), datadir, logging.NoLog{}, prometheus.NewRegistry())
-	require.NoError(t, db.InitWithMinHeight(1))
+	db, ok, err := evmblockdb.New(kvdb, chaindb, datadir, false, blockdb.DefaultConfig(), logging.NoLog{}, prometheus.NewRegistry())
+	require.NoError(t, err)
+	require.True(t, ok)
 	return db
 }
 

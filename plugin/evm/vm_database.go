@@ -11,8 +11,8 @@ import (
 
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
+	"github.com/ava-labs/avalanchego/vms/evm/database"
 	"github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
-	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
@@ -53,7 +53,7 @@ func (vm *VM) initializeDBs(db avalanchedatabase.Database) error {
 func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) {
 	// Use NewNested rather than New so that the structure of the database
 	// remains the same regardless of the provided baseDB type.
-	chainDB := rawdb.NewDatabase(database.WrapDatabase(prefixdb.NewNested(ethDBPrefix, db)))
+	chainDB := rawdb.NewDatabase(database.New(prefixdb.NewNested(ethDBPrefix, db)))
 
 	// Error if block database has been enabled/created and then disabled
 	stateDB := prefixdb.New(blockDBPrefix, db)
