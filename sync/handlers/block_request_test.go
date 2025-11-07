@@ -79,7 +79,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 	}
 	blockRequest.Parents = test.requestedParents
 
-	responseBytes, err := blockRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, blockRequest)
+	responseBytes, err := blockRequestHandler.OnBlockRequest(t.Context(), ids.GenerateTestNodeID(), 1, blockRequest)
 	require.NoError(t, err)
 	if test.assertResponse != nil {
 		test.assertResponse(t, testHandlerStats, responseBytes)
@@ -151,6 +151,7 @@ func TestBlockRequestHandler(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			executeBlockRequestTest(t, test, blocks)
 		})
 	}
@@ -208,12 +209,14 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			executeBlockRequestTest(t, test, blocks)
 		})
 	}
 }
 
 func TestBlockRequestHandlerCtxExpires(t *testing.T) {
+	t.Parallel()
 	gspec := &core.Genesis{
 		Config: params.TestChainConfig,
 	}
@@ -233,7 +236,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	}
 
 	cancelAfterNumRequests := 2
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	blockRequestCallCount := 0
 	blockProvider := &TestBlockProvider{

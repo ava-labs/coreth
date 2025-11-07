@@ -4,7 +4,6 @@
 package vm
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -21,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core/extstate"
+	"github.com/ava-labs/coreth/params/extras/extrastest"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
@@ -34,31 +34,8 @@ import (
 // createImportTxOptions adds a UTXO to shared memory and generates a list of import transactions sending this UTXO
 // to each of the three test keys (conflicting transactions)
 func createImportTxOptions(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) []*atomic.Tx {
-	utxo := &avax.UTXO{
-		UTXOID: avax.UTXOID{TxID: ids.GenerateTestID()},
-		Asset:  avax.Asset{ID: vm.Ctx.AVAXAssetID},
-		Out: &secp256k1fx.TransferOutput{
-			Amt: uint64(50000000),
-			OutputOwners: secp256k1fx.OutputOwners{
-				Threshold: 1,
-				Addrs:     []ids.ShortID{vmtest.TestKeys[0].Address()},
-			},
-		},
-	}
-	utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
+	_, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, 50000000, vmtest.TestKeys[0].Address())
 	require.NoError(t, err)
-
-	xChainSharedMemory := sharedMemory.NewSharedMemory(vm.Ctx.XChainID)
-	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
-		Key:   inputID[:],
-		Value: utxoBytes,
-		Traits: [][]byte{
-			vmtest.TestKeys[0].Address().Bytes(),
-		},
-	}}}}); err != nil {
-		require.NoError(t, err)
-	}
 
 	importTxs := make([]*atomic.Tx, 0, 3)
 	for _, ethAddr := range vmtest.TestEthAddrs {
@@ -132,24 +109,22 @@ func TestImportTxVerify(t *testing.T) {
 				return importTx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrNilTx.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrNilTx,
 		},
 		"valid import tx": {
 			generate: func() atomic.UnsignedAtomicTx {
 				return importTx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "", // Expect this transaction to be valid in Apricot Phase 0
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"valid import tx banff": {
 			generate: func() atomic.UnsignedAtomicTx {
 				return importTx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
-			expectedErr: "", // Expect this transaction to be valid in Banff
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.Banff),
 		},
 		"invalid network ID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -158,8 +133,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrWrongNetworkID.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrWrongNetworkID,
 		},
 		"invalid blockchain ID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -168,8 +143,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrWrongChainID.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrWrongChainID,
 		},
 		"P-chain source before AP5": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -178,8 +153,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrWrongChainID.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrWrongChainID,
 		},
 		"P-chain source after AP5": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -188,7 +163,7 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:   ctx,
-			rules: vmtest.ForkToRules(upgradetest.ApricotPhase5),
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase5),
 		},
 		"invalid source chain ID": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -197,8 +172,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase5),
-			expectedErr: atomic.ErrWrongChainID.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase5),
+			expectedErr: atomic.ErrWrongChainID,
 		},
 		"no inputs": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -207,8 +182,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrNoImportInputs.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrNoImportInputs,
 		},
 		"inputs sorted incorrectly": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -220,8 +195,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: atomic.ErrInputsNotSortedUnique.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrInputsNotSortedUnique,
 		},
 		"invalid input": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -233,8 +208,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "atomic input failed verification",
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: avax.ErrNilTransferableInput,
 		},
 		"unsorted outputs phase 0 passes verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -245,9 +220,8 @@ func TestImportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"non-unique outputs phase 0 passes verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -258,9 +232,8 @@ func TestImportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.NoUpgrades),
 		},
 		"unsorted outputs phase 1 fails verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -272,8 +245,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase1),
-			expectedErr: atomic.ErrOutputsNotSorted.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase1),
+			expectedErr: atomic.ErrOutputsNotSorted,
 		},
 		"non-unique outputs phase 1 passes verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -284,9 +257,8 @@ func TestImportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase1),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase1),
 		},
 		"outputs not sorted and unique phase 2 fails verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -298,8 +270,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase2),
-			expectedErr: atomic.ErrOutputsNotSortedUnique.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase2),
+			expectedErr: atomic.ErrOutputsNotSortedUnique,
 		},
 		"outputs not sorted phase 2 fails verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -311,8 +283,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase2),
-			expectedErr: atomic.ErrOutputsNotSortedUnique.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase2),
+			expectedErr: atomic.ErrOutputsNotSortedUnique,
 		},
 		"invalid EVMOutput fails verification": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -327,8 +299,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.NoUpgrades),
-			expectedErr: "EVM Output failed verification",
+			rules:       extrastest.ForkToRules(upgradetest.NoUpgrades),
+			expectedErr: atomic.ErrNoValueOutput,
 		},
 		"no outputs apricot phase 3": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -337,8 +309,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase3),
-			expectedErr: atomic.ErrNoEVMOutputs.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.ApricotPhase3),
+			expectedErr: atomic.ErrNoEVMOutputs,
 		},
 		"non-AVAX input Apricot Phase 6": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -360,9 +332,8 @@ func TestImportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase6),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase6),
 		},
 		"non-AVAX output Apricot Phase 6": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -376,9 +347,8 @@ func TestImportTxVerify(t *testing.T) {
 				}
 				return &tx
 			},
-			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.ApricotPhase6),
-			expectedErr: "",
+			ctx:   ctx,
+			rules: extrastest.ForkToRules(upgradetest.ApricotPhase6),
 		},
 		"non-AVAX input Banff": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -401,8 +371,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
-			expectedErr: atomic.ErrImportNonAVAXInputBanff.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.Banff),
+			expectedErr: atomic.ErrImportNonAVAXInputBanff,
 		},
 		"non-AVAX output Banff": {
 			generate: func() atomic.UnsignedAtomicTx {
@@ -417,8 +387,8 @@ func TestImportTxVerify(t *testing.T) {
 				return &tx
 			},
 			ctx:         ctx,
-			rules:       vmtest.ForkToRules(upgradetest.Banff),
-			expectedErr: atomic.ErrImportNonAVAXOutputBanff.Error(),
+			rules:       extrastest.ForkToRules(upgradetest.Banff),
+			expectedErr: atomic.ErrImportNonAVAXOutputBanff,
 		},
 	}
 	for name, test := range tests {
@@ -900,7 +870,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}))
 				return tx
 			},
-			semanticVerifyErr: "failed to fetch import UTXOs from",
+			semanticVerifyErr: errFailedToFetchImportUTXOs,
 		},
 		"garbage UTXO": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -936,7 +906,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}))
 				return tx
 			},
-			semanticVerifyErr: "failed to unmarshal UTXO",
+			semanticVerifyErr: errFailedToUnmarshalUTXO,
 		},
 		"UTXO AssetID mismatch": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -966,7 +936,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}))
 				return tx
 			},
-			semanticVerifyErr: ErrAssetIDMismatch.Error(),
+			semanticVerifyErr: ErrAssetIDMismatch,
 		},
 		"insufficient AVAX funds": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -995,7 +965,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}))
 				return tx
 			},
-			semanticVerifyErr: "import tx flow check failed due to",
+			semanticVerifyErr: avax.ErrInsufficientFunds,
 		},
 		"insufficient non-AVAX funds": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -1025,7 +995,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key}}))
 				return tx
 			},
-			semanticVerifyErr: "import tx flow check failed due to",
+			semanticVerifyErr: avax.ErrInsufficientFunds,
 		},
 		"no signatures": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -1054,7 +1024,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, nil))
 				return tx
 			},
-			semanticVerifyErr: "import tx contained mismatched number of inputs/credentials",
+			semanticVerifyErr: errIncorrectNumCredentials,
 		},
 		"incorrect signature": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -1086,7 +1056,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				require.NoError(t, tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{incorrectKey}}))
 				return tx
 			},
-			semanticVerifyErr: "import tx transfer failed verification",
+			semanticVerifyErr: secp256k1fx.ErrWrongSig,
 		},
 		"non-unique EVM Outputs": {
 			setup: func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) *atomic.Tx {
@@ -1123,7 +1093,7 @@ func TestImportTxSemanticVerify(t *testing.T) {
 				return tx
 			},
 			fork:              upgradetest.ApricotPhase3,
-			semanticVerifyErr: atomic.ErrOutputsNotSortedUnique.Error(),
+			semanticVerifyErr: atomic.ErrOutputsNotSortedUnique,
 		},
 	}
 
@@ -1246,47 +1216,45 @@ func executeTxTest(t *testing.T, test atomicTxTest) {
 	backend := NewVerifierBackend(vm, rules)
 
 	err := backend.SemanticVerify(tx, lastAcceptedBlock, baseFee)
-	if len(test.semanticVerifyErr) > 0 {
-		require.ErrorContains(t, err, test.semanticVerifyErr)
+	require.ErrorIs(t, err, test.semanticVerifyErr)
+	if test.semanticVerifyErr != nil {
 		// If SemanticVerify failed for the expected reason, return early
 		return
 	}
-	require.NoError(t, err)
 
 	// Retrieve dummy state to test that EVMStateTransfer works correctly
 	statedb, err := vm.Ethereum().BlockChain().StateAt(lastAcceptedBlock.GetEthBlock().Root())
 	require.NoError(t, err)
 	wrappedStateDB := extstate.New(statedb)
 	err = tx.UnsignedAtomicTx.EVMStateTransfer(vm.Ctx, wrappedStateDB)
-	if len(test.evmStateTransferErr) > 0 {
-		require.ErrorContains(t, err, test.evmStateTransferErr)
+	require.ErrorIs(t, err, test.evmStateTransferErr)
+	if test.evmStateTransferErr != nil {
 		// If EVMStateTransfer failed for the expected reason, return early
 		return
 	}
-	require.NoError(t, err)
 
 	require.NoError(t, vm.AtomicMempool.AddLocalTx(tx))
 
 	if test.bootstrapping {
 		return
 	}
-	msg, err := vm.WaitForEvent(context.Background())
+	msg, err := vm.WaitForEvent(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, commonEng.PendingTxs, msg)
 
 	// If we've reached this point, we expect to be able to build and verify the block without any errors
-	blk, err := vm.BuildBlock(context.Background())
+	blk, err := vm.BuildBlock(t.Context())
 	require.NoError(t, err)
 
-	require.NoError(t, blk.Verify(context.Background()))
+	require.NoError(t, blk.Verify(t.Context()))
 
-	err = blk.Accept(context.Background())
-	if len(test.acceptErr) > 0 {
-		require.ErrorContains(t, err, test.acceptErr)
+	err = blk.Accept(t.Context())
+	require.ErrorIs(t, err, test.acceptErr)
+
+	if test.acceptErr != nil {
 		// If Accept failed for the expected reason, return early
 		return
 	}
-	require.NoErrorf(t, err, "Accept failed unexpectedly due to: %s", err)
 
 	if test.checkState != nil {
 		test.checkState(t, vm)

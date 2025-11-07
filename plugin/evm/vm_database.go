@@ -12,12 +12,11 @@ import (
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/vms/evm/database/blockdb"
+	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/log"
-
-	"github.com/ava-labs/coreth/plugin/evm/database"
 
 	avalanchedatabase "github.com/ava-labs/avalanchego/database"
 	heightindexdb "github.com/ava-labs/avalanchego/x/blockdb"
@@ -99,7 +98,7 @@ func (vm *VM) newChainDB(db avalanchedatabase.Database) (ethdb.Database, error) 
 func (vm *VM) inspectDatabases() error {
 	start := time.Now()
 	log.Info("Starting database inspection")
-	if err := rawdb.InspectDatabase(vm.chaindb, nil, nil); err != nil {
+	if err := rawdb.InspectDatabase(vm.chaindb, nil, nil, rawdb.WithSkipFreezers()); err != nil {
 		return err
 	}
 	if err := inspectDB(vm.acceptedBlockDB, "acceptedBlockDB"); err != nil {

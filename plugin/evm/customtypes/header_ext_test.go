@@ -19,11 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/utils/utilstest"
-
-	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
-	// package so assume the presence of identifiers. A dot-import reduces PR
-	// noise during the refactoring.
-	. "github.com/ava-labs/libevm/core/types"
 )
 
 func TestHeaderRLP(t *testing.T) {
@@ -147,7 +142,7 @@ func allFieldsSet[T interface {
 				if fieldValue.Kind() == reflect.Ptr {
 					require.Falsef(t, fieldValue.IsNil(), "field %q is nil", field.Name)
 				}
-				fieldValue = reflect.NewAt(fieldValue.Type(), unsafe.Pointer(fieldValue.UnsafeAddr())).Elem() //nolint:gosec
+				fieldValue = reflect.NewAt(fieldValue.Type(), unsafe.Pointer(fieldValue.UnsafeAddr())).Elem()
 			}
 
 			switch f := fieldValue.Interface().(type) {
