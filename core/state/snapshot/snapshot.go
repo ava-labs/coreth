@@ -611,7 +611,7 @@ func (dl *diskLayer) abortGeneration() bool {
 
 	// If the disk layer is running a snapshot generator, abort it
 	dl.lock.RLock()
-	shouldAbort := dl.genAbort != nil && dl.genStats == nil
+	shouldAbort := dl.genAbort != nil
 	dl.lock.RUnlock()
 	if shouldAbort {
 		abort := make(chan struct{})
