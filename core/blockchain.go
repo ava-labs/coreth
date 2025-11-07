@@ -992,6 +992,7 @@ func (bc *BlockChain) Stop() {
 
 	// Ensure that the entirety of the state snapshot is journaled to disk.
 	if bc.snaps != nil {
+		bc.snaps.AbortGeneration()
 		bc.snaps.Release()
 	}
 	if bc.triedb.Scheme() == rawdb.PathScheme {

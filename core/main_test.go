@@ -28,8 +28,7 @@ func TestMain(m *testing.M) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelCrit, true)))
 
 	opts := []goleak.Option{
-		// No good way to shut down these goroutines:
-		goleak.IgnoreTopFunction("github.com/ava-labs/coreth/core/state/snapshot.(*diskLayer).generate"),
+		// External dependencies with long-running goroutines:
 		goleak.IgnoreTopFunction("github.com/ava-labs/libevm/core.(*txSenderCacher).cache"),
 		goleak.IgnoreTopFunction("github.com/ava-labs/libevm/metrics.(*meterArbiter).tick"),
 		goleak.IgnoreTopFunction("github.com/syndtr/goleveldb/leveldb.(*DB).mpoolDrain"),
