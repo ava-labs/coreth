@@ -143,7 +143,9 @@ func loadAllowedPackages(filename string) (map[string]struct{}, error) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line != "" && !strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") {
+		    continue
+		}
 			// Remove quotes if present
 			line = strings.Trim(line, `"`)
 			allowed[line] = struct{}{}
