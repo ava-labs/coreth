@@ -235,8 +235,7 @@ func (be *blockExtension) CleanupVerified() {
 		return
 	}
 	// atomicState.Reject() never returns an error in practice.
-	//nolint:errcheck // Reject never returns an error
-	_ = atomicState.Reject()
+	atomicState.Reject() //nolint:errcheck // Reject never returns an error
 }
 
 // AtomicTxs returns the atomic transactions in this block.
