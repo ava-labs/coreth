@@ -164,13 +164,13 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		}()
 		return nil
 	}
-	defer func() {
+	t.Cleanup(func() {
 		select {
 		case err := <-errChan:
 			require.NoError(err)
 		default:
 		}
-	}()
+	})
 
 	ResetMetrics(testSyncVMSetup.syncerVM.SnowCtx)
 	stateSyncDisabledConfigJSON := `{"state-sync-enabled":false}`
@@ -245,13 +245,13 @@ func StateSyncToggleEnabledToDisabledTest(t *testing.T, testSetup *SyncTestSetup
 		}
 		return nil
 	}
-	defer func() {
+	t.Cleanup(func() {
 		select {
 		case err := <-appResponseErrChan:
 			require.NoError(err)
 		default:
 		}
-	}()
+	})
 
 	// connect peer to [syncerVM]
 	require.NoError(syncReEnabledVM.Connected(
