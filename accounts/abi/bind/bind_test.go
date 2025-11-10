@@ -2102,7 +2102,7 @@ var bindTests = []struct {
 // The binding tests have been modified to run in two separate test
 // functions to allow these tests to pass on GitHub Actions.
 func TestGolangBindingsOverload(t *testing.T) {
-	for range 10 {
+	for range 20 {
 		t.Run("", func(t *testing.T) {
 			golangBindings(t, true)
 		})
@@ -2110,7 +2110,7 @@ func TestGolangBindingsOverload(t *testing.T) {
 }
 
 func TestGolangBindings(t *testing.T) {
-	for range 10 {
+	for range 20 {
 		t.Run("", func(t *testing.T) {
 			golangBindings(t, false)
 		})
