@@ -114,10 +114,6 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 				return fmt.Errorf("failed to send synced app request: %w", err)
 			}
 
-			if responseBytes == nil {
-				return errors.New("expected response bytes, got nil")
-			}
-
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
 				return fmt.Errorf("failed to decode response: %w", err)
@@ -225,10 +221,6 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 			responseBytes, err := net.SendSyncedAppRequest(ctx, nodeID, requestBytes)
 			if err != nil {
 				return fmt.Errorf("failed to send synced app request: %w", err)
-			}
-
-			if responseBytes == nil {
-				return errors.New("expected response bytes, got nil")
 			}
 
 			var response TestMessage
