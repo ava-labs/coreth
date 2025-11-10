@@ -286,22 +286,13 @@ func (db *Database) propose(root common.Hash, parentRoot common.Hash, hash commo
 //
 // Afterward, we know that no other proposal at this height can be committed, so we can dereference all
 // children in the the other branches of the proposal tree.
-func (db *Database) Commit(root common.Hash, report bool) (err error) {
+func (db *Database) Commit(root common.Hash, report bool) error {
 	// We need to lock the proposal tree to prevent concurrent writes.
-	var pCtx *ProposalContext
 	db.proposalLock.Lock()
 	defer db.proposalLock.Unlock()
 
-	// On success, we should persist the genesis root as necessary, and dereference all children
-	// of the committed proposal.
-	defer func() {
-		// If we attempted to commit a proposal, but it failed, we must dereference its children.
-		if pCtx != nil {
-			db.cleanupCommittedProposal(pCtx)
-		}
-	}()
-
 	// Find the proposal with the given root.
+	var pCtx *ProposalContext
 	for _, possible := range db.proposalMap[root] {
 		if possible.Parent.Root == db.proposalTree.Root && possible.Parent.Block == db.proposalTree.Block {
 			// We found the proposal with the correct parent.
@@ -318,12 +309,14 @@ func (db *Database) Commit(root common.Hash, report bool) (err error) {
 
 	start := time.Now()
 	// Commit the proposal to the database.
-	if commitErr := pCtx.Proposal.Commit(); commitErr != nil {
-		return fmt.Errorf("firewood: error committing proposal %s: %w", root.Hex(), commitErr)
+	if err := pCtx.Proposal.Commit(); err != nil {
+		return fmt.Errorf("firewood: error committing proposal %s: %w", root.Hex(), err)
 	}
 	ffiCommitCount.Inc(1)
 	ffiCommitTimer.Inc(time.Since(start).Milliseconds())
 	ffiOutstandingProposals.Dec(1)
+	// Now that the proposal is committed, we should clean up the proposal tree on return.
+	defer db.cleanupCommittedProposal(pCtx)
 
 	// Assert that the root of the database matches the committed proposal root.
 	currentRootBytes, err := db.fwDisk.Root()
@@ -353,9 +346,7 @@ func (*Database) Size() (common.StorageSize, common.StorageSize) {
 }
 
 // This isn't called anywhere in coreth
-func (*Database) Reference(_ common.Hash, _ common.Hash) {
-	log.Error("firewood: Reference not implemented")
-}
+func (*Database) Reference(common.Hash, common.Hash) {}
 
 // Dereference drops a proposal from the database.
 // This function is no-op because unused proposals are dereferenced when no longer valid.
@@ -365,11 +356,10 @@ func (*Database) Reference(_ common.Hash, _ common.Hash) {
 // We commit root A, and immediately dereference root B and its child.
 // Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
 // Thus, we recognize the single root C as the only proposal, and dereference it.
-func (*Database) Dereference(_ common.Hash) {
-}
+func (*Database) Dereference(common.Hash) {}
 
 // Firewood does not support this.
-func (*Database) Cap(_ common.StorageSize) error {
+func (*Database) Cap(common.StorageSize) error {
 	return nil
 }
 
@@ -387,6 +377,7 @@ func (db *Database) Close() error {
 	db.proposalTree.Children = nil
 
 	// Close the database
+	// This may block momentarily while finalizers for Firewood objects run.
 	return db.fwDisk.Close(context.Background())
 }
 
@@ -426,7 +417,6 @@ func createProposal(layer proposable, root common.Hash, keys, values [][]byte) (
 		return nil, fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
 	}
 
-	// Store the proposal context.
 	return p, nil
 }
 
