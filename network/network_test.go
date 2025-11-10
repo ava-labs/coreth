@@ -502,7 +502,6 @@ func TestRequestMinVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "this is a response", response.Message)
 
-	// Check for errors from the goroutine (wait for it to complete with a timeout)
 	require.NoError(t, <-errChan)
 	require.Equal(t, uint32(1), atomic.LoadUint32(&callNum))
 }
