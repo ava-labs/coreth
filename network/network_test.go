@@ -91,8 +91,8 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	}
 
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	net, err := NewNetwork(ctx, sender, codecManager, 16, prometheus.NewRegistry())
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
+	net, err := NewNetwork(snowCtx, sender, codecManager, 16, prometheus.NewRegistry())
 	require.NoError(t, err)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
 	nodeID := ids.GenerateTestNodeID()
@@ -107,7 +107,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	numCallsPerRequest := 1 // on sending response
 	totalCalls := totalRequests * numCallsPerRequest
 
-	eg := errgroup.Group{}
+	eg, ctx := errgroup.WithContext(t.Context())
 	for i := 0; i < totalCalls; i++ {
 		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
@@ -115,7 +115,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 				return fmt.Errorf("unexpected error during marshal: %w", err)
 			}
 
-			responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
+			responseBytes, _, err := net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
 			if err != nil {
 				return fmt.Errorf("unexpected error during send: %w", err)
 			}
@@ -299,25 +299,11 @@ func TestAppRequestOnShutdown(t *testing.T) {
 	requestMessage := HelloRequest{Message: "this is a request"}
 	require.NoError(t, net.Connected(t.Context(), nodeID, defaultPeerVersion))
 
-	errChan := make(chan error, 1)
-	go func() {
-		requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
-		if err != nil {
-			errChan <- err
-			return
-		}
-		responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
-		if err != errRequestFailed {
-			errChan <- fmt.Errorf("expected errRequestFailed, got %w", err)
-			return
-		}
-		if responseBytes != nil {
-			errChan <- fmt.Errorf("expected nil response, got %v", responseBytes)
-			return
-		}
-		errChan <- nil
-	}()
-	require.NoError(t, <-errChan)
+	requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
+	require.NoError(t, err)
+	responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
+	require.ErrorIs(t, err, errRequestFailed)
+	require.Nil(t, responseBytes)
 	require.True(t, called)
 }
 
@@ -388,8 +374,7 @@ func TestSyncedAppRequestAnyOnCtxCancellation(t *testing.T) {
 	sentAppRequestInfo := <-sentAppRequest
 	require.Len(t, net.(*network).outstandingRequestHandlers, 1)
 	cancel()
-	err = <-errChan
-	require.ErrorIs(t, err, context.Canceled)
+	require.ErrorIs(t, <-errChan, context.Canceled)
 	// Should still be able to process a response after cancelling.
 	require.Len(t, net.(*network).outstandingRequestHandlers, 1) // context cancellation SendAppRequestAny failure doesn't clear
 	require.NoError(t, net.AppResponse(
