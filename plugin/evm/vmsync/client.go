@@ -171,13 +171,20 @@ func (c *client) ParseStateSummary(_ context.Context, summaryBytes []byte) (bloc
 // OnEngineAccept should be invoked by the engine when a block is accepted.
 // It best-effort enqueues the block for post-finalization execution and
 // advances the coordinator's sync target using the block's hash/root/height.
+// During batch execution, only enqueuing occurs to prevent recursion.
 func (c *client) OnEngineAccept(b EthBlockWrapper) error {
 	ethb := c.enqueueBlockOperation(b, OpAccept)
 	if ethb == nil {
 		return nil
 	}
 
-	// Only update sync target on accept operations.
+	// Skip sync target update during batch execution to prevent recursion.
+	// Blocks enqueued during batch execution will be processed in the next batch.
+	if c.coordinator.CurrentState() == StateExecutingBatch {
+		return nil
+	}
+
+	// Only update sync target on accept operations when not in batch execution.
 	syncTarget := newSyncTarget(ethb.Hash(), ethb.Root(), ethb.NumberU64())
 	if err := c.coordinator.UpdateSyncTarget(syncTarget); err != nil {
 		return err
@@ -429,13 +436,8 @@ func (c *client) enqueueBlockOperation(b EthBlockWrapper, op BlockOperationType)
 		return nil
 	}
 
-	// Skip notification if we're already processing the queue to avoid recursion.
-	if c.coordinator.CurrentState() == StateExecutingBatch {
-		return nil
-	}
-
 	ethb := b.GetEthBlock()
-	// Best-effort enqueue, ignored unless Running.
+	// Best-effort enqueue, allowed during Running or StateExecutingBatch.
 	ok := c.coordinator.AddBlockOperation(b, op)
 	if !ok && ethb != nil {
 		log.Warn("could not enqueue block operation for post-finalization execution", "hash", ethb.Hash(), "block_operation", op.String(), "height", ethb.NumberU64())
@@ -444,16 +446,6 @@ func (c *client) enqueueBlockOperation(b EthBlockWrapper, op BlockOperationType)
 
 	// Return the eth block for callers that need it (e.g., OnEngineAccept).
 	return ethb
-}
-
-// runWithCancellationCheck wraps an operation with a cancellation check before execution.
-// This pattern allows cancellation checks to be applied indirectly without explicit
-// checks at each call site. The operation name is used for descriptive error messages.
-func runWithCancellationCheck(ctx context.Context, operationName string, op func() error) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("finishSync cancelled before %s: %w", operationName, err)
-	}
-	return op()
 }
 
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
@@ -496,41 +488,35 @@ func (c *client) finishSync(ctx context.Context) error {
 	parentHash := block.ParentHash()
 	c.Chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
-	// Execute operations sequentially with cancellation checks. Each operation
-	// is wrapped to check for cancellation before execution, ensuring graceful
-	// shutdown if the context is cancelled.
-	ops := []struct {
-		name string
-		fn   func() error
-	}{
-		{"ResetToStateSyncedBlock", func() error {
-			return c.Chain.BlockChain().ResetToStateSyncedBlock(block)
-		}},
-		{"OnFinishBeforeCommit", func() error {
-			if c.Extender != nil {
-				return c.Extender.OnFinishBeforeCommit(c.LastAcceptedHeight, c.summary)
-			}
-			return nil
-		}},
-		{"commitVMMarkers", func() error {
-			if err := c.commitVMMarkers(); err != nil {
-				return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
-			}
-			return nil
-		}},
-		{"SetLastAcceptedBlock", func() error {
-			return c.State.SetLastAcceptedBlock(wrappedBlock)
-		}},
-		{"OnFinishAfterCommit", func() error {
-			if c.Extender != nil {
-				return c.Extender.OnFinishAfterCommit(block.NumberU64())
-			}
-			return nil
-		}},
+	// Check for cancellation before starting finalization operations.
+	// These operations are sequential and not cancellable mid-execution, so a
+	// single check at the beginning is sufficient.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("finishSync cancelled before finalization: %w", err)
 	}
 
-	for _, op := range ops {
-		if err := runWithCancellationCheck(ctx, op.name, op.fn); err != nil {
+	// Execute operations sequentially. These are critical finalization operations
+	// that update VM state and should complete atomically.
+	if err := c.Chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
+		return err
+	}
+
+	if c.Extender != nil {
+		if err := c.Extender.OnFinishBeforeCommit(c.LastAcceptedHeight, c.summary); err != nil {
+			return err
+		}
+	}
+
+	if err := c.commitVMMarkers(); err != nil {
+		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
+	}
+
+	if err := c.State.SetLastAcceptedBlock(wrappedBlock); err != nil {
+		return err
+	}
+
+	if c.Extender != nil {
+		if err := c.Extender.OnFinishAfterCommit(block.NumberU64()); err != nil {
 			return err
 		}
 	}
