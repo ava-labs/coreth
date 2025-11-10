@@ -129,11 +129,13 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 			}()
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
+				err = fmt.Errorf("failed to encode request: %w", err)
 				return
 			}
 
 			responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
 			if err != nil {
+				err = fmt.Errorf("failed to send synced app request: %w", err)
 				return
 			}
 
@@ -144,6 +146,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
+				err = fmt.Errorf("failed to decode response: %w", err)
 				return
 			}
 			if response.Message != "Hi" {
@@ -271,11 +274,13 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 			}()
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
+				err = fmt.Errorf("failed to encode request: %w", err)
 				return
 			}
 
 			responseBytes, err := net.SendSyncedAppRequest(t.Context(), nodeID, requestBytes)
 			if err != nil {
+				err = fmt.Errorf("failed to send synced app request: %w", err)
 				return
 			}
 
@@ -286,6 +291,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
+				err = fmt.Errorf("failed to decode response: %w", err)
 				return
 			}
 			if response.Message != "Hi" {
