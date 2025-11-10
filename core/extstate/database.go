@@ -8,7 +8,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/triedb"
 
-	"github.com/ava-labs/coreth/triedb/firewood"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 )
 
 func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) state.Database {

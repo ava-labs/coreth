@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -50,7 +49,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customlogs"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -63,6 +61,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
 	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/triedb"
@@ -175,8 +174,6 @@ const (
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "hashdb/memcache/clean/fastcache"
-
-	firewoodFileName = "firewood.db"
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -230,7 +227,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			log.Crit("Chain data directory must be specified for Firewood")
 		}
 		config.DBOverride = firewood.Config{
-			FilePath:             filepath.Join(c.ChainDataDir, firewoodFileName),
+			ChainDir:             c.ChainDataDir,
 			CleanCacheSize:       c.TrieCleanLimit * 1024 * 1024,
 			FreeListCacheEntries: firewood.Defaults.FreeListCacheEntries,
 			Revisions:            uint(c.StateHistory), // must be at least 2

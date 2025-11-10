@@ -6,7 +6,6 @@ package extstate
 import (
 	"encoding/binary"
 	"math/rand"
-	"path/filepath"
 	"slices"
 	"testing"
 
@@ -21,8 +20,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 )
 
 const (
@@ -82,8 +81,8 @@ func newFuzzState(t *testing.T) *fuzzState {
 	})
 
 	firewoodMemdb := rawdb.NewMemoryDatabase()
-	fwCfg := firewood.Defaults                              // copy the defaults
-	fwCfg.FilePath = filepath.Join(t.TempDir(), "firewood") // Use a temporary directory for the Firewood
+	fwCfg := firewood.Defaults   // copy the defaults
+	fwCfg.ChainDir = t.TempDir() // Use a temporary directory for Firewood
 	firewoodState := NewDatabaseWithConfig(
 		firewoodMemdb,
 		&triedb.Config{

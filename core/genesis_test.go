@@ -32,7 +32,6 @@ import (
 	_ "embed"
 	"fmt"
 	"math/big"
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -42,7 +41,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
-	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
@@ -50,6 +48,7 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
@@ -307,7 +306,7 @@ func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 	case customrawdb.FirewoodScheme:
 		fwCfg := firewood.Defaults
 		// Create a unique temporary directory for each test
-		fwCfg.FilePath = filepath.Join(t.TempDir(), "firewood_state") // matches blockchain.go
+		fwCfg.ChainDir = t.TempDir()
 		return &triedb.Config{DBOverride: fwCfg.BackendConstructor}
 	default:
 		t.Fatalf("unknown scheme %s", scheme)
