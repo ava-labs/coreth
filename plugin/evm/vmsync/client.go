@@ -172,20 +172,9 @@ func (c *client) ParseStateSummary(_ context.Context, summaryBytes []byte) (bloc
 // It best-effort enqueues the block for post-finalization execution and
 // advances the coordinator's sync target using the block's hash/root/height.
 func (c *client) OnEngineAccept(b EthBlockWrapper) error {
-	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
+	ethb := c.enqueueBlockOperation(b, OpAccept)
+	if ethb == nil {
 		return nil
-	}
-
-	// Skip notification if we're already processing the queue to avoid recursion.
-	if c.coordinator.CurrentState() == StateExecutingBatch {
-		return nil
-	}
-
-	ethb := b.GetEthBlock()
-	// Best-effort enqueue, ignored unless Running.
-	if ok := c.coordinator.AddBlockOperation(b, OpAccept); !ok {
-		// TODO(powerslider): should we return an error here?
-		log.Warn("could not enqueue block for post-finalization execution", "hash", ethb.Hash(), "height", ethb.NumberU64())
 	}
 
 	// Only update sync target on accept operations.
@@ -199,40 +188,22 @@ func (c *client) OnEngineAccept(b EthBlockWrapper) error {
 // OnEngineReject should be invoked by the engine when a block is rejected.
 // It best-effort enqueues the block for post-finalization execution.
 func (c *client) OnEngineReject(b EthBlockWrapper) error {
-	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
-		return nil
-	}
-
-	// Skip notification if we're already processing the queue to avoid recursion.
-	if c.coordinator.CurrentState() == StateExecutingBatch {
-		return nil
-	}
-
-	ethb := b.GetEthBlock()
-	// Best-effort enqueue, ignored unless Running.
-	if ok := c.coordinator.AddBlockOperation(b, OpReject); !ok {
-		log.Warn("could not enqueue block reject operation for post-finalization execution", "hash", ethb.Hash(), "height", ethb.NumberU64())
-	}
+	c.enqueueBlockOperation(b, OpReject)
 	return nil
 }
 
 // OnEngineVerify should be invoked by the engine when a block is verified.
 // It best-effort enqueues the block for post-finalization execution.
 func (c *client) OnEngineVerify(b EthBlockWrapper) error {
-	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
-		return nil
-	}
+	c.enqueueBlockOperation(b, OpVerify)
+	return nil
+}
 
-	// Skip notification if we're already processing the queue to avoid recursion.
-	if c.coordinator.CurrentState() == StateExecutingBatch {
-		return nil
-	}
-
-	ethb := b.GetEthBlock()
-	// Best-effort enqueue, ignored unless Running.
-	if ok := c.coordinator.AddBlockOperation(b, OpVerify); !ok {
-		log.Warn("could not enqueue block verify operation for post-finalization execution", "hash", ethb.Hash(), "height", ethb.NumberU64())
-	}
+func (c *client) Shutdown() error {
+	// Unify completion - cancel context, set terminal outcome, and close [ClientConfig.StateSyncDone] once.
+	c.signalDone(context.Canceled)
+	// Wait for the background goroutine to exit.
+	c.wg.Wait()
 	return nil
 }
 
@@ -450,12 +421,29 @@ func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry)
 	return block.StateSyncDynamic
 }
 
-func (c *client) Shutdown() error {
-	// Unify completion - cancel context, set terminal outcome, and close [ClientConfig.StateSyncDone] once.
-	c.signalDone(context.Canceled)
-	// Wait for the background goroutine to exit.
-	c.wg.Wait()
-	return nil
+// enqueueBlockOperation handles the common logic for enqueuing block operations.
+// Returns the eth block if the operation was enqueued successfully, nil otherwise.
+// The returned block can be used to avoid duplicate GetEthBlock() calls.
+func (c *client) enqueueBlockOperation(b EthBlockWrapper, op BlockOperationType) *types.Block {
+	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
+		return nil
+	}
+
+	// Skip notification if we're already processing the queue to avoid recursion.
+	if c.coordinator.CurrentState() == StateExecutingBatch {
+		return nil
+	}
+
+	ethb := b.GetEthBlock()
+	// Best-effort enqueue, ignored unless Running.
+	ok := c.coordinator.AddBlockOperation(b, op)
+	if !ok && ethb != nil {
+		log.Warn("could not enqueue block operation for post-finalization execution", "hash", ethb.Hash(), "block_operation", op.String(), "height", ethb.NumberU64())
+		return nil
+	}
+
+	// Return the eth block for callers that need it (e.g., OnEngineAccept).
+	return ethb
 }
 
 // runWithCancellationCheck wraps an operation with a cancellation check before execution.
