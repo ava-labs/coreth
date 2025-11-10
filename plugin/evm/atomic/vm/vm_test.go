@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -1497,31 +1496,12 @@ func TestWaitForEvent(t *testing.T) {
 		{
 			name: "WaitForEvent with context cancelled returns 0",
 			testCase: func(t *testing.T, vm *VM, _ common.Address, _ *ecdsa.PrivateKey) {
-				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
+				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 				defer cancel()
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				resultChan := make(chan struct {
-					msg commonEng.Message
-					err error
-				}, 1)
-
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					resultChan <- struct {
-						msg commonEng.Message
-						err error
-					}{msg: msg, err: err}
-				}()
-
-				wg.Wait()
-				result := <-resultChan
-				require.ErrorIs(t, result.err, context.DeadlineExceeded)
-				require.Zero(t, result.msg)
+				msg, err := vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 			},
 		},
 		{
@@ -1530,29 +1510,24 @@ func TestWaitForEvent(t *testing.T) {
 				importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
 				require.NoError(t, err)
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				resultChan := make(chan struct {
+				type result struct {
 					msg commonEng.Message
 					err error
-				}, 1)
-
+				}
+				results := make(chan result)
 				go func() {
-					defer wg.Done()
 					msg, err := vm.WaitForEvent(t.Context())
-					resultChan <- struct {
-						msg commonEng.Message
-						err error
-					}{msg: msg, err: err}
+					results <- result{
+						msg: msg,
+						err: err,
+					}
 				}()
 
 				require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx))
 
-				wg.Wait()
-				result := <-resultChan
-				require.NoError(t, result.err)
-				require.Equal(t, commonEng.PendingTxs, result.msg)
+				r := <-results
+				require.NoError(t, r.err)
+				require.Equal(t, commonEng.PendingTxs, r.msg)
 			},
 		},
 		{
@@ -1561,28 +1536,9 @@ func TestWaitForEvent(t *testing.T) {
 				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
 				defer cancel()
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				resultChan := make(chan struct {
-					msg commonEng.Message
-					err error
-				}, 1)
-
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					resultChan <- struct {
-						msg commonEng.Message
-						err error
-					}{msg: msg, err: err}
-				}()
-
-				wg.Wait()
-				result := <-resultChan
-				require.ErrorIs(t, result.err, context.DeadlineExceeded)
-				require.Zero(t, result.msg)
+				msg, err := vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 
 				t.Log("WaitForEvent returns when regular transactions are added to the mempool")
 
@@ -1599,26 +1555,9 @@ func TestWaitForEvent(t *testing.T) {
 					require.NoError(t, err)
 				}
 
-				wg.Add(1)
-
-				resultChan2 := make(chan struct {
-					msg commonEng.Message
-					err error
-				}, 1)
-
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(t.Context())
-					resultChan2 <- struct {
-						msg commonEng.Message
-						err error
-					}{msg: msg, err: err}
-				}()
-
-				wg.Wait()
-				result2 := <-resultChan2
-				require.NoError(t, result2.err)
-				require.Equal(t, commonEng.PendingTxs, result2.msg)
+				msg, err = vm.WaitForEvent(t.Context())
+				require.NoError(t, err)
+				require.Equal(t, commonEng.PendingTxs, msg)
 
 				// Build a block again to wipe out the subscription
 				blk, err := vm.BuildBlock(t.Context())

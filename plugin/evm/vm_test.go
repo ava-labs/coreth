@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -1535,13 +1534,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 }
 
 func TestWaitForEvent(t *testing.T) {
-	type eventResult struct {
-		msg commonEng.Message
-		err error
-	}
-
 	fortunaFork := upgradetest.Fortuna
-
 	for _, testCase := range []struct {
 		name     string
 		Fork     *upgradetest.Fork
@@ -1553,33 +1546,25 @@ func TestWaitForEvent(t *testing.T) {
 				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
 				defer cancel()
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-				resultCh := make(chan eventResult, 1)
-
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					resultCh <- eventResult{msg: msg, err: err}
-				}()
-
-				wg.Wait()
-				result := <-resultCh
-				require.ErrorIs(t, result.err, context.DeadlineExceeded)
-				require.Zero(t, result.msg)
+				msg, err := vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 			},
 		},
 		{
 			name: "WaitForEvent returns when a transaction is added to the mempool",
 			testCase: func(t *testing.T, vm *VM) {
-				var wg sync.WaitGroup
-				wg.Add(1)
-				resultCh := make(chan eventResult, 1)
-
+				type result struct {
+					msg commonEng.Message
+					err error
+				}
+				results := make(chan result)
 				go func() {
-					defer wg.Done()
 					msg, err := vm.WaitForEvent(t.Context())
-					resultCh <- eventResult{msg: msg, err: err}
+					results <- result{
+						msg: msg,
+						err: err,
+					}
 				}()
 
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
@@ -1587,10 +1572,9 @@ func TestWaitForEvent(t *testing.T) {
 					require.NoError(t, err)
 				}
 
-				wg.Wait()
-				result := <-resultCh
-				require.NoError(t, result.err)
-				require.Equal(t, commonEng.PendingTxs, result.msg)
+				r := <-results
+				require.NoError(t, r.err)
+				require.Equal(t, commonEng.PendingTxs, r.msg)
 			},
 		},
 		{
@@ -1599,17 +1583,9 @@ func TestWaitForEvent(t *testing.T) {
 				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
 				defer cancel()
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-				resultCh := make(chan eventResult, 1)
-
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					resultCh <- eventResult{msg: msg, err: err}
-				}()
-
-				wg.Wait()
+				msg, err := vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 			},
 		},
 		// TODO (ceyonur): remove this test after Granite is activated. (See https://github.com/ava-labs/coreth/issues/1318)
@@ -1627,18 +1603,9 @@ func TestWaitForEvent(t *testing.T) {
 					require.NoError(t, err)
 				}
 
-				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
-				defer cancel()
-
-				var wg sync.WaitGroup
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
-				}()
-				wg.Wait()
+				msg, err := vm.WaitForEvent(t.Context())
+				require.NoError(t, err)
+				require.Equal(t, commonEng.PendingTxs, msg)
 			},
 		},
 		// TODO (ceyonur): remove this test after Granite is activated. (See https://github.com/ava-labs/coreth/issues/1318)
@@ -1655,18 +1622,9 @@ func TestWaitForEvent(t *testing.T) {
 					require.NoError(t, err)
 				}
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-				resultCh := make(chan eventResult, 1)
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(t.Context())
-					resultCh <- eventResult{msg: msg, err: err}
-				}()
-				wg.Wait()
-				result := <-resultCh
-				require.NoError(t, result.err)
-				require.Equal(t, commonEng.PendingTxs, result.msg)
+				msg, err := vm.WaitForEvent(t.Context())
+				require.NoError(t, err)
+				require.Equal(t, commonEng.PendingTxs, msg)
 				require.GreaterOrEqual(t, time.Since(lastBuildBlockTime), RetryDelay)
 			},
 		},
