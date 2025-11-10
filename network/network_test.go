@@ -71,14 +71,14 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 		sendAppRequestFn: func(_ context.Context, nodes set.Set[ids.NodeID], requestID uint32, requestBytes []byte) error {
 			nodeID, _ := nodes.Pop()
 			eg.Go(func() error {
-				return net.AppRequest(t.Context(), nodeID, requestID, time.Now().Add(5*time.Second), requestBytes)
+				return net.AppRequest(ctx, nodeID, requestID, time.Now().Add(5*time.Second), requestBytes)
 			})
 			return nil
 		},
 		sendAppResponseFn: func(nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
 			eg.Go(func() error {
 				defer callNum.Add(1)
-				return net.AppResponse(t.Context(), nodeID, requestID, responseBytes)
+				return net.AppResponse(ctx, nodeID, requestID, responseBytes)
 			})
 			return nil
 		},
@@ -210,14 +210,12 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	defer net.Shutdown()
 
 	const (
-		totalRequests             = 5000
-		numCallsPerRequest        = 1 // on sending response
-		totalCalls         uint32 = totalRequests * numCallsPerRequest
+		totalRequests      = 5000
+		numCallsPerRequest = 1 // on sending response
+		totalCalls         = totalRequests * numCallsPerRequest
 	)
-	var nodeIdx int
-	for range totalCalls {
-		nodeIdx = (nodeIdx + 1) % len(nodes)
-		nodeID := nodes[nodeIdx]
+	for i := range totalCalls {
+		nodeID := nodes[i%len(nodes)]
 		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
@@ -244,7 +242,7 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 		})
 	}
 	require.NoError(t, eg.Wait())
-	require.Equal(t, totalCalls, callNum.Load())
+	require.Equal(t, uint32(totalCalls), callNum.Load())
 	require.Equal(t, set.Of(nodes...), contactedNodes)
 
 	// ensure empty nodeID is not allowed
