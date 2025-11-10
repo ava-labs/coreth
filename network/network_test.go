@@ -358,31 +358,27 @@ func TestSyncedAppRequestAnyOnCtxCancellation(t *testing.T) {
 }
 
 func TestRequestMinVersion(t *testing.T) {
-	callNum := uint32(0)
-	nodeID := ids.GenerateTestNodeID()
-	codecManager := buildCodec(t, TestMessage{})
-
-	var net Network
-	errChan := make(chan error, 1)
+	const responseMessage = "this is a response"
+	var (
+		callNum      atomic.Uint32
+		nodeID       = ids.GenerateTestNodeID()
+		codecManager = buildCodec(t, TestMessage{})
+		net          Network
+	)
+	eg, ctx := errgroup.WithContext(t.Context())
 	sender := testAppSender{
 		sendAppRequestFn: func(_ context.Context, nodes set.Set[ids.NodeID], reqID uint32, _ []byte) error {
-			require.True(t, nodes.Contains(nodeID), "request nodes should contain expected nodeID")
-			require.Len(t, nodes, 1, "request nodes should contain exactly one node")
+			callNum.Add(1)
+			require.Equal(t, set.Of(nodeID), nodes)
 
-			go func() {
+			eg.Go(func() error {
 				time.Sleep(200 * time.Millisecond)
-				atomic.AddUint32(&callNum, 1)
-				responseBytes, err := codecManager.Marshal(codecVersion, TestMessage{Message: "this is a response"})
+				responseBytes, err := codecManager.Marshal(codecVersion, TestMessage{Message: responseMessage})
 				if err != nil {
-					errChan <- err
-					return
+					return err
 				}
-				if err := net.AppResponse(t.Context(), nodeID, reqID, responseBytes); err != nil {
-					errChan <- err
-					return
-				}
-				errChan <- nil
-			}()
+				return net.AppResponse(ctx, nodeID, reqID, responseBytes)
+			})
 			return nil
 		},
 	}
@@ -430,10 +426,10 @@ func TestRequestMinVersion(t *testing.T) {
 	var response TestMessage
 	_, err = codecManager.Unmarshal(responseBytes, &response)
 	require.NoError(t, err)
-	require.Equal(t, "this is a response", response.Message)
+	require.Equal(t, responseMessage, response.Message)
 
-	require.NoError(t, <-errChan)
-	require.Equal(t, uint32(1), atomic.LoadUint32(&callNum))
+	require.NoError(t, eg.Wait())
+	require.Equal(t, uint32(1), callNum.Load())
 }
 
 func TestOnRequestHonoursDeadline(t *testing.T) {
