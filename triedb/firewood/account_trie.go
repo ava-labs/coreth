@@ -169,7 +169,7 @@ func (a *AccountTrie) DeleteAccount(addr common.Address) error {
 	// Queue the key for deletion
 	a.dirtyKeys[string(key)] = nil
 	a.updateKeys = append(a.updateKeys, key)
-	a.updateValues = append(a.updateValues, nil) // Empty value indicates deletion
+	a.updateValues = append(a.updateValues, nil) // Nil value indicates deletion
 	a.hasChanges = true                          // Mark that there are changes to commit
 	return nil
 }
@@ -185,7 +185,7 @@ func (a *AccountTrie) DeleteStorage(addr common.Address, key []byte) error {
 	// Queue the key for deletion
 	a.dirtyKeys[string(combinedKey[:])] = nil
 	a.updateKeys = append(a.updateKeys, combinedKey[:])
-	a.updateValues = append(a.updateValues, nil) // Empty value indicates deletion
+	a.updateValues = append(a.updateValues, nil) // Nil value indicates deletion
 	a.hasChanges = true                          // Mark that there are changes to commit
 	return nil
 }
