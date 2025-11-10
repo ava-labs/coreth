@@ -449,10 +449,8 @@ func TestStatefulPrecompile(t *testing.T) {
 			// Create EVM with BlockNumber and Time initialized to 0 to enable Apricot Rules.
 			evm := vm.NewEVM(vmCtx, vm.TxContext{}, stateDB, params.TestApricotPhase5Config, vm.Config{}) // Use ApricotPhase5Config because these precompiles are deprecated in ApricotPhase6.
 			ret, gasRemaining, err := evm.Call(vm.AccountRef(test.from), test.precompileAddr, test.input, test.gasInput, test.value)
-			// Place gas remaining check before error check, so that it is not skipped when there is an error
-			require.Equalf(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining (%d of %d)", gasRemaining, test.gasInput)
-
 			require.ErrorIs(t, err, test.expectedErr)
+			require.Equalf(t, test.expectedGasRemaining, gasRemaining, "unexpected gas remaining (%d of %d)", gasRemaining, test.gasInput)
 			require.Equal(t, test.expectedResult, ret, "unexpected return value")
 			if test.stateDBCheck != nil {
 				test.stateDBCheck(t, stateDB)

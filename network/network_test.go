@@ -135,7 +135,7 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, eg.Wait())
+	require.NoError(t, eg.Wait()) // only the first error is informative
 	senderWg.Wait()
 	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 }
@@ -409,7 +409,6 @@ func TestRequestMinVersion(t *testing.T) {
 	errChan := make(chan error, 1)
 	sender := testAppSender{
 		sendAppRequestFn: func(_ context.Context, nodes set.Set[ids.NodeID], reqID uint32, _ []byte) error {
-			atomic.AddUint32(&callNum, 1)
 			require.True(t, nodes.Contains(nodeID), "request nodes should contain expected nodeID")
 			require.Len(t, nodes, 1, "request nodes should contain exactly one node")
 
@@ -432,8 +431,8 @@ func TestRequestMinVersion(t *testing.T) {
 	}
 
 	// passing nil as codec works because the net.AppRequest is never called
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	net, err := NewNetwork(ctx, sender, codecManager, 1, prometheus.NewRegistry())
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
+	net, err := NewNetwork(snowCtx, sender, codecManager, 1, prometheus.NewRegistry())
 	require.NoError(t, err)
 	requestMessage := TestMessage{Message: "this is a request"}
 	requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
@@ -466,7 +465,9 @@ func TestRequestMinVersion(t *testing.T) {
 	require.Nil(t, responseBytes)
 
 	// ensure version matches and the request goes through
-	responseBytes, _, err = net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	responseBytes, _, err = net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
 	require.NoError(t, err)
 
 	var response TestMessage
@@ -475,12 +476,8 @@ func TestRequestMinVersion(t *testing.T) {
 	require.Equal(t, "this is a response", response.Message)
 
 	// Check for errors from the goroutine (wait for it to complete with a timeout)
-	select {
-	case err := <-errChan:
-		require.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		require.Failf(t, "timeout waiting for goroutine to complete", "goroutine should send to errChan within 5 seconds")
-	}
+	require.NoError(t, <-errChan)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&callNum))
 }
 
 func TestOnRequestHonoursDeadline(t *testing.T) {
