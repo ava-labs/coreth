@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
@@ -61,30 +62,24 @@ func TestNetworkDoesNotConnectToItself(t *testing.T) {
 }
 
 func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
-	callNum := uint32(0)
-	senderWg := &sync.WaitGroup{}
-	var net Network
+	var (
+		net     Network
+		callNum atomic.Uint32
+	)
+	eg, ctx := errgroup.WithContext(t.Context())
 	sender := testAppSender{
 		sendAppRequestFn: func(_ context.Context, nodes set.Set[ids.NodeID], requestID uint32, requestBytes []byte) error {
 			nodeID, _ := nodes.Pop()
-			senderWg.Add(1)
-			go func() {
-				defer senderWg.Done()
-				if err := net.AppRequest(t.Context(), nodeID, requestID, time.Now().Add(5*time.Second), requestBytes); err != nil {
-					panic(err)
-				}
-			}()
+			eg.Go(func() error {
+				return net.AppRequest(t.Context(), nodeID, requestID, time.Now().Add(5*time.Second), requestBytes)
+			})
 			return nil
 		},
 		sendAppResponseFn: func(nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
-			senderWg.Add(1)
-			go func() {
-				defer senderWg.Done()
-				if err := net.AppResponse(t.Context(), nodeID, requestID, responseBytes); err != nil {
-					panic(err)
-				}
-				atomic.AddUint32(&callNum, 1)
-			}()
+			eg.Go(func() error {
+				defer callNum.Add(1)
+				return net.AppResponse(t.Context(), nodeID, requestID, responseBytes)
+			})
 			return nil
 		},
 	}
@@ -102,63 +97,39 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	defer net.Shutdown()
 	require.NoError(t, net.Connected(t.Context(), nodeID, defaultPeerVersion))
 
-	totalRequests := 5000
-	numCallsPerRequest := 1 // on sending response
-	totalCalls := totalRequests * numCallsPerRequest
-
-	var (
-		requestWg  sync.WaitGroup
-		requestErr error
-		once       sync.Once
+	const (
+		totalRequests             = 5000
+		numCallsPerRequest        = 1 // on sending response
+		totalCalls         uint32 = totalRequests * numCallsPerRequest
 	)
-	setError := func(e error) {
-		once.Do(func() {
-			requestErr = e
-		})
-	}
-	requestWg.Add(totalCalls)
-	for i := 0; i < totalCalls; i++ {
-		go func() {
-			var err error
-			defer func() {
-				if err != nil {
-					t.Logf("call %d failed: %v", i, err)
-					setError(err)
-				}
-				requestWg.Done()
-			}()
+	for range totalCalls {
+		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
-				err = fmt.Errorf("failed to encode request: %w", err)
-				return
+				return fmt.Errorf("failed to encode request: %w", err)
 			}
 
-			responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
+			responseBytes, _, err := net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
 			if err != nil {
-				err = fmt.Errorf("failed to send synced app request: %w", err)
-				return
+				return fmt.Errorf("failed to send synced app request: %w", err)
 			}
 
 			if responseBytes == nil {
-				err = errors.New("expected response bytes, got nil")
-				return
+				return errors.New("expected response bytes, got nil")
 			}
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
-				err = fmt.Errorf("failed to decode response: %w", err)
-				return
+				return fmt.Errorf("failed to decode response: %w", err)
 			}
 			if response.Message != "Hi" {
-				err = fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+				return fmt.Errorf("expected response message 'Hi', got %q", response.Message)
 			}
-		}()
+			return nil
+		})
 	}
-
-	requestWg.Wait()
-	require.NoError(t, requestErr) // only the first error is informative
-	senderWg.Wait()
-	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
+	require.NoError(t, eg.Wait()) // only the first error is informative
+	require.Equal(t, totalCalls, callNum.Load())
 }
 
 func TestAppRequestOnCtxCancellation(t *testing.T) {
@@ -191,42 +162,36 @@ func TestAppRequestOnCtxCancellation(t *testing.T) {
 }
 
 func TestRequestRequestsRoutingAndResponse(t *testing.T) {
-	callNum := uint32(0)
-	senderWg := &sync.WaitGroup{}
-	var net Network
-	var lock sync.Mutex
-	contactedNodes := make(map[ids.NodeID]struct{})
+	var (
+		net            Network
+		lock           sync.Mutex
+		contactedNodes set.Set[ids.NodeID]
+		callNum        atomic.Uint32
+	)
+	eg, ctx := errgroup.WithContext(t.Context())
 	sender := testAppSender{
 		sendAppRequestFn: func(_ context.Context, nodes set.Set[ids.NodeID], requestID uint32, requestBytes []byte) error {
 			nodeID, _ := nodes.Pop()
 			lock.Lock()
-			contactedNodes[nodeID] = struct{}{}
+			contactedNodes.Add(nodeID)
 			lock.Unlock()
-			senderWg.Add(1)
-			go func() {
-				defer senderWg.Done()
-				if err := net.AppRequest(t.Context(), nodeID, requestID, time.Now().Add(5*time.Second), requestBytes); err != nil {
-					panic(err)
-				}
-			}()
+			eg.Go(func() error {
+				return net.AppRequest(ctx, nodeID, requestID, time.Now().Add(5*time.Second), requestBytes)
+			})
 			return nil
 		},
 		sendAppResponseFn: func(nodeID ids.NodeID, requestID uint32, responseBytes []byte) error {
-			senderWg.Add(1)
-			go func() {
-				defer senderWg.Done()
-				if err := net.AppResponse(t.Context(), nodeID, requestID, responseBytes); err != nil {
-					panic(err)
-				}
-				atomic.AddUint32(&callNum, 1)
-			}()
+			eg.Go(func() error {
+				defer callNum.Add(1)
+				return net.AppResponse(ctx, nodeID, requestID, responseBytes)
+			})
 			return nil
 		},
 	}
 
 	codecManager := buildCodec(t, HelloRequest{}, HelloResponse{})
-	ctx := snowtest.Context(t, snowtest.CChainID)
-	net, err := NewNetwork(ctx, sender, codecManager, 16, prometheus.NewRegistry())
+	snowCtx := snowtest.Context(t, snowtest.CChainID)
+	net, err := NewNetwork(snowCtx, sender, codecManager, 16, prometheus.NewRegistry())
 	require.NoError(t, err)
 	net.SetRequestHandler(&HelloGreetingRequestHandler{codec: codecManager})
 
@@ -244,68 +209,43 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	requestMessage := HelloRequest{Message: "this is a request"}
 	defer net.Shutdown()
 
-	totalRequests := 5000
-	numCallsPerRequest := 1 // on sending response
-	totalCalls := totalRequests * numCallsPerRequest
-
-	var (
-		requestWg  sync.WaitGroup
-		requestErr error
-		once       sync.Once
-		nodeIdx    int
+	const (
+		totalRequests             = 5000
+		numCallsPerRequest        = 1 // on sending response
+		totalCalls         uint32 = totalRequests * numCallsPerRequest
 	)
-	setError := func(e error) {
-		once.Do(func() {
-			requestErr = e
-		})
-	}
-	requestWg.Add(totalCalls)
-	for i := 0; i < totalCalls; i++ {
-		nodeIdx = (nodeIdx + 1) % (len(nodes))
+	var nodeIdx int
+	for range totalCalls {
+		nodeIdx = (nodeIdx + 1) % len(nodes)
 		nodeID := nodes[nodeIdx]
-		go func() {
-			var err error
-			defer func() {
-				if err != nil {
-					t.Logf("call %d failed: %v", i, err)
-					setError(err)
-				}
-				requestWg.Done()
-			}()
+		eg.Go(func() error {
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
-				err = fmt.Errorf("failed to encode request: %w", err)
-				return
+				return fmt.Errorf("failed to encode request: %w", err)
 			}
 
-			responseBytes, err := net.SendSyncedAppRequest(t.Context(), nodeID, requestBytes)
+			responseBytes, err := net.SendSyncedAppRequest(ctx, nodeID, requestBytes)
 			if err != nil {
-				err = fmt.Errorf("failed to send synced app request: %w", err)
-				return
+				return fmt.Errorf("failed to send synced app request: %w", err)
 			}
 
 			if responseBytes == nil {
-				err = errors.New("expected response bytes, got nil")
-				return
+				return errors.New("expected response bytes, got nil")
 			}
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
-				err = fmt.Errorf("failed to decode response: %w", err)
-				return
+				return fmt.Errorf("failed to decode response: %w", err)
 			}
 			if response.Message != "Hi" {
-				err = fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+				return fmt.Errorf("expected response message 'Hi', got %q", response.Message)
 			}
-		}()
+			return nil
+		})
 	}
-	requestWg.Wait()
-	require.NoError(t, requestErr)
-	senderWg.Wait()
-	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
-	for _, nodeID := range nodes {
-		require.Contains(t, contactedNodes, nodeID, "node %s was not contacted", nodeID)
-	}
+	require.NoError(t, eg.Wait())
+	require.Equal(t, totalCalls, callNum.Load())
+	require.Equal(t, set.Of(nodes...), contactedNodes)
 
 	// ensure empty nodeID is not allowed
 	err = net.SendAppRequest(t.Context(), ids.EmptyNodeID, []byte("hello there"), nil)
