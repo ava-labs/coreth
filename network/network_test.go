@@ -149,7 +149,6 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 			if response.Message != "Hi" {
 				err = fmt.Errorf("expected response message 'Hi', got %q", response.Message)
 			}
-			return
 		}()
 	}
 
@@ -291,7 +290,6 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 			}
 			if response.Message != "Hi" {
 				err = fmt.Errorf("expected response message 'Hi', got %q", response.Message)
-				return
 			}
 		}()
 	}

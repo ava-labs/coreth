@@ -54,8 +54,13 @@ linters:
     - asciicheck
     - bodyclose
     - copyloopvar
+<<<<<<< HEAD
     - depguard
     # - errcheck
+=======
+    # - depguard
+    - errcheck
+>>>>>>> origin/master
     - errorlint
     - forbidigo
     - goconst
