@@ -310,6 +310,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	start := time.Now()
 	// Commit the proposal to the database.
 	if err := pCtx.Proposal.Commit(); err != nil {
+		db.dereference(pCtx) // no longer committable
 		return fmt.Errorf("firewood: error committing proposal %s: %w", root.Hex(), err)
 	}
 	ffiCommitCount.Inc(1)
