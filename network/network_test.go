@@ -418,9 +418,7 @@ func TestRequestMinVersion(t *testing.T) {
 	require.Nil(t, responseBytes)
 
 	// ensure version matches and the request goes through
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	responseBytes, _, err = net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
+	responseBytes, _, err = net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
 	require.NoError(t, err)
 
 	var response TestMessage
