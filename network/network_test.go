@@ -23,7 +23,6 @@ import (
 	"github.com/ava-labs/avalanchego/version"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/ava-labs/coreth/plugin/evm/message"
 )
@@ -107,35 +106,55 @@ func TestRequestAnyRequestsRoutingAndResponse(t *testing.T) {
 	numCallsPerRequest := 1 // on sending response
 	totalCalls := totalRequests * numCallsPerRequest
 
-	eg, ctx := errgroup.WithContext(t.Context())
+	var (
+		requestWg  sync.WaitGroup
+		requestErr error
+		once       sync.Once
+	)
+	setError := func(e error) {
+		once.Do(func() {
+			requestErr = e
+		})
+	}
+	requestWg.Add(totalCalls)
 	for i := 0; i < totalCalls; i++ {
-		eg.Go(func() error {
+		go func() {
+			var err error
+			defer func() {
+				if err != nil {
+					t.Logf("call %d failed: %v", i, err)
+					setError(err)
+				}
+				requestWg.Done()
+			}()
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
-				return fmt.Errorf("unexpected error during marshal: %w", err)
+				return
 			}
 
-			responseBytes, _, err := net.SendSyncedAppRequestAny(ctx, defaultPeerVersion, requestBytes)
+			responseBytes, _, err := net.SendSyncedAppRequestAny(t.Context(), defaultPeerVersion, requestBytes)
 			if err != nil {
-				return fmt.Errorf("unexpected error during send: %w", err)
+				return
 			}
 
 			if responseBytes == nil {
-				return errors.New("expected response bytes, got nil")
+				err = errors.New("expected response bytes, got nil")
+				return
 			}
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
-				return fmt.Errorf("unexpected error during unmarshal: %w", err)
+				return
 			}
 			if response.Message != "Hi" {
-				return fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+				err = fmt.Errorf("expected response message 'Hi', got %q", response.Message)
 			}
-			return nil
-		})
+			return
+		}()
 	}
 
-	require.NoError(t, eg.Wait()) // only the first error is informative
+	requestWg.Wait()
+	require.NoError(t, requestErr) // only the first error is informative
 	senderWg.Wait()
 	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 }
@@ -227,38 +246,57 @@ func TestRequestRequestsRoutingAndResponse(t *testing.T) {
 	numCallsPerRequest := 1 // on sending response
 	totalCalls := totalRequests * numCallsPerRequest
 
-	eg := errgroup.Group{}
-	nodeIdx := 0
+	var (
+		requestWg  sync.WaitGroup
+		requestErr error
+		once       sync.Once
+		nodeIdx    int
+	)
+	setError := func(e error) {
+		once.Do(func() {
+			requestErr = e
+		})
+	}
+	requestWg.Add(totalCalls)
 	for i := 0; i < totalCalls; i++ {
 		nodeIdx = (nodeIdx + 1) % (len(nodes))
 		nodeID := nodes[nodeIdx]
-		eg.Go(func() error {
+		go func() {
+			var err error
+			defer func() {
+				if err != nil {
+					t.Logf("call %d failed: %v", i, err)
+					setError(err)
+				}
+				requestWg.Done()
+			}()
 			requestBytes, err := message.RequestToBytes(codecManager, requestMessage)
 			if err != nil {
-				return fmt.Errorf("unexpected error during marshal: %w", err)
+				return
 			}
 
 			responseBytes, err := net.SendSyncedAppRequest(t.Context(), nodeID, requestBytes)
 			if err != nil {
-				return fmt.Errorf("unexpected error during send: %w", err)
+				return
 			}
 
 			if responseBytes == nil {
-				return errors.New("expected response bytes, got nil")
+				err = errors.New("expected response bytes, got nil")
+				return
 			}
 
 			var response TestMessage
 			if _, err = codecManager.Unmarshal(responseBytes, &response); err != nil {
-				return fmt.Errorf("unexpected error during unmarshal: %w", err)
+				return
 			}
 			if response.Message != "Hi" {
-				return fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+				err = fmt.Errorf("expected response message 'Hi', got %q", response.Message)
+				return
 			}
-			return nil
-		})
+		}()
 	}
-
-	require.NoError(t, eg.Wait())
+	requestWg.Wait()
+	require.NoError(t, requestErr)
 	senderWg.Wait()
 	require.Equal(t, totalCalls, int(atomic.LoadUint32(&callNum)))
 	for _, nodeID := range nodes {
