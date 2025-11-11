@@ -387,6 +387,11 @@ func (c *client) stateSyncStatic(ctx context.Context, registry *SyncerRegistry) 
 			return
 		}
 
+		if err = registry.FinalizeAll(ctx); err != nil {
+			log.Error("finalizing syncers failed after static state sync", "err", err)
+			return
+		}
+
 		if err = c.finishSync(ctx); err != nil {
 			log.Error("finalizing VM markers failed after static state sync", "err", err)
 			return
@@ -404,7 +409,6 @@ func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry)
 		registry,
 		Callbacks{
 			FinalizeVM: func(ctx context.Context, _ message.Syncable) error {
-				// TODO(powerslider): call Finalize on all syncers.
 				return c.finishSync(ctx)
 			},
 			OnDone: func(err error) {
