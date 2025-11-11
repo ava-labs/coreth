@@ -118,11 +118,14 @@ type Client interface {
 	Shutdown() error
 	Error() error
 	// OnEngineAccept should be called by the engine when a block is accepted.
-	OnEngineAccept(EthBlockWrapper) error
+	// Returns true if the block was enqueued for deferred processing, false otherwise.
+	OnEngineAccept(EthBlockWrapper) (bool, error)
 	// OnEngineReject should be called by the engine when a block is rejected.
-	OnEngineReject(EthBlockWrapper) error
+	// Returns true if the block was enqueued for deferred processing, false otherwise.
+	OnEngineReject(EthBlockWrapper) (bool, error)
 	// OnEngineVerify should be called by the engine when a block is verified.
-	OnEngineVerify(EthBlockWrapper) error
+	// Returns true if the block was enqueued for deferred processing, false otherwise.
+	OnEngineVerify(EthBlockWrapper) (bool, error)
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
@@ -171,45 +174,55 @@ func (c *client) ParseStateSummary(_ context.Context, summaryBytes []byte) (bloc
 // OnEngineAccept should be invoked by the engine when a block is accepted.
 // It best-effort enqueues the block for post-finalization execution and
 // advances the coordinator's sync target using the block's hash/root/height.
+// Returns true if the block was enqueued for deferred processing, false otherwise.
 // During batch execution, only enqueuing occurs to prevent recursion.
-func (c *client) OnEngineAccept(b EthBlockWrapper) error {
-	ethb := c.enqueueBlockOperation(b, OpAccept)
-	if ethb == nil {
-		return nil
-	}
-
+func (c *client) OnEngineAccept(b EthBlockWrapper) (bool, error) {
 	// Skip sync target update during batch execution to prevent recursion.
 	// Blocks enqueued during batch execution will be processed in the next batch.
 	if c.coordinator.CurrentState() == StateExecutingBatch {
-		return nil
+		// Still enqueue the block for processing in the next batch.
+		ethb := c.enqueueBlockOperation(b, OpAccept)
+		return ethb != nil, nil
+	}
+
+	// Enqueue the block first.
+	ethb := c.enqueueBlockOperation(b, OpAccept)
+	if ethb == nil {
+		return false, nil
 	}
 
 	// Only update sync target on accept operations when not in batch execution.
+	// If UpdateSyncTarget fails, the block is already enqueued, which is acceptable
+	// as it will be processed later. The error is returned to allow the caller to
+	// handle it appropriately (e.g., log a warning).
 	syncTarget := newSyncTarget(ethb.Hash(), ethb.Root(), ethb.NumberU64())
 	if err := c.coordinator.UpdateSyncTarget(syncTarget); err != nil {
-		return err
+		// Block is enqueued but sync target update failed. Return error to allow
+		// caller to handle it, but indicate block was enqueued.
+		return true, fmt.Errorf("block enqueued but sync target update failed: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // OnEngineReject should be invoked by the engine when a block is rejected.
 // It best-effort enqueues the block for post-finalization execution.
-func (c *client) OnEngineReject(b EthBlockWrapper) error {
-	c.enqueueBlockOperation(b, OpReject)
-	return nil
+// Returns true if the block was enqueued for deferred processing, false otherwise.
+func (c *client) OnEngineReject(b EthBlockWrapper) (bool, error) {
+	ethb := c.enqueueBlockOperation(b, OpReject)
+	return ethb != nil, nil
 }
 
 // OnEngineVerify should be invoked by the engine when a block is verified.
 // It best-effort enqueues the block for post-finalization execution.
-func (c *client) OnEngineVerify(b EthBlockWrapper) error {
-	c.enqueueBlockOperation(b, OpVerify)
-	return nil
+// Returns true if the block was enqueued for deferred processing, false otherwise.
+func (c *client) OnEngineVerify(b EthBlockWrapper) (bool, error) {
+	ethb := c.enqueueBlockOperation(b, OpVerify)
+	return ethb != nil, nil
 }
 
 func (c *client) Shutdown() error {
 	// Unify completion - cancel context, set terminal outcome, and close [ClientConfig.StateSyncDone] once.
 	c.signalDone(context.Canceled)
-	// Wait for the background goroutine to exit.
 	c.wg.Wait()
 	return nil
 }
