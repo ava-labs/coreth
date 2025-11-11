@@ -171,21 +171,15 @@ func (c *client) ParseStateSummary(_ context.Context, summaryBytes []byte) (bloc
 	return c.Parser.Parse(summaryBytes, c.acceptSyncSummary)
 }
 
-// OnEngineAccept should be invoked by the engine when a block is accepted.
-// It best-effort enqueues the block for post-finalization execution and
-// advances the coordinator's sync target using the block's hash/root/height.
-// Returns true if the block was enqueued for deferred processing, false otherwise.
-// During batch execution, only enqueuing occurs to prevent recursion.
+// OnEngineAccept enqueues the block for deferred processing and updates the sync target.
+// Returns true if enqueued, false otherwise. During batch execution, only enqueuing occurs.
 func (c *client) OnEngineAccept(b EthBlockWrapper) (bool, error) {
-	// Skip sync target update during batch execution to prevent recursion.
-	// Blocks enqueued during batch execution will be processed in the next batch.
 	if c.coordinator.CurrentState() == StateExecutingBatch {
 		// Still enqueue the block for processing in the next batch.
 		ethb := c.enqueueBlockOperation(b, OpAccept)
 		return ethb != nil, nil
 	}
 
-	// Enqueue the block first.
 	ethb := c.enqueueBlockOperation(b, OpAccept)
 	if ethb == nil {
 		return false, nil
@@ -445,9 +439,8 @@ func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry)
 	return block.StateSyncDynamic
 }
 
-// enqueueBlockOperation handles the common logic for enqueuing block operations.
-// Returns the eth block if the operation was enqueued successfully, nil otherwise.
-// The returned block can be used to avoid duplicate GetEthBlock() calls.
+// enqueueBlockOperation enqueues a block operation for deferred processing.
+// Returns the eth block if enqueued, nil otherwise.
 func (c *client) enqueueBlockOperation(b EthBlockWrapper, op BlockOperationType) *types.Block {
 	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
 		return nil
@@ -461,7 +454,6 @@ func (c *client) enqueueBlockOperation(b EthBlockWrapper, op BlockOperationType)
 		return nil
 	}
 
-	// Return the eth block for callers that need it (e.g., OnEngineAccept).
 	return ethb
 }
 
@@ -505,15 +497,9 @@ func (c *client) finishSync(ctx context.Context) error {
 	parentHash := block.ParentHash()
 	c.Chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
-	// Check for cancellation before starting finalization operations.
-	// These operations are sequential and not cancellable mid-execution, so a
-	// single check at the beginning is sufficient.
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("finishSync cancelled before finalization: %w", err)
 	}
-
-	// Execute operations sequentially. These are critical finalization operations
-	// that update VM state and should complete atomically.
 	if err := c.Chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
 		return err
 	}
