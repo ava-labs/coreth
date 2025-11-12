@@ -79,7 +79,11 @@ func (vm *VM) Initialize(
 			SnowCtx: chainContext,
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (vm *VM) Shutdown(ctx context.Context) error {
