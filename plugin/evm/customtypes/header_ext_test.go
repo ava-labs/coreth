@@ -12,15 +12,12 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
-	// package so assume the presence of identifiers. A dot-import reduces PR
-	// noise during the refactoring.
-	. "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/coreth/utils/utilstest"
 )
 
 func TestHeaderRLP(t *testing.T) {
@@ -32,15 +29,15 @@ func TestHeaderRLP(t *testing.T) {
 	// libevm. WARNING: changing these values can break backwards compatibility
 	// with extreme consequences as block-hash calculation may break.
 	const (
-		wantHex     = "f90235a00100000000000000000000000000000000000000000000000000000000000000a00200000000000000000000000000000000000000000000000000000000000000940300000000000000000000000000000000000000a00400000000000000000000000000000000000000000000000000000000000000a00500000000000000000000000000000000000000000000000000000000000000a00600000000000000000000000000000000000000000000000000000000000000b901000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008090a0b0c0da00e00000000000000000000000000000000000000000000000000000000000000880f00000000000000a015000000000000000000000000000000000000000000000000000000000000001016171213a0140000000000000000000000000000000000000000000000000000000000000018"
-		wantHashHex = "09cad03b785e6cdb31b76bcbe80f2e0f94a8cd64b3a0566a4b1e3a3b7da67ff6"
+		wantHex     = "f90236a00100000000000000000000000000000000000000000000000000000000000000a00200000000000000000000000000000000000000000000000000000000000000940300000000000000000000000000000000000000a00400000000000000000000000000000000000000000000000000000000000000a00500000000000000000000000000000000000000000000000000000000000000a00600000000000000000000000000000000000000000000000000000000000000b901000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008090a0b0c0da00e00000000000000000000000000000000000000000000000000000000000000880f00000000000000a015000000000000000000000000000000000000000000000000000000000000001016171213a014000000000000000000000000000000000000000000000000000000000000001819"
+		wantHashHex = "be13d7b6f1242dd87477eee76a46f9fa58311bf459e0d49cac6862b187b3fe9c"
 	)
 
-	assert.Equal(t, wantHex, hex.EncodeToString(got), "Header RLP")
+	require.Equal(t, wantHex, hex.EncodeToString(got), "Header RLP")
 
 	header, _ := headerWithNonZeroFields()
 	gotHashHex := header.Hash().Hex()
-	assert.Equal(t, "0x"+wantHashHex, gotHashHex, "Header.Hash()")
+	require.Equal(t, "0x"+wantHashHex, gotHashHex, "Header.Hash()")
 }
 
 func TestHeaderJSON(t *testing.T) {
@@ -69,8 +66,8 @@ func testHeaderEncodeDecode(
 
 	wantHeader, wantExtra := headerWithNonZeroFields()
 	wantHeader.WithdrawalsHash = nil
-	assert.Equal(t, wantHeader, gotHeader)
-	assert.Equal(t, wantExtra, gotExtra)
+	require.Equal(t, wantHeader, gotHeader)
+	require.Equal(t, wantExtra, gotExtra)
 
 	return encoded
 }
@@ -109,15 +106,16 @@ func headerWithNonZeroFields() (*Header, *HeaderExtra) {
 		Nonce:            BlockNonce{15},
 		BaseFee:          big.NewInt(16),
 		WithdrawalsHash:  &common.Hash{17},
-		BlobGasUsed:      ptrTo(uint64(18)),
-		ExcessBlobGas:    ptrTo(uint64(19)),
+		BlobGasUsed:      utilstest.PointerTo(uint64(18)),
+		ExcessBlobGas:    utilstest.PointerTo(uint64(19)),
 		ParentBeaconRoot: &common.Hash{20},
 	}
 	extra := &HeaderExtra{
 		ExtDataHash:      common.Hash{21},
 		ExtDataGasUsed:   big.NewInt(22),
 		BlockGasCost:     big.NewInt(23),
-		TimeMilliseconds: ptrTo(uint64(24)),
+		TimeMilliseconds: utilstest.PointerTo(uint64(24)),
+		MinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(25)),
 	}
 	return WithHeaderExtra(header, extra), extra
 }
@@ -143,7 +141,7 @@ func allFieldsSet[T interface {
 				if fieldValue.Kind() == reflect.Ptr {
 					require.Falsef(t, fieldValue.IsNil(), "field %q is nil", field.Name)
 				}
-				fieldValue = reflect.NewAt(fieldValue.Type(), unsafe.Pointer(fieldValue.UnsafeAddr())).Elem() //nolint:gosec
+				fieldValue = reflect.NewAt(fieldValue.Type(), unsafe.Pointer(fieldValue.UnsafeAddr())).Elem()
 			}
 
 			switch f := fieldValue.Interface().(type) {
@@ -169,10 +167,12 @@ func allFieldsSet[T interface {
 				assertNonZero(t, f)
 			case *Header:
 				assertNonZero(t, f)
+			case *acp226.DelayExcess:
+				assertNonZero(t, f)
 			case []uint8, []*Header, Transactions, []*Transaction, Withdrawals, []*Withdrawal:
-				assert.NotEmpty(t, f)
+				require.NotEmpty(t, f)
 			default:
-				t.Errorf("Field %q has unsupported type %T", field.Name, f)
+				require.Failf(t, "Field has unsupported type", "Field %q has unsupported type %T", field.Name, f)
 			}
 		})
 	}
@@ -180,15 +180,10 @@ func allFieldsSet[T interface {
 
 func assertNonZero[T interface {
 	common.Hash | common.Address | BlockNonce | uint32 | uint64 | Bloom |
-		*big.Int | *common.Hash | *uint64 | *[]uint8 | *Header
+		*big.Int | *common.Hash | *uint64 | *[]uint8 | *Header | *acp226.DelayExcess
 }](t *testing.T, v T) {
 	t.Helper()
-	var zero T
-	if v == zero {
-		t.Errorf("must not be zero value for %T", v)
-	}
+	require.NotZero(t, v)
 }
 
 // Note [TestCopyHeader] tests the [HeaderExtra.PostCopy] method.
-
-func ptrTo[T any](x T) *T { return &x }

@@ -17,7 +17,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/trie"
 	"github.com/ava-labs/libevm/triedb"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -26,23 +26,22 @@ import (
 )
 
 func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
-	rand.Seed(1)
+	r := rand.New(rand.NewSource(1))
 	testHandlerStats := &statstest.TestHandlerStats{}
 	memdb := rawdb.NewMemoryDatabase()
 	trieDB := triedb.NewDatabase(memdb, nil)
 
-	corruptedTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 100, common.HashLength)
+	corruptedTrieRoot, _, _ := statesynctest.GenerateTrie(t, r, trieDB, 100, common.HashLength)
 	tr, err := trie.New(trie.TrieID(corruptedTrieRoot), trieDB)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// Corrupt [corruptedTrieRoot]
 	statesynctest.CorruptTrie(t, memdb, tr, 5)
 
-	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, trieDB, 10_000, common.HashLength)
-	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, trieDB, 500, common.HashLength)
+	largeTrieRoot, largeTrieKeys, _ := statesynctest.GenerateTrie(t, r, trieDB, 10_000, common.HashLength)
+	smallTrieRoot, _, _ := statesynctest.GenerateTrie(t, r, trieDB, 500, common.HashLength)
 	accountTrieRoot, accounts := statesynctest.FillAccounts(
 		t,
+		r,
 		trieDB,
 		common.Hash{},
 		10_000,
@@ -85,12 +84,12 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		prepareTestFn    func() (context.Context, message.LeafsRequest)
-		assertResponseFn func(*testing.T, message.LeafsRequest, []byte, error)
+		prepareTestFn     func() (context.Context, message.LeafsRequest)
+		requireResponseFn func(*testing.T, message.LeafsRequest, []byte, error)
 	}{
 		"zero limit dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -98,15 +97,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.InvalidLeafsRequestCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
 		"empty root dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     common.Hash{},
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -114,15 +113,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.InvalidLeafsRequestCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
 		"bad start len dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     common.Hash{},
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength+2),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -130,15 +129,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.InvalidLeafsRequestCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
 		"bad end len dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     common.Hash{},
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength-1),
@@ -146,15 +145,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.InvalidLeafsRequestCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
 		"empty storage root dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     types.EmptyRootHash,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -162,15 +161,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.InvalidLeafsRequestCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
 		"missing root dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     common.BytesToHash([]byte("something is missing here...")),
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -178,15 +177,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.MissingRootCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.MissingRootCount)
 			},
 		},
 		"corrupted trie drops request": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     corruptedTrieRoot,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -194,15 +193,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, uint32(1), testHandlerStats.TrieErrorCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.TrieErrorCount)
 			},
 		},
 		"cancelled context dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				return ctx, message.LeafsRequest{
 					Root:     largeTrieRoot,
@@ -212,14 +211,14 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
 			},
 		},
 		"nil start and end range returns entire trie": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     smallTrieRoot,
 					Start:    nil,
 					End:      nil,
@@ -227,19 +226,19 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.Len(t, leafsResponse.Keys, 500)
-				assert.Len(t, leafsResponse.Vals, 500)
-				assert.Len(t, leafsResponse.ProofVals, 0)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, 500)
+				require.Len(t, leafsResponse.Vals, 500)
+				require.Empty(t, leafsResponse.ProofVals)
 			},
 		},
 		"nil end range treated like greatest possible value": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     smallTrieRoot,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      nil,
@@ -247,18 +246,18 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.Len(t, leafsResponse.Keys, 500)
-				assert.Len(t, leafsResponse.Vals, 500)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, 500)
+				require.Len(t, leafsResponse.Vals, 500)
 			},
 		},
 		"end greater than start dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				return ctx, message.LeafsRequest{
 					Root:     largeTrieRoot,
@@ -268,15 +267,15 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
-				assert.EqualValues(t, 1, testHandlerStats.InvalidLeafsRequestCount)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
+				require.Equal(t, uint32(1), testHandlerStats.InvalidLeafsRequestCount)
 			},
 		},
 		"invalid node type dropped": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 				return ctx, message.LeafsRequest{
 					Root:     largeTrieRoot,
@@ -286,14 +285,14 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.NodeType(11),
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.Nil(t, response)
-				assert.Nil(t, err)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.Nil(t, response)
+				require.NoError(t, err)
 			},
 		},
 		"max leaves overridden": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -301,20 +300,20 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, _ message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
-				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
 			},
 		},
 		"full range with nil start": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    nil,
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -322,21 +321,21 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
-				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 			},
 		},
 		"full range with 0x00 start": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    bytes.Repeat([]byte{0x00}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -344,16 +343,16 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, len(leafsResponse.Keys), maxLeavesLimit)
-				assert.EqualValues(t, len(leafsResponse.Vals), maxLeavesLimit)
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 			},
 		},
 		"partial mid range": {
@@ -361,7 +360,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				startKey := largeTrieKeys[1_000]
 				startKey[31]++                 // exclude start key from response
 				endKey := largeTrieKeys[1_040] // include end key in response
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    startKey,
 					End:      endKey,
@@ -369,21 +368,21 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, 40, len(leafsResponse.Keys))
-				assert.EqualValues(t, 40, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, 40)
+				require.Len(t, leafsResponse.Vals, 40)
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 			},
 		},
 		"partial end range": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    largeTrieKeys[9_400],
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -391,21 +390,21 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, 600, len(leafsResponse.Keys))
-				assert.EqualValues(t, 600, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assertRangeProofIsValid(t, &request, &leafsResponse, false)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, 600)
+				require.Len(t, leafsResponse.Vals, 600)
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				requireRangeProofIsValid(t, &request, &leafsResponse, false)
 			},
 		},
 		"final end range": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Start:    bytes.Repeat([]byte{0xff}, common.HashLength),
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -413,21 +412,21 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, len(leafsResponse.Keys), 0)
-				assert.EqualValues(t, len(leafsResponse.Vals), 0)
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assertRangeProofIsValid(t, &request, &leafsResponse, false)
+				require.NoError(t, err)
+				require.Empty(t, leafsResponse.Keys)
+				require.Empty(t, leafsResponse.Vals)
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				requireRangeProofIsValid(t, &request, &leafsResponse, false)
 			},
 		},
 		"small trie root": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     smallTrieRoot,
 					Start:    nil,
 					End:      bytes.Repeat([]byte{0xff}, common.HashLength),
@@ -435,56 +434,51 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NotEmpty(t, response)
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NotEmpty(t, response)
+				require.NoError(t, err)
 
 				var leafsResponse message.LeafsResponse
-				if _, err := message.Codec.Unmarshal(response, &leafsResponse); err != nil {
-					t.Fatalf("unexpected error when unmarshalling LeafsResponse: %v", err)
-				}
+				_, err = message.Codec.Unmarshal(response, &leafsResponse)
+				require.NoError(t, err)
 
-				assert.EqualValues(t, 500, len(leafsResponse.Keys))
-				assert.EqualValues(t, 500, len(leafsResponse.Vals))
-				assert.Empty(t, leafsResponse.ProofVals)
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assertRangeProofIsValid(t, &request, &leafsResponse, false)
+				require.Len(t, leafsResponse.Keys, 500)
+				require.Len(t, leafsResponse.Vals, 500)
+				require.Empty(t, leafsResponse.ProofVals)
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				requireRangeProofIsValid(t, &request, &leafsResponse, false)
 			},
 		},
 		"account data served from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				snap, err := snapshot.New(snapConfig, memdb, trieDB, common.Hash{}, accountTrieRoot)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				snapshotProvider.Snapshot = snap
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     accountTrieRoot,
 					Limit:    maxLeavesLimit,
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadAttemptCount)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadSuccessCount)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadAttemptCount)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadSuccessCount)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 			},
 		},
 		"partial account data served from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				snap, err := snapshot.New(snapConfig, memdb, trieDB, common.Hash{}, accountTrieRoot)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				snapshotProvider.Snapshot = snap
 				it := snap.DiskAccountIterator(common.Hash{})
 				defer it.Release()
@@ -497,9 +491,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					// modify one entry of 1 in 4 segments
 					if i%(segmentLen*4) == 0 {
 						acc, err := types.FullAccount(it.Account())
-						if err != nil {
-							t.Fatalf("could not parse snapshot account: %v", err)
-						}
+						require.NoError(t, err)
 						acc.Nonce++
 						bytes := types.SlimAccountRLP(*acc)
 						rawdb.WriteAccountSnapshot(memdb, it.Hash(), bytes)
@@ -507,65 +499,61 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					i++
 				}
 
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     accountTrieRoot,
 					Limit:    maxLeavesLimit,
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadAttemptCount)
-				assert.EqualValues(t, 0, testHandlerStats.SnapshotReadSuccessCount)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadAttemptCount)
+				require.Equal(t, uint32(0), testHandlerStats.SnapshotReadSuccessCount)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 
 				// expect 1/4th of segments to be invalid
 				numSegments := maxLeavesLimit / segmentLen
-				assert.EqualValues(t, numSegments/4, testHandlerStats.SnapshotSegmentInvalidCount)
-				assert.EqualValues(t, 3*numSegments/4, testHandlerStats.SnapshotSegmentValidCount)
+				require.Equal(t, uint32(numSegments/4), testHandlerStats.SnapshotSegmentInvalidCount)
+				require.Equal(t, uint32(3*numSegments/4), testHandlerStats.SnapshotSegmentValidCount)
 			},
 		},
 		"storage data served from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				snap, err := snapshot.New(snapConfig, memdb, trieDB, common.Hash{}, accountTrieRoot)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				snapshotProvider.Snapshot = snap
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Account:  largeStorageAccount,
 					Limit:    maxLeavesLimit,
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadAttemptCount)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadSuccessCount)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadAttemptCount)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadSuccessCount)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 			},
 		},
 		"partial storage data served from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				snap, err := snapshot.New(snapConfig, memdb, trieDB, common.Hash{}, accountTrieRoot)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				snapshotProvider.Snapshot = snap
 				it := snap.DiskStorageIterator(largeStorageAccount, common.Hash{})
 				defer it.Release()
@@ -578,45 +566,43 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					// modify one entry of 1 in 4 segments
 					if i%(segmentLen*4) == 0 {
 						randomBytes := make([]byte, 5)
-						_, err := rand.Read(randomBytes)
-						assert.NoError(t, err)
+						_, err := r.Read(randomBytes)
+						require.NoError(t, err)
 						rawdb.WriteStorageSnapshot(memdb, largeStorageAccount, it.Hash(), randomBytes)
 					}
 					i++
 				}
 
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     largeTrieRoot,
 					Account:  largeStorageAccount,
 					Limit:    maxLeavesLimit,
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Keys))
-				assert.EqualValues(t, maxLeavesLimit, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadAttemptCount)
-				assert.EqualValues(t, 0, testHandlerStats.SnapshotReadSuccessCount)
-				assertRangeProofIsValid(t, &request, &leafsResponse, true)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, int(maxLeavesLimit))
+				require.Len(t, leafsResponse.Vals, int(maxLeavesLimit))
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadAttemptCount)
+				require.Equal(t, uint32(0), testHandlerStats.SnapshotReadSuccessCount)
+				requireRangeProofIsValid(t, &request, &leafsResponse, true)
 
 				// expect 1/4th of segments to be invalid
 				numSegments := maxLeavesLimit / segmentLen
-				assert.EqualValues(t, numSegments/4, testHandlerStats.SnapshotSegmentInvalidCount)
-				assert.EqualValues(t, 3*numSegments/4, testHandlerStats.SnapshotSegmentValidCount)
+				require.Equal(t, uint32(numSegments/4), testHandlerStats.SnapshotSegmentInvalidCount)
+				require.Equal(t, uint32(3*numSegments/4), testHandlerStats.SnapshotSegmentValidCount)
 			},
 		},
 		"last snapshot key removed": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				snap, err := snapshot.New(snapConfig, memdb, trieDB, common.Hash{}, accountTrieRoot)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				snapshotProvider.Snapshot = snap
 				it := snap.DiskStorageIterator(smallStorageAccount, common.Hash{})
 				defer it.Release()
@@ -626,33 +612,31 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				}
 				rawdb.DeleteStorageSnapshot(memdb, smallStorageAccount, lastKey)
 
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     smallTrieRoot,
 					Account:  smallStorageAccount,
 					Limit:    maxLeavesLimit,
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, 500, len(leafsResponse.Keys))
-				assert.EqualValues(t, 500, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadAttemptCount)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadSuccessCount)
-				assertRangeProofIsValid(t, &request, &leafsResponse, false)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, 500)
+				require.Len(t, leafsResponse.Vals, 500)
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadAttemptCount)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadSuccessCount)
+				requireRangeProofIsValid(t, &request, &leafsResponse, false)
 			},
 		},
 		"request last key when removed from snapshot": {
 			prepareTestFn: func() (context.Context, message.LeafsRequest) {
 				snap, err := snapshot.New(snapConfig, memdb, trieDB, common.Hash{}, accountTrieRoot)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 				snapshotProvider.Snapshot = snap
 				it := snap.DiskStorageIterator(smallStorageAccount, common.Hash{})
 				defer it.Release()
@@ -662,7 +646,7 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 				}
 				rawdb.DeleteStorageSnapshot(memdb, smallStorageAccount, lastKey)
 
-				return context.Background(), message.LeafsRequest{
+				return t.Context(), message.LeafsRequest{
 					Root:     smallTrieRoot,
 					Account:  smallStorageAccount,
 					Start:    lastKey[:],
@@ -670,18 +654,18 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 					NodeType: message.StateTrieNode,
 				}
 			},
-			assertResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
-				assert.NoError(t, err)
+			requireResponseFn: func(t *testing.T, request message.LeafsRequest, response []byte, err error) {
+				require.NoError(t, err)
 				var leafsResponse message.LeafsResponse
 				_, err = message.Codec.Unmarshal(response, &leafsResponse)
-				assert.NoError(t, err)
-				assert.EqualValues(t, 1, len(leafsResponse.Keys))
-				assert.EqualValues(t, 1, len(leafsResponse.Vals))
-				assert.EqualValues(t, 1, testHandlerStats.LeafsRequestCount)
-				assert.EqualValues(t, len(leafsResponse.Keys), testHandlerStats.LeafsReturnedSum)
-				assert.EqualValues(t, 1, testHandlerStats.SnapshotReadAttemptCount)
-				assert.EqualValues(t, 0, testHandlerStats.SnapshotReadSuccessCount)
-				assertRangeProofIsValid(t, &request, &leafsResponse, false)
+				require.NoError(t, err)
+				require.Len(t, leafsResponse.Keys, 1)
+				require.Len(t, leafsResponse.Vals, 1)
+				require.Equal(t, uint32(1), testHandlerStats.LeafsRequestCount)
+				require.Equal(t, uint32(len(leafsResponse.Keys)), testHandlerStats.LeafsReturnedSum)
+				require.Equal(t, uint32(1), testHandlerStats.SnapshotReadAttemptCount)
+				require.Equal(t, uint32(0), testHandlerStats.SnapshotReadSuccessCount)
+				requireRangeProofIsValid(t, &request, &leafsResponse, false)
 			},
 		},
 	}
@@ -695,12 +679,12 @@ func TestLeafsRequestHandler_OnLeafsRequest(t *testing.T) {
 			})
 
 			response, err := leafsHandler.OnLeafsRequest(ctx, ids.GenerateTestNodeID(), 1, request)
-			test.assertResponseFn(t, request, response, err)
+			test.requireResponseFn(t, request, response, err)
 		})
 	}
 }
 
-func assertRangeProofIsValid(t *testing.T, request *message.LeafsRequest, response *message.LeafsResponse, expectMore bool) {
+func requireRangeProofIsValid(t *testing.T, request *message.LeafsRequest, response *message.LeafsResponse, expectMore bool) {
 	t.Helper()
 
 	var start []byte
@@ -716,13 +700,11 @@ func assertRangeProofIsValid(t *testing.T, request *message.LeafsRequest, respon
 		defer proof.Close()
 		for _, proofVal := range response.ProofVals {
 			proofKey := crypto.Keccak256(proofVal)
-			if err := proof.Put(proofKey, proofVal); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, proof.Put(proofKey, proofVal))
 		}
 	}
 
 	more, err := trie.VerifyRangeProof(request.Root, start, response.Keys, response.Vals, proof)
-	assert.NoError(t, err)
-	assert.Equal(t, expectMore, more)
+	require.NoError(t, err)
+	require.Equal(t, expectMore, more)
 }

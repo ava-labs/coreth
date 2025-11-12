@@ -8,8 +8,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
-	"strings"
-	"sync"
+	"os"
 	"testing"
 	"time"
 
@@ -35,7 +34,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-	"github.com/ava-labs/coreth/plugin/evm/customheader"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
@@ -46,6 +44,12 @@ import (
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	commonEng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 func newAtomicTestVM() *VM {
 	return WrapVM(&evm.VM{})
@@ -124,6 +128,7 @@ func TestImportMissingUTXOs(t *testing.T) {
 
 func testImportMissingUTXOs(t *testing.T, scheme string) {
 	// make a VM with a shared memory that has an importable UTXO to build a block
+	require := require.New(t)
 	importAmount := uint64(50000000)
 	fork := upgradetest.ApricotPhase2
 	vm1 := newAtomicTestVM()
@@ -131,21 +136,21 @@ func testImportMissingUTXOs(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm1.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm1.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 	}))
 	defer func() {
-		require.NoError(t, vm1.Shutdown(context.Background()))
+		require.NoError(vm1.Shutdown(t.Context()))
 	}()
 
 	importTx, err := vm1.newImportTx(vm1.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
-	require.NoError(t, err)
-	require.NoError(t, vm1.AtomicMempool.AddLocalTx(importTx))
-	msg, err := vm1.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-	blk, err := vm1.BuildBlock(context.Background())
-	require.NoError(t, err)
+	require.NoError(err)
+	require.NoError(vm1.AtomicMempool.AddLocalTx(importTx))
+	msg, err := vm1.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
+	blk, err := vm1.BuildBlock(t.Context())
+	require.NoError(err)
 
 	// make another VM which is missing the UTXO in shared memory
 	vm2 := newAtomicTestVM()
@@ -154,18 +159,18 @@ func testImportMissingUTXOs(t *testing.T, scheme string) {
 		Scheme: scheme,
 	})
 	defer func() {
-		require.NoError(t, vm2.Shutdown(context.Background()))
+		require.NoError(vm2.Shutdown(t.Context()))
 	}()
 
-	vm2Blk, err := vm2.ParseBlock(context.Background(), blk.Bytes())
-	require.NoError(t, err)
-	err = vm2Blk.Verify(context.Background())
-	require.ErrorIs(t, err, ErrMissingUTXOs)
+	vm2Blk, err := vm2.ParseBlock(t.Context(), blk.Bytes())
+	require.NoError(err)
+	err = vm2Blk.Verify(t.Context())
+	require.ErrorIs(err, ErrMissingUTXOs)
 
 	// This should not result in a bad block since the missing UTXO should
 	// prevent InsertBlockManual from being called.
 	badBlocks, _ := vm2.Ethereum().BlockChain().BadBlocks()
-	require.Len(t, badBlocks, 0)
+	require.Empty(badBlocks)
 }
 
 // Simple test to ensure we can issue an import transaction followed by an export transaction
@@ -179,6 +184,7 @@ func TestIssueAtomicTxs(t *testing.T) {
 }
 
 func testIssueAtomicTxs(t *testing.T, scheme string) {
+	require := require.New(t)
 	importAmount := uint64(50000000)
 	vm := newAtomicTestVM()
 	fork := upgradetest.ApricotPhase2
@@ -189,215 +195,148 @@ func testIssueAtomicTxs(t *testing.T, scheme string) {
 	utxos := map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 	}
-	addUTXOs(tvm.AtomicMemory, vm.Ctx, utxos)
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, utxos))
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk.Verify(t.Context()))
+	require.NoError(vm.SetPreference(t.Context(), blk.ID()))
+	require.NoError(blk.Accept(t.Context()))
 
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
+	require.Equal(lastAcceptedID, blk.ID())
 	vm.Ethereum().BlockChain().DrainAcceptorQueue()
 
 	state, err := vm.Ethereum().BlockChain().State()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	wrappedState := extstate.New(state)
 	exportTx, err := atomic.NewExportTx(vm.Ctx, vm.CurrentRules(), wrappedState, vm.Ctx.AVAXAssetID, importAmount-(2*ap0.AtomicTxFee), vm.Ctx.XChainID, vmtest.TestShortIDAddrs[0], vmtest.InitialBaseFee, vmtest.TestKeys[0:1])
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(exportTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(exportTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err = vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blk2, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk2.Verify(t.Context()))
+	require.NoError(blk2.Accept(t.Context()))
 
-	blk2, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk2.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk2.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blk2.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk2.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err = vm.LastAccepted(t.Context())
+	require.NoError(err)
+	require.Equal(lastAcceptedID, blk2.ID())
 
 	// Check that both atomic transactions were indexed as expected.
 	indexedImportTx, status, height, err := vm.GetAtomicTx(importTx.ID())
-	require.NoError(t, err)
-	require.Equal(t, atomic.Accepted, status)
-	require.Equal(t, uint64(1), height, "expected height of indexed import tx to be 1")
-	require.Equal(t, indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
+	require.NoError(err)
+	require.Equal(atomic.Accepted, status)
+	require.Equal(uint64(1), height, "expected height of indexed import tx to be 1")
+	require.Equal(indexedImportTx.ID(), importTx.ID(), "expected ID of indexed import tx to match original txID")
 
 	indexedExportTx, status, height, err := vm.GetAtomicTx(exportTx.ID())
-	require.NoError(t, err)
-	require.Equal(t, atomic.Accepted, status)
-	require.Equal(t, uint64(2), height, "expected height of indexed export tx to be 2")
-	require.Equal(t, indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
+	require.NoError(err)
+	require.Equal(atomic.Accepted, status)
+	require.Equal(uint64(2), height, "expected height of indexed export tx to be 2")
+	require.Equal(indexedExportTx.ID(), exportTx.ID(), "expected ID of indexed import tx to match original txID")
 }
 
 func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string) {
+	require := require.New(t)
 	importAmount := uint64(10000000)
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 		vmtest.TestShortIDAddrs[1]: importAmount,
 		vmtest.TestShortIDAddrs[2]: importAmount,
 	}))
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	importTxs := make([]*atomic.Tx, 0, 3)
 	conflictTxs := make([]*atomic.Tx, 0, 3)
 	for i, key := range vmtest.TestKeys {
 		importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[i], vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		importTxs = append(importTxs, importTx)
 
 		conflictAddr := vmtest.TestEthAddrs[(i+1)%len(vmtest.TestEthAddrs)]
 		conflictTx, err := vm.newImportTx(vm.Ctx.XChainID, conflictAddr, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		conflictTxs = append(conflictTxs, conflictTx)
 	}
 
-	expectedParentBlkID, err := vm.LastAccepted(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	expectedParentBlkID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
 	for _, tx := range importTxs[:2] {
-		if err := vm.AtomicMempool.AddLocalTx(tx); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.AtomicMempool.AddLocalTx(tx))
 
-		msg, err := vm.WaitForEvent(context.Background())
-		require.NoError(t, err)
-		require.Equal(t, commonEng.PendingTxs, msg)
+		msg, err := vm.WaitForEvent(t.Context())
+		require.NoError(err)
+		require.Equal(commonEng.PendingTxs, msg)
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
-		blk, err := vm.BuildBlock(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
+		blk, err := vm.BuildBlock(t.Context())
+		require.NoError(err)
+		require.NoError(blk.Verify(t.Context()))
 
-		if err := blk.Verify(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-
-		if parentID := blk.Parent(); parentID != expectedParentBlkID {
-			t.Fatalf("Expected parent to have blockID %s, but found %s", expectedParentBlkID, parentID)
-		}
+		require.Equal(expectedParentBlkID, blk.Parent())
 
 		expectedParentBlkID = blk.ID()
-		if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.SetPreference(t.Context(), blk.ID()))
 	}
 
 	// Check that for each conflict tx (whose conflict is in the chain ancestry)
 	// the VM returns an error when it attempts to issue the conflict into the mempool
 	// and when it attempts to build a block with the conflict force added to the mempool.
 	for i, tx := range conflictTxs[:2] {
-		if err := vm.AtomicMempool.AddLocalTx(tx); err == nil {
-			t.Fatal("Expected issueTx to fail due to conflicting transaction")
-		}
+		err = vm.AtomicMempool.AddLocalTx(tx)
+		require.ErrorIsf(err, ErrConflictingAtomicInputs, "tx index %d", i)
 		// Force issue transaction directly to the mempool
-		if err := vm.AtomicMempool.ForceAddTx(tx); err != nil {
-			t.Fatal(err)
-		}
-		msg, err := vm.WaitForEvent(context.Background())
-		require.NoError(t, err)
-		require.Equal(t, commonEng.PendingTxs, msg)
+		require.NoErrorf(vm.AtomicMempool.ForceAddTx(tx), "force issue failed for tx index %d", i)
+		msg, err := vm.WaitForEvent(t.Context())
+		require.NoErrorf(err, "wait for event failed for tx index %d", i)
+		require.Equal(commonEng.PendingTxs, msg)
 
 		vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
-		_, err = vm.BuildBlock(context.Background())
+		_, err = vm.BuildBlock(t.Context())
 		// The new block is verified in BuildBlock, so
 		// BuildBlock should fail due to an attempt to
 		// double spend an atomic UTXO.
-		if err == nil {
-			t.Fatalf("Block verification should have failed in BuildBlock %d due to double spending atomic UTXO", i)
-		}
+		require.ErrorIsf(err, ErrEmptyBlock, "tx index %d", i)
 	}
 
 	// Generate one more valid block so that we can copy the header to create an invalid block
 	// with modified extra data. This new block will be invalid for more than one reason (invalid merkle root)
 	// so we check to make sure that the expected error is returned from block verification.
-	if err := vm.AtomicMempool.AddLocalTx(importTxs[2]); err != nil {
-		t.Fatal(err)
-	}
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTxs[2]))
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 	vm.clock.Set(vm.clock.Time().Add(2 * time.Second))
 
-	validBlock, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := validBlock.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	validBlock, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(validBlock.Verify(t.Context()))
 
 	validEthBlock := validBlock.(*chain.BlockWrapper).Block.(extension.ExtendedBlock).GetEthBlock()
 
@@ -409,10 +348,7 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 	default:
 		extraData, err = atomic.Codec.Marshal(atomic.CodecVersion, conflictTxs[1])
 	}
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	conflictingAtomicTxBlock := customtypes.NewBlockWithExtData(
 		types.CopyHeader(validEthBlock.Header()),
 		nil,
@@ -424,27 +360,18 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 	)
 
 	blockBytes, err := rlp.EncodeToBytes(conflictingAtomicTxBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	parsedBlock, err := vm.ParseBlock(context.Background(), blockBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = parsedBlock.Verify(context.Background())
-	require.ErrorIs(t, err, ErrConflictingAtomicInputs)
+	require.NoError(err)
+	parsedBlock, err := vm.ParseBlock(t.Context(), blockBytes)
+	require.NoError(err)
+	err = parsedBlock.Verify(t.Context())
+	require.ErrorIs(err, ErrConflictingAtomicInputs)
 
 	if !rules.IsApricotPhase5 {
 		return
 	}
 
 	extraData, err = atomic.Codec.Marshal(atomic.CodecVersion, []*atomic.Tx{importTxs[2], conflictTxs[2]})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	header := types.CopyHeader(validEthBlock.Header())
 	headerExtra := customtypes.GetHeaderExtra(header)
 	headerExtra.ExtDataGasUsed.Mul(common.Big2, headerExtra.ExtDataGasUsed)
@@ -460,17 +387,11 @@ func testConflictingImportTxs(t *testing.T, fork upgradetest.Fork, scheme string
 	)
 
 	blockBytes, err = rlp.EncodeToBytes(internalConflictBlock)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	parsedBlock, err = vm.ParseBlock(context.Background(), blockBytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = parsedBlock.Verify(context.Background())
-	require.ErrorIs(t, err, ErrConflictingAtomicInputs)
+	require.NoError(err)
+	parsedBlock, err = vm.ParseBlock(t.Context(), blockBytes)
+	require.NoError(err)
+	err = parsedBlock.Verify(t.Context())
+	require.ErrorIs(err, ErrConflictingAtomicInputs)
 }
 
 func TestReissueAtomicTxHigherGasPrice(t *testing.T) {
@@ -487,85 +408,43 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 	tests := map[string]func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, discarded []*atomic.Tx){
 		"single UTXO override": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, vmtest.TestShortIDAddrs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			tx1, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, kc, []*avax.UTXO{utxo})
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			tx2, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(common.Big2, vmtest.InitialBaseFee), kc, []*avax.UTXO{utxo})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if err := vm.AtomicMempool.AddLocalTx(tx1); err != nil {
-				t.Fatal(err)
-			}
-			if err := vm.AtomicMempool.AddLocalTx(tx2); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(tx1))
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(tx2))
 
 			return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
 		},
 		"one of two UTXOs overrides": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo1, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, vmtest.TestShortIDAddrs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			utxo2, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, vmtest.TestShortIDAddrs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			tx1, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, kc, []*avax.UTXO{utxo1, utxo2})
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			tx2, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(common.Big2, vmtest.InitialBaseFee), kc, []*avax.UTXO{utxo1})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if err := vm.AtomicMempool.AddLocalTx(tx1); err != nil {
-				t.Fatal(err)
-			}
-			if err := vm.AtomicMempool.AddLocalTx(tx2); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(tx1))
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(tx2))
 
 			return []*atomic.Tx{tx2}, []*atomic.Tx{tx1}
 		},
 		"hola": func(t *testing.T, vm *VM, sharedMemory *avalancheatomic.Memory) (issued []*atomic.Tx, evicted []*atomic.Tx) {
 			utxo1, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, vmtest.TestShortIDAddrs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			utxo2, err := addUTXO(sharedMemory, vm.Ctx, ids.GenerateTestID(), 0, vm.Ctx.AVAXAssetID, units.Avax, vmtest.TestShortIDAddrs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			require.NoError(t, err)
 			importTx1, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, kc, []*avax.UTXO{utxo1})
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			require.NoError(t, err)
 			importTx2, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(3), vmtest.InitialBaseFee), kc, []*avax.UTXO{utxo2})
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			require.NoError(t, err)
 			reissuanceTx1, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(2), vmtest.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := vm.AtomicMempool.AddLocalTx(importTx1); err != nil {
-				t.Fatal(err)
-			}
-
-			if err := vm.AtomicMempool.AddLocalTx(importTx2); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx1))
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx2))
 
 			err = vm.AtomicMempool.AddLocalTx(reissuanceTx1)
 			require.ErrorIs(t, err, txpool.ErrConflict)
@@ -575,12 +454,8 @@ func testReissueAtomicTxHigherGasPrice(t *testing.T, scheme string) {
 			require.False(t, vm.AtomicMempool.Has(reissuanceTx1.ID()))
 
 			reissuanceTx2, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(big.NewInt(4), vmtest.InitialBaseFee), kc, []*avax.UTXO{utxo1, utxo2})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := vm.AtomicMempool.AddLocalTx(reissuanceTx2); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+			require.NoError(t, vm.AtomicMempool.AddLocalTx(reissuanceTx2))
 
 			return []*atomic.Tx{reissuanceTx2}, []*atomic.Tx{importTx1, importTx2}
 		},
@@ -636,6 +511,7 @@ func TestConflictingTransitiveAncestryWithGap(t *testing.T) {
 }
 
 func testConflictingTransitiveAncestryWithGap(t *testing.T, scheme string) {
+	require := require.New(t)
 	key := utilstest.NewKey(t)
 
 	key0 := vmtest.TestKeys[0]
@@ -651,109 +527,70 @@ func testConflictingTransitiveAncestryWithGap(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		addr0: importAmount,
 		addr1: importAmount,
 	}))
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
 	vm.Ethereum().TxPool().SubscribeNewReorgEvent(newTxPoolHeadChan)
 
 	importTx0A, err := vm.newImportTx(vm.Ctx.XChainID, key.Address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key0})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 	// Create a conflicting transaction
 	importTx0B, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[2], vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key0})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx0A))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx0A); err != nil {
-		t.Fatalf("Failed to issue importTx0A: %s", err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blk0, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
 
-	blk0, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
-	}
-
-	if err := blk0.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification: %s", err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk0.ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk0.Verify(t.Context()))
+	require.NoError(vm.SetPreference(t.Context(), blk0.ID()))
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk0.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(common.Hash(blk0.ID()), newHead.Head.Hash())
 
 	tx := types.NewTransaction(0, key.Address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), key.PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	// Add the remote transactions, build the block, and set VM1's preference for block A
 	_, err = vmtest.IssueTxsAndSetPreference([]*types.Transaction{signedTx}, vm)
-	if err != nil {
-		t.Fatalf("Failed to issue txs and build blk1: %s", err)
-	}
+	require.NoError(err)
 
 	importTx1, err := vm.newImportTx(vm.Ctx.XChainID, key.Address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key1})
-	if err != nil {
-		t.Fatalf("Failed to issue importTx1 due to: %s", err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx1))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx1); err != nil {
-		t.Fatal(err)
-	}
+	msg, err = vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blk2, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk2.Verify(t.Context()))
+	require.NoError(vm.SetPreference(t.Context(), blk2.ID()))
 
-	blk2, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
-	}
+	err = vm.AtomicMempool.AddLocalTx(importTx0B)
+	require.ErrorIs(err, ErrConflictingAtomicInputs)
 
-	if err := blk2.Verify(context.Background()); err != nil {
-		t.Fatalf("Block failed verification: %s", err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk2.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.AtomicMempool.AddLocalTx(importTx0B); err == nil {
-		t.Fatalf("Should not have been able to issue import tx with conflict")
-	}
 	// Force issue transaction directly into the mempool
-	if err := vm.AtomicMempool.ForceAddTx(importTx0B); err != nil {
-		t.Fatal(err)
-	}
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	require.NoError(vm.AtomicMempool.ForceAddTx(importTx0B))
+	msg, err = vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	_, err = vm.BuildBlock(context.Background())
-	if err == nil {
-		t.Fatal("Shouldn't have been able to build an invalid block")
-	}
+	_, err = vm.BuildBlock(t.Context())
+	require.ErrorIs(err, ErrEmptyBlock)
 }
 
 func TestBonusBlocksTxs(t *testing.T) {
@@ -765,6 +602,7 @@ func TestBonusBlocksTxs(t *testing.T) {
 }
 
 func testBonusBlocksTxs(t *testing.T, scheme string) {
+	require := require.New(t)
 	fork := upgradetest.NoUpgrades
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
@@ -772,9 +610,7 @@ func testBonusBlocksTxs(t *testing.T, scheme string) {
 		Scheme: scheme,
 	})
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	importAmount := uint64(10000000)
@@ -792,67 +628,42 @@ func testBonusBlocksTxs(t *testing.T, scheme string) {
 		},
 	}
 	utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.Ctx.XChainID)
 	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
+	require.NoError(xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
 			vmtest.TestKeys[0].Address().Bytes(),
 		},
-	}}}}); err != nil {
-		t.Fatal(err)
-	}
+	}}}}))
 
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
 	// Make [blk] a bonus block.
 	vm.AtomicBackend.AddBonusBlock(blk.Height(), blk.ID())
 
 	// Remove the UTXOs from shared memory, so that non-bonus blocks will fail verification
-	if err := vm.Ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.Ctx.SharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.XChainID: {RemoveRequests: [][]byte{inputID[:]}}}))
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk.Verify(t.Context()))
 
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), blk.ID()))
 
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk.Accept(t.Context()))
 
-	lastAcceptedID, err := vm.LastAccepted(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
+	require.Equal(blk.ID(), lastAcceptedID)
 }
 
 // Builds [blkA] with a virtuous import transaction and [blkB] with a separate import transaction
@@ -867,107 +678,70 @@ func TestReissueAtomicTx(t *testing.T) {
 }
 
 func testReissueAtomicTx(t *testing.T, scheme string) {
+	require := require.New(t)
 	fork := upgradetest.ApricotPhase1
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: 10000000,
 		vmtest.TestShortIDAddrs[1]: 10000000,
 	}))
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
-	genesisBlkID, err := vm.LastAccepted(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	genesisBlkID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blkA, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blkA.Verify(t.Context()))
 
-	blkA, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blkA.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blkA.ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), blkA.ID()))
 
 	// SetPreference to parent before rejecting (will rollback state to genesis
 	// so that atomic transaction can be reissued, otherwise current block will
 	// conflict with UTXO to be reissued)
-	if err := vm.SetPreference(context.Background(), genesisBlkID); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), genesisBlkID))
 
 	// Rejecting [blkA] should cause [importTx] to be re-issued into the mempool.
-	if err := blkA.Reject(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(blkA.Reject(t.Context()))
 	// Sleep for a minimum of two seconds to ensure that [blkB] will have a different timestamp
 	// than [blkA] so that the block will be unique. This is necessary since we have marked [blkA]
 	// as Rejected.
 	time.Sleep(2 * time.Second)
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-	blkB, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	msg, err = vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
+	blkB, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.Equal(blkA.Height(), blkB.Height())
 
-	if blkB.Height() != blkA.Height() {
-		t.Fatalf("Expected blkB (%d) to have the same height as blkA (%d)", blkB.Height(), blkA.Height())
-	}
+	require.NoError(blkB.Verify(t.Context()))
 
-	if err := blkB.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), blkB.ID()))
 
-	if err := vm.SetPreference(context.Background(), blkB.ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blkB.Accept(t.Context()))
 
-	if err := blkB.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if lastAcceptedID, err := vm.LastAccepted(context.Background()); err != nil {
-		t.Fatal(err)
-	} else if lastAcceptedID != blkB.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blkB.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
+	require.Equal(blkB.ID(), lastAcceptedID)
 
 	// Check that [importTx] has been indexed correctly after [blkB] is accepted.
 	_, height, err := vm.AtomicTxRepository.GetByTxID(importTx.ID())
-	if err != nil {
-		t.Fatal(err)
-	} else if height != blkB.Height() {
-		t.Fatalf("Expected indexed height of import tx to be %d, but found %d", blkB.Height(), height)
-	}
+	require.NoError(err)
+	require.Equal(blkB.Height(), height)
 }
 
 func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
@@ -979,84 +753,68 @@ func TestAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T) {
 }
 
 func testAtomicTxFailsEVMStateTransferBuildBlock(t *testing.T, scheme string) {
+	require := require.New(t)
 	fork := upgradetest.ApricotPhase1
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: 10000000,
 		vmtest.TestShortIDAddrs[1]: 10000000,
 	}))
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	exportTxs := createExportTxOptions(t, vm, tvm.AtomicMemory)
 	exportTx1, exportTx2 := exportTxs[0], exportTxs[1]
 
-	if err := vm.AtomicMempool.AddLocalTx(exportTx1); err != nil {
-		t.Fatal(err)
-	}
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-	exportBlk1, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := exportBlk1.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.AtomicMempool.AddLocalTx(exportTx1))
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
+	exportBlk1, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(exportBlk1.Verify(t.Context()))
 
-	if err := vm.SetPreference(context.Background(), exportBlk1.ID()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), exportBlk1.ID()))
 
-	if err := vm.AtomicMempool.AddLocalTx(exportTx2); err == nil {
-		t.Fatal("Should have failed to issue due to an invalid export tx")
-	}
+	err = vm.AtomicMempool.AddLocalTx(exportTx2)
+	require.ErrorIs(err, atomic.ErrInvalidNonce)
 
-	if err := vm.AtomicMempool.AddRemoteTx(exportTx2); err == nil {
-		t.Fatal("Should have failed to add because conflicting")
-	}
+	err = vm.AtomicMempool.AddRemoteTx(exportTx2)
+	require.ErrorIs(err, atomic.ErrInvalidNonce)
 
 	// Manually add transaction to mempool to bypass validation
-	if err := vm.AtomicMempool.ForceAddTx(exportTx2); err != nil {
-		t.Fatal(err)
-	}
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	require.NoError(vm.AtomicMempool.ForceAddTx(exportTx2))
+	msg, err = vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	_, err = vm.BuildBlock(context.Background())
-	if err == nil {
-		t.Fatal("BuildBlock should have returned an error due to invalid export transaction")
-	}
+	_, err = vm.BuildBlock(t.Context())
+	require.ErrorIs(err, ErrEmptyBlock)
 }
 
 // This is a regression test to ensure that if two consecutive atomic transactions fail verification
 // in onFinalizeAndAssemble it will not cause a panic due to calling RevertToSnapshot(revID) on the
 // same revision ID twice.
 func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
+	require := require.New(t)
 	fork := upgradetest.ApricotPhase1
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: 10000000,
 		vmtest.TestShortIDAddrs[1]: 10000000,
 	}))
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
@@ -1066,54 +824,40 @@ func TestConsecutiveAtomicTransactionsRevertSnapshot(t *testing.T) {
 	importTxs := createImportTxOptions(t, vm, tvm.AtomicMemory)
 
 	// Issue the first import transaction, build, and accept the block.
-	if err := vm.AtomicMempool.AddLocalTx(importTxs[0]); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTxs[0]))
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk.Verify(t.Context()))
+	require.NoError(vm.SetPreference(t.Context(), blk.ID()))
+	require.NoError(blk.Accept(t.Context()))
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(common.Hash(blk.ID()), newHead.Head.Hash())
 
 	// Add the two conflicting transactions directly to the mempool, so that two consecutive transactions
 	// will fail verification when build block is called.
-	vm.AtomicMempool.AddRemoteTx(importTxs[1])
-	vm.AtomicMempool.AddRemoteTx(importTxs[2])
+	require.NoError(vm.AtomicMempool.ForceAddTx(importTxs[1]))
+	require.NoError(vm.AtomicMempool.ForceAddTx(importTxs[2]))
+	require.Equal(2, vm.AtomicMempool.Txs.PendingLen())
 
-	if _, err := vm.BuildBlock(context.Background()); err == nil {
-		t.Fatal("Expected build block to fail due to empty block")
-	}
+	_, err = vm.BuildBlock(t.Context())
+	require.ErrorIs(err, ErrEmptyBlock)
 }
 
 func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
+	require := require.New(t)
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
 		Fork: &fork,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 		vmtest.TestShortIDAddrs[1]: importAmount,
 		vmtest.TestShortIDAddrs[2]: importAmount,
@@ -1121,48 +865,37 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	conflictKey := utilstest.NewKey(t)
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	// Create a conflict set for each pair of transactions
 	conflictSets := make([]set.Set[ids.ID], len(vmtest.TestKeys))
 	for index, key := range vmtest.TestKeys {
 		importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[index], vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
+		require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 		conflictSets[index].Add(importTx.ID())
 		conflictTx, err := vm.newImportTx(vm.Ctx.XChainID, conflictKey.Address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{key})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := vm.AtomicMempool.AddLocalTx(conflictTx); err == nil {
-			t.Fatal("should conflict with the utxoSet in the mempool")
-		}
+		require.NoError(err)
+		err = vm.AtomicMempool.AddLocalTx(conflictTx)
+		require.ErrorIs(err, txpool.ErrConflict)
 		// force add the tx
-		vm.AtomicMempool.ForceAddTx(conflictTx)
+		require.NoError(vm.AtomicMempool.ForceAddTx(conflictTx))
 		conflictSets[index].Add(conflictTx.ID())
 	}
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 	// Note: this only checks the path through OnFinalizeAndAssemble, we should make sure to add a test
 	// that verifies blocks received from the network will also fail verification
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	blockExtension, ok := wrappedBlk.GetBlockExtension().(*blockExtension)
-	require.True(t, ok, "expected block to be a blockExtension")
+	require.True(ok, "expected block to be a blockExtension")
 	atomicTxs := blockExtension.atomicTxs
-	require.True(t, len(atomicTxs) == len(vmtest.TestKeys), "Conflict transactions should be out of the batch")
+	require.Len(atomicTxs, len(vmtest.TestKeys), "Conflict transactions should be out of the batch")
 	atomicTxIDs := set.Set[ids.ID]{}
 	for _, tx := range atomicTxs {
 		atomicTxIDs.Add(tx.ID())
@@ -1173,18 +906,15 @@ func TestAtomicTxBuildBlockDropsConflicts(t *testing.T) {
 	// has been included in the block.
 	for _, conflictSet := range conflictSets {
 		conflictSet.Difference(atomicTxIDs)
-		require.Equal(t, 1, conflictSet.Len())
+		require.Equal(1, conflictSet.Len())
 	}
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk.Verify(t.Context()))
+	require.NoError(blk.Accept(t.Context()))
 }
 
 func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
+	require := require.New(t)
 	importAmount := uint64(10000000)
 	fork := upgradetest.ApricotPhase5
 	vm := newAtomicTestVM()
@@ -1193,51 +923,41 @@ func TestBuildBlockDoesNotExceedAtomicGasLimit(t *testing.T) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	kc := secp256k1fx.NewKeychain(vmtest.TestKeys[0])
 	txID, err := ids.ToID(hashing.ComputeHash256(vmtest.TestShortIDAddrs[0][:]))
-	require.NoError(t, err)
+	require.NoError(err)
 
 	mempoolTxs := 200
 	for i := 0; i < mempoolTxs; i++ {
 		utxo, err := addUTXO(tvm.AtomicMemory, vm.Ctx, txID, uint32(i), vm.Ctx.AVAXAssetID, importAmount, vmtest.TestShortIDAddrs[0])
-		require.NoError(t, err)
+		require.NoError(err)
 
 		importTx, err := atomic.NewImportTx(vm.Ctx, vm.CurrentRules(), vm.clock.Unix(), vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, kc, []*avax.UTXO{utxo})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
+		require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 	}
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	blockExtension, ok := wrappedBlk.GetBlockExtension().(*blockExtension)
-	require.True(t, ok, "expected block to be a blockExtension")
+	require.True(ok, "expected block to be a blockExtension")
 	// Need to ensure that not all of the transactions in the mempool are included in the block.
 	// This ensures that we hit the atomic gas limit while building the block before we hit the
 	// upper limit on the size of the codec for marshalling the atomic transactions.
 	atomicTxs := blockExtension.atomicTxs
-	if len(atomicTxs) >= mempoolTxs {
-		t.Fatalf("Expected number of atomic transactions included in the block (%d) to be less than the number of transactions added to the mempool (%d)", len(atomicTxs), mempoolTxs)
-	}
+	require.Lessf(len(atomicTxs), mempoolTxs, "Expected number of atomic transactions included in the block (%d) to be less than the number of transactions added to the mempool (%d)", len(atomicTxs), mempoolTxs)
 }
 
 func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
+	require := require.New(t)
 	importAmount := uint64(10000000)
 	// We create two VMs one in ApriotPhase4 and one in ApricotPhase5, so that we can construct a block
 	// containing a large enough atomic transaction that it will exceed the atomic gas limit in
@@ -1253,56 +973,41 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 		Fork: &fork2,
 	})
 	defer func() {
-		if err := vm1.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		if err := vm2.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm1.Shutdown(t.Context()))
+		require.NoError(vm2.Shutdown(t.Context()))
 	}()
 
 	txID, err := ids.ToID(hashing.ComputeHash256(vmtest.TestShortIDAddrs[0][:]))
-	require.NoError(t, err)
+	require.NoError(err)
 
 	// Add enough UTXOs, such that the created import transaction will attempt to consume more gas than allowed
 	// in ApricotPhase5.
 	for i := 0; i < 100; i++ {
 		_, err := addUTXO(tvm1.AtomicMemory, vm1.Ctx, txID, uint32(i), vm1.Ctx.AVAXAssetID, importAmount, vmtest.TestShortIDAddrs[0])
-		require.NoError(t, err)
+		require.NoError(err)
 
 		_, err = addUTXO(tvm2.AtomicMemory, vm2.Ctx, txID, uint32(i), vm2.Ctx.AVAXAssetID, importAmount, vmtest.TestShortIDAddrs[0])
-		require.NoError(t, err)
+		require.NoError(err)
 	}
 
 	// Double the initial base fee used when estimating the cost of this transaction to ensure that when it is
 	// used in ApricotPhase5 it still pays a sufficient fee with the fixed fee per atomic transaction.
 	importTx, err := vm1.newImportTx(vm1.Ctx.XChainID, vmtest.TestEthAddrs[0], new(big.Int).Mul(common.Big2, vmtest.InitialBaseFee), []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := vm1.AtomicMempool.ForceAddTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm1.AtomicMempool.ForceAddTx(importTx))
 
-	msg, err := vm1.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-	blk1, err := vm1.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := blk1.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm1.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
+	blk1, err := vm1.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk1.Verify(t.Context()))
 
 	wrappedBlk, ok := blk1.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	validEthBlock := wrappedBlk.GetEthBlock()
 	extraData, err := atomic.Codec.Marshal(atomic.CodecVersion, []*atomic.Tx{importTx})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	// Construct the new block with the extra data in the new format (slice of atomic transactions).
 	ethBlk2 := customtypes.NewBlockWithExtData(
 		types.CopyHeader(validEthBlock.Header()),
@@ -1315,14 +1020,11 @@ func TestExtraStateChangeAtomicGasLimitExceeded(t *testing.T) {
 	)
 
 	state, err := vm2.Ethereum().BlockChain().State()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	// Hack: test [onExtraStateChange] directly to ensure it catches the atomic gas limit error correctly.
-	if _, _, err := vm2.onExtraStateChange(ethBlk2, nil, state); err == nil || !strings.Contains(err.Error(), "exceeds atomic gas limit") {
-		t.Fatalf("Expected block to fail verification due to exceeded atomic gas limit, but found error: %v", err)
-	}
+	_, _, err = vm2.onExtraStateChange(ethBlk2, nil, state)
+	require.ErrorIs(err, errAtomicGasExceedsLimit)
 }
 
 // Regression test to ensure that a VM that is not able to parse a block that
@@ -1336,6 +1038,7 @@ func TestEmptyBlock(t *testing.T) {
 }
 
 func testEmptyBlock(t *testing.T, scheme string) {
+	require := require.New(t)
 	importAmount := uint64(1000000000)
 	fork := upgradetest.NoUpgrades
 	vm := newAtomicTestVM()
@@ -1343,37 +1046,28 @@ func testEmptyBlock(t *testing.T, scheme string) {
 		Fork:   &fork,
 		Scheme: scheme,
 	})
-	require.NoError(t, addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
+	require.NoError(addUTXOs(tvm.AtomicMemory, vm.Ctx, map[ids.ShortID]uint64{
 		vmtest.TestShortIDAddrs[0]: importAmount,
 	}))
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, vmtest.TestEthAddrs[0], vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
-
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatalf("Failed to build block with import transaction: %s", err)
-	}
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
 
 	// Create empty block from blkA
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	ethBlock := wrappedBlk.GetEthBlock()
 
 	emptyEthBlock := customtypes.NewBlockWithExtData(
@@ -1386,15 +1080,14 @@ func testEmptyBlock(t *testing.T, scheme string) {
 		false,
 	)
 
-	if len(customtypes.BlockExtData(emptyEthBlock)) != 0 || customtypes.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash != (common.Hash{}) {
-		t.Fatalf("emptyEthBlock should not have any extra data")
-	}
+	require.Empty(customtypes.BlockExtData(emptyEthBlock))
+	require.Equal(common.Hash{}, customtypes.GetHeaderExtra(emptyEthBlock.Header()).ExtDataHash)
 
 	emptyBlockBytes, err := rlp.EncodeToBytes(emptyEthBlock)
-	require.NoError(t, err)
+	require.NoError(err)
 
-	_, err = vm.ParseBlock(context.Background(), emptyBlockBytes)
-	require.ErrorIs(t, err, ErrEmptyBlock)
+	_, err = vm.ParseBlock(t.Context(), emptyBlockBytes)
+	require.ErrorIs(err, ErrEmptyBlock)
 }
 
 // Regression test to ensure we can build blocks if we are starting with the
@@ -1408,6 +1101,7 @@ func TestBuildApricotPhase5Block(t *testing.T) {
 }
 
 func testBuildApricotPhase5Block(t *testing.T, scheme string) {
+	require := require.New(t)
 	fork := upgradetest.ApricotPhase5
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
@@ -1416,9 +1110,7 @@ func testBuildApricotPhase5Block(t *testing.T, scheme string) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
@@ -1442,141 +1134,87 @@ func testBuildApricotPhase5Block(t *testing.T, scheme string) {
 		},
 	}
 	utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.Ctx.XChainID)
 	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
+	require.NoError(xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
 			vmtest.TestKeys[0].Address().Bytes(),
 		},
-	}}}}); err != nil {
-		t.Fatal(err)
-	}
+	}}}}))
 
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk.Verify(t.Context()))
 
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), blk.ID()))
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk.Accept(t.Context()))
 
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	ethBlk := wrappedBlk.GetEthBlock()
-	if eBlockGasCost := customtypes.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
-		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
-	}
-	if eExtDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(11230)) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
-	}
-	minRequiredTip, err := customheader.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if minRequiredTip == nil || minRequiredTip.Cmp(common.Big0) != 0 {
-		t.Fatalf("expected minRequiredTip to be 0 but got %d", minRequiredTip)
-	}
+	eBlockGasCost := customtypes.BlockGasCost(ethBlk)
+	require.NotNil(eBlockGasCost)
+	require.Zerof(eBlockGasCost.Cmp(common.Big0), "expected blockGasCost to be greater than 0 but got %d", eBlockGasCost)
+	eExtDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk)
+	require.NotNil(eExtDataGasUsed)
+	require.Zero(eExtDataGasUsed.Cmp(big.NewInt(11230)), "expected extDataGasUsed to be 11230 but got %d", eExtDataGasUsed)
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(common.Hash(blk.ID()), newHead.Head.Hash())
 
 	txs := make([]*types.Transaction, 10)
 	for i := 0; i < 10; i++ {
 		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice*3), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), key)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		txs[i] = signedTx
 	}
 	errs := vm.Ethereum().TxPool().Add(txs, false, false)
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("Failed to add tx at index %d: %s", i, err)
-		}
+	for _, err := range errs {
+		require.NoError(err)
 	}
 
-	msg, err = vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	msg, err = vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	blk, err = vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	blk, err = vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk.Verify(t.Context()))
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk.Accept(t.Context()))
 
 	wrappedBlk, ok = blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	ethBlk = wrappedBlk.GetEthBlock()
-	if customtypes.BlockGasCost(ethBlk) == nil || customtypes.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", customtypes.BlockGasCost(ethBlk))
-	}
-	if customtypes.BlockExtDataGasUsed(ethBlk) == nil || customtypes.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", customtypes.BlockExtDataGasUsed(ethBlk))
-	}
-	minRequiredTip, err = customheader.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if minRequiredTip == nil || minRequiredTip.Cmp(big.NewInt(0.05*params.GWei)) < 0 {
-		t.Fatalf("expected minRequiredTip to be at least 0.05 gwei but got %d", minRequiredTip)
-	}
+	blockGasCost := customtypes.BlockGasCost(ethBlk)
+	require.NotNil(blockGasCost)
+	require.LessOrEqualf(0, blockGasCost.Cmp(big.NewInt(100)), "expected blockGasCost to be at least 100 but got %d", blockGasCost)
+	eDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk)
+	require.NotNil(eDataGasUsed)
+	require.Zero(eDataGasUsed.Cmp(common.Big0), "expected extDataGasUsed to be 0 but got %d", eDataGasUsed)
 
-	lastAcceptedID, err := vm.LastAccepted(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
+	require.Equal(blk.ID(), lastAcceptedID)
 
 	// Confirm all txs are present
 	ethBlkTxs := vm.Ethereum().BlockChain().GetBlockByNumber(2).Transactions()
 	for i, tx := range txs {
-		if len(ethBlkTxs) <= i {
-			t.Fatalf("missing transactions expected: %d but found: %d", len(txs), len(ethBlkTxs))
-		}
-		if ethBlkTxs[i].Hash() != tx.Hash() {
-			t.Fatalf("expected tx at index %d to have hash: %x but has: %x", i, txs[i].Hash(), tx.Hash())
-		}
+		require.Greater(len(ethBlkTxs), i, "missing transactions expected: %d but found: %d", len(txs), len(ethBlkTxs))
+		require.Equal(ethBlkTxs[i].Hash(), tx.Hash(), "expected tx at index %d to have hash: %x but has: %x", i, txs[i].Hash(), tx.Hash())
 	}
 }
 
@@ -1591,6 +1229,7 @@ func TestBuildApricotPhase4Block(t *testing.T) {
 }
 
 func testBuildApricotPhase4Block(t *testing.T, scheme string) {
+	require := require.New(t)
 	fork := upgradetest.ApricotPhase4
 	vm := newAtomicTestVM()
 	tvm := vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
@@ -1599,9 +1238,7 @@ func testBuildApricotPhase4Block(t *testing.T, scheme string) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	newTxPoolHeadChan := make(chan core.NewTxPoolReorgEvent, 1)
@@ -1625,135 +1262,83 @@ func testBuildApricotPhase4Block(t *testing.T, scheme string) {
 		},
 	}
 	utxoBytes, err := atomic.Codec.Marshal(atomic.CodecVersion, utxo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	xChainSharedMemory := tvm.AtomicMemory.NewSharedMemory(vm.Ctx.XChainID)
 	inputID := utxo.InputID()
-	if err := xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
+	require.NoError(xChainSharedMemory.Apply(map[ids.ID]*avalancheatomic.Requests{vm.Ctx.ChainID: {PutRequests: []*avalancheatomic.Element{{
 		Key:   inputID[:],
 		Value: utxoBytes,
 		Traits: [][]byte{
 			vmtest.TestKeys[0].Address().Bytes(),
 		},
-	}}}}); err != nil {
-		t.Fatal(err)
-	}
+	}}}}))
 
 	importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(vm.AtomicMempool.AddLocalTx(importTx))
 
-	if err := vm.AtomicMempool.AddLocalTx(importTx); err != nil {
-		t.Fatal(err)
-	}
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(err)
+	require.NoError(blk.Verify(t.Context()))
 
-	blk, err := vm.BuildBlock(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.SetPreference(t.Context(), blk.ID()))
 
-	if err := blk.Verify(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vm.SetPreference(context.Background(), blk.ID()); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(blk.Accept(t.Context()))
 
 	wrappedBlk, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	ethBlk := wrappedBlk.GetEthBlock()
-	if eBlockGasCost := customtypes.BlockGasCost(ethBlk); eBlockGasCost == nil || eBlockGasCost.Cmp(common.Big0) != 0 {
-		t.Fatalf("expected blockGasCost to be 0 but got %d", eBlockGasCost)
-	}
-	if eExtDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk); eExtDataGasUsed == nil || eExtDataGasUsed.Cmp(big.NewInt(1230)) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
-	}
-	minRequiredTip, err := customheader.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if minRequiredTip == nil || minRequiredTip.Cmp(common.Big0) != 0 {
-		t.Fatalf("expected minRequiredTip to be 0 but got %d", minRequiredTip)
-	}
+	eBlockGasCost := customtypes.BlockGasCost(ethBlk)
+	require.NotNil(eBlockGasCost)
+	require.Zerof(eBlockGasCost.Cmp(common.Big0), "expected blockGasCost to be 0 but got %d", eBlockGasCost)
+	eExtDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk)
+	require.NotNil(eExtDataGasUsed)
+	require.Zerof(eExtDataGasUsed.Cmp(big.NewInt(1230)), "expected extDataGasUsed to be 1000 but got %d", eExtDataGasUsed)
 
 	newHead := <-newTxPoolHeadChan
-	if newHead.Head.Hash() != common.Hash(blk.ID()) {
-		t.Fatalf("Expected new block to match")
-	}
+	require.Equal(common.Hash(blk.ID()), newHead.Head.Hash())
 
 	txs := make([]*types.Transaction, 10)
 	chainID := vm.Ethereum().BlockChain().Config().ChainID
 	for i := 0; i < 5; i++ {
 		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap0.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), key)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		txs[i] = signedTx
 	}
 	for i := 5; i < 10; i++ {
 		tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(ap1.MinGasPrice), nil)
 		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), key)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(err)
 		txs[i] = signedTx
 	}
 	blk, err = vmtest.IssueTxsAndBuild(txs, vm)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := blk.Accept(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
+	require.NoError(blk.Accept(t.Context()))
 
 	wrappedBlk, ok = blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
-	require.True(t, ok, "expected block to be a ExtendedBlock")
+	require.True(ok, "expected block to be a ExtendedBlock")
 	ethBlk = wrappedBlk.GetEthBlock()
-	if customtypes.BlockGasCost(ethBlk) == nil || customtypes.BlockGasCost(ethBlk).Cmp(big.NewInt(100)) < 0 {
-		t.Fatalf("expected blockGasCost to be at least 100 but got %d", customtypes.BlockGasCost(ethBlk))
-	}
-	if customtypes.BlockExtDataGasUsed(ethBlk) == nil || customtypes.BlockExtDataGasUsed(ethBlk).Cmp(common.Big0) != 0 {
-		t.Fatalf("expected extDataGasUsed to be 0 but got %d", customtypes.BlockExtDataGasUsed(ethBlk))
-	}
-	minRequiredTip, err = customheader.EstimateRequiredTip(vm.chainConfigExtra(), ethBlk.Header())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if minRequiredTip == nil || minRequiredTip.Cmp(big.NewInt(0.05*params.GWei)) < 0 {
-		t.Fatalf("expected minRequiredTip to be at least 0.05 gwei but got %d", minRequiredTip)
-	}
+	blockGasCost := customtypes.BlockGasCost(ethBlk)
+	require.NotNil(blockGasCost)
+	require.GreaterOrEqualf(blockGasCost.Cmp(big.NewInt(100)), 0, "expected blockGasCost to be at least 100 but got %d", blockGasCost)
+	eDataGasUsed := customtypes.BlockExtDataGasUsed(ethBlk)
+	require.NotNil(eDataGasUsed)
+	require.Zero(eDataGasUsed.Cmp(common.Big0), "expected extDataGasUsed to be 0 but got %d", eDataGasUsed)
 
-	lastAcceptedID, err := vm.LastAccepted(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if lastAcceptedID != blk.ID() {
-		t.Fatalf("Expected last accepted blockID to be the accepted block: %s, but found %s", blk.ID(), lastAcceptedID)
-	}
+	lastAcceptedID, err := vm.LastAccepted(t.Context())
+	require.NoError(err)
+	require.Equal(blk.ID(), lastAcceptedID)
 
 	// Confirm all txs are present
 	ethBlkTxs := vm.Ethereum().BlockChain().GetBlockByNumber(2).Transactions()
 	for i, tx := range txs {
-		if len(ethBlkTxs) <= i {
-			t.Fatalf("missing transactions expected: %d but found: %d", len(txs), len(ethBlkTxs))
-		}
-		if ethBlkTxs[i].Hash() != tx.Hash() {
-			t.Fatalf("expected tx at index %d to have hash: %x but has: %x", i, txs[i].Hash(), tx.Hash())
-		}
+		require.Greaterf(len(ethBlkTxs), i, "missing transactions expected: %d but found: %d", len(txs), len(ethBlkTxs))
+		require.Equal(ethBlkTxs[i].Hash(), tx.Hash(), "expected tx at index %d to have hash: %x but has: %x", i, txs[i].Hash(), tx.Hash())
 	}
 }
 
@@ -1766,6 +1351,7 @@ func TestBuildInvalidBlockHead(t *testing.T) {
 }
 
 func testBuildInvalidBlockHead(t *testing.T, scheme string) {
+	require := require.New(t)
 	fork := upgradetest.NoUpgrades
 	vm := newAtomicTestVM()
 	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
@@ -1774,9 +1360,7 @@ func testBuildInvalidBlockHead(t *testing.T, scheme string) {
 	})
 
 	defer func() {
-		if err := vm.Shutdown(context.Background()); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(vm.Shutdown(t.Context()))
 	}()
 
 	key0 := vmtest.TestKeys[0]
@@ -1805,35 +1389,27 @@ func testBuildInvalidBlockHead(t *testing.T, scheme string) {
 		SourceChain: vm.Ctx.XChainID,
 	}
 	tx := &atomic.Tx{UnsignedAtomicTx: utx}
-	if err := tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key0}}); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(tx.Sign(atomic.Codec, [][]*secp256k1.PrivateKey{{key0}}))
 
 	currentBlock := vm.Ethereum().BlockChain().CurrentBlock()
 
 	// Verify that the transaction fails verification when attempting to issue
 	// it into the atomic mempool.
-	if err := vm.AtomicMempool.AddLocalTx(tx); err == nil {
-		t.Fatal("Should have failed to issue invalid transaction")
-	}
+	err := vm.AtomicMempool.AddLocalTx(tx)
+	require.ErrorIs(err, errFailedToFetchImportUTXOs)
 	// Force issue the transaction directly to the mempool
-	if err := vm.AtomicMempool.ForceAddTx(tx); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(vm.AtomicMempool.ForceAddTx(tx))
 
-	msg, err := vm.WaitForEvent(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, commonEng.PendingTxs, msg)
+	msg, err := vm.WaitForEvent(t.Context())
+	require.NoError(err)
+	require.Equal(commonEng.PendingTxs, msg)
 
-	if _, err := vm.BuildBlock(context.Background()); err == nil {
-		t.Fatalf("Unexpectedly created a block")
-	}
+	_, err = vm.BuildBlock(t.Context())
+	require.ErrorIs(err, ErrEmptyBlock)
 
 	newCurrentBlock := vm.Ethereum().BlockChain().CurrentBlock()
 
-	if currentBlock.Hash() != newCurrentBlock.Hash() {
-		t.Fatal("current block changed")
-	}
+	require.Equal(currentBlock.Hash(), newCurrentBlock.Hash())
 }
 
 // shows that a locally generated AtomicTx can be added to mempool and then
@@ -1850,7 +1426,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 				Fork: &fork,
 			})
 			defer func() {
-				require.NoError(vm.Shutdown(context.Background()))
+				require.NoError(vm.Shutdown(t.Context()))
 			}()
 			mempool := vm.AtomicMempool
 
@@ -1879,7 +1455,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(conflictingTxID)
 			require.False(has, "conflicting tx in mempool")
 
-			msg, err := vm.WaitForEvent(context.Background())
+			msg, err := vm.WaitForEvent(t.Context())
 			require.NoError(err)
 			require.Equal(commonEng.PendingTxs, msg)
 
@@ -1888,7 +1464,7 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 
 			// Show that BuildBlock generates a block containing [txID] and that it is
 			// still present in the mempool.
-			blk, err := vm.BuildBlock(context.Background())
+			blk, err := vm.BuildBlock(t.Context())
 			require.NoError(err, "could not build block out of mempool")
 
 			wrappedBlock, ok := blk.(*chain.BlockWrapper).Block.(extension.ExtendedBlock)
@@ -1903,8 +1479,8 @@ func TestMempoolAddLocallyCreateAtomicTx(t *testing.T) {
 			has = mempool.Has(txID)
 			require.True(has, "tx should stay in mempool until block is accepted")
 
-			require.NoError(blk.Verify(context.Background()))
-			require.NoError(blk.Accept(context.Background()))
+			require.NoError(blk.Verify(t.Context()))
+			require.NoError(blk.Accept(t.Context()))
 
 			has = mempool.Has(txID)
 			require.False(has, "tx shouldn't be in mempool after block is accepted")
@@ -1920,21 +1496,12 @@ func TestWaitForEvent(t *testing.T) {
 		{
 			name: "WaitForEvent with context cancelled returns 0",
 			testCase: func(t *testing.T, vm *VM, _ common.Address, _ *ecdsa.PrivateKey) {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 				defer cancel()
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, err, context.DeadlineExceeded)
-					require.Zero(t, msg)
-				}()
-
-				wg.Wait()
+				msg, err := vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 			},
 		},
 		{
@@ -1943,53 +1510,35 @@ func TestWaitForEvent(t *testing.T) {
 				importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
 				require.NoError(t, err)
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-
+				type result struct {
+					msg commonEng.Message
+					err error
+				}
+				results := make(chan result)
 				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(context.Background())
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
+					msg, err := vm.WaitForEvent(t.Context())
+					results <- result{
+						msg: msg,
+						err: err,
+					}
 				}()
 
 				require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx))
 
-				wg.Wait()
+				r := <-results
+				require.NoError(t, r.err)
+				require.Equal(t, commonEng.PendingTxs, r.msg)
 			},
 		},
 		{
-			name: "WaitForEvent doesn't return once a block is built and accepted",
+			name: "WaitForEvent doesn't return if both mempool is empty",
 			testCase: func(t *testing.T, vm *VM, address common.Address, key *ecdsa.PrivateKey) {
-				importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-				require.NoError(t, err)
-
-				require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx))
-
-				blk, err := vm.BuildBlock(context.Background())
-				require.NoError(t, err)
-
-				require.NoError(t, blk.Verify(context.Background()))
-
-				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
-
-				require.NoError(t, blk.Accept(context.Background()))
-
-				ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+				ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
 				defer cancel()
 
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, err, context.DeadlineExceeded)
-					require.Zero(t, msg)
-				}()
-
-				wg.Wait()
+				msg, err := vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 
 				t.Log("WaitForEvent returns when regular transactions are added to the mempool")
 
@@ -2006,72 +1555,19 @@ func TestWaitForEvent(t *testing.T) {
 					require.NoError(t, err)
 				}
 
-				wg.Add(1)
-
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(context.Background())
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
-				}()
-
-				wg.Wait()
+				msg, err = vm.WaitForEvent(t.Context())
+				require.NoError(t, err)
+				require.Equal(t, commonEng.PendingTxs, msg)
 
 				// Build a block again to wipe out the subscription
-				blk, err = vm.BuildBlock(context.Background())
+				blk, err := vm.BuildBlock(t.Context())
 				require.NoError(t, err)
 
-				require.NoError(t, blk.Verify(context.Background()))
+				require.NoError(t, blk.Verify(t.Context()))
 
-				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
+				require.NoError(t, vm.SetPreference(t.Context(), blk.ID()))
 
-				require.NoError(t, blk.Accept(context.Background()))
-			},
-		},
-		{
-			name: "WaitForEvent waits some time after a block is built",
-			testCase: func(t *testing.T, vm *VM, address common.Address, key *ecdsa.PrivateKey) {
-				importTx, err := vm.newImportTx(vm.Ctx.XChainID, address, vmtest.InitialBaseFee, []*secp256k1.PrivateKey{vmtest.TestKeys[0]})
-				require.NoError(t, err)
-
-				require.NoError(t, vm.AtomicMempool.AddLocalTx(importTx))
-
-				lastBuildBlockTime := time.Now()
-
-				blk, err := vm.BuildBlock(context.Background())
-				require.NoError(t, err)
-
-				require.NoError(t, blk.Verify(context.Background()))
-
-				require.NoError(t, vm.SetPreference(context.Background(), blk.ID()))
-
-				require.NoError(t, blk.Accept(context.Background()))
-
-				txs := make([]*types.Transaction, 10)
-				for i := 0; i < 10; i++ {
-					tx := types.NewTransaction(uint64(i), address, big.NewInt(10), 21000, big.NewInt(3*ap0.MinGasPrice), nil)
-					signedTx, err := types.SignTx(tx, types.NewEIP155Signer(vm.Ethereum().BlockChain().Config().ChainID), key)
-					require.NoError(t, err)
-
-					txs[i] = signedTx
-				}
-				errs := vm.Ethereum().TxPool().Add(txs, false, false)
-				for _, err := range errs {
-					require.NoError(t, err)
-				}
-
-				var wg sync.WaitGroup
-				wg.Add(1)
-
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(context.Background())
-					require.NoError(t, err)
-					require.Equal(t, commonEng.PendingTxs, msg)
-					require.GreaterOrEqual(t, time.Since(lastBuildBlockTime), evm.MinBlockBuildingRetryDelay)
-				}()
-
-				wg.Wait()
+				require.NoError(t, blk.Accept(t.Context()))
 			},
 		},
 	} {
@@ -2111,7 +1607,7 @@ func TestWaitForEvent(t *testing.T) {
 				},
 			}}}}))
 			testCase.testCase(t, vm, address, key)
-			vm.Shutdown(context.Background())
+			require.NoError(t, vm.Shutdown(t.Context()))
 		})
 	}
 }

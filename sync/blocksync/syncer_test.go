@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
@@ -19,6 +20,7 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
 
@@ -26,6 +28,12 @@ import (
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
 	ethparams "github.com/ava-labs/libevm/params"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 	tests := []struct {
@@ -101,13 +109,14 @@ func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			env := newTestEnvironment(t, tt.numBlocks)
 			require.NoError(t, env.prePopulateBlocks(tt.prePopulateBlocks))
 
 			syncer, err := env.createSyncer(tt.fromHeight, tt.blocksToFetch)
 			require.NoError(t, err)
 
-			require.NoError(t, syncer.Sync(context.Background()))
+			require.NoError(t, syncer.Sync(t.Context()))
 
 			env.verifyBlocksInDB(t, tt.expectedBlocks)
 
@@ -120,12 +129,13 @@ func TestBlockSyncer_ParameterizedTests(t *testing.T) {
 }
 
 func TestBlockSyncer_ContextCancellation(t *testing.T) {
+	t.Parallel()
 	env := newTestEnvironment(t, 10)
 	syncer, err := env.createSyncer(5, 3)
 	require.NoError(t, err)
 
 	// Immediately cancel the context to simulate cancellation.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	err = syncer.Sync(ctx)
 	require.ErrorIs(t, err, context.Canceled)
@@ -210,16 +220,18 @@ func (e *testEnvironment) prePopulateBlocks(blockHeights []int) error {
 }
 
 // createSyncer creates a block syncer with the given configuration
-func (e *testEnvironment) createSyncer(fromHeight uint64, blocksToFetch uint64) (*blockSyncer, error) {
+func (e *testEnvironment) createSyncer(fromHeight uint64, blocksToFetch uint64) (*BlockSyncer, error) {
 	if fromHeight > uint64(len(e.blocks)) {
 		return nil, fmt.Errorf("fromHeight %d exceeds available blocks %d", fromHeight, len(e.blocks))
 	}
 
-	return NewSyncer(e.client, e.chainDB, Config{
-		FromHash:      e.blocks[fromHeight].Hash(),
-		FromHeight:    fromHeight,
-		BlocksToFetch: blocksToFetch,
-	})
+	return NewSyncer(
+		e.client,
+		e.chainDB,
+		e.blocks[fromHeight].Hash(),
+		fromHeight,
+		blocksToFetch,
+	)
 }
 
 // verifyBlocksInDB checks that the expected blocks are present in the database (by block height)

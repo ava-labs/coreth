@@ -33,10 +33,10 @@ import (
 	"sync"
 
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customheader"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/lru"
@@ -97,7 +97,6 @@ type OracleBackend interface {
 	ChainConfig() *params.ChainConfig
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	SubscribeChainAcceptedEvent(ch chan<- core.ChainEvent) event.Subscription
-	MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error)
 	LastAcceptedBlock() *types.Block
 }
 
@@ -186,7 +185,7 @@ func NewOracle(backend OracleBackend, config Config) (*Oracle, error) {
 			lastHead = ev.Block.Hash()
 		}
 	}()
-	feeInfoProvider, err := newFeeInfoProvider(backend, minGasUsed.Uint64(), config.Blocks)
+	feeInfoProvider, err := newFeeInfoProvider(backend, config.Blocks)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +231,7 @@ func (oracle *Oracle) estimateNextBaseFee(ctx context.Context) (*big.Int, error)
 	// based on the current time and add it to the tip to estimate the
 	// total gas price estimate.
 	config := params.GetExtra(oracle.backend.ChainConfig())
-	return customheader.EstimateNextBaseFee(config, header, oracle.clock.Unix())
+	return customheader.EstimateNextBaseFee(config, header, uint64(oracle.clock.Time().UnixMilli()))
 }
 
 // SuggestPrice returns an estimated price for legacy transactions.
@@ -315,11 +314,7 @@ func (oracle *Oracle) suggestTip(ctx context.Context) (*big.Int, error) {
 			break
 		}
 
-		if feeInfo.tip != nil {
-			tipResults = append(tipResults, feeInfo.tip)
-		} else {
-			tipResults = append(tipResults, new(big.Int).Set(common.Big0))
-		}
+		tipResults = append(tipResults, feeInfo.tips...)
 	}
 
 	price := lastPrice
@@ -351,9 +346,9 @@ func (oracle *Oracle) getFeeInfo(ctx context.Context, number uint64) (*feeInfo, 
 	}
 
 	// on cache miss, read from database
-	header, err := oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
+	block, err := oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(number))
 	if err != nil {
 		return nil, err
 	}
-	return oracle.feeInfoProvider.addHeader(ctx, header)
+	return oracle.feeInfoProvider.addHeader(ctx, block.Header(), block.Transactions())
 }

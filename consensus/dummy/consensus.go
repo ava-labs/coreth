@@ -9,8 +9,8 @@ import (
 	"math/big"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
-	"github.com/ava-labs/libevm/consensus/misc/eip4844"
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/trie"
@@ -24,17 +24,11 @@ import (
 )
 
 var (
-	errUnclesUnsupported                   = errors.New("uncles unsupported")
-	errExtDataGasUsedNil                   = errors.New("extDataGasUsed is nil")
-	errExtDataGasUsedTooLarge              = errors.New("extDataGasUsed is not uint64")
-	ErrInvalidBlockGasCost                 = errors.New("invalid blockGasCost")
-	errInvalidExtDataGasUsed               = errors.New("invalid extDataGasUsed")
-	errInvalidExcessBlobGasBeforeCancun    = errors.New("invalid excessBlobGas before cancun")
-	errInvalidBlobGasUsedBeforeCancun      = errors.New("invalid blobGasUsed before cancun")
-	errInvalidParentBeaconRootBeforeCancun = errors.New("invalid parentBeaconRoot before cancun")
-	errMissingParentBeaconRoot             = errors.New("header is missing beaconRoot")
-	errNonEmptyParentBeaconRoot            = errors.New("invalid non-empty parentBeaconRoot")
-	errBlobsNotEnabled                     = errors.New("blobs not enabled on avalanche networks")
+	errUnclesUnsupported      = errors.New("uncles unsupported")
+	errExtDataGasUsedNil      = errors.New("extDataGasUsed is nil")
+	errExtDataGasUsedTooLarge = errors.New("extDataGasUsed is not uint64")
+	ErrInvalidBlockGasCost    = errors.New("invalid blockGasCost")
+	errInvalidExtDataGasUsed  = errors.New("invalid extDataGasUsed")
 )
 
 type Mode struct {
@@ -75,18 +69,21 @@ type (
 		cb                  ConsensusCallbacks
 		consensusMode       Mode
 		desiredTargetExcess *gas.Gas
+		desiredDelayExcess  *acp226.DelayExcess
 	}
 )
 
 func NewDummyEngine(
 	cb ConsensusCallbacks,
 	mode Mode,
-	desiredTargetExcess *gas.Gas,
+	desiredTargetExcess *gas.Gas, // Guides the target gas excess (ACP-176) toward the desired value
+	desiredDelayExcess *acp226.DelayExcess, // Guides the min delay excess (ACP-226) toward the desired value
 ) *DummyEngine {
 	return &DummyEngine{
 		cb:                  cb,
 		consensusMode:       mode,
 		desiredTargetExcess: desiredTargetExcess,
+		desiredDelayExcess:  desiredDelayExcess,
 	}
 }
 
@@ -136,7 +133,8 @@ func verifyHeaderGasFields(config *extras.ChainConfig, header *types.Header, par
 	}
 
 	// Verify header.BaseFee matches the expected value.
-	expectedBaseFee, err := customheader.BaseFee(config, parent, header.Time)
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
+	expectedBaseFee, err := customheader.BaseFee(config, parent, timeMS)
 	if err != nil {
 		return fmt.Errorf("failed to calculate base fee: %w", err)
 	}
@@ -199,31 +197,7 @@ func verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, paren
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
 		return consensus.ErrInvalidNumber
 	}
-	// Verify the existence / non-existence of excessBlobGas
-	cancun := config.IsCancun(header.Number, header.Time)
-	if !cancun {
-		switch {
-		case header.ExcessBlobGas != nil:
-			return fmt.Errorf("%w: have %d, expected nil", errInvalidExcessBlobGasBeforeCancun, *header.ExcessBlobGas)
-		case header.BlobGasUsed != nil:
-			return fmt.Errorf("%w: have %d, expected nil", errInvalidBlobGasUsedBeforeCancun, *header.BlobGasUsed)
-		case header.ParentBeaconRoot != nil:
-			return fmt.Errorf("%w: have %#x, expected nil", errInvalidParentBeaconRootBeforeCancun, *header.ParentBeaconRoot)
-		}
-	} else {
-		if header.ParentBeaconRoot == nil {
-			return errMissingParentBeaconRoot
-		}
-		if *header.ParentBeaconRoot != (common.Hash{}) {
-			return fmt.Errorf("%w: have %#x, expected empty", errNonEmptyParentBeaconRoot, *header.ParentBeaconRoot)
-		}
-		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
-			return err
-		}
-		if *header.BlobGasUsed > 0 { // VerifyEIP4844Header ensures BlobGasUsed is non-nil
-			return fmt.Errorf("%w: used %d blob gas, expected 0", errBlobsNotEnabled, *header.BlobGasUsed)
-		}
-	}
+
 	return nil
 }
 
@@ -364,6 +338,18 @@ func (eng *DummyEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, h
 		return nil, fmt.Errorf("failed to calculate new header.Extra: %w", err)
 	}
 	header.Extra = append(extraPrefix, header.Extra...)
+
+	// Set the min delay excess
+	minDelayExcess, err := customheader.MinDelayExcess(
+		configExtra,
+		parent,
+		header.Time,
+		eng.desiredDelayExcess,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate min delay excess: %w", err)
+	}
+	headerExtra.MinDelayExcess = minDelayExcess
 
 	// commit the final state root
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))

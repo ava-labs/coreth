@@ -38,6 +38,19 @@ func (m *mockSyncer) Sync(context.Context) error {
 	return m.syncError
 }
 
+func (m *mockSyncer) Name() string { return m.name }
+func (m *mockSyncer) ID() string   { return m.name }
+
+// namedSyncer adapts an existing syncer with a provided name to satisfy Syncer with Name().
+type namedSyncer struct {
+	name   string
+	syncer syncpkg.Syncer
+}
+
+func (n *namedSyncer) Sync(ctx context.Context) error { return n.syncer.Sync(ctx) }
+func (n *namedSyncer) Name() string                   { return n.name }
+func (n *namedSyncer) ID() string                     { return n.name }
+
 // syncerConfig describes a test syncer setup for RunSyncerTasks table tests.
 type syncerConfig struct {
 	name      string
@@ -54,7 +67,7 @@ func TestSyncerRegistry_Register(t *testing.T) {
 	tests := []struct {
 		name          string
 		registrations []*mockSyncer
-		expectedError string
+		expectedError error
 		expectedCount int
 	}{
 		{
@@ -63,16 +76,15 @@ func TestSyncerRegistry_Register(t *testing.T) {
 				newMockSyncer("Syncer1", nil),
 				newMockSyncer("Syncer2", nil),
 			},
-			expectedError: "",
 			expectedCount: 2,
 		},
 		{
-			name: "duplicate name registration",
+			name: "duplicate id registration",
 			registrations: []*mockSyncer{
 				newMockSyncer("Syncer1", nil),
 				newMockSyncer("Syncer1", nil),
 			},
-			expectedError: "syncer with name 'Syncer1' is already registered",
+			expectedError: errSyncerAlreadyRegistered,
 			expectedCount: 1,
 		},
 		{
@@ -93,7 +105,7 @@ func TestSyncerRegistry_Register(t *testing.T) {
 
 			// Perform registrations.
 			for _, reg := range tt.registrations {
-				err := registry.Register(reg.name, reg)
+				err := registry.Register(reg)
 				if err != nil {
 					errLast = err
 					break
@@ -101,18 +113,13 @@ func TestSyncerRegistry_Register(t *testing.T) {
 			}
 
 			// Check error expectations.
-			if tt.expectedError != "" {
-				require.Error(t, errLast)
-				require.Contains(t, errLast.Error(), tt.expectedError)
-			} else {
-				require.NoError(t, errLast)
-			}
+			require.ErrorIs(t, errLast, tt.expectedError)
 
 			// Verify registration count.
 			require.Len(t, registry.syncers, tt.expectedCount)
 
 			// Verify registration order for successful cases.
-			if tt.expectedError == "" {
+			if tt.expectedError == nil {
 				for i, reg := range tt.registrations {
 					require.Equal(t, reg.name, registry.syncers[i].name)
 					require.Equal(t, reg, registry.syncers[i].syncer)
@@ -123,10 +130,11 @@ func TestSyncerRegistry_Register(t *testing.T) {
 }
 
 func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
+	errFoo := errors.New("foo")
 	tests := []struct {
 		name          string
 		syncers       []syncerConfig
-		expectedError string
+		expectedError error
 		assertState   func(t *testing.T, mockSyncers []*mockSyncer)
 	}{
 		{
@@ -143,10 +151,10 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 		}, {
 			name: "error returned",
 			syncers: []syncerConfig{
-				{"Syncer1", errors.New("wait failed")},
+				{"Syncer1", errFoo},
 				{"Syncer2", nil},
 			},
-			expectedError: "Syncer1 failed",
+			expectedError: errFoo,
 			assertState: func(t *testing.T, mockSyncers []*mockSyncer) {
 				// First syncer should be started and waited on (but wait failed).
 				require.True(t, mockSyncers[0].started, "First syncer should have been started")
@@ -164,7 +172,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 			for i, syncerConfig := range tt.syncers {
 				mockSyncer := newMockSyncer(syncerConfig.name, syncerConfig.syncError)
 				mockSyncers[i] = mockSyncer
-				require.NoError(t, registry.Register(syncerConfig.name, mockSyncer))
+				require.NoError(t, registry.Register(mockSyncer))
 			}
 
 			ctx, cancel := utilstest.NewTestContext(t)
@@ -172,12 +180,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 
 			err := registry.RunSyncerTasks(ctx, newTestClientSummary(t))
 
-			if tt.expectedError != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.expectedError)
-			} else {
-				require.NoError(t, err)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
 
 			// Use custom assertion function for each test case.
 			tt.assertState(t, mockSyncers)
@@ -202,8 +205,8 @@ func TestSyncerRegistry_ConcurrentStart(t *testing.T) {
 
 	for i := 0; i < numBarrierSyncers; i++ {
 		name := fmt.Sprintf("BarrierSyncer-%d", i)
-		syncer := NewBarrierSyncer(&allStartedWG, releaseCh)
-		require.NoError(t, registry.Register(name, syncer))
+		s := &namedSyncer{name: name, syncer: NewBarrierSyncer(&allStartedWG, releaseCh)}
+		require.NoError(t, registry.Register(s))
 	}
 
 	doneCh := make(chan error, 1)
@@ -226,7 +229,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 	// Error syncer
 	trigger := make(chan struct{})
 	errFirst := errors.New("test error")
-	require.NoError(t, registry.Register("ErrorSyncer-0", NewErrorSyncer(trigger, errFirst)))
+	require.NoError(t, registry.Register(&namedSyncer{name: "ErrorSyncer-0", syncer: NewErrorSyncer(trigger, errFirst)}))
 
 	// Cancel-aware syncers to verify cancellation propagation
 	const numCancelSyncers = 2
@@ -239,8 +242,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 		cancelChans = append(cancelChans, canceledCh)
 		startedChans = append(startedChans, startedCh)
 		name := fmt.Sprintf("CancelSyncer-%d", i)
-
-		require.NoError(t, registry.Register(name, NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)))
+		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: NewCancelAwareSyncer(startedCh, canceledCh, 4*time.Second)}))
 	}
 
 	doneCh := make(chan error, 1)
@@ -282,7 +284,7 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 			errFirst = errInstance
 		}
 		name := fmt.Sprintf("ErrorSyncer-%d", i)
-		require.NoError(t, registry.Register(name, NewErrorSyncer(trigger, errInstance)))
+		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: NewErrorSyncer(trigger, errInstance)}))
 	}
 
 	doneCh := make(chan error, 1)

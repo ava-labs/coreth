@@ -4,25 +4,32 @@
 package ethapi
 
 import (
-	"context"
 	"errors"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/ava-labs/libevm/core/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 
 	ethparams "github.com/ava-labs/libevm/params"
 )
+
+func TestMain(m *testing.M) {
+	core.RegisterExtras()
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 func TestBlockchainAPI_GetChainConfig(t *testing.T) {
 	t.Parallel()
@@ -38,8 +45,8 @@ func TestBlockchainAPI_GetChainConfig(t *testing.T) {
 
 	api := NewBlockChainAPI(backend)
 
-	gotConfig := api.GetChainConfig(context.Background())
-	assert.Equal(t, wantConfig, gotConfig)
+	gotConfig := api.GetChainConfig(t.Context())
+	require.Equal(t, wantConfig, gotConfig)
 }
 
 // Copy one test case from TestCall
@@ -68,7 +75,7 @@ func TestBlockchainAPI_CallDetailed(t *testing.T) {
 	}))
 
 	result, err := api.CallDetailed(
-		context.Background(),
+		t.Context(),
 		TransactionArgs{
 			From:  &accounts[0].addr,
 			To:    &accounts[1].addr,
@@ -196,9 +203,9 @@ func TestBlockChainAPI_stateQueryBlockNumberAllowed(t *testing.T) {
 
 			err := api.stateQueryBlockNumberAllowed(testCase.blockNumOrHash)
 			if testCase.wantErrMessage == "" {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			} else {
-				assert.EqualError(t, err, testCase.wantErrMessage)
+				require.EqualError(t, err, testCase.wantErrMessage)
 			}
 		})
 	}

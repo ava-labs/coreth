@@ -5,6 +5,7 @@ package extstate
 
 import (
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/libevm/common"
@@ -19,6 +20,11 @@ import (
 	"github.com/ava-labs/coreth/core/state/snapshot"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	os.Exit(m.Run())
+}
 
 func TestMultiCoinOperations(t *testing.T) {
 	memdb := rawdb.NewMemoryDatabase()
@@ -163,7 +169,7 @@ func TestGenerateMultiCoinAccounts(t *testing.T) {
 	snap := snaps.Snapshot(root)
 	snapAccount, err := snap.Account(addrHash)
 	require.NoError(t, err, "getting account from snapshot")
-	require.True(t, customtypes.IsMultiCoin(snapAccount), "snap account must be multi-coin")
+	require.True(t, customtypes.IsAccountMultiCoin(snapAccount), "snap account must be multi-coin")
 
 	normalizeCoinID(&assetID)
 	assetHash := crypto.Keccak256Hash(assetID.Bytes())

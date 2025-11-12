@@ -4,7 +4,6 @@
 package statesync
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
+	"github.com/ava-labs/coreth/utils/utilstest"
 
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -26,7 +26,7 @@ import (
 
 type codeSyncerTest struct {
 	clientDB          ethdb.Database
-	setupCodeSyncer   func(*codeSyncer)
+	queueCapacity     int
 	codeRequestHashes [][]common.Hash
 	codeByteSlices    [][]byte
 	getCodeIntercept  func(hashes []common.Hash, codeBytes [][]byte) ([][]byte, error)
@@ -54,25 +54,35 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		clientDB = rawdb.NewMemoryDatabase()
 	}
 
-	codeSyncer, err := newCodeSyncer(
-		mockClient,
+	codeQueue, err := NewCodeQueue(
 		clientDB,
-		NewDefaultConfig(testRequestSize),
+		make(chan struct{}),
+		WithCapacity(test.queueCapacity),
 	)
 	require.NoError(t, err)
-	if test.setupCodeSyncer != nil {
-		test.setupCodeSyncer(codeSyncer)
-	}
+
+	codeSyncer, err := NewCodeSyncer(
+		mockClient,
+		clientDB,
+		codeQueue.CodeHashes(),
+	)
+	require.NoError(t, err)
 	go func() {
 		for _, codeHashes := range test.codeRequestHashes {
-			if err := codeSyncer.AddCode(codeHashes); err != nil {
+			if err := codeQueue.AddCode(codeHashes); err != nil {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
-		codeSyncer.notifyAccountTrieCompleted()
+		if err := codeQueue.Finalize(); err != nil {
+			require.ErrorIs(t, err, test.err)
+		}
 	}()
 
-	err = codeSyncer.Sync(context.Background())
+	ctx, cancel := utilstest.NewTestContext(t)
+	t.Cleanup(cancel)
+
+	// Run the sync and handle expected error.
+	err = codeSyncer.Sync(ctx)
 	require.ErrorIs(t, err, test.err)
 	if err != nil {
 		return // don't check the state
@@ -86,6 +96,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 }
 
 func TestCodeSyncerSingleCodeHash(t *testing.T) {
+	t.Parallel()
 	codeBytes := utils.RandomBytes(100)
 	codeHash := crypto.Keccak256Hash(codeBytes)
 	testCodeSyncer(t, codeSyncerTest{
@@ -95,6 +106,7 @@ func TestCodeSyncerSingleCodeHash(t *testing.T) {
 }
 
 func TestCodeSyncerManyCodeHashes(t *testing.T) {
+	t.Parallel()
 	numCodeSlices := 5000
 	codeHashes := make([]common.Hash, 0, numCodeSlices)
 	codeByteSlices := make([][]byte, 0, numCodeSlices)
@@ -106,15 +118,14 @@ func TestCodeSyncerManyCodeHashes(t *testing.T) {
 	}
 
 	testCodeSyncer(t, codeSyncerTest{
-		setupCodeSyncer: func(c *codeSyncer) {
-			c.codeHashes = make(chan common.Hash, 10)
-		},
+		queueCapacity:     10,
 		codeRequestHashes: [][]common.Hash{codeHashes[0:100], codeHashes[100:2000], codeHashes[2000:2005], codeHashes[2005:]},
 		codeByteSlices:    codeByteSlices,
 	})
 }
 
 func TestCodeSyncerRequestErrors(t *testing.T) {
+	t.Parallel()
 	codeBytes := utils.RandomBytes(100)
 	codeHash := crypto.Keccak256Hash(codeBytes)
 	err := errors.New("dummy error")
@@ -129,6 +140,7 @@ func TestCodeSyncerRequestErrors(t *testing.T) {
 }
 
 func TestCodeSyncerAddsInProgressCodeHashes(t *testing.T) {
+	t.Parallel()
 	codeBytes := utils.RandomBytes(100)
 	codeHash := crypto.Keccak256Hash(codeBytes)
 	clientDB := rawdb.NewMemoryDatabase()
@@ -141,6 +153,7 @@ func TestCodeSyncerAddsInProgressCodeHashes(t *testing.T) {
 }
 
 func TestCodeSyncerAddsMoreInProgressThanQueueSize(t *testing.T) {
+	t.Parallel()
 	numCodeSlices := 100
 	codeHashes := make([]common.Hash, 0, numCodeSlices)
 	codeByteSlices := make([][]byte, 0, numCodeSlices)

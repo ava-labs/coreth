@@ -29,7 +29,11 @@ var _ atomic.Visitor = (*semanticVerifier)(nil)
 var (
 	ErrAssetIDMismatch            = errors.New("asset IDs in the input don't match the utxo")
 	ErrConflictingAtomicInputs    = errors.New("invalid block due to conflicting atomic inputs")
+	errFailedToFetchImportUTXOs   = errors.New("failed to fetch import UTXOs")
+	errFailedToUnmarshalUTXO      = errors.New("failed to unmarshal UTXO")
 	errRejectedParent             = errors.New("rejected parent")
+	errIncorrectNumCredentials    = errors.New("incorrect number of credentials")
+	errIncorrectNumSignatures     = errors.New("incorrect number of signatures")
 	errPublicKeySignatureMismatch = errors.New("signature doesn't match public key")
 )
 
@@ -328,7 +332,7 @@ func verifyCredentialsExportTx(
 		}
 
 		if len(cred.Sigs) != 1 {
-			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
+			return fmt.Errorf("%w want 1 signature for EVM Input Credential, but got %d", errIncorrectNumSignatures, len(cred.Sigs))
 		}
 		pubKey, err := cache.RecoverPublicKey(utx.Bytes(), cred.Sigs[0][:])
 		if err != nil {

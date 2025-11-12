@@ -11,9 +11,9 @@ import (
 	avalanchedb "github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
+	corethdb "github.com/ava-labs/avalanchego/vms/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
-	corethdb "github.com/ava-labs/coreth/plugin/evm/database"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
@@ -36,7 +36,7 @@ func (vm *VM) Initialize(
 	_ []*common.Fx,
 	appSender common.AppSender,
 ) error {
-	ethDB := rawdb.NewDatabase(corethdb.WrapDatabase(db))
+	ethDB := rawdb.NewDatabase(corethdb.New(db))
 
 	genesis := new(core.Genesis)
 	if err := json.Unmarshal(genesisBytes, genesis); err != nil {

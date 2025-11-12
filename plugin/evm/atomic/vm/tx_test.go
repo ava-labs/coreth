@@ -42,15 +42,9 @@ func TestCalculateDynamicFee(t *testing.T) {
 
 	for _, test := range tests {
 		cost, err := atomic.CalculateDynamicFee(test.gas, test.baseFee)
+		require.ErrorIs(t, err, test.expectedErr)
 		if test.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("Unexpectedly failed to calculate dynamic fee: %s", err)
-			}
-			if cost != test.expectedValue {
-				t.Fatalf("Expected value: %d, found: %d", test.expectedValue, cost)
-			}
-		} else if err != test.expectedErr {
-			t.Fatalf("Expected error: %s, found error: %s", test.expectedErr, err)
+			require.Equal(t, test.expectedValue, cost)
 		}
 	}
 }
@@ -59,7 +53,7 @@ type atomicTxVerifyTest struct {
 	ctx         *snow.Context
 	generate    func() atomic.UnsignedAtomicTx
 	rules       *extras.Rules
-	expectedErr string
+	expectedErr error
 }
 
 // executeTxVerifyTest tests
@@ -67,11 +61,7 @@ func executeTxVerifyTest(t *testing.T, test atomicTxVerifyTest) {
 	require := require.New(t)
 	atomicTx := test.generate()
 	err := atomicTx.Verify(test.ctx, *test.rules)
-	if len(test.expectedErr) == 0 {
-		require.NoError(err)
-	} else {
-		require.ErrorContains(err, test.expectedErr, "expected tx verify to fail with specified error")
-	}
+	require.ErrorIs(err, test.expectedErr)
 }
 
 type atomicTxTest struct {
@@ -80,7 +70,7 @@ type atomicTxTest struct {
 	// define a string that should be contained in the error message if the tx fails verification
 	// at some point. If the strings are empty, then the tx should pass verification at the
 	// respective step.
-	semanticVerifyErr, evmStateTransferErr, acceptErr string
+	semanticVerifyErr, evmStateTransferErr, acceptErr error
 	// checkState is called iff building and verifying a block containing the transaction is successful. Verifies
 	// the state of the VM following the block's acceptance.
 	checkState func(t *testing.T, vm *VM)

@@ -10,19 +10,15 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/utils"
-
-	// TODO(arr4n) These tests were originally part of the `coreth/core/types`
-	// package so assume the presence of identifiers. A dot-import reduces PR
-	// noise during the refactoring.
-	. "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/coreth/utils/utilstest"
 )
 
 func TestCopyHeader(t *testing.T) {
@@ -46,7 +42,7 @@ func TestCopyHeader(t *testing.T) {
 		headerExtra = &HeaderExtra{}
 		extras.Header.Set(want, headerExtra)
 
-		assert.Equal(t, want, cpy)
+		require.Equal(t, want, cpy)
 	})
 
 	t.Run("filled_header", func(t *testing.T) {
@@ -58,8 +54,8 @@ func TestCopyHeader(t *testing.T) {
 		gotExtra := GetHeaderExtra(gotHeader)
 
 		wantHeader, wantExtra := headerWithNonZeroFields()
-		assert.Equal(t, wantHeader, gotHeader)
-		assert.Equal(t, wantExtra, gotExtra)
+		require.Equal(t, wantHeader, gotHeader)
+		require.Equal(t, wantExtra, gotExtra)
 
 		exportedFieldsPointToDifferentMemory(t, header, gotHeader)
 		exportedFieldsPointToDifferentMemory(t, GetHeaderExtra(header), gotExtra)
@@ -92,6 +88,8 @@ func exportedFieldsPointToDifferentMemory[T interface {
 				assertDifferentPointers(t, f, fieldCp)
 			case *common.Hash:
 				assertDifferentPointers(t, f, fieldCp)
+			case *acp226.DelayExcess:
+				assertDifferentPointers(t, f, fieldCp)
 			case *uint64:
 				assertDifferentPointers(t, f, fieldCp)
 			case *[]uint8:
@@ -99,7 +97,7 @@ func exportedFieldsPointToDifferentMemory[T interface {
 			case []uint8:
 				assertDifferentPointers(t, unsafe.SliceData(f), unsafe.SliceData(fieldCp.([]uint8)))
 			default:
-				t.Errorf("field %q type %T needs to be added to switch cases of exportedFieldsDeepCopied", field.Name, f)
+				require.Failf(t, "field type needs to be added to switch cases", "field %q type %T needs to be added to switch cases of exportedFieldsDeepCopied", field.Name, f)
 			}
 		})
 	}
@@ -109,14 +107,9 @@ func exportedFieldsPointToDifferentMemory[T interface {
 // pointers pointing to different memory locations.
 func assertDifferentPointers[T any](t *testing.T, a *T, b any) {
 	t.Helper()
-	switch {
-	case a == nil:
-		t.Errorf("a (%T) cannot be nil", a)
-	case b == nil:
-		t.Errorf("b (%T) cannot be nil", b)
-	case a == b:
-		t.Errorf("pointers to same memory")
-	}
+	require.NotNilf(t, a, "a (%T) cannot be nil", a)
+	require.NotNilf(t, b, "b (%T) cannot be nil", b)
+	require.NotSame(t, a, b, "a and b must not point to the same memory address")
 	// Note: no need to check `b` is of the same type as `a`, otherwise
 	// the memory address would be different as well.
 }
@@ -232,21 +225,19 @@ func TestBodyExtraRLP(t *testing.T) {
 		headerHashComparer(),
 		cmpopts.IgnoreUnexported(Body{}),
 	}
-	if diff := cmp.Diff(wantBody, gotBody, opts); diff != "" {
-		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
-	}
+	diff := cmp.Diff(wantBody, gotBody, opts)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip (-want +got):\n%s", wantBody, diff)
 
 	gotExtra := extras.Body.Get(gotBody)
-	if diff := cmp.Diff(wantExtra, gotExtra); diff != "" {
-		t.Errorf("%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBody, diff)
-	}
+	diff = cmp.Diff(wantExtra, gotExtra)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBody, diff)
 
 	// Golden data from original coreth implementation, before integration of
 	// libevm. WARNING: changing these values can break backwards compatibility
 	// with extreme consequences.
 	const wantHex = "f90235dedd0105049402000000000000000000000000000000000000000306808080f90211f9020ea00900000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000070880808080a00000000000000000000000000000000000000000000000000000000000000000880000000000000000a00a000000000000000000000000000000000000000000000000000000000000000d0e"
 
-	assert.Equal(t, wantHex, hex.EncodeToString(encoded), "golden data")
+	require.Equal(t, wantHex, hex.EncodeToString(encoded), "golden data")
 }
 
 func TestBlockExtraRLP(t *testing.T) {
@@ -268,21 +259,19 @@ func TestBlockExtraRLP(t *testing.T) {
 		headerHashComparer(),
 		cmpopts.IgnoreUnexported(Block{}),
 	}
-	if diff := cmp.Diff(wantBlock, gotBlock, opts); diff != "" {
-		t.Errorf("%T diff after RLP round-trip (-want +got):\n%s", gotBlock, diff)
-	}
+	diff := cmp.Diff(wantBlock, gotBlock, opts)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip (-want +got):\n%s", gotBlock, diff)
 
 	gotExtra := extras.Block.Get(gotBlock)
-	if diff := cmp.Diff(wantExtra, gotExtra); diff != "" {
-		t.Errorf("%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBlock, diff)
-	}
+	diff = cmp.Diff(wantExtra, gotExtra)
+	require.Emptyf(t, diff, "%T diff after RLP round-trip of %T (-want +got):\n%s", wantExtra, wantBlock, diff)
 
 	// Golden data from original coreth implementation, before integration of
 	// libevm. WARNING: changing these values can break backwards compatibility
 	// with extreme consequences.
 	const wantHex = "f90446f9020ea00100000000000000000000000000000000000000000000000000000000000000a008539331084089cedbaf7771d0f5f69847f246e0676e4d96091a49c53c89360b940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000808080808080a00000000000000000000000000000000000000000000000000000000000000000880000000000000000a00200000000000000000000000000000000000000000000000000000000000000dedd0105049402000000000000000000000000000000000000000306808080f90211f9020ea00900000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000070880808080a00000000000000000000000000000000000000000000000000000000000000000880000000000000000a00a000000000000000000000000000000000000000000000000000000000000000d0e"
 
-	assert.Equal(t, wantHex, hex.EncodeToString(encoded), "golden data")
+	require.Equal(t, wantHex, hex.EncodeToString(encoded), "golden data")
 }
 
 // TestBlockBody tests the [BlockBodyExtra.Copy] method is implemented correctly.
@@ -305,7 +294,7 @@ func TestBlockBody(t *testing.T) {
 		ExtData: extData,
 	}
 	gotExtra := extras.Body.Get(block.Body()) // [types.Block.Body] invokes [BlockBodyExtra.Copy]
-	assert.Equal(t, wantExtra, gotExtra)
+	require.Equal(t, wantExtra, gotExtra)
 
 	exportedFieldsPointToDifferentMemory(t, blockExtras, gotExtra)
 }
@@ -322,12 +311,14 @@ func TestBlockGetters(t *testing.T) {
 		wantVersion          uint32
 		wantExtData          []byte
 		wantTimeMilliseconds *uint64
+		wantMinDelayExcess   *acp226.DelayExcess
 	}{
 		{
 			name:                 "empty",
 			headerExtra:          &HeaderExtra{},
 			blockExtra:           &BlockBodyExtra{},
 			wantTimeMilliseconds: nil,
+			wantMinDelayExcess:   nil,
 		},
 		{
 			name: "fields_set",
@@ -335,6 +326,7 @@ func TestBlockGetters(t *testing.T) {
 				ExtDataGasUsed:   big.NewInt(1),
 				BlockGasCost:     big.NewInt(2),
 				TimeMilliseconds: utils.NewUint64(3),
+				MinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(4)),
 			},
 			blockExtra: &BlockBodyExtra{
 				Version: 3,
@@ -345,6 +337,7 @@ func TestBlockGetters(t *testing.T) {
 			wantVersion:          3,
 			wantExtData:          []byte{4},
 			wantTimeMilliseconds: utils.NewUint64(3),
+			wantMinDelayExcess:   utilstest.PointerTo(acp226.DelayExcess(4)),
 		},
 	}
 
@@ -358,19 +351,22 @@ func TestBlockGetters(t *testing.T) {
 			extras.Block.Set(block, test.blockExtra)
 
 			extData := BlockExtData(block)
-			assert.Equal(t, test.wantExtData, extData, "BlockExtData()")
+			require.Equal(t, test.wantExtData, extData, "BlockExtData()")
 
 			version := BlockVersion(block)
-			assert.Equal(t, test.wantVersion, version, "BlockVersion()")
+			require.Equal(t, test.wantVersion, version, "BlockVersion()")
 
 			extDataGasUsed := BlockExtDataGasUsed(block)
-			assert.Equal(t, test.wantExtDataGasUsed, extDataGasUsed, "BlockExtDataGasUsed()")
+			require.Equal(t, test.wantExtDataGasUsed, extDataGasUsed, "BlockExtDataGasUsed()")
 
 			blockGasCost := BlockGasCost(block)
-			assert.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
+			require.Equal(t, test.wantBlockGasCost, blockGasCost, "BlockGasCost()")
 
 			timeMilliseconds := BlockTimeMilliseconds(block)
-			assert.Equal(t, test.wantTimeMilliseconds, timeMilliseconds, "BlockTimeMilliseconds()")
+			require.Equal(t, test.wantTimeMilliseconds, timeMilliseconds, "BlockTimeMilliseconds()")
+
+			minDelayExcess := BlockMinDelayExcess(block)
+			require.Equal(t, test.wantMinDelayExcess, minDelayExcess, "BlockMinDelayExcess()")
 		})
 	}
 }
@@ -490,7 +486,7 @@ func TestNewBlockWithExtData(t *testing.T) {
 				test.recalc,
 			)
 
-			assert.Equal(t, test.wantBlock(), block)
+			require.Equal(t, test.wantBlock(), block)
 		})
 	}
 }

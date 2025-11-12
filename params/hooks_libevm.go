@@ -149,7 +149,6 @@ func makePrecompile(contract contract.StatefulPrecompiledContract) libevm.Precom
 			// Otherwise, we allow the precompile to be called
 		}
 
-		// EVM semantic addresses are used here to maintain consistency with prior behavior as present in AvalancheGo 1.13.0.
 		return contract.Run(accessibleState, env.Addresses().EVMSemantic.Caller, env.Addresses().EVMSemantic.Self, input, suppliedGas, env.ReadOnly())
 	}
 	return vm.NewStatefulPrecompile(legacy.PrecompiledStatefulContract(run).Upgrade())
@@ -192,8 +191,9 @@ func (a accessibleState) GetBlockContext() contract.BlockContext {
 	return a.blockContext
 }
 
-func (a accessibleState) GetChainConfig() precompileconfig.ChainConfig {
-	return GetExtra(a.env.ChainConfig())
+func (a accessibleState) GetRules() precompileconfig.Rules {
+	chainConfigExtra := GetExtra(a.GetPrecompileEnv().ChainConfig())
+	return chainConfigExtra.GetAvalancheRules(a.GetBlockContext().Timestamp())
 }
 
 func (a accessibleState) GetSnowContext() *snow.Context {

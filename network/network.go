@@ -35,7 +35,9 @@ const (
 
 var (
 	errAcquiringSemaphore                      = errors.New("error acquiring semaphore")
+	errEmptyNodeID                             = errors.New("cannot send request to empty nodeID")
 	errExpiredRequest                          = errors.New("expired request")
+	errNoPeersFound                            = errors.New("no peers found matching version")
 	_                     Network              = (*network)(nil)
 	_                     validators.Connector = (*network)(nil)
 	_                     common.AppHandler    = (*network)(nil)
@@ -175,18 +177,22 @@ func (n *network) SendAppRequestAny(ctx context.Context, minVersion *version.App
 
 	n.lock.Lock()
 	defer n.lock.Unlock()
-	if nodeID, ok := n.peers.GetAnyPeer(minVersion); ok {
+	nodeID, ok, err := n.peers.GetAnyPeer(minVersion)
+	if err != nil {
+		return ids.EmptyNodeID, err
+	}
+	if ok {
 		return nodeID, n.sendAppRequest(ctx, nodeID, request, handler)
 	}
 
 	n.activeAppRequests.Release(1)
-	return ids.EmptyNodeID, fmt.Errorf("no peers found matching version %s out of %d peers", minVersion, n.peers.Size())
+	return ids.EmptyNodeID, fmt.Errorf("%w: version: %s, numPeers: %d", errNoPeersFound, minVersion, n.peers.Size())
 }
 
 // SendAppRequest sends request message bytes to specified nodeID, notifying the responseHandler on response or failure
 func (n *network) SendAppRequest(ctx context.Context, nodeID ids.NodeID, request []byte, responseHandler message.ResponseHandler) error {
 	if nodeID == ids.EmptyNodeID {
-		return fmt.Errorf("cannot send request to empty nodeID, nodeID=%s, requestLen=%d", nodeID, len(request))
+		return fmt.Errorf("%w, nodeID=%s, requestLen=%d", errEmptyNodeID, nodeID, len(request))
 	}
 
 	// If the context was cancelled, we can skip sending this request.

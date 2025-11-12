@@ -7,12 +7,12 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 )
 
 // feeStateBeforeBlock takes the previous header and the timestamp of its child
@@ -20,9 +20,11 @@ import (
 func feeStateBeforeBlock(
 	config *extras.ChainConfig,
 	parent *types.Header,
-	timestamp uint64,
+	timeMS uint64,
 ) (acp176.State, error) {
-	if timestamp < parent.Time {
+	timestamp := timeMS / 1000
+	parentMS := customtypes.HeaderTimeMilliseconds(parent)
+	if timeMS < parentMS {
 		return acp176.State{}, fmt.Errorf("%w: timestamp %d prior to parent timestamp %d",
 			errInvalidTimestamp,
 			timestamp,
@@ -43,7 +45,12 @@ func feeStateBeforeBlock(
 		}
 	}
 
-	state.AdvanceTime(timestamp - parent.Time)
+	switch {
+	case config.IsGranite(timestamp):
+		state.AdvanceMilliseconds(timeMS - parentMS)
+	case config.IsFortuna(timestamp):
+		state.AdvanceSeconds(timestamp - parent.Time)
+	}
 	return state, nil
 }
 
@@ -56,7 +63,8 @@ func feeStateAfterBlock(
 	desiredTargetExcess *gas.Gas,
 ) (acp176.State, error) {
 	// Calculate the gas state after the parent block
-	state, err := feeStateBeforeBlock(config, parent, header.Time)
+	timeMS := customtypes.HeaderTimeMilliseconds(header)
+	state, err := feeStateBeforeBlock(config, parent, timeMS)
 	if err != nil {
 		return acp176.State{}, fmt.Errorf("calculating initial fee state: %w", err)
 	}

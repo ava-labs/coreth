@@ -10,6 +10,7 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
+	"github.com/ava-labs/avalanchego/vms/evm/database"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -20,7 +21,6 @@ import (
 	"github.com/ava-labs/libevm/triedb"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
-	"github.com/ava-labs/coreth/plugin/evm/database"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -72,7 +72,7 @@ func newAtomicTrie(
 	}
 
 	trieDB := triedb.NewDatabase(
-		rawdb.NewDatabase(database.WrapDatabase(atomicTrieDB)),
+		rawdb.NewDatabase(database.New(atomicTrieDB)),
 		&triedb.Config{
 			DBOverride: hashdb.Config{
 				CleanCacheSize: 64 * units.MiB, // Allocate 64MB of memory for clean cache
@@ -244,7 +244,9 @@ func (a *AtomicTrie) InsertTrie(nodes *trienode.NodeSet, root common.Hash) error
 			return err
 		}
 	}
-	a.trieDB.Reference(root, common.Hash{})
+	if err := a.trieDB.Reference(root, common.Hash{}); err != nil {
+		return err
+	}
 
 	// The use of [Cap] in [insertTrie] prevents exceeding the configured memory
 	// limit (and OOM) in case there is a large backlog of processing (unaccepted) blocks.
@@ -285,12 +287,13 @@ func (a *AtomicTrie) AcceptTrie(height uint64, root common.Hash) (bool, error) {
 	// - not committted, in which case the current root we are inserting contains
 	//   references to all the relevant data from the previous root, so the previous
 	//   root can be dereferenced.
-	a.trieDB.Dereference(a.lastAcceptedRoot)
+	if err := a.trieDB.Dereference(a.lastAcceptedRoot); err != nil {
+		return false, err
+	}
 	a.lastAcceptedRoot = root
 	return hasCommitted, nil
 }
 
 func (a *AtomicTrie) RejectTrie(root common.Hash) error {
-	a.trieDB.Dereference(root)
-	return nil
+	return a.trieDB.Dereference(root)
 }

@@ -33,6 +33,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/components/gas"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
+	"github.com/ava-labs/avalanchego/vms/evm/acp226"
 	"github.com/ava-labs/firewood-go-ethhash/ffi"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -70,7 +72,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/vmerrors"
 	"github.com/ava-labs/coreth/plugin/evm/vmsync"
 	"github.com/ava-labs/coreth/precompile/precompileconfig"
@@ -144,7 +145,6 @@ var (
 	errFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
 	errFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
 	errFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
-	errPathStateUnsupported              = errors.New("path state scheme is not supported")
 )
 
 var originalStderr *os.File
@@ -410,8 +410,7 @@ func (vm *VM) Initialize(
 		}
 	}
 	if vm.ethConfig.StateScheme == rawdb.PathScheme {
-		log.Error("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
-		return errPathStateUnsupported
+		log.Warn("Path state scheme is not supported. Please use HashDB or Firewood state schemes instead")
 	}
 
 	// Create directory for offline pruning
@@ -468,7 +467,9 @@ func (vm *VM) Initialize(
 
 	// Add p2p warp message warpHandler
 	warpHandler := acp118.NewCachedHandler(meteredCache, vm.warpBackend, vm.ctx.WarpSigner)
-	vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler)
+	if err = vm.Network.AddHandler(p2p.SignatureRequestHandlerID, warpHandler); err != nil {
+		return err
+	}
 
 	vm.stateSyncDone = make(chan struct{})
 
@@ -544,6 +545,12 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 		*desiredTargetExcess = acp176.DesiredTargetExcess(*vm.config.GasTarget)
 	}
 
+	var desiredDelayExcess *acp226.DelayExcess
+	if vm.config.MinDelayTarget != nil {
+		desiredDelayExcess = new(acp226.DelayExcess)
+		*desiredDelayExcess = acp226.DesiredDelayExcess(*vm.config.MinDelayTarget)
+	}
+
 	vm.eth, err = eth.New(
 		node,
 		&vm.ethConfig,
@@ -555,6 +562,7 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 			vm.extensionConfig.ConsensusCallbacks,
 			dummy.Mode{},
 			desiredTargetExcess,
+			desiredDelayExcess,
 		),
 		vm.clock,
 	)
@@ -870,7 +878,7 @@ func (vm *VM) WaitForEvent(ctx context.Context) (commonEng.Message, error) {
 		}
 	}
 
-	return builder.waitForEvent(ctx)
+	return builder.waitForEvent(ctx, vm.blockChain.CurrentHeader())
 }
 
 // Shutdown implements the snowman.ChainVM interface
@@ -890,7 +898,9 @@ func (vm *VM) Shutdown(context.Context) error {
 	for _, handler := range vm.rpcHandlers {
 		handler.Stop()
 	}
-	vm.eth.Stop()
+	if err := vm.eth.Stop(); err != nil {
+		log.Error("error stopping eth", "err", err)
+	}
 	vm.shutdownWg.Wait()
 	return nil
 }
@@ -912,7 +922,7 @@ func (vm *VM) buildBlockWithContext(_ context.Context, proposerVMBlockCtx *block
 	}
 
 	block, err := vm.miner.GenerateBlock(predicateCtx)
-	vm.builder.handleGenerateBlock()
+	vm.builder.handleGenerateBlock(vm.blockChain.CurrentHeader().ParentHash)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", vmerrors.ErrGenerateBlockFailed, err)
 	}
@@ -1071,7 +1081,7 @@ func (vm *VM) CreateHandlers(context.Context) (map[string]http.Handler, error) {
 		warpSDKClient := vm.Network.NewClient(p2p.SignatureRequestHandlerID)
 		signatureAggregator := acp118.NewSignatureAggregator(vm.ctx.Log, warpSDKClient)
 
-		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx, vm.warpBackend, signatureAggregator, vm.requirePrimaryNetworkSigners)); err != nil {
+		if err := handler.RegisterName("warp", warp.NewAPI(vm.ctx, vm.warpBackend, signatureAggregator)); err != nil {
 			return nil, err
 		}
 		enabledAPIs = append(enabledAPIs, "warp")
@@ -1103,24 +1113,6 @@ func (vm *VM) chainConfigExtra() *extras.ChainConfig {
 func (vm *VM) rules(number *big.Int, time uint64) extras.Rules {
 	ethrules := vm.chainConfig.Rules(number, params.IsMergeTODO, time)
 	return *params.GetRulesExtra(ethrules)
-}
-
-// currentRules returns the chain rules for the current block.
-func (vm *VM) currentRules() extras.Rules {
-	header := vm.eth.APIBackend.CurrentHeader()
-	return vm.rules(header.Number, header.Time)
-}
-
-// requirePrimaryNetworkSigners returns true if warp messages from the primary
-// network must be signed by the primary network validators.
-// This is necessary when the subnet is not validating the primary network.
-func (vm *VM) requirePrimaryNetworkSigners() bool {
-	switch c := vm.currentRules().Precompiles[warpcontract.ContractAddress].(type) {
-	case *warpcontract.Config:
-		return c.RequirePrimaryNetworkSigners
-	default: // includes nil due to non-presence
-		return false
-	}
 }
 
 func (vm *VM) startContinuousProfiler() {

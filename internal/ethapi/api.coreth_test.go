@@ -8,12 +8,12 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 )
 
 type testSuggestPriceOptionsBackend struct {
@@ -162,7 +162,7 @@ func TestSuggestPriceOptions(t *testing.T) {
 			}
 			api := NewEthereumAPI(backend)
 
-			got, err := api.SuggestPriceOptions(context.Background())
+			got, err := api.SuggestPriceOptions(t.Context())
 			require.NoError(err)
 			require.Equal(test.want, got)
 		})

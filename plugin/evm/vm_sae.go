@@ -19,7 +19,7 @@ import (
 	"github.com/ava-labs/strevm/adaptor"
 	"github.com/ava-labs/strevm/blocks"
 
-	corethdatabase "github.com/ava-labs/coreth/plugin/evm/database"
+	corethdatabase "github.com/ava-labs/avalanchego/vms/evm/database"
 	sae "github.com/ava-labs/strevm"
 )
 
@@ -106,7 +106,7 @@ func (t *TransitionVM) afterAccept(ctx context.Context, block snowman.Block) err
 		return fmt.Errorf("shutting down preFork VM: %w", err)
 	}
 
-	db := corethdatabase.WrapDatabase(prefixdb.NewNested(ethDBPrefix, t.db))
+	db := corethdatabase.New(prefixdb.NewNested(ethDBPrefix, t.db))
 	_ = db
 	vm, err := sae.New(
 		ctx,

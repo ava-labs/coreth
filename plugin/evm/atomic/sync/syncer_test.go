@@ -68,10 +68,10 @@ func TestSyncerScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rand.Seed(1)
+			r := rand.New(rand.NewSource(1))
 			targetHeight := 10 * uint64(testCommitInterval)
 			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), state.TrieKeyLength)
+			root, _, _ := statesynctest.GenerateTrie(t, r, serverTrieDB, int(targetHeight), state.TrieKeyLength)
 
 			testSyncer(t, serverTrieDB, targetHeight, root, nil, int64(targetHeight), tt.numWorkers)
 		})
@@ -104,11 +104,11 @@ func TestSyncerResumeScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rand.Seed(1)
+			r := rand.New(rand.NewSource(1))
 			targetHeight := 10 * uint64(testCommitInterval)
 			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 			numTrieKeys := int(targetHeight) - 1 // no atomic ops for genesis
-			root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys, state.TrieKeyLength)
+			root, _, _ := statesynctest.GenerateTrie(t, r, serverTrieDB, numTrieKeys, state.TrieKeyLength)
 
 			testSyncer(t, serverTrieDB, targetHeight, root, []atomicSyncTestCheckpoint{
 				{
@@ -148,16 +148,16 @@ func TestSyncerResumeNewRootCheckpointScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rand.Seed(1)
+			r := rand.New(rand.NewSource(1))
 			targetHeight1 := 10 * uint64(testCommitInterval)
 			serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 			numTrieKeys1 := int(targetHeight1) - 1 // no atomic ops for genesis
-			root1, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, numTrieKeys1, state.TrieKeyLength)
+			root1, _, _ := statesynctest.GenerateTrie(t, r, serverTrieDB, numTrieKeys1, state.TrieKeyLength)
 
 			targetHeight2 := 20 * uint64(testCommitInterval)
 			numTrieKeys2 := int(targetHeight2) - 1 // no atomic ops for genesis
 			root2, _, _ := statesynctest.FillTrie(
-				t, numTrieKeys1, numTrieKeys2, state.TrieKeyLength, serverTrieDB, root1,
+				t, r, numTrieKeys1, numTrieKeys2, state.TrieKeyLength, serverTrieDB, root1,
 			)
 
 			testSyncer(t, serverTrieDB, targetHeight1, root1, []atomicSyncTestCheckpoint{
@@ -182,25 +182,23 @@ func TestSyncerParallelizationScenarios(t *testing.T) {
 		description       string
 	}{
 		{
-			name:              "parallelization with 4 workers",
-			targetHeight:      2 * uint64(testCommitInterval), // 2,048 leaves for meaningful parallelization
-			numWorkers:        4,
-			useDefaultWorkers: false,
-			description:       "should work correctly with 4 worker goroutines",
+			name:         "parallelization with 4 workers",
+			targetHeight: 2 * uint64(testCommitInterval), // 2,048 leaves for meaningful parallelization
+			numWorkers:   4,
+			description:  "should work correctly with 4 worker goroutines",
 		},
 		{
-			name:              "default parallelization",
-			targetHeight:      uint64(testCommitInterval), // 1,024 leaves to test commit boundary
-			numWorkers:        0,
-			useDefaultWorkers: true,
-			description:       "should default to parallelization with default workers",
+			name:         "default parallelization",
+			targetHeight: uint64(testCommitInterval), // 1,024 leaves to test commit boundary
+			numWorkers:   0,
+			description:  "should default to parallelization with default workers",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, mockClient, atomicBackend, clientDB, root := setupParallelizationTest(t, tt.targetHeight)
-			runParallelizationTest(t, ctx, mockClient, clientDB, atomicBackend, root, tt.targetHeight, tt.numWorkers, tt.useDefaultWorkers)
+			runParallelizationTest(t, ctx, mockClient, clientDB, atomicBackend, root, tt.targetHeight, tt.numWorkers)
 		})
 	}
 }
@@ -208,13 +206,13 @@ func TestSyncerParallelizationScenarios(t *testing.T) {
 // TestSyncerContextCancellation verifies that the syncer properly handles context cancellation.
 func TestSyncerContextCancellation(t *testing.T) {
 	ctx, mockClient, atomicBackend, clientDB, root := setupParallelizationTest(t, testTargetHeight)
-	config := createTestConfig(testTargetHeight)
-	syncer := createTestSyncer(t, mockClient, clientDB, atomicBackend, root, config)
+	syncer, err := NewSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, testTargetHeight)
+	require.NoError(t, err, "NewSyncer()")
 
 	// Immediately cancel the context to simulate cancellation.
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
-	err := syncer.Sync(ctx)
+	err = syncer.Sync(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -222,8 +220,9 @@ func TestSyncerContextCancellation(t *testing.T) {
 // It returns the context, mock client, atomic backend, client DB, and root hash for testing.
 func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Context, *syncclient.TestClient, *state.AtomicBackend, *versiondb.Database, common.Hash) {
 	// Create a simple test trie with some data.
+	r := rand.New(rand.NewSource(1))
 	serverTrieDB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	root, _, _ := statesynctest.GenerateTrie(t, serverTrieDB, int(targetHeight), state.TrieKeyLength)
+	root, _, _ := statesynctest.GenerateTrie(t, r, serverTrieDB, int(targetHeight), state.TrieKeyLength)
 
 	ctx, mockClient, atomicBackend, clientDB := setupTestInfrastructure(t, serverTrieDB)
 
@@ -231,20 +230,14 @@ func setupParallelizationTest(t *testing.T, targetHeight uint64) (context.Contex
 }
 
 // runParallelizationTest executes a parallelization test with the given parameters.
-func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, clientDB *versiondb.Database, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int, useDefaultWorkers bool) {
-	config := createTestConfig(targetHeight)
-
-	// Set worker count based on test type
-	if useDefaultWorkers {
-		config.NumWorkers = defaultNumWorkers
-	} else {
-		config.NumWorkers = numWorkers
-	}
-
-	syncer := createTestSyncer(t, mockClient, clientDB, atomicBackend, root, config)
+func runParallelizationTest(t *testing.T, ctx context.Context, mockClient *syncclient.TestClient, clientDB *versiondb.Database, atomicBackend *state.AtomicBackend, root common.Hash, targetHeight uint64, numWorkers int) {
+	syncer, err := NewSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight)
+	require.NoError(t, err, "NewSyncer()")
 
 	workerType := "default workers"
-	if !useDefaultWorkers {
+	if numWorkers > 0 {
+		syncer, err = NewSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), root, targetHeight, WithNumWorkers(numWorkers))
+		require.NoError(t, err, "NewSyncer()")
 		workerType = fmt.Sprintf("%d workers", numWorkers)
 	}
 
@@ -262,14 +255,13 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	// For each checkpoint, replace the leafsIntercept to shut off the syncer at the correct point and force resume from the checkpoint's
 	// next trie.
 	for i, checkpoint := range checkpoints {
-		// Create syncer targeting the current [syncTrie].
-		syncerConfig := Config{
-			TargetHeight: targetHeight,
-			RequestSize:  defaultRequestSize,
-			NumWorkers:   numWorkers,
-		}
-		syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, &syncerConfig)
-		require.NoError(t, err, "could not create syncer")
+		syncer, err := NewSyncer(
+			mockClient, clientDB, atomicBackend.AtomicTrie(),
+			targetRoot,
+			targetHeight,
+			WithNumWorkers(numWorkers),
+		)
+		require.NoError(t, err, "NewSyncer()")
 		mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 			// If this request exceeds the desired number of leaves, intercept the request with an error
 			if numLeaves+len(leafsResponse.Keys) > checkpoint.leafCutoff {
@@ -291,13 +283,14 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	}
 
 	// Create syncer targeting the current [targetRoot].
-	syncerConfig := Config{
-		TargetHeight: targetHeight,
-		RequestSize:  defaultRequestSize,
-		NumWorkers:   numWorkers,
-	}
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, &syncerConfig)
-	require.NoError(t, err, "could not create syncer")
+	syncer, err := NewSyncer(
+		mockClient, clientDB,
+		atomicBackend.AtomicTrie(), targetRoot,
+		targetHeight,
+		WithRequestSize(defaultRequestSize),
+		WithNumWorkers(numWorkers),
+	)
+	require.NoError(t, err, "NewSyncer()")
 	mockClient.GetLeafsIntercept = func(_ message.LeafsRequest, leafsResponse message.LeafsResponse) (message.LeafsResponse, error) {
 		// Increment the number of leaves and return the original response
 		numLeaves += len(leafsResponse.Keys)
@@ -317,9 +310,8 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	hasher := trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil))
 
 	serverTrie, err := trie.New(trie.TrieID(targetRoot), serverTrieDB)
-	if err != nil {
-		t.Fatalf("failed to create server trie: %v", err)
-	}
+	require.NoError(t, err)
+
 	addAllKeysWithPrefix := func(prefix []byte) error {
 		nodeIt, err := serverTrie.NodeIterator(prefix)
 		if err != nil {
@@ -338,16 +330,12 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 	}
 
 	for height := uint64(0); height <= targetHeight; height++ {
-		if err := addAllKeysWithPrefix(database.PackUInt64(height)); err != nil {
-			t.Fatalf("failed to add keys for height %d: %v", height, err)
-		}
+		require.NoErrorf(t, addAllKeysWithPrefix(database.PackUInt64(height)), "failed to add keys for height %d", height)
 
 		if height%testCommitInterval == 0 {
 			expected := hasher.Hash()
 			root, err := atomicTrie.Root(height)
-			if err != nil {
-				t.Fatalf("failed to get root for height %d: %v", height, err)
-			}
+			require.NoError(t, err)
 			require.Equal(t, expected, root)
 		}
 	}
@@ -356,7 +344,7 @@ func testSyncer(t *testing.T, serverTrieDB *triedb.Database, targetHeight uint64
 // setupTestInfrastructure creates the common test infrastructure components.
 // It returns the context, mock client, atomic backend, and client database.
 func setupTestInfrastructure(t *testing.T, serverTrieDB *triedb.Database) (context.Context, *syncclient.TestClient, *state.AtomicBackend, *versiondb.Database) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	mockClient := syncclient.NewTestClient(
@@ -368,26 +356,10 @@ func setupTestInfrastructure(t *testing.T, serverTrieDB *triedb.Database) (conte
 
 	clientDB := versiondb.New(memdb.New())
 	repo, err := state.NewAtomicTxRepository(clientDB, message.Codec, 0)
-	require.NoError(t, err, "could not initialize atomic tx repository")
+	require.NoError(t, err, "NewAtomicTxRepository()")
 
 	atomicBackend, err := state.NewAtomicBackend(atomictest.TestSharedMemory(), nil, repo, 0, common.Hash{}, testCommitInterval)
-	require.NoError(t, err, "could not initialize atomic backend")
+	require.NoError(t, err, "NewAtomicBackend()")
 
 	return ctx, mockClient, atomicBackend, clientDB
-}
-
-// createTestConfig creates a test configuration with default values.
-func createTestConfig(targetHeight uint64) Config {
-	return Config{
-		TargetHeight: targetHeight,
-		RequestSize:  defaultRequestSize,
-		NumWorkers:   0, // Will use default
-	}
-}
-
-// createTestSyncer creates a test syncer with the given configuration.
-func createTestSyncer(t *testing.T, mockClient *syncclient.TestClient, clientDB *versiondb.Database, atomicBackend *state.AtomicBackend, targetRoot common.Hash, config Config) *syncer {
-	syncer, err := newSyncer(mockClient, clientDB, atomicBackend.AtomicTrie(), targetRoot, &config)
-	require.NoError(t, err, "could not create syncer")
-	return syncer
 }
