@@ -18,7 +18,7 @@ require (
 	github.com/ava-labs/avalanchego v1.13.6-0.20251028023847-6afe371e3b86
 	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.13
 	github.com/ava-labs/libevm v1.13.15-0.20251016142715-1bccf4f2ddb2
-	github.com/ava-labs/strevm v0.0.0-00010101000000-000000000000
+	github.com/ava-labs/strevm v0.0.0-20251110173938-998dcaa22a26
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/fjl/gencodec v0.1.1
@@ -194,5 +194,3 @@ tool (
 	github.com/ava-labs/libevm/rlp/rlpgen
 	github.com/onsi/ginkgo/v2/ginkgo
 )
-
-replace github.com/ava-labs/strevm => /Users/stephen/go/src/github.com/ava-labs/strevm

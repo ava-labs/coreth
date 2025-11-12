@@ -81,3 +81,10 @@ func (vm *VM) Initialize(
 	)
 	return err
 }
+
+func (vm *VM) Shutdown(ctx context.Context) error {
+	if vm.VM == nil {
+		return nil
+	}
+	return vm.VM.Shutdown(ctx)
+}
