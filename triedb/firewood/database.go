@@ -491,7 +491,9 @@ func (db *Database) removeProposalFromMap(pCtx *ProposalContext) {
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
-	if _, err := db.fwDisk.GetFromRoot(root.Bytes(), []byte{}); err != nil {
+	result, err := db.fwDisk.GetFromRoot(root.Bytes(), []byte{})
+	log.Info("firewood: GetFromRoot", "root", root.Hex(), "key", []byte{}, "result", result, "err", err)
+	if err != nil {
 		return nil, fmt.Errorf("firewood: unable to retrieve from root %s: %w", root.Hex(), err)
 	}
 	return &reader{db: db, root: root}, nil
@@ -510,6 +512,7 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 	// This is safe even if a proposal is being committed concurrently.
 	start := time.Now()
 	result, err := reader.db.fwDisk.GetFromRoot(reader.root.Bytes(), path)
+	log.Info("firewood: GetFromRoot", "root", reader.root.Hex(), "key", path, "result", result, "err", err)
 	if metrics.EnabledExpensive {
 		ffiReadCount.Inc(1)
 		ffiReadTimer.Inc(time.Since(start).Milliseconds())
