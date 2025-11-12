@@ -19,13 +19,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type txs interface {
-	NextTx() (*atomic.Tx, bool)
-	CancelCurrentTx(txID ids.ID)
-	DiscardCurrentTx(txID ids.ID)
-	DiscardCurrentTxs()
-}
-
 type txSlice []*atomic.Tx
 
 func (t *txSlice) NextTx() (*atomic.Tx, bool) {

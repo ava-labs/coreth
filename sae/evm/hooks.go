@@ -43,6 +43,14 @@ var (
 	errEmptyBlock = errors.New("empty block")
 )
 
+// txs supports building blocks from a sequence of atomic transactions.
+type txs interface {
+	NextTx() (*atomic.Tx, bool)
+	CancelCurrentTx(txID ids.ID)
+	DiscardCurrentTx(txID ids.ID)
+	DiscardCurrentTxs()
+}
+
 type hooks struct {
 	ctx         *snow.Context
 	chainConfig *params.ChainConfig
