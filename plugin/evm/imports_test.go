@@ -111,7 +111,6 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 	// After this point, there are disallowed imports, and the test will fail.
 	// The remaining code is just necessary to pretty-print the error message,
 	// to make it easier to find and fix the disallowed imports.
-
 	slices.Sort(disallowedImports)
 
 	var errorMsg strings.Builder
