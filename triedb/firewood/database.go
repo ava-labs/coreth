@@ -407,6 +407,7 @@ func createProposal(layer proposable, root common.Hash, keys, values [][]byte) (
 		return nil, fmt.Errorf("firewood: keys and values must have the same length, got %d keys and %d values", len(keys), len(values))
 	}
 
+	log.Info("firewood: calling Propose", "root", root.Hex(), "numKeys", len(keys), "keys", keys, "values", values)
 	start := time.Now()
 	p, err = layer.Propose(keys, values)
 	if err != nil {
@@ -530,6 +531,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 	start := time.Now()
 	if db.proposalTree.Root == parentRoot {
 		// Propose from the database root.
+		log.Info("firewood: calling Propose from database root", "parentRoot", parentRoot.Hex(), "numKeys", len(keys), "keys", keys, "values", values)
 		p, err = db.fwDisk.Propose(keys, values)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("firewood: error proposing from root %s: %w", parentRoot.Hex(), err)
@@ -544,6 +546,7 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		}
 		rootProposal := proposals[0].Proposal
 
+		log.Info("firewood: calling Propose from root proposal", "parentRoot", parentRoot.Hex(), "numKeys", len(keys), "keys", keys, "values", values)
 		p, err = rootProposal.Propose(keys, values)
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("firewood: error proposing from parent proposal %s: %w", parentRoot.Hex(), err)
