@@ -116,7 +116,6 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 
 	var errorMsg strings.Builder
 	errorMsg.WriteString("New libevm imports should be added to ./scripts/eth-allowed-packages.txt to prevent accidental imports:\n\n")
-
 	for _, importPath := range disallowedImports {
 		files := foundImports[importPath]
 		fileList := make([]string, 0, len(files))
