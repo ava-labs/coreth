@@ -1,7 +1,7 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
-package main
+package evm
 
 import (
 	"context"
@@ -22,11 +22,11 @@ import (
 
 const atomicMempoolSize = 4096 // number of transactions
 
-type vm struct {
+type VM struct {
 	*sae.VM // Populated by [vm.Initialize]
 }
 
-func (vm *vm) Initialize(
+func (vm *VM) Initialize(
 	ctx context.Context,
 	chainContext *snow.Context,
 	db avalanchedb.Database,

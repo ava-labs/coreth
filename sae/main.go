@@ -7,10 +7,11 @@ import (
 	"context"
 
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm"
+	"github.com/ava-labs/coreth/sae/evm"
 	"github.com/ava-labs/strevm/adaptor"
 )
 
 func main() {
-	vm := adaptor.Convert(&vm{})
+	vm := adaptor.Convert(&evm.VM{})
 	rpcchainvm.Serve(context.Background(), vm)
 }
