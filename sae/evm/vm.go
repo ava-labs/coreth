@@ -7,10 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	avalanchedb "github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/database/versiondb"
 	"github.com/ava-labs/avalanchego/network/p2p"
 	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
@@ -18,9 +21,12 @@ import (
 	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	corethdb "github.com/ava-labs/avalanchego/vms/evm/database"
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	atomicvm "github.com/ava-labs/coreth/plugin/evm/atomic/vm"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
+	"github.com/ava-labs/coreth/utils/rpc"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
@@ -29,8 +35,10 @@ import (
 )
 
 const (
-	atomicMempoolSize       = 4096 // number of transactions
-	atomicGossipNamespace   = "atomic_tx_gossip"
+	atomicMempoolSize     = 4096 // number of transactions
+	atomicGossipNamespace = "atomic_tx_gossip"
+	avaxEndpoint          = "/avax"
+
 	atomicRegossipFrequency = 30 * time.Second
 	atomicPushFrequency     = 100 * time.Millisecond
 	atomicPullFrequency     = 1 * time.Second
@@ -44,8 +52,12 @@ type VM struct {
 	onShutdown context.CancelFunc
 	wg         sync.WaitGroup
 
-	chainContext  *snow.Context
+	chainContext *snow.Context
+
 	atomicMempool *txpool.Mempool
+	gossipMetrics avalanchegossip.Metrics
+	pushGossiper  *avalanchegossip.PushGossiper[*atomic.Tx]
+	acceptedTxs   *atomicstate.AtomicRepository
 }
 
 func (vm *VM) Initialize(
@@ -113,6 +125,41 @@ func (vm *VM) Initialize(
 		return fmt.Errorf("failed to initialize mempool: %w", err)
 	}
 
+	vm.gossipMetrics, err = avalanchegossip.NewMetrics(metrics, atomicGossipNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
+	}
+
+	vm.pushGossiper, err = avalanchegossip.NewPushGossiper[*atomic.Tx](
+		atomicTxMarshaller,
+		vm.atomicMempool,
+		vm.P2PValidators,
+		vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, vm.P2PValidators),
+		vm.gossipMetrics,
+		avalanchegossip.BranchingFactor{
+			StakePercentage: .9,
+			Validators:      100,
+		},
+		avalanchegossip.BranchingFactor{
+			Validators: 10,
+		},
+		config.PushGossipDiscardedElements,
+		config.TxGossipTargetMessageSize,
+		atomicRegossipFrequency,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
+	}
+
+	vm.acceptedTxs, err = atomicstate.NewAtomicTxRepository(
+		versiondb.New(memdb.New()), // TODO
+		atomic.Codec,
+		0, // TODO
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create atomic repository: %w", err)
+	}
+
 	return nil
 }
 
@@ -130,64 +177,38 @@ func (vm *VM) SetState(ctx context.Context, state snow.State) error {
 }
 
 func (vm *VM) registerAtomicMempoolGossip() error {
-	// TODO: Don't make a new registry
-	metrics := prometheus.NewRegistry()
-	gossipMetrics, err := avalanchegossip.NewMetrics(metrics, atomicGossipNamespace)
-	if err != nil {
-		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
-	}
+	{
+		// TODO: Don't make a new registry
+		metrics := prometheus.NewRegistry()
+		handler, err := gossip.NewTxGossipHandler[*atomic.Tx](
+			vm.chainContext.Log,
+			atomicTxMarshaller,
+			vm.atomicMempool,
+			vm.gossipMetrics,
+			config.TxGossipTargetMessageSize,
+			config.TxGossipThrottlingPeriod,
+			config.TxGossipRequestsPerPeer,
+			vm.P2PValidators,
+			metrics,
+			atomicGossipNamespace,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
+		}
 
-	handler, err := gossip.NewTxGossipHandler[*atomic.Tx](
-		vm.chainContext.Log,
-		atomicTxMarshaller,
-		vm.atomicMempool,
-		gossipMetrics,
-		config.TxGossipTargetMessageSize,
-		config.TxGossipThrottlingPeriod,
-		config.TxGossipRequestsPerPeer,
-		vm.P2PValidators,
-		metrics,
-		atomicGossipNamespace,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
+		// By registering the handler, we allow inbound network traffic for the
+		// [p2p.AtomicTxGossipHandlerID] protocol.
+		if err := vm.Network.AddHandler(p2p.AtomicTxGossipHandlerID, handler); err != nil {
+			return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
+		}
 	}
-
-	// By registering the handler, we allow inbound network traffic for the
-	// [p2p.AtomicTxGossipHandlerID] protocol.
-	if err := vm.Network.AddHandler(p2p.AtomicTxGossipHandlerID, handler); err != nil {
-		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
-	}
-
-	client := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, vm.P2PValidators)
 
 	// Start push gossip to disseminate any transactions issued by this node to
 	// a large percentage of the network.
 	{
-		pushGossiper, err := avalanchegossip.NewPushGossiper[*atomic.Tx](
-			atomicTxMarshaller,
-			vm.atomicMempool,
-			vm.P2PValidators,
-			client,
-			gossipMetrics,
-			avalanchegossip.BranchingFactor{
-				StakePercentage: .9,
-				Validators:      100,
-			},
-			avalanchegossip.BranchingFactor{
-				Validators: 10,
-			},
-			config.PushGossipDiscardedElements,
-			config.TxGossipTargetMessageSize,
-			atomicRegossipFrequency,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
-		}
-
 		vm.wg.Add(1)
 		go func() {
-			avalanchegossip.Every(vm.ctx, vm.chainContext.Log, pushGossiper, atomicPushFrequency)
+			avalanchegossip.Every(vm.ctx, vm.chainContext.Log, vm.pushGossiper, atomicPushFrequency)
 			vm.wg.Done()
 		}()
 	}
@@ -199,8 +220,8 @@ func (vm *VM) registerAtomicMempoolGossip() error {
 			vm.chainContext.Log,
 			atomicTxMarshaller,
 			vm.atomicMempool,
-			client,
-			gossipMetrics,
+			vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, vm.P2PValidators),
+			vm.gossipMetrics,
 			config.TxGossipPollSize,
 		)
 
@@ -218,6 +239,25 @@ func (vm *VM) registerAtomicMempoolGossip() error {
 	}
 
 	return nil
+}
+
+func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, error) {
+	apis, err := vm.VM.CreateHandlers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	avaxAPI, err := rpc.NewHandler("avax", &atomicvm.AvaxAPI{
+		Context:      vm.chainContext,
+		Mempool:      vm.atomicMempool,
+		PushGossiper: vm.pushGossiper,
+		AcceptedTxs:  vm.acceptedTxs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("making AVAX handler: %w", err)
+	}
+	vm.chainContext.Log.Info("AVAX API enabled")
+	apis[avaxEndpoint] = avaxAPI
+	return apis, nil
 }
 
 func (vm *VM) Shutdown(ctx context.Context) error {
