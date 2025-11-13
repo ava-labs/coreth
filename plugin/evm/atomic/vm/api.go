@@ -8,14 +8,19 @@ import (
 	"net/http"
 
 	"github.com/ava-labs/avalanchego/api"
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/ids"
+	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
+	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/formatting"
 	"github.com/ava-labs/avalanchego/utils/json"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
-	"github.com/ava-labs/libevm/log"
+	"go.uber.org/zap"
 
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
+	atomicstate "github.com/ava-labs/coreth/plugin/evm/atomic/state"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
 	"github.com/ava-labs/coreth/plugin/evm/client"
 )
@@ -33,11 +38,22 @@ var (
 )
 
 // AvaxAPI offers Avalanche network related API methods
-type AvaxAPI struct{ vm *VM }
+type AvaxAPI struct {
+	vm *VM
 
-// GetUTXOs gets all utxos for passed in addresses
+	Context      *snow.Context
+	Mempool      *txpool.Mempool
+	PushGossiper *avalanchegossip.PushGossiper[*atomic.Tx]
+	AcceptedTxs  *atomicstate.AtomicRepository
+}
+
 func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply *api.GetUTXOsReply) error {
-	log.Info("EVM: GetUTXOs called", "Addresses", args.Addresses)
+	service.Context.Log.Debug("API called",
+		zap.String("service", "avax"),
+		zap.String("method", "getUTXOs"),
+		logging.UserStrings("addresses", args.Addresses),
+		zap.Stringer("encoding", args.Encoding),
+	)
 
 	if len(args.Addresses) == 0 {
 		return errNoAddresses
@@ -50,24 +66,24 @@ func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply 
 		return errNoSourceChain
 	}
 
-	sourceChainID, err := service.vm.Ctx.BCLookup.Lookup(args.SourceChain)
+	sourceChainID, err := service.Context.BCLookup.Lookup(args.SourceChain)
 	if err != nil {
 		return fmt.Errorf("problem parsing source chainID %q: %w", args.SourceChain, err)
 	}
 
-	addrSet := set.Set[ids.ShortID]{}
+	var addrs set.Set[ids.ShortID]
 	for _, addrStr := range args.Addresses {
-		addr, err := ParseServiceAddress(service.vm.Ctx, addrStr)
+		addr, err := ParseServiceAddress(service.Context, addrStr)
 		if err != nil {
 			return fmt.Errorf("couldn't parse address %q: %w", addrStr, err)
 		}
-		addrSet.Add(addr)
+		addrs.Add(addr)
 	}
 
 	startAddr := ids.ShortEmpty
 	startUTXO := ids.Empty
 	if args.StartIndex.Address != "" || args.StartIndex.UTXO != "" {
-		startAddr, err = ParseServiceAddress(service.vm.Ctx, args.StartIndex.Address)
+		startAddr, err = ParseServiceAddress(service.Context, args.StartIndex.Address)
 		if err != nil {
 			return fmt.Errorf("couldn't parse start index address %q: %w", args.StartIndex.Address, err)
 		}
@@ -77,8 +93,8 @@ func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply 
 		}
 	}
 
-	service.vm.Ctx.Lock.Lock()
-	defer service.vm.Ctx.Lock.Unlock()
+	service.Context.Lock.Lock()
+	defer service.Context.Lock.Unlock()
 
 	limit := int(args.Limit)
 
@@ -87,10 +103,10 @@ func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply 
 	}
 
 	utxos, endAddr, endUTXOID, err := avax.GetAtomicUTXOs(
-		service.vm.Ctx.SharedMemory,
+		service.Context.SharedMemory,
 		atomic.Codec,
 		sourceChainID,
-		addrSet,
+		addrs,
 		startAddr,
 		startUTXO,
 		limit,
@@ -112,7 +128,7 @@ func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply 
 		reply.UTXOs[i] = str
 	}
 
-	endAddress, err := FormatLocalAddress(service.vm.Ctx, endAddr)
+	endAddress, err := FormatLocalAddress(service.Context, endAddr)
 	if err != nil {
 		return fmt.Errorf("problem formatting address: %w", err)
 	}
@@ -125,7 +141,12 @@ func (service *AvaxAPI) GetUTXOs(_ *http.Request, args *api.GetUTXOsArgs, reply 
 }
 
 func (service *AvaxAPI) IssueTx(_ *http.Request, args *api.FormattedTx, response *api.JSONTxID) error {
-	log.Info("EVM: IssueTx called")
+	service.Context.Log.Debug("API called",
+		zap.String("service", "avax"),
+		zap.String("method", "getUTXOs"),
+		logging.UserString("tx", args.Tx),
+		zap.Stringer("encoding", args.Encoding),
+	)
 
 	txBytes, err := formatting.Decode(args.Encoding, args.Tx)
 	if err != nil {
@@ -142,10 +163,10 @@ func (service *AvaxAPI) IssueTx(_ *http.Request, args *api.FormattedTx, response
 
 	response.TxID = tx.ID()
 
-	service.vm.Ctx.Lock.Lock()
-	defer service.vm.Ctx.Lock.Unlock()
+	service.Context.Lock.Lock()
+	defer service.Context.Lock.Unlock()
 
-	err = service.vm.AtomicMempool.AddLocalTx(tx)
+	err = service.Mempool.AddLocalTx(tx)
 	if err != nil && !errors.Is(err, txpool.ErrAlreadyKnown) {
 		return err
 	}
@@ -154,38 +175,27 @@ func (service *AvaxAPI) IssueTx(_ *http.Request, args *api.FormattedTx, response
 	// we push it to the network for inclusion. If the tx was previously added
 	// to the mempool through p2p gossip, this will ensure this node also pushes
 	// it to the network.
-	service.vm.AtomicTxPushGossiper.Add(tx)
+	service.PushGossiper.Add(tx)
 	return nil
 }
 
-// GetAtomicTxStatus returns the status of the specified transaction
 func (service *AvaxAPI) GetAtomicTxStatus(_ *http.Request, args *api.JSONTxID, reply *client.GetAtomicTxStatusReply) error {
-	log.Info("EVM: GetAtomicTxStatus called", "txID", args.TxID)
+	service.Context.Log.Debug("API called",
+		zap.String("service", "avax"),
+		zap.String("method", "getAtomicTxStatus"),
+		zap.Stringer("txID", args.TxID),
+	)
 
 	if args.TxID == ids.Empty {
 		return errNilTxID
 	}
 
-	service.vm.Ctx.Lock.Lock()
-	defer service.vm.Ctx.Lock.Unlock()
+	service.Context.Lock.Lock()
+	defer service.Context.Lock.Unlock()
 
-	_, status, height, _ := service.vm.GetAtomicTx(args.TxID)
-
-	reply.Status = status
-	if status == atomic.Accepted {
-		// Since chain state updates run asynchronously with VM block acceptance,
-		// avoid returning [Accepted] until the chain state reaches the block
-		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
-		if height > lastAccepted.NumberU64() {
-			reply.Status = atomic.Processing
-			return nil
-		}
-
-		jsonHeight := json.Uint64(height)
-		reply.BlockHeight = &jsonHeight
-	}
-	return nil
+	var err error
+	_, reply.Status, reply.BlockHeight, err = service.getAtomicTx(args.TxID)
+	return err
 }
 
 type FormattedTx struct {
@@ -193,43 +203,62 @@ type FormattedTx struct {
 	BlockHeight *json.Uint64 `json:"blockHeight,omitempty"`
 }
 
-// GetAtomicTx returns the specified transaction
 func (service *AvaxAPI) GetAtomicTx(_ *http.Request, args *api.GetTxArgs, reply *FormattedTx) error {
-	log.Info("EVM: GetAtomicTx called", "txID", args.TxID)
+	service.Context.Log.Debug("API called",
+		zap.String("service", "avax"),
+		zap.String("method", "getAtomicTx"),
+		zap.Stringer("txID", args.TxID),
+		zap.Stringer("encoding", args.Encoding),
+	)
 
 	if args.TxID == ids.Empty {
 		return errNilTxID
 	}
 
-	service.vm.Ctx.Lock.Lock()
-	defer service.vm.Ctx.Lock.Unlock()
+	service.Context.Lock.Lock()
+	defer service.Context.Lock.Unlock()
 
-	tx, status, height, err := service.vm.GetAtomicTx(args.TxID)
+	tx, status, height, err := service.getAtomicTx(args.TxID)
 	if err != nil {
 		return err
 	}
-
 	if status == atomic.Unknown {
 		return fmt.Errorf("could not find tx %s", args.TxID)
 	}
 
-	txBytes, err := formatting.Encode(args.Encoding, tx.SignedBytes())
-	if err != nil {
-		return err
-	}
-	reply.Tx = txBytes
+	reply.Tx, err = formatting.Encode(args.Encoding, tx.SignedBytes())
 	reply.Encoding = args.Encoding
-	if status == atomic.Accepted {
-		// Since chain state updates run asynchronously with VM block acceptance,
-		// avoid returning [Accepted] until the chain state reaches the block
-		// containing the atomic tx.
-		lastAccepted := service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock()
-		if height > lastAccepted.NumberU64() {
-			return nil
+	reply.BlockHeight = height
+	return err
+}
+
+// TODO: these should be unexported after test refactor is done
+
+// getAtomicTx returns the requested transaction, status, and height.
+// If the status is Unknown, then the returned transaction will be nil.
+func (service *AvaxAPI) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, *json.Uint64, error) {
+	tx, height, err := service.AcceptedTxs.GetByTxID(txID)
+	if err == nil {
+		// Since chain state updates run asynchronously with VM block
+		// acceptance, avoid returning [Accepted] until the chain state reaches
+		// the block containing the atomic tx.
+		if service.vm != nil && height > service.vm.InnerVM.Ethereum().BlockChain().LastAcceptedBlock().NumberU64() {
+			return tx, atomic.Processing, nil, nil
 		}
 
-		jsonHeight := json.Uint64(height)
-		reply.BlockHeight = &jsonHeight
+		return tx, atomic.Accepted, (*json.Uint64)(&height), nil
 	}
-	return nil
+	if err != database.ErrNotFound {
+		return nil, atomic.Unknown, nil, err
+	}
+
+	tx, dropped, found := service.Mempool.GetTx(txID)
+	switch {
+	case found && dropped:
+		return tx, atomic.Dropped, nil, nil
+	case found:
+		return tx, atomic.Processing, nil, nil
+	default:
+		return nil, atomic.Unknown, nil, nil
+	}
 }
