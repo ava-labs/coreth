@@ -237,7 +237,7 @@ func (service *AvaxAPI) GetAtomicTx(_ *http.Request, args *api.GetTxArgs, reply 
 // getAtomicTx returns the requested transaction, status, and height.
 // If the status is Unknown, then the returned transaction will be nil.
 func (service *AvaxAPI) getAtomicTx(txID ids.ID) (*atomic.Tx, atomic.Status, *json.Uint64, error) {
-	tx, height, err := service.vm.AtomicTxRepository.GetByTxID(txID)
+	tx, height, err := service.AcceptedTxs.GetByTxID(txID)
 	if err == nil {
 		// Since chain state updates run asynchronously with VM block
 		// acceptance, avoid returning [Accepted] until the chain state reaches
