@@ -172,9 +172,10 @@ func (vm *VM) registerAtomicMempoolGossip() error {
 			gossipMetrics,
 			avalanchegossip.BranchingFactor{
 				StakePercentage: .9,
+				Validators:      100,
 			},
 			avalanchegossip.BranchingFactor{
-				Validators: 1,
+				Validators: 10,
 			},
 			config.PushGossipDiscardedElements,
 			config.TxGossipTargetMessageSize,
