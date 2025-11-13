@@ -263,7 +263,10 @@ func (vm *VM) onNormalOperationsStarted() error {
 	vm.cancel = cancel
 	atomicTxGossipMarshaller := atomic.TxMarshaller{}
 	atomicTxGossipClient := vm.InnerVM.NewClient(p2p.AtomicTxGossipHandlerID)
-	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(vm.InnerVM.MetricRegistry(), atomicTxGossipNamespace)
+	atomicTxGossipMetrics, err := avalanchegossip.NewMetrics(
+		vm.InnerVM.MetricRegistry(),
+		atomicTxGossipNamespace,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
 	}
@@ -304,7 +307,7 @@ func (vm *VM) onNormalOperationsStarted() error {
 		config.TxGossipRequestsPerPeer,
 		vm.InnerVM.P2PValidators(),
 		vm.MetricRegistry(),
-		"atomic_tx_gossip",
+		atomicTxGossipNamespace,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)

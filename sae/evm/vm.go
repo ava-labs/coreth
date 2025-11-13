@@ -7,23 +7,45 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"time"
 
 	avalanchedb "github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/network/p2p"
+	avalanchegossip "github.com/ava-labs/avalanchego/network/p2p/gossip"
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	corethdb "github.com/ava-labs/avalanchego/vms/evm/database"
+	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/atomic/txpool"
+	"github.com/ava-labs/coreth/plugin/evm/config"
+	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/libevm/core"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/state"
 	sae "github.com/ava-labs/strevm"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-const atomicMempoolSize = 4096 // number of transactions
+const (
+	atomicMempoolSize       = 4096 // number of transactions
+	atomicGossipNamespace   = "atomic_tx_gossip"
+	atomicRegossipFrequency = 30 * time.Second
+	atomicPushFrequency     = 100 * time.Millisecond
+	atomicPullFrequency     = 1 * time.Second
+)
+
+var atomicTxMarshaller = &atomic.TxMarshaller{}
 
 type VM struct {
-	*sae.VM // Populated by [vm.Initialize]
+	*sae.VM                    // Populated by [vm.Initialize]
+	ctx        context.Context // Cancelled when onShutdown is called
+	onShutdown context.CancelFunc
+	wg         sync.WaitGroup
+
+	chainContext  *snow.Context
+	atomicMempool *txpool.Mempool
 }
 
 func (vm *VM) Initialize(
@@ -82,6 +104,117 @@ func (vm *VM) Initialize(
 	if err != nil {
 		return err
 	}
+	vm.ctx, vm.onShutdown = context.WithCancel(context.Background())
+	vm.chainContext = chainContext
+
+	metrics := prometheus.NewRegistry()
+	vm.atomicMempool, err = txpool.NewMempool(mempoolTxs, metrics, vm.verifyTxAtTip)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mempool: %w", err)
+	}
+
+	return nil
+}
+
+// TODO: Implement me
+func (*VM) verifyTxAtTip(*atomic.Tx) error {
+	return nil
+}
+
+func (vm *VM) SetState(ctx context.Context, state snow.State) error {
+	if state != snow.NormalOp {
+		return nil
+	}
+
+	return vm.registerAtomicMempoolGossip()
+}
+
+func (vm *VM) registerAtomicMempoolGossip() error {
+	// TODO: Don't make a new registry
+	metrics := prometheus.NewRegistry()
+	gossipMetrics, err := avalanchegossip.NewMetrics(metrics, atomicGossipNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip metrics: %w", err)
+	}
+
+	handler, err := gossip.NewTxGossipHandler[*atomic.Tx](
+		vm.chainContext.Log,
+		atomicTxMarshaller,
+		vm.atomicMempool,
+		gossipMetrics,
+		config.TxGossipTargetMessageSize,
+		config.TxGossipThrottlingPeriod,
+		config.TxGossipRequestsPerPeer,
+		vm.P2PValidators,
+		metrics,
+		atomicGossipNamespace,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to initialize atomic tx gossip handler: %w", err)
+	}
+
+	// By registering the handler, we allow inbound network traffic for the
+	// [p2p.AtomicTxGossipHandlerID] protocol.
+	if err := vm.Network.AddHandler(p2p.AtomicTxGossipHandlerID, handler); err != nil {
+		return fmt.Errorf("failed to add atomic tx gossip handler: %w", err)
+	}
+
+	client := vm.Network.NewClient(p2p.AtomicTxGossipHandlerID, vm.P2PValidators)
+
+	// Start push gossip to disseminate any transactions issued by this node to
+	// a large percentage of the network.
+	{
+		pushGossiper, err := avalanchegossip.NewPushGossiper[*atomic.Tx](
+			atomicTxMarshaller,
+			vm.atomicMempool,
+			vm.P2PValidators,
+			client,
+			gossipMetrics,
+			avalanchegossip.BranchingFactor{
+				StakePercentage: .9,
+			},
+			avalanchegossip.BranchingFactor{
+				Validators: 1,
+			},
+			config.PushGossipDiscardedElements,
+			config.TxGossipTargetMessageSize,
+			atomicRegossipFrequency,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize atomic tx push gossiper: %w", err)
+		}
+
+		vm.wg.Add(1)
+		go func() {
+			avalanchegossip.Every(vm.ctx, vm.chainContext.Log, pushGossiper, atomicPushFrequency)
+			vm.wg.Done()
+		}()
+	}
+
+	// Start pull gossip to ensure this node quickly learns of transactions that
+	// have already been distributed to a large percentage of the network.
+	{
+		pullGossiper := avalanchegossip.NewPullGossiper[*atomic.Tx](
+			vm.chainContext.Log,
+			atomicTxMarshaller,
+			vm.atomicMempool,
+			client,
+			gossipMetrics,
+			config.TxGossipPollSize,
+		)
+
+		pullGossiperWhenValidator := &avalanchegossip.ValidatorGossiper{
+			Gossiper:   pullGossiper,
+			NodeID:     vm.chainContext.NodeID,
+			Validators: vm.P2PValidators,
+		}
+
+		vm.wg.Add(1)
+		go func() {
+			avalanchegossip.Every(vm.ctx, vm.chainContext.Log, pullGossiperWhenValidator, atomicPullFrequency)
+			vm.wg.Done()
+		}()
+	}
 
 	return nil
 }
@@ -90,5 +223,8 @@ func (vm *VM) Shutdown(ctx context.Context) error {
 	if vm.VM == nil {
 		return nil
 	}
+	vm.onShutdown()
+	defer vm.wg.Wait()
+
 	return vm.VM.Shutdown(ctx)
 }
