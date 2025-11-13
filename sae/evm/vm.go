@@ -261,6 +261,15 @@ func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, erro
 	return apis, nil
 }
 
+func (*VM) WaitForEvent(ctx context.Context) (common.Message, error) {
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-time.After(time.Second):
+		return common.PendingTxs, nil
+	}
+}
+
 func (vm *VM) Shutdown(ctx context.Context) error {
 	if vm.VM == nil {
 		return nil
