@@ -110,7 +110,8 @@ func (vm *VM) Initialize(
 				Target:      acp176.MinTargetPerSecond,
 				ExcessAfter: 0,
 			},
-			SnowCtx: chainContext,
+			SnowCtx:   chainContext,
+			AppSender: appSender,
 		},
 	)
 	if err != nil {
