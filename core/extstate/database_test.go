@@ -81,8 +81,7 @@ func newFuzzState(t *testing.T) *fuzzState {
 	})
 
 	firewoodMemdb := rawdb.NewMemoryDatabase()
-	fwCfg := firewood.Defaults   // copy the defaults
-	fwCfg.ChainDir = t.TempDir() // Use a temporary directory for Firewood
+	fwCfg := firewood.DefaultConfig(t.TempDir()) // Use a temporary directory for Firewood
 	firewoodState := NewDatabaseWithConfig(
 		firewoodMemdb,
 		&triedb.Config{

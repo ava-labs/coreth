@@ -304,9 +304,8 @@ func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 	case rawdb.PathScheme:
 		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
 	case customrawdb.FirewoodScheme:
-		fwCfg := firewood.Defaults
 		// Create a unique temporary directory for each test
-		fwCfg.ChainDir = t.TempDir()
+		fwCfg := firewood.DefaultConfig(t.TempDir())
 		return &triedb.Config{DBOverride: fwCfg.BackendConstructor}
 	default:
 		t.Fatalf("unknown scheme %s", scheme)

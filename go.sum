@@ -30,8 +30,8 @@ github.com/ava-labs/avalanchego v1.13.6-0.20251028023847-6afe371e3b86 h1:Amek9uS
 github.com/ava-labs/avalanchego v1.13.6-0.20251028023847-6afe371e3b86/go.mod h1:wEiDa5Lc3oKm9l2AxJOXmLz00Wg7b3hUttgkfzgRoDA=
 github.com/ava-labs/firewood-go-ethhash/ffi v0.0.14 h1:Be+LO61hwmo7XKNm57Yoqx7ld8SgBapjVBEPjUcgI8o=
 github.com/ava-labs/firewood-go-ethhash/ffi v0.0.14/go.mod h1:hR/JSGXxST9B9olwu/NpLXHAykfAyNGfyKnYQqiiOeE=
-github.com/ava-labs/libevm v1.13.15-0.20251110182813-bdb53d6b73ad h1:BOVrEs0wtvgi2+hacDKgJl0dMpslF4Yzg8ek2rscBME=
-github.com/ava-labs/libevm v1.13.15-0.20251110182813-bdb53d6b73ad/go.mod h1:V2t/qgUU7FPw3AV1F/lSkmONAJI23QcDHTX8cx+ypW8=
+github.com/ava-labs/libevm v1.13.15-0.20251114153835-3484a301ea62 h1:E2hI6ywk1L1vWzm5e9zhooahcOIZQdfEiQz3b0fodLM=
+github.com/ava-labs/libevm v1.13.15-0.20251114153835-3484a301ea62/go.mod h1:PsoQ92SyarYG311a0qTxQx3DUj89na7LcshGU3OGiJQ=
 github.com/aymerick/raymond v2.0.3-0.20180322193309-b565731e1464+incompatible/go.mod h1:osfaiScAUVup+UC9Nfq76eWqDhXlp+4UYaA8uhTBO6g=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
