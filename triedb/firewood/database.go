@@ -346,17 +346,10 @@ func (*Database) Size() (common.StorageSize, common.StorageSize) {
 	return 0, 0
 }
 
-// This isn't called anywhere in coreth
+// Reference is a no-op.
 func (*Database) Reference(common.Hash, common.Hash) {}
 
-// Dereference drops a proposal from the database.
-// This function is no-op because unused proposals are dereferenced when no longer valid.
-// We cannot dereference at this call. Consider the following case:
-// Chain 1 has root A and root C
-// Chain 2 has root B and root C
-// We commit root A, and immediately dereference root B and its child.
-// Root C is Rejected, (which is intended to be 2C) but there's now only one record of root C in the proposal map.
-// Thus, we recognize the single root C as the only proposal, and dereference it.
+// Dereference is a no-op since Firewood handles unused state roots internally.
 func (*Database) Dereference(common.Hash) {}
 
 // Firewood does not support this.
