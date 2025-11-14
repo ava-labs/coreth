@@ -18,7 +18,7 @@ require (
 	github.com/ava-labs/avalanchego v1.13.6-0.20251028023847-6afe371e3b86
 	github.com/ava-labs/firewood-go-ethhash/ffi v0.0.13
 	github.com/ava-labs/libevm v1.13.15-0.20251114170401-749b6cefda28
-	github.com/ava-labs/strevm v0.0.0-20251114202911-b363264a860f
+	github.com/ava-labs/strevm v0.0.0-20251114203810-ee4dcf3ef268
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/deckarep/golang-set/v2 v2.1.0
 	github.com/fjl/gencodec v0.1.1
