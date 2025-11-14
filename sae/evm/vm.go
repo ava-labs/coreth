@@ -261,6 +261,8 @@ func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, erro
 	return apis, nil
 }
 
+// TODO: Correctly block until either the atomic mempool or the evm mempool has
+// txs.
 func (*VM) WaitForEvent(ctx context.Context) (common.Message, error) {
 	select {
 	case <-ctx.Done():
