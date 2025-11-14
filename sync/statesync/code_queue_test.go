@@ -78,6 +78,7 @@ func TestCodeQueue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 			db := rawdb.NewMemoryDatabase()
@@ -235,7 +236,9 @@ func TestQuitAndAddCodeRace(t *testing.T) {
 				in := []common.Hash{{}}
 				ready.Done()
 				<-start
-				q.AddCode(in)
+				// Due to the race condition, AddCode may either succeed or fail
+				// depending on whether the quit channel is closed first
+				_ = q.AddCode(in)
 			}()
 
 			ready.Wait()
