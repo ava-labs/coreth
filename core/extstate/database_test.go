@@ -15,13 +15,13 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/coreth/triedb/hashdb"
-	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 )
 
 const (
