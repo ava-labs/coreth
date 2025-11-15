@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ava-labs/libevm/log"
 	"golang.org/x/sync/errgroup"
@@ -16,7 +17,10 @@ import (
 	synccommon "github.com/ava-labs/coreth/sync"
 )
 
-var errSyncerAlreadyRegistered = errors.New("syncer already registered")
+var (
+	errSyncerAlreadyRegistered    = errors.New("syncer already registered")
+	errUpdateSyncTargetNotAllowed = errors.New("UpdateSyncTarget not allowed while syncers are not running")
+)
 
 // SyncerTask represents a single syncer with its name for identification.
 type SyncerTask struct {
@@ -28,6 +32,11 @@ type SyncerTask struct {
 type SyncerRegistry struct {
 	syncers         []SyncerTask
 	registeredNames map[string]bool // Track registered IDs to prevent duplicates.
+
+	// This lock protects access to target and updateTargetAllowed.
+	targetLock          sync.Mutex
+	target              message.Syncable
+	updateTargetAllowed bool // Only allowed while syncers are running.
 }
 
 // NewSyncerRegistry creates a new empty syncer registry.
@@ -61,12 +70,12 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary message.Syn
 	summaryBlockHashHex := summary.GetBlockHash().Hex()
 	blockHeight := summary.Height()
 
-	g, ctx := errgroup.WithContext(ctx)
+	g, egCtx := errgroup.WithContext(ctx)
 
 	for _, task := range r.syncers {
 		g.Go(func() error {
 			log.Info("starting syncer", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
-			if err := task.syncer.Sync(ctx); err != nil {
+			if err := task.syncer.Sync(egCtx); err != nil {
 				log.Error("failed syncing", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight, "err", err)
 				return fmt.Errorf("%s failed: %w", task.name, err)
 			}
@@ -76,11 +85,61 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary message.Syn
 		})
 	}
 
+	// Allow UpdateSyncTarget calls while waiting for syncers to complete.
+	r.targetLock.Lock()
+	r.updateTargetAllowed = true
+	r.target = summary
+	r.targetLock.Unlock()
+
 	if err := g.Wait(); err != nil {
 		return err
 	}
 
 	log.Info("all syncers completed successfully", "count", len(r.syncers), "summary", summaryBlockHashHex)
 
+	// At this point, UpdateSyncTarget should no longer be called, so we should prevent it.
+	r.targetLock.Lock()
+	r.updateTargetAllowed = false
+	finalTarget := r.target
+	r.targetLock.Unlock()
+
+	// Finalize each syncer to ensure all data matches the expected state.
+	// Use a new error group to finalize in parallel.
+	g, egCtx = errgroup.WithContext(ctx)
+	for _, task := range r.syncers {
+		log.Info("finalizing syncer", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
+		g.Go(func() error {
+			if err := task.syncer.Finalize(egCtx, finalTarget); err != nil {
+				log.Error("failed finalizing", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight, "err", err)
+				return fmt.Errorf("%s finalize failed: %w", task.name, err)
+			}
+			return nil
+		})
+	}
+
+	return g.Wait()
+}
+
+// UpdateSyncTarget updates the target for all registered syncers.
+func (r *SyncerRegistry) UpdateSyncTarget(summary message.Syncable) error {
+	r.targetLock.Lock()
+	defer r.targetLock.Unlock()
+
+	if !r.updateTargetAllowed {
+		return errUpdateSyncTargetNotAllowed
+	}
+
+	// Since UpdateSyncTarget can block, we call each syncer in its own goroutine.
+	var eg errgroup.Group
+	for _, task := range r.syncers {
+		eg.Go(func() error {
+			return task.syncer.UpdateSyncTarget(summary)
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("failed to update sync target: %w", err)
+	}
+
+	r.target = summary
 	return nil
 }
