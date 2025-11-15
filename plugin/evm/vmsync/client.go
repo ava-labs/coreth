@@ -44,9 +44,13 @@ type BlockAcceptor interface {
 
 // EthBlockWrapper can be implemented by a concrete block wrapper type to
 // return *types.Block, which is needed to update chain pointers at the
-// end of the sync operation.
+// end of the sync operation. It also provides Accept/Reject/Verify operations
+// for deferred processing during dynamic state sync.
 type EthBlockWrapper interface {
 	GetEthBlock() *types.Block
+	Accept(context.Context) error
+	Reject(context.Context) error
+	Verify(context.Context) error
 }
 
 type ClientConfig struct {
@@ -73,6 +77,11 @@ type ClientConfig struct {
 	RequestSize        uint16 // number of key/value pairs to ask peers for per request
 	Enabled            bool
 	SkipResume         bool
+	// DynamicStateSyncEnabled toggles dynamic vs static state sync orchestration.
+	DynamicStateSyncEnabled bool
+
+	// PivotInterval advances the sync target every N blocks.
+	PivotInterval uint64
 }
 
 type client struct {
@@ -84,8 +93,12 @@ type client struct {
 	wg     sync.WaitGroup
 
 	// State Sync results
-	summary message.Syncable
-	err     error
+	summary       message.Syncable
+	err           error
+	stateSyncOnce sync.Once
+
+	// dynamic coordinator (only set in dynamic mode)
+	coordinator *Coordinator
 }
 
 func NewClient(config *ClientConfig) Client {
@@ -104,40 +117,49 @@ type Client interface {
 	ClearOngoingSummary() error
 	Shutdown() error
 	Error() error
+	// OnEngineAccept should be called by the engine when a block is accepted.
+	// Returns true if the block was enqueued for deferred processing, false otherwise.
+	OnEngineAccept(EthBlockWrapper) (bool, error)
+	// OnEngineReject should be called by the engine when a block is rejected.
+	// Returns true if the block was enqueued for deferred processing, false otherwise.
+	OnEngineReject(EthBlockWrapper) (bool, error)
+	// OnEngineVerify should be called by the engine when a block is verified.
+	// Returns true if the block was enqueued for deferred processing, false otherwise.
+	OnEngineVerify(EthBlockWrapper) (bool, error)
 }
 
 // StateSyncEnabled returns [client.enabled], which is set in the chain's config file.
-func (client *client) StateSyncEnabled(context.Context) (bool, error) {
-	return client.Enabled, nil
+func (c *client) StateSyncEnabled(context.Context) (bool, error) {
+	return c.Enabled, nil
 }
 
 // GetOngoingSyncStateSummary returns a state summary that was previously started
 // and not finished, and sets [resumableSummary] if one was found.
 // Returns [database.ErrNotFound] if no ongoing summary is found or if [client.skipResume] is true.
-func (client *client) GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error) {
-	if client.SkipResume {
+func (c *client) GetOngoingSyncStateSummary(context.Context) (block.StateSummary, error) {
+	if c.SkipResume {
 		return nil, database.ErrNotFound
 	}
 
-	summaryBytes, err := client.MetadataDB.Get(stateSyncSummaryKey)
+	summaryBytes, err := c.MetadataDB.Get(stateSyncSummaryKey)
 	if err != nil {
 		return nil, err // includes the [database.ErrNotFound] case
 	}
 
-	summary, err := client.Parser.Parse(summaryBytes, client.acceptSyncSummary)
+	summary, err := c.Parser.Parse(summaryBytes, c.acceptSyncSummary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse saved state sync summary to SyncSummary: %w", err)
 	}
-	client.resumableSummary = summary
+	c.resumableSummary = summary
 	return summary, nil
 }
 
 // ClearOngoingSummary clears any marker of an ongoing state sync summary
-func (client *client) ClearOngoingSummary() error {
-	if err := client.MetadataDB.Delete(stateSyncSummaryKey); err != nil {
+func (c *client) ClearOngoingSummary() error {
+	if err := c.MetadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return fmt.Errorf("failed to clear ongoing summary: %w", err)
 	}
-	if err := client.VerDB.Commit(); err != nil {
+	if err := c.VerDB.Commit(); err != nil {
 		return fmt.Errorf("failed to commit db while clearing ongoing summary: %w", err)
 	}
 
@@ -145,47 +167,90 @@ func (client *client) ClearOngoingSummary() error {
 }
 
 // ParseStateSummary parses [summaryBytes] to [commonEng.Summary]
-func (client *client) ParseStateSummary(_ context.Context, summaryBytes []byte) (block.StateSummary, error) {
-	return client.Parser.Parse(summaryBytes, client.acceptSyncSummary)
+func (c *client) ParseStateSummary(_ context.Context, summaryBytes []byte) (block.StateSummary, error) {
+	return c.Parser.Parse(summaryBytes, c.acceptSyncSummary)
 }
 
-func (client *client) stateSync(ctx context.Context) error {
-	// Create and register all syncers.
-	registry := NewSyncerRegistry()
-
-	if err := client.registerSyncers(registry); err != nil {
-		return err
+// OnEngineAccept enqueues the block for deferred processing and updates the sync target.
+// Returns true if enqueued, false otherwise. During batch execution, only enqueuing occurs.
+func (c *client) OnEngineAccept(b EthBlockWrapper) (bool, error) {
+	if c.coordinator.CurrentState() == StateExecutingBatch {
+		// Still enqueue the block for processing in the next batch.
+		ethb := c.enqueueBlockOperation(b, OpAccept)
+		return ethb != nil, nil
 	}
 
-	// Run all registered syncers sequentially.
-	return registry.RunSyncerTasks(ctx, client.summary)
+	ethb := c.enqueueBlockOperation(b, OpAccept)
+	if ethb == nil {
+		return false, nil
+	}
+
+	// Only update sync target on accept operations when not in batch execution.
+	// If UpdateSyncTarget fails, the block is already enqueued, which is acceptable
+	// as it will be processed later. The error is returned to allow the caller to
+	// handle it appropriately (e.g., log a warning).
+	syncTarget := newSyncTarget(ethb.Hash(), ethb.Root(), ethb.NumberU64())
+	if err := c.coordinator.UpdateSyncTarget(syncTarget); err != nil {
+		// Block is enqueued but sync target update failed. Return error to allow
+		// caller to handle it, but indicate block was enqueued.
+		return true, fmt.Errorf("block enqueued but sync target update failed: %w", err)
+	}
+	return true, nil
 }
 
-func (client *client) registerSyncers(registry *SyncerRegistry) error {
+// OnEngineReject should be invoked by the engine when a block is rejected.
+// It best-effort enqueues the block for post-finalization execution.
+// Returns true if the block was enqueued for deferred processing, false otherwise.
+func (c *client) OnEngineReject(b EthBlockWrapper) (bool, error) {
+	ethb := c.enqueueBlockOperation(b, OpReject)
+	return ethb != nil, nil
+}
+
+// OnEngineVerify should be invoked by the engine when a block is verified.
+// It best-effort enqueues the block for post-finalization execution.
+// Returns true if the block was enqueued for deferred processing, false otherwise.
+func (c *client) OnEngineVerify(b EthBlockWrapper) (bool, error) {
+	ethb := c.enqueueBlockOperation(b, OpVerify)
+	return ethb != nil, nil
+}
+
+func (c *client) Shutdown() error {
+	// Unify completion - cancel context, set terminal outcome, and close [ClientConfig.StateSyncDone] once.
+	c.signalDone(context.Canceled)
+	c.wg.Wait()
+	return nil
+}
+
+// Error returns a non-nil error if one occurred during the sync.
+func (c *client) Error() error {
+	return c.err
+}
+
+func (c *client) registerSyncers(registry *SyncerRegistry) error {
 	// Register block syncer.
-	blockSyncer, err := client.createBlockSyncer(client.summary.GetBlockHash(), client.summary.Height())
+	blockSyncer, err := c.createBlockSyncer(c.summary.GetBlockHash(), c.summary.Height())
 	if err != nil {
 		return fmt.Errorf("failed to create block syncer: %w", err)
 	}
 
-	codeQueue, err := client.createCodeQueue()
+	codeQueue, err := c.createCodeQueue()
 	if err != nil {
 		return fmt.Errorf("failed to create code queue: %w", err)
 	}
 
-	codeSyncer, err := client.createCodeSyncer(codeQueue.CodeHashes())
+	codeSyncer, err := c.createCodeSyncer(codeQueue.CodeHashes())
 	if err != nil {
 		return fmt.Errorf("failed to create code syncer: %w", err)
 	}
 
-	stateSyncer, err := client.createEVMSyncer(codeQueue)
+	stateSyncer, err := c.createEVMSyncer(codeQueue)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM state syncer: %w", err)
 	}
 
 	var atomicSyncer syncpkg.Syncer
-	if client.Extender != nil {
-		atomicSyncer, err = client.createAtomicSyncer()
+	if c.Extender != nil {
+		atomicSyncer, err = c.createAtomicSyncer()
 		if err != nil {
 			return fmt.Errorf("failed to create atomic syncer: %w", err)
 		}
@@ -209,54 +274,65 @@ func (client *client) registerSyncers(registry *SyncerRegistry) error {
 	return nil
 }
 
-func (client *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64) (syncpkg.Syncer, error) {
+func (c *client) createBlockSyncer(fromHash common.Hash, fromHeight uint64) (syncpkg.Syncer, error) {
 	return blocksync.NewSyncer(
-		client.Client,
-		client.ChainDB,
+		c.Client,
+		c.ChainDB,
 		fromHash,
 		fromHeight,
 		BlocksToFetch,
 	)
 }
 
-func (client *client) createEVMSyncer(queue *statesync.CodeQueue) (syncpkg.Syncer, error) {
+func (c *client) createEVMSyncer(queue *statesync.CodeQueue) (syncpkg.Syncer, error) {
 	return statesync.NewSyncer(
-		client.Client,
-		client.ChainDB,
-		client.summary.GetBlockRoot(),
+		c.Client,
+		c.ChainDB,
+		c.summary.GetBlockRoot(),
 		queue,
-		client.RequestSize,
+		c.RequestSize,
 	)
 }
 
-func (client *client) createCodeQueue() (*statesync.CodeQueue, error) {
+func (c *client) createCodeQueue() (*statesync.CodeQueue, error) {
 	return statesync.NewCodeQueue(
-		client.ChainDB,
-		client.StateSyncDone,
+		c.ChainDB,
+		c.StateSyncDone,
 	)
 }
 
-func (client *client) createCodeSyncer(codeHashes <-chan common.Hash) (syncpkg.Syncer, error) {
-	return statesync.NewCodeSyncer(client.Client, client.ChainDB, codeHashes)
+func (c *client) createCodeSyncer(codeHashes <-chan common.Hash) (syncpkg.Syncer, error) {
+	return statesync.NewCodeSyncer(c.Client, c.ChainDB, codeHashes)
 }
 
-func (client *client) createAtomicSyncer() (syncpkg.Syncer, error) {
-	return client.Extender.CreateSyncer(client.Client, client.VerDB, client.summary)
+func (c *client) createAtomicSyncer() (syncpkg.Syncer, error) {
+	return c.Extender.CreateSyncer(c.Client, c.VerDB, c.summary)
 }
 
 // acceptSyncSummary returns true if sync will be performed and launches the state sync process
 // in a goroutine.
-func (client *client) acceptSyncSummary(proposedSummary message.Syncable) (block.StateSyncMode, error) {
-	isResume := client.resumableSummary != nil &&
-		proposedSummary.GetBlockHash() == client.resumableSummary.GetBlockHash()
+func (c *client) acceptSyncSummary(proposedSummary message.Syncable) (block.StateSyncMode, error) {
+	// If dynamic sync is already running, treat new summaries as target updates.
+	// Pivot gating is enforced inside the coordinator's policy.
+	if c.DynamicStateSyncEnabled && c.coordinator != nil {
+		if c.coordinator.CurrentState() == StateRunning {
+			if err := c.coordinator.UpdateSyncTarget(proposedSummary); err != nil {
+				return block.StateSyncSkipped, err
+			}
+			return block.StateSyncDynamic, nil
+		}
+	}
+
+	isResume := c.resumableSummary != nil &&
+		proposedSummary.GetBlockHash() == c.resumableSummary.GetBlockHash()
 	if !isResume {
 		// Skip syncing if the blockchain is not significantly ahead of local state,
 		// since bootstrapping would be faster.
 		// (Also ensures we don't sync to a height prior to local state.)
-		if client.LastAcceptedHeight+client.MinBlocks > proposedSummary.Height() {
+		if c.LastAcceptedHeight+c.MinBlocks > proposedSummary.Height() {
 			log.Info(
 				"last accepted too close to most recent syncable block, skipping state sync",
-				"lastAccepted", client.LastAcceptedHeight,
+				"lastAccepted", c.LastAcceptedHeight,
 				"syncableHeight", proposedSummary.Height(),
 			)
 			return block.StateSyncSkipped, nil
@@ -268,62 +344,125 @@ func (client *client) acceptSyncSummary(proposedSummary message.Syncable) (block
 		// sync marker will be wiped, so we do not accidentally resume progress from an incorrect version
 		// of the snapshot. (if switching between versions that come before this change and back this could
 		// lead to the snapshot not being cleaned up correctly)
-		<-snapshot.WipeSnapshot(client.ChainDB, true)
+		<-snapshot.WipeSnapshot(c.ChainDB, true)
 		// Reset the snapshot generator here so that when state sync completes, snapshots will not attempt to read an
 		// invalid generator.
 		// Note: this must be called after WipeSnapshot is called so that we do not invalidate a partially generated snapshot.
-		snapshot.ResetSnapshotGeneration(client.ChainDB)
+		snapshot.ResetSnapshotGeneration(c.ChainDB)
 	}
-	client.summary = proposedSummary
+	c.summary = proposedSummary
 
 	// Update the current state sync summary key in the database
 	// Note: this must be performed after WipeSnapshot finishes so that we do not start a state sync
 	// session from a partially wiped snapshot.
-	if err := client.MetadataDB.Put(stateSyncSummaryKey, proposedSummary.Bytes()); err != nil {
+	if err := c.MetadataDB.Put(stateSyncSummaryKey, proposedSummary.Bytes()); err != nil {
 		return block.StateSyncSkipped, fmt.Errorf("failed to write state sync summary key to disk: %w", err)
 	}
-	if err := client.VerDB.Commit(); err != nil {
+	if err := c.VerDB.Commit(); err != nil {
 		return block.StateSyncSkipped, fmt.Errorf("failed to commit db: %w", err)
 	}
 
-	log.Info("Starting state sync", "summary", proposedSummary)
-
-	// create a cancellable ctx for the state sync goroutine
+	log.Info("Starting state sync", "summary", proposedSummary.GetBlockHash().Hex())
 	ctx, cancel := context.WithCancel(context.Background())
-	client.cancel = cancel
-	client.wg.Add(1) // track the state sync goroutine so we can wait for it on shutdown
-	go func() {
-		defer client.wg.Done()
-		defer cancel()
+	c.cancel = cancel
 
-		if err := client.stateSync(ctx); err != nil {
-			client.err = err
-		} else {
-			client.err = client.finishSync()
-		}
-		// notify engine regardless of whether err == nil,
-		// this error will be propagated to the engine when it calls
-		// vm.SetState(snow.Bootstrapping)
-		log.Info("stateSync completed, notifying engine", "err", client.err)
-		close(client.StateSyncDone)
-	}()
-	return block.StateSyncStatic, nil
+	registry := NewSyncerRegistry()
+	if err := c.registerSyncers(registry); err != nil {
+		return block.StateSyncSkipped, err
+	}
+
+	if c.DynamicStateSyncEnabled {
+		return c.stateSyncDynamic(ctx, registry), nil
+	}
+
+	return c.stateSyncStatic(ctx, registry), nil
 }
 
-func (client *client) Shutdown() error {
-	if client.cancel != nil {
-		client.cancel()
+// stateSyncStatic launches the static state sync in a goroutine and returns the mode.
+func (c *client) stateSyncStatic(ctx context.Context, registry *SyncerRegistry) block.StateSyncMode {
+	c.wg.Add(1)
+	go func() {
+		var err error
+
+		defer func() {
+			c.wg.Done()
+			c.signalDone(err)
+		}()
+
+		if err = registry.RunSyncerTasks(ctx, c.summary); err != nil {
+			log.Error("static state sync completed with error, notifying engine", "err", err)
+			return
+		}
+
+		if err = registry.FinalizeAll(ctx); err != nil {
+			log.Error("finalizing syncers failed after static state sync", "err", err)
+			return
+		}
+
+		if err = c.finishSync(ctx); err != nil {
+			log.Error("finalizing VM markers failed after static state sync", "err", err)
+			return
+		}
+
+		log.Info("static state sync completed, notifying engine")
+	}()
+	log.Info("static state sync started", "summary", c.summary)
+	return block.StateSyncStatic
+}
+
+// stateSyncDynamic launches the dynamic state sync in a goroutine and returns the mode.
+func (c *client) stateSyncDynamic(ctx context.Context, registry *SyncerRegistry) block.StateSyncMode {
+	c.coordinator = NewCoordinator(
+		registry,
+		Callbacks{
+			FinalizeVM: func(ctx context.Context, _ message.Syncable) error {
+				return c.finishSync(ctx)
+			},
+			OnDone: func(err error) {
+				c.signalDone(err)
+				if err != nil {
+					log.Error("dynamic state sync completed with error, notifying engine", "err", err)
+				} else {
+					log.Info("dynamic state sync completed successfully, notifying engine")
+				}
+			},
+		},
+		WithPivotInterval(c.PivotInterval),
+	)
+
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.coordinator.Start(ctx, c.summary)
+	}()
+	log.Info("dynamic state sync started", "summary", c.summary)
+	return block.StateSyncDynamic
+}
+
+// enqueueBlockOperation enqueues a block operation for deferred processing.
+// Returns the eth block if enqueued, nil otherwise.
+func (c *client) enqueueBlockOperation(b EthBlockWrapper, op BlockOperationType) *types.Block {
+	if !c.DynamicStateSyncEnabled || c.coordinator == nil {
+		return nil
 	}
-	client.wg.Wait() // wait for the background goroutine to exit
-	return nil
+
+	ethb := b.GetEthBlock()
+	// Best-effort enqueue, allowed during Running or StateExecutingBatch.
+	ok := c.coordinator.AddBlockOperation(b, op)
+	if !ok && ethb != nil {
+		log.Warn("could not enqueue block operation for post-finalization execution", "hash", ethb.Hash(), "block_operation", op.String(), "height", ethb.NumberU64())
+		return nil
+	}
+
+	return ethb
 }
 
 // finishSync is responsible for updating disk and memory pointers so the VM is prepared
 // for bootstrapping. Executes any shared memory operations from the atomic trie to shared memory.
-func (client *client) finishSync() error {
-	stateBlock, err := client.State.GetBlock(context.TODO(), ids.ID(client.summary.GetBlockHash()))
+func (c *client) finishSync(ctx context.Context) error {
+	stateBlock, err := c.State.GetBlock(ctx, ids.ID(c.summary.GetBlockHash()))
 	if err != nil {
-		return fmt.Errorf("could not get block by hash from client state: %s", client.summary.GetBlockHash())
+		return fmt.Errorf("could not get block by hash from client state: %s", c.summary.GetBlockHash())
 	}
 
 	wrapper, ok := stateBlock.(*chain.BlockWrapper)
@@ -339,11 +478,11 @@ func (client *client) finishSync() error {
 
 	block := evmBlockGetter.GetEthBlock()
 
-	if block.Hash() != client.summary.GetBlockHash() {
-		return fmt.Errorf("attempted to set last summary block to unexpected block hash: (%s != %s)", block.Hash(), client.summary.GetBlockHash())
+	if block.Hash() != c.summary.GetBlockHash() {
+		return fmt.Errorf("attempted to set last summary block to unexpected block hash: (%s != %s)", block.Hash(), c.summary.GetBlockHash())
 	}
-	if block.NumberU64() != client.summary.Height() {
-		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), client.summary.Height())
+	if block.NumberU64() != c.summary.Height() {
+		return fmt.Errorf("attempted to set last summary block to unexpected block number: (%d != %d)", block.NumberU64(), c.summary.Height())
 	}
 
 	// BloomIndexer needs to know that some parts of the chain are not available
@@ -356,28 +495,33 @@ func (client *client) finishSync() error {
 	// by [params.BloomBitsBlocks].
 	parentHeight := block.NumberU64() - 1
 	parentHash := block.ParentHash()
-	client.Chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
+	c.Chain.BloomIndexer().AddCheckpoint(parentHeight/params.BloomBitsBlocks, parentHash)
 
-	if err := client.Chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("finishSync cancelled before finalization: %w", err)
+	}
+	if err := c.Chain.BlockChain().ResetToStateSyncedBlock(block); err != nil {
 		return err
 	}
 
-	if client.Extender != nil {
-		if err := client.Extender.OnFinishBeforeCommit(client.LastAcceptedHeight, client.summary); err != nil {
+	if c.Extender != nil {
+		if err := c.Extender.OnFinishBeforeCommit(c.LastAcceptedHeight, c.summary); err != nil {
 			return err
 		}
 	}
 
-	if err := client.commitVMMarkers(); err != nil {
+	if err := c.commitVMMarkers(); err != nil {
 		return fmt.Errorf("error updating vm markers, height=%d, hash=%s, err=%w", block.NumberU64(), block.Hash(), err)
 	}
 
-	if err := client.State.SetLastAcceptedBlock(wrappedBlock); err != nil {
+	if err := c.State.SetLastAcceptedBlock(wrappedBlock); err != nil {
 		return err
 	}
 
-	if client.Extender != nil {
-		return client.Extender.OnFinishAfterCommit(block.NumberU64())
+	if c.Extender != nil {
+		if err := c.Extender.OnFinishAfterCommit(block.NumberU64()); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -389,19 +533,27 @@ func (client *client) finishSync() error {
 // - updates atomic trie so it will resume applying operations to shared memory on initialize
 // - updates lastAcceptedKey
 // - removes state sync progress markers
-func (client *client) commitVMMarkers() error {
+func (c *client) commitVMMarkers() error {
 	// Mark the previously last accepted block for the shared memory cursor, so that we will execute shared
 	// memory operations from the previously last accepted block to [vm.syncSummary] when ApplyToSharedMemory
 	// is called.
-	id := ids.ID(client.summary.GetBlockHash())
-	if err := client.Acceptor.PutLastAcceptedID(id); err != nil {
+	id := ids.ID(c.summary.GetBlockHash())
+	if err := c.Acceptor.PutLastAcceptedID(id); err != nil {
 		return err
 	}
-	if err := client.MetadataDB.Delete(stateSyncSummaryKey); err != nil {
+	if err := c.MetadataDB.Delete(stateSyncSummaryKey); err != nil {
 		return err
 	}
-	return client.VerDB.Commit()
+	return c.VerDB.Commit()
 }
 
-// Error returns a non-nil error if one occurred during the sync.
-func (client *client) Error() error { return client.err }
+// signalDone sets the terminal error exactly once, signals completion to the engine.
+func (c *client) signalDone(err error) {
+	c.stateSyncOnce.Do(func() {
+		c.err = err
+		if c.cancel != nil {
+			c.cancel()
+		}
+		close(c.StateSyncDone)
+	})
+}
