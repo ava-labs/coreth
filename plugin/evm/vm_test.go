@@ -1719,6 +1719,59 @@ func TestWaitForEvent(t *testing.T) {
 	}
 }
 
+func TestWaitForEvent2(t *testing.T) {
+	fork := upgradetest.Latest
+	vm := newDefaultTestVM()
+	vmtest.SetupTestVM(t, vm, vmtest.TestVMConfig{
+		Fork: &fork,
+	})
+
+	signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+
+	err := errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
+	require.NoError(t, err)
+
+	blk, err := vm.BuildBlock(t.Context())
+	require.NoError(t, err)
+
+	require.NoError(t, blk.Verify(t.Context()))
+
+	require.NoError(t, vm.SetPreference(t.Context(), blk.ID()))
+
+	signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 1, &vmtest.TestEthAddrs[2], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+
+	err = errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
+	require.NoError(t, err)
+
+	time.Sleep(time.Second * 2)
+
+	blk2, err := vm.BuildBlock(t.Context())
+	require.NoError(t, err)
+
+	require.NoError(t, blk2.Verify(t.Context()))
+
+	require.NoError(t, vm.SetPreference(t.Context(), blk2.ID()))
+
+	err = blk.Accept(context.Background())
+	require.NoError(t, err)
+
+	err = blk2.Accept(context.Background())
+	require.NoError(t, err)
+
+	go func() {
+		time.Sleep(time.Second * 4)
+		signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 2, &vmtest.TestEthAddrs[2], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
+
+		err = errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
+		require.NoError(t, err)
+	}()
+
+	pending, err := vm.WaitForEvent(context.Background())
+	require.NoError(t, err)
+
+	require.Equal(t, commonEng.PendingTxs, pending)
+}
+
 // Copied from rpc/testservice_test.go
 type testService struct{}
 
