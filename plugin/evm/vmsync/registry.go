@@ -86,7 +86,7 @@ func (r *SyncerRegistry) StartAsync(ctx context.Context, summary message.Syncabl
 		g.Go(func() error {
 			log.Info("starting syncer", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
 			if err := task.syncer.Sync(ctx); err != nil {
-				// Context cancellation during shutdown is expected - log as INFO, not ERROR.
+				// Context cancellation during shutdown is expected.
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					log.Info("syncer cancelled", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
 					return err

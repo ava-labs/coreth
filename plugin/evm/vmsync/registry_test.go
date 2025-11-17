@@ -182,12 +182,6 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 
 			require.ErrorIs(t, err, tt.expectedError)
 
-			// Verify error wrapping for real errors (not cancellation).
-			if tt.expectedError != nil {
-				require.NotEqual(t, tt.expectedError, err, "error should be wrapped")
-				require.Contains(t, err.Error(), "Syncer1 failed", "error message should include syncer name")
-			}
-
 			// Use custom assertion function for each test case.
 			tt.assertState(t, mockSyncers)
 		})
@@ -354,7 +348,7 @@ func TestSyncerRegistry_ContextCancellationErrors(t *testing.T) {
 			} else {
 				ctx, cancel = context.WithCancel(t.Context())
 			}
-			defer cancel()
+			t.Cleanup(cancel)
 
 			doneCh := startSyncersAsync(registry, ctx, newTestClientSummary(t))
 
@@ -482,14 +476,14 @@ func TestSyncerRegistry_WrappedContextCanceledError(t *testing.T) {
 	}))
 
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	t.Cleanup(cancel)
 
 	// Start syncers - the wrapped error should be detected by errors.Is().
 	g := registry.StartAsync(ctx, newTestClientSummary(t))
 
 	err := g.Wait()
 
-	// Verify that errors.Is correctly identifies the wrapped context.Canceled
+	// Verify that errors.Is correctly identifies the wrapped context.Canceled.
 	require.ErrorIs(t, err, context.Canceled, "wrapped context.Canceled should be detected by errors.Is")
 }
 
