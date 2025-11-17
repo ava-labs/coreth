@@ -47,8 +47,12 @@ func NewBarrierSyncer(wg *sync.WaitGroup, releaseCh <-chan struct{}) FuncSyncer 
 
 // NewErrorSyncer returns a syncer that waits until either `trigger` is closed
 // (then returns `errToReturn`) or `ctx` is canceled (then returns ctx.Err).
-func NewErrorSyncer(trigger <-chan struct{}, errToReturn error) FuncSyncer {
+// If `startedWG` is provided, it calls Done() when Sync begins.
+func NewErrorSyncer(trigger <-chan struct{}, errToReturn error, startedWG *sync.WaitGroup) FuncSyncer {
 	return FuncSyncer{fn: func(ctx context.Context) error {
+		if startedWG != nil {
+			startedWG.Done()
+		}
 		select {
 		case <-trigger:
 			return errToReturn
@@ -58,18 +62,18 @@ func NewErrorSyncer(trigger <-chan struct{}, errToReturn error) FuncSyncer {
 	}}
 }
 
-// NewCancelAwareSyncer closes `started` as soon as Sync begins, then waits for
+// NewCancelAwareSyncer calls startedWG.Done() as soon as Sync begins, then waits for
 // either:
-//   - `ctx` cancellation: closes `canceled` and returns ctx.Err; or
+//   - `ctx` cancellation: calls canceledWG.Done() and returns ctx.Err; or
 //   - `timeout` elapsing: returns an error indicating a timeout.
 //
 // Useful for asserting that cancellation propagates to the syncer under test.
-func NewCancelAwareSyncer(started, canceled chan struct{}, timeout time.Duration) FuncSyncer {
+func NewCancelAwareSyncer(startedWG, canceledWG *sync.WaitGroup, timeout time.Duration) FuncSyncer {
 	return FuncSyncer{fn: func(ctx context.Context) error {
-		close(started)
+		startedWG.Done()
 		select {
 		case <-ctx.Done():
-			close(canceled)
+			canceledWG.Done()
 			return ctx.Err()
 		case <-time.After(timeout):
 			return errors.New("syncer timed out waiting for cancellation")
