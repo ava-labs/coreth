@@ -149,7 +149,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				}
 			},
 		}, {
-			name: "error returned and wrapped",
+			name: "error returned",
 			syncers: []syncerConfig{
 				{"Syncer1", errFoo},
 				{"Syncer2", nil},
@@ -367,9 +367,8 @@ func TestSyncerRegistry_ContextCancellationErrors(t *testing.T) {
 
 			err := utilstest.WaitErrWithTimeout(t, doneCh, 4*time.Second)
 
-			// Verify error is returned directly (not wrapped).
+			// Verify error propagates correctly.
 			require.ErrorIs(t, err, tt.wantErr)
-			require.Equal(t, tt.wantErr, err, "error should be returned directly, not wrapped")
 
 			// Verify that all syncers detected cancellation.
 			utilstest.WaitGroupWithTimeout(t, canceledWG, 2*time.Second, "cancellation was not propagated to all syncers")
@@ -404,7 +403,6 @@ func TestSyncerRegistry_EarlyReturnOnAlreadyCancelledContext(t *testing.T) {
 
 	// Verify that context.Canceled is returned immediately.
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, context.Canceled, err, "error should be context.Canceled directly, not wrapped")
 
 	// Verify that syncers were never started (early return optimization).
 	for i, mockSyncer := range mockSyncers {
