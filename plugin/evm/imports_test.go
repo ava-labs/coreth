@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 )
@@ -96,11 +97,10 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 	foundImports, err := findFilteredLibevmImportsWithFiles("../..")
 	require.NoError(t, err, "Failed to find libevm imports")
 
-	// Check for any imports not in the allowed list and build detailed error message
-	var disallowedImports []string
+	var disallowedImports set.Set[string]
 	for importPath := range foundImports {
-		if _, allowed := allowedPackages[importPath]; !allowed {
-			disallowedImports = append(disallowedImports, importPath)
+		if !allowedPackages.Contains(importPath) {
+			disallowedImports.Add(importPath)
 		}
 	}
 
@@ -111,16 +111,14 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 	// After this point, there are disallowed imports, and the test will fail.
 	// The remaining code is just necessary to pretty-print the error message,
 	// to make it easier to find and fix the disallowed imports.
-	slices.Sort(disallowedImports)
+	sortedDisallowed := disallowedImports.List()
+	slices.Sort(sortedDisallowed)
 
 	var errorMsg strings.Builder
 	errorMsg.WriteString("New libevm imports should be added to ./scripts/eth-allowed-packages.txt to prevent accidental imports:\n\n")
-	for _, importPath := range disallowedImports {
+	for _, importPath := range sortedDisallowed {
 		files := foundImports[importPath]
-		fileList := make([]string, 0, len(files))
-		for file := range files {
-			fileList = append(fileList, file)
-		}
+		fileList := files.List()
 		slices.Sort(fileList)
 
 		errorMsg.WriteString(fmt.Sprintf("- %s\n", importPath))
@@ -134,14 +132,14 @@ func TestLibevmImportsAreAllowed(t *testing.T) {
 }
 
 // loadAllowedPackages reads the allowed packages from the specified file
-func loadAllowedPackages(filename string) (map[string]struct{}, error) {
+func loadAllowedPackages(filename string) (set.Set[string], error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open allowed packages file: %w", err)
 	}
 	defer file.Close()
 
-	allowed := make(map[string]struct{})
+	allowed := set.Set[string]{}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -150,7 +148,7 @@ func loadAllowedPackages(filename string) (map[string]struct{}, error) {
 		}
 
 		line = strings.Trim(line, `"`)
-		allowed[line] = struct{}{}
+		allowed.Add(line)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -163,8 +161,8 @@ func loadAllowedPackages(filename string) (map[string]struct{}, error) {
 // findFilteredLibevmImportsWithFiles finds all libevm imports in the codebase,
 // excluding underscore imports and "eth*" named imports.
 // Returns a map of import paths to the set of files that contain them
-func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]struct{}, error) {
-	imports := make(map[string]map[string]struct{})
+func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]set.Set[string], error) {
+	imports := make(map[string]set.Set[string])
 	libevmRegex := regexp.MustCompile(`^github\.com/ava-labs/libevm/`)
 
 	err := filepath.Walk(rootDir, func(path string, _ os.FileInfo, err error) error {
@@ -198,10 +196,12 @@ func findFilteredLibevmImportsWithFiles(rootDir string) (map[string]map[string]s
 				continue
 			}
 
-			if imports[importPath] == nil {
-				imports[importPath] = make(map[string]struct{})
+			if _, exists := imports[importPath]; !exists {
+				imports[importPath] = set.Set[string]{}
 			}
-			imports[importPath][path] = struct{}{}
+			fileSet := imports[importPath]
+			fileSet.Add(path)
+			imports[importPath] = fileSet
 		}
 		return nil
 	})
