@@ -164,14 +164,14 @@ func (*Database) Scheme() string {
 
 // Initialized checks whether a non-empty genesis block has been written.
 func (db *Database) Initialized(common.Hash) bool {
-	rootBytes, err := db.fwDisk.Root()
+	root, err := db.fwDisk.Root()
 	if err != nil {
 		log.Error("firewood: error getting current root", "error", err)
 		return false
 	}
-	root := common.BytesToHash(rootBytes)
+
 	// If the current root isn't empty, then unless the database is empty, we have a genesis block recorded.
-	return root != types.EmptyRootHash
+	return common.Hash(root) != types.EmptyRootHash
 }
 
 // Update takes a root and a set of keys-values and creates a new proposal.
@@ -320,13 +320,14 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	defer db.cleanupCommittedProposal(pCtx)
 
 	// Assert that the root of the database matches the committed proposal root.
-	currentRootBytes, err := db.fwDisk.Root()
+	currentRoot, err := db.fwDisk.Root()
 	if err != nil {
 		return fmt.Errorf("firewood: error getting current root after commit: %w", err)
 	}
-	currentRoot := common.BytesToHash(currentRootBytes)
-	if currentRoot != root {
-		return fmt.Errorf("firewood: current root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+
+	currentRootHash := common.Hash(currentRoot)
+	if currentRootHash != root {
+		return fmt.Errorf("firewood: current root %s does not match expected root %s", currentRootHash.Hex(), root.Hex())
 	}
 
 	if report {
@@ -402,13 +403,14 @@ func createProposal(layer proposable, root common.Hash, keys, values [][]byte) (
 	ffiProposeTimer.Inc(time.Since(start).Milliseconds())
 	ffiOutstandingProposals.Inc(1)
 
-	currentRootBytes, err := p.Root()
+	currentRoot, err := p.Root()
 	if err != nil {
 		return nil, fmt.Errorf("firewood: error getting root of proposal %s: %w", root, err)
 	}
-	currentRoot := common.BytesToHash(currentRootBytes)
-	if root != currentRoot {
-		return nil, fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRoot.Hex(), root.Hex())
+
+	currentRootHash := common.Hash(currentRoot)
+	if root != currentRootHash {
+		return nil, fmt.Errorf("firewood: proposed root %s does not match expected root %s", currentRootHash.Hex(), root.Hex())
 	}
 
 	return p, nil
@@ -475,7 +477,7 @@ func (db *Database) removeProposalFromMap(pCtx *ProposalContext) {
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (database.Reader, error) {
-	if _, err := db.fwDisk.GetFromRoot(root.Bytes(), []byte{}); err != nil {
+	if _, err := db.fwDisk.GetFromRoot(ffi.Hash(root), []byte{}); err != nil {
 		return nil, fmt.Errorf("firewood: unable to retrieve from root %s: %w", root.Hex(), err)
 	}
 	return &reader{db: db, root: root}, nil
@@ -493,7 +495,7 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 	// This function relies on Firewood's internal locking to ensure concurrent reads are safe.
 	// This is safe even if a proposal is being committed concurrently.
 	start := time.Now()
-	result, err := reader.db.fwDisk.GetFromRoot(reader.root.Bytes(), path)
+	result, err := reader.db.fwDisk.GetFromRoot(ffi.Hash(reader.root), path)
 	if metrics.EnabledExpensive {
 		ffiReadCount.Inc(1)
 		ffiReadTimer.Inc(time.Since(start).Milliseconds())
@@ -544,11 +546,11 @@ func (db *Database) getProposalHash(parentRoot common.Hash, keys, values [][]byt
 		}
 	}()
 
-	rootBytes, err := p.Root()
+	root, err := p.Root()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return common.BytesToHash(rootBytes), nil
+	return common.Hash(root), nil
 }
 
 func arrangeKeyValuePairs(nodes *trienode.MergedNodeSet) ([][]byte, [][]byte) {
