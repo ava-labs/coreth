@@ -19,8 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const repo = "github.com/ava-labs/coreth"
-
 // TestLibevmImportsAreAllowed ensures that all libevm imports in the codebase
 // are explicitly allowed via the eth-allowed-packages.txt file.
 func TestLibevmImportsAreAllowed(t *testing.T) {
