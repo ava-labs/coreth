@@ -45,8 +45,6 @@ import (
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
 	c *rpc.Client
-	// blockHook is called when a block is decoded.
-	blockHook BlockHook
 }
 
 // Dial connects a client to the given URL.
@@ -204,17 +202,10 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	block := types.NewBlockWithHeader(head).WithBody(types.Body{
+	return types.NewBlockWithHeader(head).WithBody(types.Body{
 		Transactions: txs,
 		Uncles:       uncles,
-	})
-	// Fill the block with the extra data. BlockHook can modify the block.
-	if ec.blockHook != nil {
-		if err := ec.blockHook.OnBlockDecoded(raw, block); err != nil {
-			return nil, err
-		}
-	}
-	return block, nil
+	}), nil
 }
 
 // HeaderByHash returns the block header with the given hash.
