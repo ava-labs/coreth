@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/rpc"
 	ethereum "github.com/ava-labs/libevm"
 	"github.com/ava-labs/libevm/common"
@@ -130,10 +131,12 @@ func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 }
 
 type rpcBlock struct {
-	Hash         common.Hash         `json:"hash"`
-	Transactions []rpcTransaction    `json:"transactions"`
-	UncleHashes  []common.Hash       `json:"uncles"`
-	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
+	Hash           common.Hash         `json:"hash"`
+	Transactions   []rpcTransaction    `json:"transactions"`
+	UncleHashes    []common.Hash       `json:"uncles"`
+	Withdrawals    []*types.Withdrawal `json:"withdrawals,omitempty"`
+	Version        uint32              `json:"version"`
+	BlockExtraData *hexutil.Bytes      `json:"blockExtraData"`
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
@@ -202,10 +205,19 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		}
 		txs[i] = tx.tx
 	}
-	return types.NewBlockWithHeader(head).WithBody(types.Body{
-		Transactions: txs,
-		Uncles:       uncles,
-	}), nil
+
+	block := types.NewBlockWithHeader(head).WithBody(
+		types.Body{
+			Transactions: txs,
+			Uncles:       uncles,
+			Withdrawals:  body.Withdrawals,
+		})
+	extra := &customtypes.BlockBodyExtra{
+		Version: body.Version,
+		ExtData: (*[]byte)(body.BlockExtraData),
+	}
+	customtypes.SetBlockExtra(block, extra)
+	return block, nil
 }
 
 // HeaderByHash returns the block header with the given hash.
