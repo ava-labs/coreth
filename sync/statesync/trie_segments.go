@@ -143,12 +143,6 @@ func (t *trieToSync) loadSegments() error {
 // startSyncing adds the trieToSync's segments to the work queue.
 func (t *trieToSync) startSyncing(ctx context.Context) error {
 	for _, segment := range t.segments {
-		// Check context cancellation before attempting to send to avoid blocking
-		// on a full channel when shutdown occurs.
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
 		select {
 		case t.sync.segments <- segment:
 		case <-ctx.Done():
@@ -324,12 +318,6 @@ func (t *trieToSync) createSegments(ctx context.Context, numSegments int) error 
 	// is already syncing.
 	// this avoids concurrent access to [t.segments].
 	for i := 1; i < len(t.segments); i++ {
-		// Check context cancellation before attempting to send to avoid blocking
-		// on a full channel when shutdown occurs.
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
 		select {
 		case t.sync.segments <- t.segments[i]:
 		case <-ctx.Done():
