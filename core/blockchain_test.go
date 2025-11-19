@@ -72,8 +72,10 @@ var (
 		AcceptorQueueLimit:        64,
 	}
 
+	// TODO: remove the "non-archive" comment after we update all archival (but
+	// snapshot disabled) tests to use Firewood
 	// Firewood should only be included for non-archive, snapshot disabled tests.
-	schemes = []string{rawdb.HashScheme, customrawdb.FirewoodScheme}
+	schemes = []string{customrawdb.FirewoodScheme, rawdb.HashScheme}
 )
 
 func newGwei(n int64) *big.Int {
@@ -111,22 +113,36 @@ func TestArchiveBlockChain(t *testing.T) {
 }
 
 func TestArchiveBlockChainSnapsDisabled(t *testing.T) {
-	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, _ string) (*BlockChain, error) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testArchiveBlockChainSnapsDisabled(t, scheme)
+		})
+	}
+}
+
+func testArchiveBlockChainSnapsDisabled(t *testing.T, scheme string) {
+	create := func(db ethdb.Database, gspec *Genesis, lastAcceptedHash common.Hash, dataPath string) (*BlockChain, error) {
+		cacheConfig := &CacheConfig{
+			TrieCleanLimit:            256,
+			TrieDirtyLimit:            256,
+			TrieDirtyCommitTarget:     20,
+			TriePrefetcherParallelism: 4,
+			Pruning:                   false, // Archive mode
+			StateHistory:              32,    // Required for Firewood's minimum Revision count
+			SnapshotLimit:             0,     // Disable snapshots
+			AcceptorQueueLimit:        64,
+			StateScheme:               scheme,
+			ChainDataDir:              dataPath,
+		}
+
 		return createBlockChain(
 			db,
-			&CacheConfig{
-				TrieCleanLimit:            256,
-				TrieDirtyLimit:            256,
-				TrieDirtyCommitTarget:     20,
-				TriePrefetcherParallelism: 4,
-				Pruning:                   false, // Archive mode
-				SnapshotLimit:             0,     // Disable snapshots
-				AcceptorQueueLimit:        64,
-			},
+			cacheConfig,
 			gspec,
 			lastAcceptedHash,
 		)
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			tt.testFunc(t, create)
