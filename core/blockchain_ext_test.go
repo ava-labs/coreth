@@ -192,11 +192,9 @@ func copyDir(t *testing.T, src string) string {
 		dstPath := filepath.Join(dst, relPath)
 
 		if info.IsDir() {
-			// Create directory with the same permissions
 			return os.MkdirAll(dstPath, info.Mode().Perm())
 		}
 
-		// Copy file
 		data, err := os.ReadFile(path)
 		require.NoError(err)
 
