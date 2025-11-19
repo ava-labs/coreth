@@ -433,20 +433,27 @@ func TestPruningToNonPruning(t *testing.T) {
 	}
 }
 
+// testPruningToNonPruning tests that opening a previously pruned database as a
+// non-pruned database is successful.
+//
+// This test checks the following invariants:
+// 1. Verifies that a pruned node does not have the state for all blocks (except
+// the last accepted block) upon restart.
+// 2. Verify that a pruned => archival node has the state for all blocks
+// accepted during archival mode upon restart.
 func testPruningToNonPruning(t *testing.T, scheme string) {
 	var (
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		chainDB = rawdb.NewMemoryDatabase()
+		key1, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _   = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1     = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2     = crypto.PubkeyToAddress(key2.PublicKey)
+		chainDB   = rawdb.NewMemoryDatabase()
+		numStates = uint64(5)
 	)
 
-	// Ensure that key1 has some funds in the genesis block.
-	genesisBalance := big.NewInt(1000000)
 	gspec := &Genesis{
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
-		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
 
 	chainDataDir := t.TempDir()
@@ -457,21 +464,21 @@ func testPruningToNonPruning(t *testing.T, scheme string) {
 		TriePrefetcherParallelism: 4,
 		Pruning:                   true, // Enable pruning
 		CommitInterval:            4096,
-		StateHistory:              32,
+		StateHistory:              numStates,
 		AcceptorQueueLimit:        64,
 		StateScheme:               scheme,
 		ChainDataDir:              chainDataDir,
 	}
 
+	// Create a node in pruning mode.
 	blockchain, err := createBlockChain(chainDB, pruningConfig, gspec, common.Hash{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer blockchain.Stop()
 
-	// This call generates a chain of 3 blocks.
+	// Generate 10 (2 * numStates) blocks.
 	signer := types.HomesteadSigner{}
-	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
+	_, blocks, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 2*int(numStates), 10, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), ethparams.TxGas, nil, nil), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -479,10 +486,15 @@ func testPruningToNonPruning(t *testing.T, scheme string) {
 		t.Fatal(err)
 	}
 
-	if _, err := blockchain.InsertChain(chain); err != nil {
+	prunedBlocks := blocks[:numStates]
+	nonPrunedBlocks := blocks[numStates:]
+
+	// Insert the first five blocks.
+	// The states of the first four blocks will be lost upon restart.
+	if _, err := blockchain.InsertChain(prunedBlocks); err != nil {
 		t.Fatal(err)
 	}
-	for _, block := range chain {
+	for _, block := range prunedBlocks {
 		if err := blockchain.Accept(block); err != nil {
 			t.Fatal(err)
 		}
@@ -490,6 +502,22 @@ func testPruningToNonPruning(t *testing.T, scheme string) {
 	blockchain.DrainAcceptorQueue()
 
 	lastAcceptedHash := blockchain.LastConsensusAcceptedBlock().Hash()
+	blockchain.Stop()
+
+	// Reopen the node.
+	blockchain, err = createBlockChain(chainDB, pruningConfig, gspec, lastAcceptedHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Verify that a pruned node does not have the state for all blocks (except
+	// the last accepted block) upon restart.
+	for _, block := range prunedBlocks[:numStates-1] {
+		if blockchain.HasState(block.Root()) {
+			t.Fatalf("Expected blockchain to be missing state for intermediate block %d with pruning enabled", block.NumberU64())
+		}
+	}
+
 	blockchain.Stop()
 
 	archiveConfig := &CacheConfig{
@@ -504,7 +532,7 @@ func testPruningToNonPruning(t *testing.T, scheme string) {
 		ChainDataDir:              chainDataDir,
 	}
 
-	// Create a node in archival mode.
+	// Reopen the node, but switch from pruning to archival mode.
 	blockchain, err = createBlockChain(
 		chainDB,
 		archiveConfig,
@@ -514,7 +542,43 @@ func testPruningToNonPruning(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Insert the remaining five blocks.
+	// The states of all these blocks will still be accessible on restart
+	// since we're now in archival mode.
+	if _, err := blockchain.InsertChain(nonPrunedBlocks); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, block := range nonPrunedBlocks {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blockchain.DrainAcceptorQueue()
+
+	lastAcceptedHash = blockchain.LastConsensusAcceptedBlock().Hash()
 	blockchain.Stop()
+
+	// Reopen the archival node.
+	blockchain, err = createBlockChain(
+		chainDB,
+		archiveConfig,
+		gspec,
+		lastAcceptedHash,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	// 2. Verify that a pruned => archival node has the state for all blocks
+	// accepted during archival mode upon restart.
+	for _, block := range nonPrunedBlocks {
+		if !blockchain.HasState(block.Root()) {
+			t.Fatalf("Expected blockchain to have the state for block %d with pruning disabled", block.NumberU64())
+		}
+	}
 }
 
 func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
