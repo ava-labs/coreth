@@ -72,10 +72,8 @@ var (
 		AcceptorQueueLimit:        64,
 	}
 
-	// TODO: remove the "non-archive" comment after we update all archival (but
-	// snapshot disabled) tests to use Firewood
-	// Firewood should only be included for non-archive, snapshot disabled tests.
-	schemes = []string{customrawdb.FirewoodScheme, rawdb.HashScheme}
+	// Firewood should only be included for snapshot disabled tests.
+	schemes = []string{rawdb.HashScheme, customrawdb.FirewoodScheme}
 )
 
 func newGwei(n int64) *big.Int {
@@ -423,6 +421,100 @@ func TestBlockChainOfflinePruningUngracefulShutdown(t *testing.T) {
 			tt.testFunc(t, create)
 		})
 	}
+}
+
+// TestPruningToNonPruning tests that opening a previously pruned database as a
+// non-pruned database is successful.
+func TestPruningToNonPruning(t *testing.T) {
+	for _, scheme := range schemes {
+		t.Run(scheme, func(t *testing.T) {
+			testPruningToNonPruning(t, scheme)
+		})
+	}
+}
+
+func testPruningToNonPruning(t *testing.T, scheme string) {
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		chainDB = rawdb.NewMemoryDatabase()
+	)
+
+	// Ensure that key1 has some funds in the genesis block.
+	genesisBalance := big.NewInt(1000000)
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  types.GenesisAlloc{addr1: {Balance: genesisBalance}},
+	}
+
+	chainDataDir := t.TempDir()
+	pruningConfig := &CacheConfig{
+		TrieCleanLimit:            256,
+		TrieDirtyLimit:            256,
+		TrieDirtyCommitTarget:     20,
+		TriePrefetcherParallelism: 4,
+		Pruning:                   true, // Enable pruning
+		CommitInterval:            4096,
+		StateHistory:              32,
+		AcceptorQueueLimit:        64,
+		StateScheme:               scheme,
+		ChainDataDir:              chainDataDir,
+	}
+
+	blockchain, err := createBlockChain(chainDB, pruningConfig, gspec, common.Hash{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blockchain.Stop()
+
+	// This call generates a chain of 3 blocks.
+	signer := types.HomesteadSigner{}
+	_, chain, _, err := GenerateChainWithGenesis(gspec, blockchain.engine, 10, 10, func(i int, gen *BlockGen) {
+		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), ethparams.TxGas, nil, nil), signer, key1)
+		gen.AddTx(tx)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain {
+		if err := blockchain.Accept(block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blockchain.DrainAcceptorQueue()
+
+	lastAcceptedHash := blockchain.LastConsensusAcceptedBlock().Hash()
+	blockchain.Stop()
+
+	archiveConfig := &CacheConfig{
+		TrieCleanLimit:            256,
+		TrieDirtyLimit:            256,
+		TrieDirtyCommitTarget:     20,
+		TriePrefetcherParallelism: 4,
+		Pruning:                   false, // Archive mode
+		AcceptorQueueLimit:        64,
+		StateScheme:               scheme,
+		StateHistory:              32,
+		ChainDataDir:              chainDataDir,
+	}
+
+	// Create a node in archival mode.
+	blockchain, err = createBlockChain(
+		chainDB,
+		archiveConfig,
+		gspec,
+		lastAcceptedHash,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockchain.Stop()
 }
 
 func testRepopulateMissingTriesParallel(t *testing.T, parallelism int) {
