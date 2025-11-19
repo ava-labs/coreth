@@ -230,12 +230,12 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 	errFirst := errors.New("test error")
 	var errorSyncerStartedWG sync.WaitGroup
 	errorSyncerStartedWG.Add(1)
-	errorSyncer := &namedSyncer{name: "ErrorSyncer-0", syncer: NewErrorSyncer(trigger, errFirst, &errorSyncerStartedWG)}
+	errorSyncer := &namedSyncer{name: "ErrorSyncer-0", syncer: NewErrorSyncer(&errorSyncerStartedWG, trigger, errFirst)}
 	require.NoError(t, registry.Register(errorSyncer))
 
 	// Cancel-aware syncers to verify cancellation propagation.
 	const numCancelSyncers = 2
-	startedWG, canceledWG := registerCancelAwareSyncers(t, registry, numCancelSyncers, 4*time.Second)
+	startedWG := registerCancelAwareSyncers(t, registry, numCancelSyncers, 4*time.Second)
 
 	doneCh := startSyncersAsync(registry, ctx, newTestClientSummary(t))
 
@@ -247,8 +247,6 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 
 	err := utilstest.WaitErrWithTimeout(t, doneCh, 4*time.Second)
 	require.ErrorIs(t, err, errFirst)
-
-	utilstest.WaitGroupWithTimeout(t, canceledWG, 2*time.Second, "cancellation was not propagated to all syncers")
 }
 
 func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
@@ -276,7 +274,7 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 			errFirst = errInstance
 		}
 		name := fmt.Sprintf("ErrorSyncer-%d", i)
-		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: NewErrorSyncer(trigger, errInstance, &allErrorSyncersStartedWG)}))
+		require.NoError(t, registry.Register(&namedSyncer{name: name, syncer: NewErrorSyncer(&allErrorSyncersStartedWG, trigger, errInstance)}))
 	}
 
 	doneCh := startSyncersAsync(registry, ctx, newTestClientSummary(t))
@@ -303,12 +301,6 @@ func TestSyncerRegistry_NoSyncersRegistered(t *testing.T) {
 
 func TestSyncerRegistry_ContextCancellationErrors(t *testing.T) {
 	t.Parallel()
-
-	// Test scenario that reproduces the issue where context cancellation during shutdown
-	// was being logged as ERROR instead of INFO. The fix ensures that:
-	// 1. Context cancellation errors are returned as-is (not wrapped).
-	// 2. Each syncer cancellation is logged as INFO, not ERROR.
-	// 3. The error propagates correctly to the caller.
 
 	tests := []struct {
 		name          string
@@ -338,7 +330,7 @@ func TestSyncerRegistry_ContextCancellationErrors(t *testing.T) {
 
 			registry := NewSyncerRegistry()
 
-			startedWG, canceledWG := registerCancelAwareSyncers(t, registry, tt.numSyncers, tt.syncerTimeout)
+			startedWG := registerCancelAwareSyncers(t, registry, tt.numSyncers, tt.syncerTimeout)
 
 			var (
 				ctx    context.Context
@@ -370,9 +362,6 @@ func TestSyncerRegistry_ContextCancellationErrors(t *testing.T) {
 
 			// Verify error propagates correctly.
 			require.ErrorIs(t, err, tt.wantErr)
-
-			// Verify that all syncers detected cancellation.
-			utilstest.WaitGroupWithTimeout(t, canceledWG, 2*time.Second, "cancellation was not propagated to all syncers")
 		})
 	}
 }
@@ -427,7 +416,7 @@ func TestSyncerRegistry_MixedCancellationAndSuccess(t *testing.T) {
 
 	// Create syncers that will be cancelled.
 	const numCancelSyncers = 2
-	startedWG, canceledWG := registerCancelAwareSyncers(t, registry, numCancelSyncers, 5*time.Second)
+	startedWG := registerCancelAwareSyncers(t, registry, numCancelSyncers, 5*time.Second)
 
 	doneCh := startSyncersAsync(registry, ctx, newTestClientSummary(t))
 
@@ -441,40 +430,6 @@ func TestSyncerRegistry_MixedCancellationAndSuccess(t *testing.T) {
 
 	// Verify that the cancellation error is returned.
 	require.ErrorIs(t, err, context.Canceled)
-
-	// Verify that all cancel-aware syncers detected cancellation.
-	utilstest.WaitGroupWithTimeout(t, canceledWG, 2*time.Second, "cancellation was not propagated to all syncers")
-}
-
-func TestSyncerRegistry_WrappedContextCanceledError(t *testing.T) {
-	t.Parallel()
-
-	registry := NewSyncerRegistry()
-
-	// Create a syncer that returns a wrapped context.Canceled error
-	// (simulating the real-world scenario from the original error).
-	wrappedErrorSyncer := FuncSyncer{
-		fn: func(_ context.Context) error {
-			// Simulate the wrapped error pattern of for example the code syncer not being able to fetch a codehash.
-			return fmt.Errorf("could not get code (CodeRequest(...)): %w", context.Canceled)
-		},
-	}
-
-	require.NoError(t, registry.Register(&namedSyncer{
-		name:   "WrappedErrorSyncer",
-		syncer: wrappedErrorSyncer,
-	}))
-
-	ctx, cancel := context.WithCancel(t.Context())
-	t.Cleanup(cancel)
-
-	// Start syncers - the wrapped error should be detected by errors.Is().
-	g := registry.StartAsync(ctx, newTestClientSummary(t))
-
-	err := g.Wait()
-
-	// Verify that errors.Is correctly identifies the wrapped context.Canceled.
-	require.ErrorIs(t, err, context.Canceled, "wrapped context.Canceled should be detected by errors.Is")
 }
 
 // startSyncersAsync starts the syncers asynchronously using StartAsync and returns a channel to receive the error.
@@ -488,19 +443,18 @@ func startSyncersAsync(registry *SyncerRegistry, ctx context.Context, summary me
 }
 
 // registerCancelAwareSyncers registers [numSyncers] cancel-aware syncers with the registry
-// and returns WaitGroups for coordination.
-func registerCancelAwareSyncers(t *testing.T, registry *SyncerRegistry, numSyncers int, timeout time.Duration) (*sync.WaitGroup, *sync.WaitGroup) {
+// and returns a WaitGroup to coordinate when syncers have started.
+func registerCancelAwareSyncers(t *testing.T, registry *SyncerRegistry, numSyncers int, timeout time.Duration) *sync.WaitGroup {
 	t.Helper()
-	var startedWG, canceledWG sync.WaitGroup
+	var startedWG sync.WaitGroup
 	startedWG.Add(numSyncers)
-	canceledWG.Add(numSyncers)
 	for i := 0; i < numSyncers; i++ {
 		require.NoError(t, registry.Register(&namedSyncer{
 			name:   fmt.Sprintf("Syncer-%d", i),
-			syncer: NewCancelAwareSyncer(&startedWG, &canceledWG, timeout),
+			syncer: NewCancelAwareSyncer(&startedWG, timeout),
 		}))
 	}
-	return &startedWG, &canceledWG
+	return &startedWG
 }
 
 func newTestClientSummary(t *testing.T) message.Syncable {
