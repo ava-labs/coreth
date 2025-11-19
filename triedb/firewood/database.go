@@ -67,6 +67,7 @@ type Config struct {
 	FreeListCacheEntries uint // Number of free list entries to cache
 	Revisions            uint
 	ReadCacheStrategy    ffi.CacheStrategy
+	RootStoreDir         string
 }
 
 // Note that `FilePath` is not specified, and must always be set by the user.
@@ -109,6 +110,7 @@ func New(config Config) (*Database, error) {
 		FreeListCacheEntries: config.FreeListCacheEntries,
 		Revisions:            config.Revisions,
 		ReadCacheStrategy:    config.ReadCacheStrategy,
+		RootStoreDir:         config.RootStoreDir,
 	})
 	if err != nil {
 		return nil, err
