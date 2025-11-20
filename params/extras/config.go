@@ -75,6 +75,10 @@ var (
 		c.NetworkUpgrades.GraniteTimestamp = utils.NewUint64(0)
 	})
 
+	TestHeliconChainConfig = copyAndSet(TestGraniteChainConfig, func(c *ChainConfig) {
+		c.NetworkUpgrades.HeliconTimestamp = utils.NewUint64(0)
+	})
+
 	TestChainConfig = copyConfig(TestGraniteChainConfig)
 )
 
