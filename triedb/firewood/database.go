@@ -482,13 +482,13 @@ func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.fwDisk.GetFromRoot(ffi.Hash(root), []byte{}); err != nil {
 		return nil, fmt.Errorf("firewood: unable to retrieve from root %s: %w", root.Hex(), err)
 	}
-	return &reader{db: db, root: root}, nil
+	return &reader{db: db, root: ffi.Hash(root)}, nil
 }
 
 // reader is a state reader of Database which implements the Reader interface.
 type reader struct {
 	db   *Database
-	root common.Hash // The root of the state this reader is reading.
+	root ffi.Hash // The root of the state this reader is reading.
 }
 
 // Node retrieves the trie node with the given node hash. No error will be
@@ -497,7 +497,7 @@ func (reader *reader) Node(_ common.Hash, path []byte, _ common.Hash) ([]byte, e
 	// This function relies on Firewood's internal locking to ensure concurrent reads are safe.
 	// This is safe even if a proposal is being committed concurrently.
 	start := time.Now()
-	result, err := reader.db.fwDisk.GetFromRoot(ffi.Hash(reader.root), path)
+	result, err := reader.db.fwDisk.GetFromRoot(reader.root, path)
 	if metrics.EnabledExpensive {
 		ffiReadCount.Inc(1)
 		ffiReadTimer.Inc(time.Since(start).Milliseconds())
