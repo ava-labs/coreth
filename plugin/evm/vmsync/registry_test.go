@@ -332,15 +332,7 @@ func TestSyncerRegistry_ContextCancellationErrors(t *testing.T) {
 
 			startedWG := registerCancelAwareSyncers(t, registry, tt.numSyncers, tt.syncerTimeout)
 
-			var (
-				ctx    context.Context
-				cancel context.CancelFunc
-			)
-			if tt.wantErr == context.DeadlineExceeded {
-				ctx, cancel = context.WithTimeout(t.Context(), tt.timeout)
-			} else {
-				ctx, cancel = context.WithCancel(t.Context())
-			}
+			ctx, cancel := newTestContext(t, tt.wantErr, tt.timeout)
 			t.Cleanup(cancel)
 
 			doneCh := startSyncersAsync(registry, ctx, newTestClientSummary(t))
@@ -455,6 +447,14 @@ func registerCancelAwareSyncers(t *testing.T, registry *SyncerRegistry, numSynce
 		}))
 	}
 	return &startedWG
+}
+
+func newTestContext(t *testing.T, wantErr error, timeout time.Duration) (context.Context, context.CancelFunc) {
+	t.Helper()
+	if wantErr == context.DeadlineExceeded {
+		return context.WithTimeout(t.Context(), timeout)
+	}
+	return context.WithCancel(t.Context())
 }
 
 func newTestClientSummary(t *testing.T) message.Syncable {

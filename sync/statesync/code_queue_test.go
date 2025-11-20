@@ -102,7 +102,8 @@ func TestCodeQueue(t *testing.T) {
 				if tt.quitInsteadOfFinalize {
 					close(quit)
 					<-recvDone
-					require.ErrorIsf(t, q.AddCode(t.Context(), tt.addCodeAfter), errFailedToAddCodeHashesToQueue, "%T.AddCode() after `quit` channel closed", q)
+					err := q.AddCode(t.Context(), tt.addCodeAfter)
+					require.ErrorIsf(t, err, errFailedToAddCodeHashesToQueue, "%T.AddCode() after `quit` channel closed", q)
 				} else {
 					require.NoErrorf(t, q.Finalize(), "%T.Finalize()", q)
 					// Avoid leaking the internal goroutine
