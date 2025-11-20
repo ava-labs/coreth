@@ -809,8 +809,8 @@ func (vm *VM) initBlockBuilding() error {
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	vm.builderLock.Lock()
 	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool)
-	vm.builder.setPendingBlockHash(vm.blockChain.CurrentBlock().Hash())
-	vm.builder.setFinalBlockHash(vm.blockChain.CurrentBlock().Hash())
+	vm.builder.setChainHeadHash(vm.blockChain.CurrentBlock().Hash())
+	vm.builder.setMempoolHeadHash(vm.blockChain.CurrentBlock().Hash())
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
@@ -1216,7 +1216,7 @@ func (vm *VM) setPendingBlock(hash common.Hash) {
 		return
 	}
 
-	vm.builder.setPendingBlockHash(hash)
+	vm.builder.setChainHeadHash(hash)
 }
 
 func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {
