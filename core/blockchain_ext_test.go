@@ -171,18 +171,21 @@ func copyMemDB(db ethdb.Database) (ethdb.Database, error) {
 func copyDir(t *testing.T, src string) string {
 	t.Helper()
 
-	require := require.New(t)
 	if src == "" {
 		return ""
 	}
 
 	dst := t.TempDir()
 	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		require.NoError(err)
+		if err != nil {
+			return err
+		}
 
 		// Calculate the relative path from src
 		relPath, err := filepath.Rel(src, path)
-		require.NoError(err)
+		if err != nil {
+			return err
+		}
 
 		// Skip the root directory itself
 		if relPath == "." {
@@ -196,12 +199,14 @@ func copyDir(t *testing.T, src string) string {
 		}
 
 		data, err := os.ReadFile(path)
-		require.NoError(err)
+		if err != nil {
+			return err
+		}
 
 		return os.WriteFile(dstPath, data, info.Mode().Perm())
 	})
 
-	require.NoError(err)
+	require.NoError(t, err)
 	return dst
 }
 
