@@ -26,6 +26,11 @@ import (
 	"github.com/ava-labs/libevm/triedb/database"
 )
 
+const (
+	firewoodFileName     = "firewood.db"
+	firewoodRootStoreDir = "root_store"
+)
+
 var (
 	_ proposable = (*ffi.Database)(nil)
 	_ proposable = (*ffi.Proposal)(nil)
@@ -62,12 +67,12 @@ type ProposalContext struct {
 }
 
 type Config struct {
-	FilePath             string
+	ChainDataDir         string
 	CleanCacheSize       int  // Size of the clean cache in bytes
 	FreeListCacheEntries uint // Number of free list entries to cache
 	Revisions            uint
 	ReadCacheStrategy    ffi.CacheStrategy
-	RootStoreDir         string
+	PruningDisabled      bool
 }
 
 // Note that `FilePath` is not specified, and must always be set by the user.
@@ -101,16 +106,22 @@ type Database struct {
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
 func New(config Config) (*Database, error) {
-	if err := validatePath(config.FilePath); err != nil {
+	filePath := filepath.Join(config.ChainDataDir, firewoodFileName)
+	if err := validatePath(filePath); err != nil {
 		return nil, err
 	}
 
-	fw, err := ffi.New(config.FilePath, &ffi.Config{
+	var rootStoreDir string
+	if config.PruningDisabled {
+		rootStoreDir = filepath.Join(config.ChainDataDir, firewoodRootStoreDir)
+	}
+
+	fw, err := ffi.New(filePath, &ffi.Config{
 		NodeCacheEntries:     uint(config.CleanCacheSize) / 256, // TODO: estimate 256 bytes per node
 		FreeListCacheEntries: config.FreeListCacheEntries,
 		Revisions:            config.Revisions,
 		ReadCacheStrategy:    config.ReadCacheStrategy,
-		RootStoreDir:         config.RootStoreDir,
+		RootStoreDir:         rootStoreDir,
 	})
 	if err != nil {
 		return nil, err
