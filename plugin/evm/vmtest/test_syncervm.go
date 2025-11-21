@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/avalanchego/vms/components/chain"
 	"github.com/ava-labs/avalanchego/vms/evm/database"
 	"github.com/ava-labs/avalanchego/vms/evm/predicate"
+	"github.com/ava-labs/avalanchego/vms/evm/sync/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
@@ -37,7 +38,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/coretest"
 	"github.com/ava-labs/coreth/params/paramstest"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/vmsync"
@@ -497,7 +497,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 		// TODO: this avoids circular dependencies but is not ideal.
 		ethDBPrefix := []byte("ethdb")
 		chaindb := database.New(prefixdb.NewNested(ethDBPrefix, testSyncVMSetup.syncerVM.DB))
-		requireSyncPerformedHeights(t, chaindb, map[uint64]struct{}{})
+		requireSyncPerformedHeight(t, chaindb, nil)
 		return
 	}
 	require.NoError(err, "state sync failed")
@@ -508,7 +508,8 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	require.Equal(serverVM.LastAcceptedExtendedBlock().Height(), syncerVM.LastAcceptedExtendedBlock().Height(), "block height mismatch between syncer and server")
 	require.Equal(serverVM.LastAcceptedExtendedBlock().ID(), syncerVM.LastAcceptedExtendedBlock().ID(), "blockID mismatch between syncer and server")
 	require.True(syncerVM.Ethereum().BlockChain().HasState(syncerVM.Ethereum().BlockChain().LastAcceptedBlock().Root()), "unavailable state for last accepted block")
-	requireSyncPerformedHeights(t, syncerVM.Ethereum().ChainDb(), map[uint64]struct{}{retrievedSummary.Height(): {}})
+	expectedHeight := retrievedSummary.Height()
+	requireSyncPerformedHeight(t, syncerVM.Ethereum().ChainDb(), &expectedHeight)
 
 	lastNumber := syncerVM.Ethereum().BlockChain().LastAcceptedBlock().NumberU64()
 	// check the last block is indexed
@@ -653,16 +654,17 @@ func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, 
 	vm.Ethereum().BlockChain().DrainAcceptorQueue()
 }
 
-// requireSyncPerformedHeights iterates over all heights the VM has synced to and
-// verifies they all match the heights present in `expected`.
-func requireSyncPerformedHeights(t *testing.T, db ethdb.Iteratee, expected map[uint64]struct{}) {
-	it := customrawdb.NewSyncPerformedIterator(db)
-	defer it.Release()
+// requireSyncPerformedHeight verifies the latest sync performed height matches expectations.
+// If `expected` is nil, verifies the result is 0 (no sync performed).
+// If `expected` is non-nil, verifies the result equals the expected height.
+func requireSyncPerformedHeight(t *testing.T, db ethdb.KeyValueStore, expected *uint64) {
+	t.Helper()
+	latest, err := customrawdb.GetLatestSyncPerformed(db)
+	require.NoError(t, err)
 
-	found := make(map[uint64]struct{}, len(expected))
-	for it.Next() {
-		found[customrawdb.UnpackSyncPerformedKey(it.Key())] = struct{}{}
+	if expected == nil {
+		require.Equal(t, uint64(0), latest, "expected no sync performed, but got height %d", latest)
+	} else {
+		require.Equal(t, *expected, latest, "latest sync performed height mismatch: expected %d, got %d", *expected, latest)
 	}
-	require.NoError(t, it.Error())
-	require.Equal(t, expected, found)
 }

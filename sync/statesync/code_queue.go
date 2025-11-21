@@ -8,12 +8,11 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ava-labs/avalanchego/vms/evm/sync/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/libevm/options"
-
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 )
 
 const defaultQueueCapacity = 5000
@@ -135,7 +134,9 @@ func (q *CodeQueue) AddCode(codeHashes []common.Hash) error {
 	// key rather than growing DB usage. The consumer deletes the marker after
 	// fulfilling the request (or when it detects code is already present).
 	for _, codeHash := range codeHashes {
-		customrawdb.AddCodeToFetch(batch, codeHash)
+		if err := customrawdb.WriteCodeToFetch(batch, codeHash); err != nil {
+			return fmt.Errorf("failed to write code to fetch marker: %w", err)
+		}
 	}
 
 	if err := batch.Write(); err != nil {
@@ -197,7 +198,10 @@ func recoverUnfetchedCodeHashes(db ethdb.Database) ([]common.Hash, error) {
 			continue
 		}
 
-		customrawdb.DeleteCodeToFetch(batch, codeHash)
+		if err := customrawdb.DeleteCodeToFetch(batch, codeHash); err != nil {
+			return nil, fmt.Errorf("failed to delete code to fetch marker: %w", err)
+		}
+
 		if batch.ValueSize() < ethdb.IdealBatchSize {
 			continue
 		}
