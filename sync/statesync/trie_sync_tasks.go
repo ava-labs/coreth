@@ -143,9 +143,13 @@ func (s *storageTrieTask) OnFinish() error {
 	return s.sync.onStorageTrieFinished(s.root)
 }
 
-func (s *storageTrieTask) OnLeafs(_ context.Context, db ethdb.KeyValueWriter, keys, vals [][]byte) error {
+func (s *storageTrieTask) OnLeafs(ctx context.Context, db ethdb.KeyValueWriter, keys, vals [][]byte) error {
 	// persists the trie leafs to the snapshot for all accounts associated with this root
 	for _, account := range s.accounts {
+		// Check context cancellation before processing each account to allow early exit during shutdown.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for i, key := range keys {
 			rawdb.WriteStorageSnapshot(db, account, common.BytesToHash(key), vals[i])
 		}

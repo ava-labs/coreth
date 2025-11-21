@@ -175,6 +175,8 @@ func (q *CodeQueue) init() error {
 	if err != nil {
 		return fmt.Errorf("unable to recover previous sync state: %w", err)
 	}
+	// Use context.Background() since init() runs during construction before sync starts.
+	// The channel is empty, so sends won't block. Shutdown is handled via q.quit in AddCode.
 	if err := q.AddCode(context.Background(), dbCodeHashes); err != nil {
 		return fmt.Errorf("unable to resume previous sync: %w", err)
 	}
