@@ -59,7 +59,7 @@ type NetworkUpgrades struct {
 	FortunaTimestamp *uint64 `json:"fortunaTimestamp,omitempty"`
 	// Granite adds a millisecond timestamp, precompile updates, and P-Chain epochs
 	GraniteTimestamp *uint64 `json:"graniteTimestamp,omitempty"`
-	// Helicon is a placeholder for a future upgrade
+	// Helicon is a placeholder for the next upgrade
 	HeliconTimestamp *uint64 `json:"heliconTimestamp,omitempty"`
 }
 
