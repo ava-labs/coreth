@@ -15,11 +15,15 @@ import (
 	"github.com/ava-labs/libevm/libevm/options"
 
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
+
+	syncpkg "github.com/ava-labs/coreth/sync"
 )
 
 const defaultQueueCapacity = 5000
 
 var (
+	_ syncpkg.Finalizer = (*CodeQueue)(nil)
+
 	errFailedToAddCodeHashesToQueue = errors.New("failed to add code hashes to queue")
 	errFailedToFinalizeCodeQueue    = errors.New("failed to finalize code queue")
 )
@@ -175,6 +179,8 @@ func (q *CodeQueue) init() error {
 	if err != nil {
 		return fmt.Errorf("unable to recover previous sync state: %w", err)
 	}
+	// Use context.Background() since init() runs during construction before sync starts.
+	// The channel is empty, so sends won't block. Shutdown is handled via q.quit in AddCode.
 	if err := q.AddCode(context.Background(), dbCodeHashes); err != nil {
 		return fmt.Errorf("unable to resume previous sync: %w", err)
 	}
