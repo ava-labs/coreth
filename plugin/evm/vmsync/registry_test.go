@@ -184,7 +184,7 @@ func TestSyncerRegistry_RunSyncerTasks(t *testing.T) {
 				require.NoError(t, registry.Register(mockSyncer))
 			}
 
-			ctx, cancel := utilstest.NewTestContext(t)
+			ctx, cancel := context.WithCancel(t.Context())
 			t.Cleanup(cancel)
 
 			err := registry.RunSyncerTasks(ctx, newTestClientSummary(t))
@@ -202,7 +202,7 @@ func TestSyncerRegistry_ConcurrentStart(t *testing.T) {
 
 	registry := NewSyncerRegistry()
 
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	const numBarrierSyncers = 5
@@ -232,7 +232,7 @@ func TestSyncerRegistry_ErrorPropagatesAndCancelsOthers(t *testing.T) {
 
 	registry := NewSyncerRegistry()
 
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	// Error syncer
@@ -277,7 +277,7 @@ func TestSyncerRegistry_FirstErrorWinsAcrossMany(t *testing.T) {
 
 	registry := NewSyncerRegistry()
 
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	const numErrorSyncers = 3
@@ -310,7 +310,7 @@ func TestSyncerRegistry_NoSyncersRegistered(t *testing.T) {
 	t.Parallel()
 
 	registry := NewSyncerRegistry()
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	require.NoError(t, registry.RunSyncerTasks(ctx, newTestClientSummary(t)))
