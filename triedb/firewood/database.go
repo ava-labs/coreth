@@ -70,7 +70,7 @@ type Config struct {
 	ChainDataDir         string
 	CleanCacheSize       int  // Size of the clean cache in bytes
 	FreeListCacheEntries uint // Number of free list entries to cache
-	Revisions            uint
+	Revisions            uint // Number of revisions to keep in memory (must be >= 2)
 	ReadCacheStrategy    ffi.CacheStrategy
 	ArchiveMode          bool
 }
