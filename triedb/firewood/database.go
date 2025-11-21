@@ -72,7 +72,7 @@ type Config struct {
 	FreeListCacheEntries uint // Number of free list entries to cache
 	Revisions            uint
 	ReadCacheStrategy    ffi.CacheStrategy
-	PruningDisabled      bool
+	ArchiveMode          bool
 }
 
 // Note that `FilePath` is not specified, and must always be set by the user.
@@ -112,7 +112,7 @@ func New(config Config) (*Database, error) {
 	}
 
 	var rootStoreDir string
-	if config.PruningDisabled {
+	if config.ArchiveMode {
 		rootStoreDir = filepath.Join(config.ChainDataDir, firewoodRootStoreDir)
 	}
 

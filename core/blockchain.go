@@ -232,7 +232,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			FreeListCacheEntries: firewood.Defaults.FreeListCacheEntries,
 			Revisions:            uint(c.StateHistory), // must be at least 2
 			ReadCacheStrategy:    ffi.CacheAllReads,
-			PruningDisabled:      !c.Pruning,
+			ArchiveMode:          !c.Pruning,
 		}.BackendConstructor
 	}
 	return config
