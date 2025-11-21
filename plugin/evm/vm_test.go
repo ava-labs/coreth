@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -1539,6 +1538,11 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 }
 
 func TestWaitForEvent(t *testing.T) {
+	type result struct {
+		msg commonEng.Message
+		err error
+	}
+
 	fortunaFork := upgradetest.Fortuna
 	for _, testCase := range []struct {
 		name     string
@@ -1561,10 +1565,7 @@ func TestWaitForEvent(t *testing.T) {
 			name: "WaitForEvent returns when a transaction is added to the mempool",
 			testCase: func(t *testing.T, vm *VM) {
 				t.Parallel()
-				type result struct {
-					msg commonEng.Message
-					err error
-				}
+
 				results := make(chan result)
 				go func() {
 					msg, err := vm.WaitForEvent(t.Context())
@@ -1639,8 +1640,6 @@ func TestWaitForEvent(t *testing.T) {
 				msg, err := vm.WaitForEvent(ctx)
 				require.ErrorIs(t, err, context.DeadlineExceeded)
 				require.Zero(t, msg)
-				var wg sync.WaitGroup
-				wg.Add(1)
 
 				signedTx := newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 0, &vmtest.TestEthAddrs[1], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 
@@ -1659,15 +1658,9 @@ func TestWaitForEvent(t *testing.T) {
 				ctx, cancel = context.WithTimeout(t.Context(), time.Millisecond*100)
 				defer cancel()
 
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				go func() {
-					defer wg.Done()
-					msg, err := vm.WaitForEvent(ctx)
-					require.ErrorIs(t, err, context.DeadlineExceeded)
-					require.Zero(t, msg)
-				}()
-
-				wg.Wait()
+				msg, err = vm.WaitForEvent(ctx)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				require.Zero(t, msg)
 			},
 		},
 		{
@@ -1697,22 +1690,24 @@ func TestWaitForEvent(t *testing.T) {
 				signedTx = newSignedLegacyTx(t, vm.chainConfig, vmtest.TestKeys[0].ToECDSA(), 2, &vmtest.TestEthAddrs[2], big.NewInt(1), 21000, vmtest.InitialBaseFee, nil)
 				err = errors.Join(vm.txPool.AddRemotesSync([]*types.Transaction{signedTx})...)
 				require.NoError(t, err)
-				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
-				var wg sync.WaitGroup
 
-				wg.Add(1)
+				results := make(chan result)
+				// We run WaitForEvent in a goroutine to ensure it can be safely called concurrently.
 				go func() {
-					defer wg.Done()
 					msg, err := vm.WaitForEvent(t.Context())
-					require.Equal(t, commonEng.PendingTxs, msg)
-					require.NoError(t, err)
+					results <- result{
+						msg: msg,
+						err: err,
+					}
 				}()
 				err = blk.Accept(t.Context())
 				require.NoError(t, err)
 				err = blk2.Accept(t.Context())
 				require.NoError(t, err)
 				require.NoError(t, vm.SetPreference(t.Context(), blk2.ID()))
-				wg.Wait()
+				res := <-results
+				require.NoError(t, res.err)
+				require.Equal(t, commonEng.PendingTxs, res.msg)
 			},
 		},
 		// TODO (ceyonur): remove this test after Granite is activated. (See https://github.com/ava-labs/coreth/issues/1318)
