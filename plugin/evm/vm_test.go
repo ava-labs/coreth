@@ -1435,6 +1435,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 	require.NoError(err)
 
 	require.NoError(blk2.Accept(ctx))
+	require.NoError(vm.SetPreference(t.Context(), blk2.ID()))
 
 	// Attempt to build a block consuming more than the current gas capacity
 	_, err = vmtest.IssueTxsAndBuild([]*types.Transaction{txs[1]}, vm)
@@ -1453,6 +1454,7 @@ func TestBuildBlockWithInsufficientCapacity(t *testing.T) {
 
 	require.NoError(blk3.Verify(ctx))
 	require.NoError(blk3.Accept(ctx))
+	require.NoError(vm.SetPreference(t.Context(), blk3.ID()))
 }
 
 func TestBuildBlockLargeTxStarvation(t *testing.T) {
@@ -1503,6 +1505,7 @@ func TestBuildBlockLargeTxStarvation(t *testing.T) {
 	require.NoError(err)
 
 	require.NoError(blk2.Accept(ctx))
+	require.NoError(vm.SetPreference(t.Context(), blk2.ID()))
 
 	// Add a second transaction trying to consume the max guaranteed gas capacity at a higher gas price
 	errs := vm.txPool.AddRemotesSync([]*types.Transaction{maxSizeTxs[1]})
@@ -1708,6 +1711,7 @@ func TestWaitForEvent(t *testing.T) {
 				require.NoError(t, err)
 				err = blk2.Accept(t.Context())
 				require.NoError(t, err)
+				require.NoError(t, vm.SetPreference(t.Context(), blk2.ID()))
 				wg.Wait()
 			},
 		},

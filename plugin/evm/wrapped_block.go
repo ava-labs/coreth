@@ -104,8 +104,6 @@ func (b *wrappedBlock) Accept(context.Context) error {
 		"height", b.Height(),
 	)
 
-	vm.setPendingBlock(b.ethBlock.Hash())
-
 	// Call Accept for relevant precompile logs. Note we do this prior to
 	// calling Accept on the blockChain so any side effects (eg warp signatures)
 	// take place before the accepted log is emitted to subscribers.
