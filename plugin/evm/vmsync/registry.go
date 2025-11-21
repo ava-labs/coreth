@@ -77,7 +77,7 @@ func (r *SyncerRegistry) RunSyncerTasks(ctx context.Context, summary message.Syn
 // whose Wait() completes when all syncers exit. The context returned will be
 // cancelled when any syncer fails, propagating shutdown to the others.
 func (r *SyncerRegistry) StartAsync(ctx context.Context, summary message.Syncable) *errgroup.Group {
-	g, ctx := errgroup.WithContext(ctx)
+	g, egCtx := errgroup.WithContext(ctx)
 
 	if len(r.syncers) == 0 {
 		return g
@@ -89,7 +89,7 @@ func (r *SyncerRegistry) StartAsync(ctx context.Context, summary message.Syncabl
 	for _, task := range r.syncers {
 		g.Go(func() error {
 			log.Info("starting syncer", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
-			if err := task.syncer.Sync(ctx); err != nil {
+			if err := task.syncer.Sync(egCtx); err != nil {
 				// Context cancellation during shutdown is expected.
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					log.Info("syncer cancelled", "name", task.name, "summary", summaryBlockHashHex, "height", blockHeight)
