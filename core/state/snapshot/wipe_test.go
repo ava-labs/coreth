@@ -28,9 +28,11 @@
 package snapshot
 
 import (
+	"errors"
 	"math/rand"
 	"testing"
 
+	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/vms/evm/sync/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
@@ -96,7 +98,11 @@ func TestWipe(t *testing.T) {
 		t.Fatalf("misc item count mismatch: have %d, want %d", items, 1000)
 	}
 
-	if hash, err := customrawdb.ReadSnapshotBlockHash(db); err != nil || hash != (common.Hash{}) {
+	hash, err := customrawdb.ReadSnapshotBlockHash(db)
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		t.Errorf("unexpected error reading snapshot block hash after wipe: %v", err)
+	}
+	if err == nil && hash != (common.Hash{}) {
 		t.Errorf("snapshot block hash marker remained after wipe: %#x", hash)
 	}
 	if hash := rawdb.ReadSnapshotRoot(db); hash != (common.Hash{}) {
