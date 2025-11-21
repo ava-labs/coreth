@@ -145,7 +145,9 @@ func (c *CodeSyncer) work(ctx context.Context) error {
 			if rawdb.HasCode(c.db, codeHash) {
 				// Best-effort cleanup of stale marker.
 				batch := c.db.NewBatch()
-				customrawdb.DeleteCodeToFetch(batch, codeHash)
+				if err := customrawdb.DeleteCodeToFetch(batch, codeHash); err != nil {
+					return fmt.Errorf("failed to delete code to fetch marker: %w", err)
+				}
 
 				if err := batch.Write(); err != nil {
 					return fmt.Errorf("failed to write batch for stale code marker: %w", err)
@@ -182,7 +184,9 @@ func (c *CodeSyncer) fulfillCodeRequest(ctx context.Context, codeHashes []common
 
 	batch := c.db.NewBatch()
 	for i, codeHash := range codeHashes {
-		customrawdb.DeleteCodeToFetch(batch, codeHash)
+		if err := customrawdb.DeleteCodeToFetch(batch, codeHash); err != nil {
+			return fmt.Errorf("failed to delete code to fetch marker: %w", err)
+		}
 		rawdb.WriteCode(batch, codeHash, codeByteSlices[i])
 	}
 

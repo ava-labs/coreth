@@ -2,6 +2,12 @@
 
 ## Pending Release
 
+- Removes `avax.version` API
+- Removes `customethclient` package in favor of `ethclient` package and temporary type registrations (`WithTempRegisteredLibEVMExtras`)
+  - Also removes blockHook extension in `ethclient` package.
+
+## [v0.16.0](https://github.com/ava-labs/coreth/releases/tag/v0.16.0)
+
 - Removed deprecated flags `coreth-admin-api-enabled`, `coreth-admin-api-dir`, `tx-regossip-frequency`, `tx-lookup-limit`. Use `admin-api-enabled`, `admin-api-dir`, `regossip-frequency`, `transaction-history` instead.
 - Enabled RPC batch limits by default, and configurable with `batch-request-limit` and `batch-max-response-size`.
 - ACP-226 (Granite):
@@ -15,7 +21,6 @@
 - Updated gas price estimation to use median of transactions in the last 20 seconds/40 blocks instead of estimation with block gas cost:
   - Changed default percentile from 60 to 40
   - This impacts `eth_suggestGasPrice` and `eth_suggestGasTipCap` , `eth_suggestPriceOptions`, `eth_maxPriorityFeePerGas`, `eth_gasPrice` APIs
-
 
 ## [v0.15.3](https://github.com/ava-labs/coreth/releases/tag/v0.15.3)
 

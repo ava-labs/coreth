@@ -31,7 +31,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/atomic"
 	"github.com/ava-labs/coreth/plugin/evm/config"
 	"github.com/ava-labs/coreth/plugin/evm/vmtest"
-	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/coreth/utils/utilstest"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
@@ -40,12 +39,12 @@ import (
 
 func TestAtomicTxGossip(t *testing.T) {
 	require := require.New(t)
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
-	validatorState := utils.NewTestValidatorState()
+	validatorState := utilstest.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
 	memory := avalancheatomic.NewMemory(memdb.New())
 	snowCtx.SharedMemory = memory.NewSharedMemory(snowCtx.ChainID)
@@ -190,12 +189,12 @@ func TestAtomicTxGossip(t *testing.T) {
 // Tests that a tx is gossiped when it is issued
 func TestAtomicTxPushGossipOutbound(t *testing.T) {
 	require := require.New(t)
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
-	validatorState := utils.NewTestValidatorState()
+	validatorState := utilstest.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
 	memory := avalancheatomic.NewMemory(memdb.New())
 	snowCtx.SharedMemory = memory.NewSharedMemory(snowCtx.ChainID)
@@ -260,12 +259,12 @@ func TestAtomicTxPushGossipOutbound(t *testing.T) {
 // Tests that a tx is gossiped when it is issued and valid
 func TestAtomicTxPushGossipInboundValid(t *testing.T) {
 	require := require.New(t)
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	snowCtx := snowtest.Context(t, snowtest.CChainID)
 	snowCtx.AVAXAssetID = ids.GenerateTestID()
-	validatorState := utils.NewTestValidatorState()
+	validatorState := utilstest.NewTestValidatorState()
 	snowCtx.ValidatorState = validatorState
 	memory := avalancheatomic.NewMemory(memdb.New())
 	snowCtx.SharedMemory = memory.NewSharedMemory(snowCtx.ChainID)
