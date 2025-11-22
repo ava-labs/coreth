@@ -22,6 +22,14 @@ type Syncer interface {
 	// The sync will respect context cancellation.
 	Sync(ctx context.Context) error
 
+	// UpdateSyncTarget updates the target summary to sync to.
+	// If this is not implemented on the syncer, it should return an error.
+	UpdateSyncTarget(summary message.Syncable) error
+
+	// Finalize assures all data matches the expected state after a sync.
+	// This may block while resolving in-flight data.
+	Finalize(ctx context.Context, summary message.Syncable) error
+
 	// Name returns a human-readable name for this syncer implementation.
 	Name() string
 

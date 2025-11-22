@@ -5,6 +5,7 @@ package statesync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -113,6 +114,17 @@ func (c *CodeSyncer) Sync(ctx context.Context) error {
 	}
 
 	return eg.Wait()
+}
+
+// UpdateSyncTarget is not yet implemented.
+// TODO(alarso16): see https://github.com/ava-labs/coreth/issues/1341
+func (*CodeSyncer) UpdateSyncTarget(message.Syncable) error {
+	return errors.New("not yet implemented")
+}
+
+// Finalize is currently a no-op since UpdateSyncTarget is not implemented.
+func (*CodeSyncer) Finalize(context.Context, message.Syncable) error {
+	return nil
 }
 
 // work fulfills any incoming requests from the producer channel by fetching code bytes from the network
