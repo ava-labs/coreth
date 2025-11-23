@@ -107,6 +107,7 @@ var (
 	blockTrieOpsTimer           = metrics.GetOrRegisterCounter("chain/block/trie", nil)
 	blockValidationTimer        = metrics.GetOrRegisterCounter("chain/block/validations/state", nil)
 	blockWriteTimer             = metrics.GetOrRegisterCounter("chain/block/writes", nil)
+	blockAcceptTimer            = metrics.GetOrRegisterCounter("chain/block/accepts", nil)
 
 	acceptorQueueGauge           = metrics.GetOrRegisterGauge("chain/acceptor/queue/size", nil)
 	acceptorWorkTimer            = metrics.GetOrRegisterCounter("chain/acceptor/work", nil)
@@ -139,11 +140,12 @@ var (
 )
 
 const (
-	bodyCacheLimit     = 256
-	blockCacheLimit    = 256
-	receiptsCacheLimit = 32
-	txLookupCacheLimit = 1024
-	badBlockLimit      = 10
+	bodyCacheLimit          = 256
+	blockCacheLimit         = 256
+	verifiedBlockCacheLimit = 1024
+	receiptsCacheLimit      = 32
+	txLookupCacheLimit      = 1024
+	badBlockLimit           = 10
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -321,11 +323,13 @@ type BlockChain struct {
 
 	currentBlock atomic.Pointer[types.Header] // Current head of the block chain
 
-	bodyCache     *lru.Cache[common.Hash, *types.Body]      // Cache for the most recent block bodies
-	receiptsCache *lru.Cache[common.Hash, []*types.Receipt] // Cache for the most recent receipts per block
-	blockCache    *lru.Cache[common.Hash, *types.Block]     // Cache for the most recent entire blocks
-	txLookupCache *lru.Cache[common.Hash, txLookup]         // Cache for the most recent transaction lookup data.
-	badBlocks     *lru.Cache[common.Hash, *badBlock]        // Cache for bad blocks
+	bodyCache             *lru.Cache[common.Hash, *types.Body]      // Cache for the most recent block bodies
+	receiptsCache         *lru.Cache[common.Hash, []*types.Receipt] // Cache for the most recent receipts per block
+	blockCache            *lru.Cache[common.Hash, *types.Block]     // Cache for the most recent entire blocks
+	txLookupCache         *lru.Cache[common.Hash, txLookup]         // Cache for the most recent transaction lookup data.
+	badBlocks             *lru.Cache[common.Hash, *badBlock]        // Cache for bad blocks
+	verifiedBlockCache    FIFOCache[common.Hash, *types.Block]      // cache for verified but not accepted blocks
+	verifiedReceiptsCache FIFOCache[common.Hash, types.Receipts]    // cache for verified but not accepted receipts
 
 	stopping atomic.Bool // false if chain is running, true when stopped
 
@@ -414,21 +418,23 @@ func NewBlockChain(
 	log.Info("")
 
 	bc := &BlockChain{
-		chainConfig:       chainConfig,
-		cacheConfig:       cacheConfig,
-		db:                db,
-		triedb:            triedb,
-		bodyCache:         lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
-		receiptsCache:     lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:        lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache:     lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
-		badBlocks:         lru.NewCache[common.Hash, *badBlock](badBlockLimit),
-		engine:            engine,
-		vmConfig:          vmConfig,
-		senderCacher:      NewTxSenderCacher(runtime.NumCPU()),
-		acceptorQueue:     make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
-		quit:              make(chan struct{}),
-		acceptedLogsCache: NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
+		chainConfig:           chainConfig,
+		cacheConfig:           cacheConfig,
+		db:                    db,
+		triedb:                triedb,
+		bodyCache:             lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		receiptsCache:         lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:            lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache:         lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		badBlocks:             lru.NewCache[common.Hash, *badBlock](badBlockLimit),
+		verifiedBlockCache:    NewFIFOCache[common.Hash, *types.Block](verifiedBlockCacheLimit),
+		verifiedReceiptsCache: NewFIFOCache[common.Hash, types.Receipts](verifiedBlockCacheLimit),
+		engine:                engine,
+		vmConfig:              vmConfig,
+		senderCacher:          NewTxSenderCacher(runtime.NumCPU()),
+		acceptorQueue:         make(chan *types.Block, cacheConfig.AcceptorQueueLimit),
+		quit:                  make(chan struct{}),
+		acceptedLogsCache:     NewFIFOCache[common.Hash, [][]*types.Log](cacheConfig.AcceptedCacheSize),
 	}
 	bc.stateCache = extstate.NewDatabaseWithNodeDB(bc.db, bc.triedb)
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
@@ -593,6 +599,22 @@ func (bc *BlockChain) warmAcceptedCaches() {
 	log.Info("Warmed accepted caches", "start", startIndex, "end", lastAccepted, "t", time.Since(startTime))
 }
 
+func (bc *BlockChain) writeAcceptedBlock(b *types.Block) {
+	batch := bc.db.NewBatch()
+	rawdb.WriteBlock(batch, b)
+
+	if receipts, ok := bc.verifiedReceiptsCache.Get(b.Hash()); ok {
+		rawdb.WriteReceipts(batch, b.Hash(), b.NumberU64(), receipts)
+	}
+
+	bc.verifiedBlockCache.Remove(b.Hash())
+	bc.verifiedReceiptsCache.Remove(b.Hash())
+
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to write accepted block and receipts", "err", err)
+	}
+}
+
 // startAcceptor starts processing items on the [acceptorQueue]. If a [nil]
 // object is placed on the [acceptorQueue], the [startAcceptor] will exit.
 func (bc *BlockChain) startAcceptor() {
@@ -724,6 +746,11 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 		return bc.loadGenesisState()
 	}
 
+	lastAcceptedBlock := bc.GetBlockByHash(lastAcceptedHash)
+	if lastAcceptedBlock == nil {
+		return fmt.Errorf("could not load last accepted block %s", lastAcceptedHash.Hex())
+	}
+
 	// Restore the last known head block
 	head := rawdb.ReadHeadBlockHash(bc.db)
 	if head == (common.Hash{}) {
@@ -731,29 +758,31 @@ func (bc *BlockChain) loadLastState(lastAcceptedHash common.Hash) error {
 	}
 	// Make sure the entire head block is available
 	headBlock := bc.GetBlockByHash(head)
+	var currentHeader *types.Header
 	if headBlock == nil {
-		return fmt.Errorf("could not load head block %s", head.Hex())
-	}
-	// Everything seems to be fine, set as the head block
-	bc.currentBlock.Store(headBlock.Header())
+		log.Info(
+			"Head block is missing when loading last state, using the last accepted block",
+			"hash", lastAcceptedBlock.Hash(),
+			"number", lastAcceptedBlock.Number(),
+		)
 
-	// Restore the last known head header
-	currentHeader := headBlock.Header()
-	if head := rawdb.ReadHeadHeaderHash(bc.db); head != (common.Hash{}) {
-		if header := bc.GetHeaderByHash(head); header != nil {
-			currentHeader = header
-		}
+		// ReadHeadBlockHash stores the hash of the last inserted/verified block.
+		// This means it can be missing if the blockchain crashed before the block
+		// was accepted. If this happens, we set the head block to the last accepted block.
+		headBlock = lastAcceptedBlock
+		bc.writeHeadBlock(headBlock)
+		currentHeader = headBlock.Header()
+	} else {
+		bc.currentBlock.Store(headBlock.Header())
+		currentHeader = headBlock.Header()
+		bc.hc.SetCurrentHeader(currentHeader)
 	}
-	bc.hc.SetCurrentHeader(currentHeader)
 
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "age", common.PrettyAge(time.Unix(int64(currentHeader.Time), 0)))
 	log.Info("Loaded most recent local full block", "number", headBlock.Number(), "hash", headBlock.Hash(), "age", common.PrettyAge(time.Unix(int64(headBlock.Time()), 0)))
 
 	// Otherwise, set the last accepted block and perform a re-org.
-	bc.lastAccepted = bc.GetBlockByHash(lastAcceptedHash)
-	if bc.lastAccepted == nil {
-		return fmt.Errorf("could not load last accepted block")
-	}
+	bc.lastAccepted = lastAcceptedBlock
 
 	// This ensures that the head block is updated to the last accepted block on startup
 	if err := bc.setPreference(bc.lastAccepted); err != nil {
@@ -1091,6 +1120,8 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
 
+	start := time.Now()
+
 	// The parent of [block] must be the last accepted block.
 	if bc.lastAccepted.Hash() != block.ParentHash() {
 		return fmt.Errorf(
@@ -1111,6 +1142,9 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 			return fmt.Errorf("could not set new preferred block %d:%s as preferred: %w", block.Number(), block.Hash(), err)
 		}
 	}
+
+	// Write to block to disk before enqueuing it in the acceptor
+	bc.writeAcceptedBlock(block)
 
 	// Enqueue block in the acceptor
 	bc.lastAccepted = block
@@ -1141,6 +1175,7 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 			latestMinDelayExcessGauge.Update(int64(delayExcess))
 		}
 	}
+	blockAcceptTimer.Inc(time.Since(start).Milliseconds())
 	return nil
 }
 
@@ -1168,6 +1203,8 @@ func (bc *BlockChain) Reject(block *types.Block) error {
 
 	// Remove the block from the block cache (ignore return value of whether it was in the cache)
 	_ = bc.blockCache.Remove(block.Hash())
+	bc.verifiedBlockCache.Remove(block.Hash())
+	bc.verifiedReceiptsCache.Remove(block.Hash())
 
 	return nil
 }
@@ -1226,13 +1263,13 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, parentRoot common
 // writeBlockWithState writes the block and all associated state to the database,
 // but it expects the chain mutex to be held.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, parentRoot common.Hash, receipts []*types.Receipt, state *state.StateDB) error {
-	// Irrelevant of the canonical status, write the block itself to the database.
-	//
-	// Note all the components of block(hash->number map, header, body, receipts)
-	// should be written atomically. BlockBatch is used for containing all components.
+	// Cache block and receipts before they are written to disk in Accept
+	bc.verifiedBlockCache.Put(block.Hash(), block)
+	bc.verifiedReceiptsCache.Put(block.Hash(), receipts)
+
+	// Write all other block data to disk
 	blockBatch := bc.db.NewBatch()
-	rawdb.WriteBlock(blockBatch, block)
-	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
+	rawdb.WriteHeaderNumber(blockBatch, block.Hash(), block.NumberU64())
 	rawdb.WritePreimages(blockBatch, state.Preimages())
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1466,7 +1503,7 @@ func (bc *BlockChain) collectUnflattenedLogs(b *types.Block, removed bool) [][]*
 	if excessBlobGas != nil {
 		blobGasPrice = eip4844.CalcBlobFee(*excessBlobGas)
 	}
-	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
+	receipts := bc.GetReceiptsByHash(b.Hash())
 	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), blobGasPrice, b.Transactions()); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
 	}
