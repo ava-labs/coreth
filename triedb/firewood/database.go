@@ -27,6 +27,8 @@ import (
 )
 
 const (
+	// Directory where all Firewood state lives.
+	firewoodDir          = "firewood"
 	firewoodFileName     = "firewood.db"
 	firewoodRootStoreDir = "root_store"
 )
@@ -106,14 +108,15 @@ type Database struct {
 // New creates a new Firewood database with the given disk database and configuration.
 // Any error during creation will cause the program to exit.
 func New(config Config) (*Database, error) {
-	filePath := filepath.Join(config.ChainDataDir, firewoodFileName)
+	firewoodDir := filepath.Join(config.ChainDataDir, firewoodDir)
+	filePath := filepath.Join(firewoodDir, firewoodFileName)
 	if err := validatePath(filePath); err != nil {
 		return nil, err
 	}
 
 	var rootStoreDir string
 	if config.ArchiveMode {
-		rootStoreDir = filepath.Join(config.ChainDataDir, firewoodRootStoreDir)
+		rootStoreDir = filepath.Join(firewoodDir, firewoodRootStoreDir)
 	}
 
 	fw, err := ffi.New(filePath, &ffi.Config{
