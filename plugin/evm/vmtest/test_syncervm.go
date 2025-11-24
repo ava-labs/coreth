@@ -497,7 +497,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 		// TODO: this avoids circular dependencies but is not ideal.
 		ethDBPrefix := []byte("ethdb")
 		chaindb := database.New(prefixdb.NewNested(ethDBPrefix, testSyncVMSetup.syncerVM.DB))
-		requireSyncPerformedHeight(t, chaindb, nil)
+		requireSyncPerformedHeight(t, chaindb, 0)
 		return
 	}
 	require.NoError(err, "state sync failed")
@@ -509,7 +509,7 @@ func testSyncerVM(t *testing.T, testSyncVMSetup *testSyncVMSetup, test SyncTestP
 	require.Equal(serverVM.LastAcceptedExtendedBlock().ID(), syncerVM.LastAcceptedExtendedBlock().ID(), "blockID mismatch between syncer and server")
 	require.True(syncerVM.Ethereum().BlockChain().HasState(syncerVM.Ethereum().BlockChain().LastAcceptedBlock().Root()), "unavailable state for last accepted block")
 	expectedHeight := retrievedSummary.Height()
-	requireSyncPerformedHeight(t, syncerVM.Ethereum().ChainDb(), &expectedHeight)
+	requireSyncPerformedHeight(t, syncerVM.Ethereum().ChainDb(), expectedHeight)
 
 	lastNumber := syncerVM.Ethereum().BlockChain().LastAcceptedBlock().NumberU64()
 	// check the last block is indexed
@@ -655,16 +655,10 @@ func generateAndAcceptBlocks(t *testing.T, vm extension.InnerVM, numBlocks int, 
 }
 
 // requireSyncPerformedHeight verifies the latest sync performed height matches expectations.
-// If `expected` is nil, verifies the result is 0 (no sync performed).
-// If `expected` is non-nil, verifies the result equals the expected height.
-func requireSyncPerformedHeight(t *testing.T, db ethdb.KeyValueStore, expected *uint64) {
+// Pass 0 to verify no sync was performed.
+func requireSyncPerformedHeight(t *testing.T, db ethdb.KeyValueStore, expected uint64) {
 	t.Helper()
 	latest, err := customrawdb.GetLatestSyncPerformed(db)
 	require.NoError(t, err)
-
-	if expected == nil {
-		require.Equal(t, uint64(0), latest, "expected no sync performed, but got height %d", latest)
-	} else {
-		require.Equal(t, *expected, latest, "latest sync performed height mismatch: expected %d, got %d", *expected, latest)
-	}
+	require.Equal(t, expected, latest, "sync performed height mismatch: expected %d, got %d", expected, latest)
 }
