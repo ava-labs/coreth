@@ -1,5 +1,13 @@
 # Coreth and the C-Chain
 
+## THIS REPOSITORY HAS MOVED
+
+> **⚠️ WARNING: Do not depend on this repository. It has been archived.**
+
+Coreth has been moved entirely to the [AvalancheGo](https://github.com/ava-labs/avalanchego/tree/master/graft/coreth), and this repository is no longer under active development. To open issues, pull requests, and discussions, do so in [AvalancheGo](https://github.com/ava-labs/avalanchego). For the latest releases, see the [AvalancheGo release page](https://github.com/ava-labs/avalanchego).
+
+----
+
 [Avalanche](https://www.avax.network/) is a network composed of multiple blockchains.
 Each blockchain is an instance of a Virtual Machine (VM), much like an object in an object-oriented language is an instance of a class.
 That is, the VM defines the behavior of the blockchain.
