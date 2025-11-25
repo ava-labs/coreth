@@ -133,18 +133,18 @@ var (
 )
 
 var (
-	errInvalidBlock                      = errors.New("invalid block")
-	errInvalidNonce                      = errors.New("invalid nonce")
-	errUnclesUnsupported                 = errors.New("uncles unsupported")
-	errNilBaseFeeApricotPhase3           = errors.New("nil base fee is invalid after apricotPhase3")
-	errNilBlockGasCostApricotPhase4      = errors.New("nil blockGasCost is invalid after apricotPhase4")
-	errInvalidHeaderPredicateResults     = errors.New("invalid header predicate results")
-	errInitializingLogger                = errors.New("failed to initialize logger")
-	errShuttingDownVM                    = errors.New("shutting down VM")
-	errFirewoodPruningRequired           = errors.New("pruning must be enabled for Firewood")
-	errFirewoodSnapshotCacheDisabled     = errors.New("snapshot cache must be disabled for Firewood")
-	errFirewoodOfflinePruningUnsupported = errors.New("offline pruning is not supported for Firewood")
-	errFirewoodStateSyncUnsupported      = errors.New("state sync is not yet supported for Firewood")
+	errInvalidBlock                               = errors.New("invalid block")
+	errInvalidNonce                               = errors.New("invalid nonce")
+	errUnclesUnsupported                          = errors.New("uncles unsupported")
+	errNilBaseFeeApricotPhase3                    = errors.New("nil base fee is invalid after apricotPhase3")
+	errNilBlockGasCostApricotPhase4               = errors.New("nil blockGasCost is invalid after apricotPhase4")
+	errInvalidHeaderPredicateResults              = errors.New("invalid header predicate results")
+	errInitializingLogger                         = errors.New("failed to initialize logger")
+	errShuttingDownVM                             = errors.New("shutting down VM")
+	errFirewoodSnapshotCacheDisabled              = errors.New("snapshot cache must be disabled for Firewood")
+	errFirewoodOfflinePruningUnsupported          = errors.New("offline pruning is not supported for Firewood")
+	errFirewoodStateSyncUnsupported               = errors.New("state sync is not yet supported for Firewood")
+	errFirewoodMissingTrieRepopulationUnsupported = errors.New("missing trie repopulation is not supported for Firewood")
 )
 
 var originalStderr *os.File
@@ -394,10 +394,6 @@ func (vm *VM) Initialize(
 	if vm.ethConfig.StateScheme == firewood.Scheme {
 		log.Warn("Firewood state scheme is enabled")
 		log.Warn("This is untested in production, use at your own risk")
-		// Firewood only supports pruning for now.
-		if !vm.config.Pruning {
-			return errFirewoodPruningRequired
-		}
 		// Firewood does not support iterators, so the snapshot cannot be constructed
 		if vm.config.SnapshotCache > 0 {
 			return errFirewoodSnapshotCacheDisabled
@@ -407,6 +403,9 @@ func (vm *VM) Initialize(
 		}
 		if vm.config.StateSyncEnabled == nil || *vm.config.StateSyncEnabled {
 			return errFirewoodStateSyncUnsupported
+		}
+		if vm.config.PopulateMissingTries != nil {
+			return errFirewoodMissingTrieRepopulationUnsupported
 		}
 	}
 	if vm.ethConfig.StateScheme == rawdb.PathScheme {
@@ -809,6 +808,8 @@ func (vm *VM) initBlockBuilding() error {
 	// NOTE: gossip network must be initialized first otherwise ETH tx gossip will not work.
 	vm.builderLock.Lock()
 	vm.builder = vm.NewBlockBuilder(vm.extensionConfig.ExtraMempool)
+	vm.builder.setChainHeadHash(vm.blockChain.CurrentBlock().Hash())
+	vm.builder.setMempoolHeadHash(vm.blockChain.CurrentBlock().Hash())
 	vm.builder.awaitSubmittedTxs()
 	vm.builderLock.Unlock()
 
@@ -1027,6 +1028,8 @@ func (vm *VM) SetPreference(ctx context.Context, blkID ids.ID) error {
 		return fmt.Errorf("failed to set preference to %s: %w", blkID, err)
 	}
 
+	vm.setPendingBlock(block.GetEthBlock().Hash())
+
 	return vm.blockChain.SetPreference(block.GetEthBlock())
 }
 
@@ -1202,6 +1205,17 @@ func attachEthService(handler *rpc.Server, apis []rpc.API, names []string) error
 	}
 
 	return nil
+}
+
+func (vm *VM) setPendingBlock(hash common.Hash) {
+	vm.builderLock.Lock()
+	defer vm.builderLock.Unlock()
+
+	if vm.builder == nil {
+		return
+	}
+
+	vm.builder.setChainHeadHash(hash)
 }
 
 func (vm *VM) stateSyncEnabled(lastAcceptedHeight uint64) bool {

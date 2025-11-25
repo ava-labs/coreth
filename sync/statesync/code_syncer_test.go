@@ -4,6 +4,7 @@
 package statesync
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers"
-	"github.com/ava-labs/coreth/utils/utilstest"
 
 	statesyncclient "github.com/ava-labs/coreth/sync/client"
 	handlerstats "github.com/ava-labs/coreth/sync/handlers/stats"
@@ -69,7 +69,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 	require.NoError(t, err)
 	go func() {
 		for _, codeHashes := range test.codeRequestHashes {
-			if err := codeQueue.AddCode(codeHashes); err != nil {
+			if err := codeQueue.AddCode(t.Context(), codeHashes); err != nil {
 				require.ErrorIs(t, err, test.err)
 			}
 		}
@@ -78,7 +78,7 @@ func testCodeSyncer(t *testing.T, test codeSyncerTest) {
 		}
 	}()
 
-	ctx, cancel := utilstest.NewTestContext(t)
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	// Run the sync and handle expected error.

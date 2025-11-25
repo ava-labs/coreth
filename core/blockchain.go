@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -126,6 +127,9 @@ var (
 	latestGasCapacityGauge = metrics.NewRegisteredGauge("chain/latest/gas/capacity", nil)
 	latestGasTargetGauge   = metrics.NewRegisteredGauge("chain/latest/gas/target", nil)
 
+	latestMinDelayGauge       = metrics.NewRegisteredGauge("chain/latest/mindelay", nil)
+	latestMinDelayExcessGauge = metrics.NewRegisteredGauge("chain/latest/mindelay/excess", nil)
+
 	ErrRefuseToCorruptArchiver = errors.New("node has operated with pruning disabled, shutting down to prevent missing tries")
 
 	errFutureBlockUnsupported  = errors.New("future block insertion not supported")
@@ -173,6 +177,9 @@ const (
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "hashdb/memcache/clean/fastcache"
+
+	// firewoodPath is the default path for firewood database.
+	firewoodPath = "firewood"
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -225,12 +232,14 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 		if c.ChainDataDir == "" {
 			log.Crit("Chain data directory must be specified for Firewood")
 		}
+
 		config.DBOverride = firewood.Config{
-			DatabasePath:         c.ChainDataDir,
+			DatabasePath:         filepath.Join(c.ChainDataDir, firewoodPath),
 			CacheSizeBytes:       uint(c.TrieCleanLimit * 1024 * 1024),
 			FreeListCacheEntries: 40_000,               // same as Firewood default
-			MaxRevisions:         uint(c.StateHistory), // must be at least 2
+			RevisionsInMemory:    uint(c.StateHistory), // must be at least 2
 			CacheStrategy:        ffi.CacheAllReads,
+			Archive:              !c.Pruning,
 		}.BackendConstructor
 	}
 	return config
@@ -1126,6 +1135,14 @@ func (bc *BlockChain) Accept(block *types.Block) error {
 		latestGasExcessGauge.Update(int64(s.Gas.Excess))
 		latestGasCapacityGauge.Update(int64(s.Gas.Capacity))
 		latestGasTargetGauge.Update(int64(s.Target()))
+	}
+	if extraConfig.IsGranite(block.Time()) {
+		extraHeader := customtypes.GetHeaderExtra(block.Header())
+		if extraHeader.MinDelayExcess != nil {
+			delayExcess := *extraHeader.MinDelayExcess
+			latestMinDelayGauge.Update(int64(delayExcess.Delay()))
+			latestMinDelayExcessGauge.Update(int64(delayExcess))
+		}
 	}
 	return nil
 }

@@ -1,5 +1,6 @@
 // Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
+
 package paramstest
 
 import (
@@ -24,4 +25,5 @@ var ForkToChainConfig = map[upgradetest.Fork]*params.ChainConfig{
 	upgradetest.Etna:              params.TestEtnaChainConfig,
 	upgradetest.Fortuna:           params.TestFortunaChainConfig,
 	upgradetest.Granite:           params.TestGraniteChainConfig,
+	upgradetest.Helicon:           params.TestHeliconChainConfig,
 }
