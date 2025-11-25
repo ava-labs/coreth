@@ -12,13 +12,9 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
-)
 
-// newTrue returns a pointer to a bool that is true
-func newTrue() *bool {
-	b := true
-	return &b
-}
+	"github.com/ava-labs/coreth/utils"
+)
 
 func TestUnmarshalConfig(t *testing.T) {
 	tests := []struct {
@@ -69,7 +65,7 @@ func TestUnmarshalConfig(t *testing.T) {
 		{
 			"state sync enabled",
 			[]byte(`{"state-sync-enabled":true}`),
-			Config{StateSyncEnabled: newTrue()},
+			Config{StateSyncEnabled: utils.PointerTo(true)},
 			false,
 		},
 		{
