@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -48,7 +49,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
-	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 	"github.com/ava-labs/coreth/triedb/pathdb"
 	"github.com/ava-labs/libevm/common"
@@ -61,6 +61,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb"
 	"github.com/ava-labs/libevm/event"
 	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/triedb"
@@ -176,6 +177,9 @@ const (
 	// trieCleanCacheStatsNamespace is the namespace to surface stats from the trie
 	// clean cache's underlying fastcache.
 	trieCleanCacheStatsNamespace = "hashdb/memcache/clean/fastcache"
+
+	// firewoodPath is the default path for firewood database.
+	firewoodPath = "firewood"
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -223,19 +227,19 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
-	if c.StateScheme == customrawdb.FirewoodScheme {
+	if c.StateScheme == firewood.Scheme {
 		// ChainDataDir may not be set during some tests, where this path won't be called.
 		if c.ChainDataDir == "" {
 			log.Crit("Chain data directory must be specified for Firewood")
 		}
 
 		config.DBOverride = firewood.Config{
-			ChainDataDir:         c.ChainDataDir,
-			CleanCacheSize:       c.TrieCleanLimit * 1024 * 1024,
-			FreeListCacheEntries: firewood.Defaults.FreeListCacheEntries,
-			Revisions:            uint(c.StateHistory), // must be at least 2
-			ReadCacheStrategy:    ffi.CacheAllReads,
-			ArchiveMode:          !c.Pruning,
+			DatabasePath:         filepath.Join(c.ChainDataDir, firewoodPath),
+			CacheSizeBytes:       uint(c.TrieCleanLimit * 1024 * 1024),
+			FreeListCacheEntries: 40_000,               // same as Firewood default
+			RevisionsInMemory:    uint(c.StateHistory), // must be at least 2
+			CacheStrategy:        ffi.CacheAllReads,
+			Archive:              !c.Pruning,
 		}.BackendConstructor
 	}
 	return config
@@ -263,7 +267,7 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
 	// TODO: remove this once if Firewood supports snapshots
-	if config.StateScheme == customrawdb.FirewoodScheme {
+	if config.StateScheme == firewood.Scheme {
 		config.SnapshotLimit = 0 // no snapshot allowed for firewood
 	}
 	return &config
@@ -1789,7 +1793,7 @@ func (bc *BlockChain) commitWithSnap(
 
 	// Because Firewood relies on tracking block hashes in a tree, we need to notify the
 	// database that this block is empty.
-	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme && root == parentRoot {
+	if bc.triedb.Scheme() == firewood.Scheme && root == parentRoot {
 		if err := bc.triedb.Update(root, parentRoot, current.NumberU64(), nil, nil, triedbOpt); err != nil {
 			return common.Hash{}, fmt.Errorf("failed to update trie for block %s: %w", current.Hash(), err)
 		}
@@ -1956,7 +1960,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 
 	// Firewood requires processing each root individually.
-	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
+	if triedb.Scheme() == firewood.Scheme {
 		for _, root := range roots {
 			if err := triedb.Commit(root, true); err != nil {
 				return err

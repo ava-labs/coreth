@@ -43,7 +43,6 @@ import (
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
@@ -54,6 +53,7 @@ import (
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	ethparams "github.com/ava-labs/libevm/params"
 	"golang.org/x/exp/slices"
 )
@@ -62,7 +62,7 @@ var (
 	errStateNotFound = errors.New("state not found")
 	errBlockNotFound = errors.New("block not found")
 
-	schemes = []string{rawdb.HashScheme, customrawdb.FirewoodScheme}
+	schemes = []string{rawdb.HashScheme, firewood.Scheme}
 )
 
 type testBackend struct {
@@ -101,7 +101,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, scheme string, gen
 		StateHistory:              100, // Sufficient history for testing
 		ChainDataDir:              t.TempDir(),
 	}
-	if scheme == customrawdb.FirewoodScheme {
+	if scheme == firewood.Scheme {
 		cacheConfig.SnapshotLimit = 0 // Firewood does not support snapshots
 	}
 

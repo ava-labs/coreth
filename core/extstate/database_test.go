@@ -15,12 +15,12 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm/stateconf"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/ava-labs/libevm/trie/trienode"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/triedb/firewood"
 	"github.com/ava-labs/coreth/triedb/hashdb"
 )
 
@@ -81,8 +81,7 @@ func newFuzzState(t *testing.T) *fuzzState {
 	})
 
 	firewoodMemdb := rawdb.NewMemoryDatabase()
-	fwCfg := firewood.Defaults       // copy the defaults
-	fwCfg.ChainDataDir = t.TempDir() // Use a temporary directory for the Firewood
+	fwCfg := firewood.DefaultConfig(t.TempDir()) // Use a temporary directory for Firewood
 	firewoodState := NewDatabaseWithConfig(
 		firewoodMemdb,
 		&triedb.Config{

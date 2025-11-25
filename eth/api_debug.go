@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/internal/ethapi"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
@@ -42,6 +41,7 @@ import (
 	"github.com/ava-labs/libevm/core/state"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 	"github.com/ava-labs/libevm/trie"
@@ -386,5 +386,5 @@ func (api *DebugAPI) GetAccessibleState(from, to rpc.BlockNumber) (uint64, error
 }
 
 func (api *DebugAPI) isFirewood() bool {
-	return api.eth.blockchain.CacheConfig().StateScheme == customrawdb.FirewoodScheme
+	return api.eth.blockchain.CacheConfig().StateScheme == firewood.Scheme
 }

@@ -17,16 +17,16 @@ import (
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 
 	avalancheatomic "github.com/ava-labs/avalanchego/chains/atomic"
 	commoneng "github.com/ava-labs/avalanchego/snow/engine/common"
 )
 
-var Schemes = []string{rawdb.HashScheme, customrawdb.FirewoodScheme}
+var Schemes = []string{rawdb.HashScheme, firewood.Scheme}
 
 type TestVMConfig struct {
 	IsSyncing bool
@@ -110,7 +110,7 @@ func ResetMetrics(snowCtx *snow.Context) {
 
 func OverrideSchemeConfig(scheme string, configJSON string) (string, error) {
 	// If the scheme is not Firewood, return the configJSON as is
-	if scheme != customrawdb.FirewoodScheme {
+	if scheme != firewood.Scheme {
 		return configJSON, nil
 	}
 
@@ -123,7 +123,7 @@ func OverrideSchemeConfig(scheme string, configJSON string) (string, error) {
 	}
 
 	// Set Firewood-specific configuration flags (these will override any existing values)
-	configMap["state-scheme"] = customrawdb.FirewoodScheme
+	configMap["state-scheme"] = firewood.Scheme
 	configMap["snapshot-cache"] = 0
 	configMap["pruning-enabled"] = true
 	configMap["state-sync-enabled"] = false

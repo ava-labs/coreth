@@ -37,13 +37,13 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/ava-labs/libevm/triedb"
 	"github.com/stretchr/testify/require"
@@ -508,7 +508,7 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 }
 
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, firewood.Scheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testRepairWithScheme(t, tt, snapshots, scheme)
 		})
@@ -520,7 +520,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// fmt.Println(tt.dump(true))
 
-	if scheme == customrawdb.FirewoodScheme && snapshots {
+	if scheme == firewood.Scheme && snapshots {
 		t.Skip("Firewood scheme does not support snapshots")
 	}
 

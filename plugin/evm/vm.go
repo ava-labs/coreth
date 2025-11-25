@@ -40,6 +40,7 @@ import (
 	"github.com/ava-labs/libevm/core/rawdb"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/rlp"
@@ -68,7 +69,6 @@ import (
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/plugin/evm/config"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/extension"
 	"github.com/ava-labs/coreth/plugin/evm/gossip"
 	"github.com/ava-labs/coreth/plugin/evm/message"
@@ -391,7 +391,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.SkipTxIndexing = vm.config.SkipTxIndexing
 	vm.ethConfig.StateScheme = vm.config.StateScheme
 
-	if vm.ethConfig.StateScheme == customrawdb.FirewoodScheme {
+	if vm.ethConfig.StateScheme == firewood.Scheme {
 		log.Warn("Firewood state scheme is enabled")
 		log.Warn("This is untested in production, use at your own risk")
 		// Firewood does not support iterators, so the snapshot cannot be constructed
@@ -513,7 +513,7 @@ func (vm *VM) initializeMetrics() error {
 		return err
 	}
 
-	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == customrawdb.FirewoodScheme {
+	if vm.config.MetricsExpensiveEnabled && vm.config.StateScheme == firewood.Scheme {
 		if err := ffi.StartMetrics(); err != nil {
 			return fmt.Errorf("failed to start firewood metrics collection: %w", err)
 		}
@@ -591,7 +591,7 @@ func (vm *VM) initializeStateSync(lastAcceptedHeight uint64) error {
 	// used by the node when processing blocks.
 	// However, Firewood does not support multiple TrieDBs, so we use the same one.
 	evmTrieDB := vm.eth.BlockChain().TrieDB()
-	if vm.ethConfig.StateScheme != customrawdb.FirewoodScheme {
+	if vm.ethConfig.StateScheme != firewood.Scheme {
 		evmTrieDB = triedb.NewDatabase(
 			vm.chaindb,
 			&triedb.Config{
