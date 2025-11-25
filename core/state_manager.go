@@ -30,10 +30,10 @@ package core
 import (
 	"fmt"
 
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 )
 
 // flushWindow is the distance to the [commitInterval] when we start
@@ -60,7 +60,7 @@ type TrieDB interface {
 
 func NewTrieWriter(db TrieDB, config *CacheConfig) TrieWriter {
 	// Firewood should only be used in pruning mode, but we shouldn't explicitly manage this.
-	if config.Pruning && config.StateScheme != customrawdb.FirewoodScheme {
+	if config.Pruning && config.StateScheme != firewood.Scheme {
 		cm := &cappedMemoryTrieWriter{
 			TrieDB:           db,
 			memoryCap:        common.StorageSize(config.TrieDirtyLimit) * 1024 * 1024,

@@ -38,7 +38,6 @@ import (
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/params/extras"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/precompile/contracts/warp"
 	"github.com/ava-labs/coreth/triedb/pathdb"
@@ -69,7 +68,7 @@ func TestGenesisBlockForTesting(t *testing.T) {
 }
 
 func TestSetupGenesis(t *testing.T) {
-	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme, firewood.Scheme} {
 		t.Run(scheme, func(t *testing.T) {
 			testSetupGenesis(t, scheme)
 		})
@@ -303,7 +302,7 @@ func newDbConfig(t *testing.T, scheme string) *triedb.Config {
 		return triedb.HashDefaults
 	case rawdb.PathScheme:
 		return &triedb.Config{DBOverride: pathdb.Defaults.BackendConstructor}
-	case customrawdb.FirewoodScheme:
+	case firewood.Scheme:
 		// Create a unique temporary directory for each test
 		fwCfg := firewood.DefaultConfig(t.TempDir())
 		return &triedb.Config{DBOverride: fwCfg.BackendConstructor}

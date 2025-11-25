@@ -34,7 +34,6 @@ import (
 
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/customrawdb"
 	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/tests"
 	"github.com/ava-labs/libevm/common"
@@ -43,6 +42,7 @@ import (
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/libevm/triedb/firewood"
 )
 
 func TestMain(m *testing.M) {
@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkPrestateTracer(b *testing.B) {
-	for _, scheme := range []string{rawdb.HashScheme, customrawdb.FirewoodScheme} {
+	for _, scheme := range []string{rawdb.HashScheme, firewood.Scheme} {
 		b.Run(scheme, func(b *testing.B) {
 			benchmarkTransactionTrace(b, scheme)
 		})

@@ -220,7 +220,7 @@ func (c *CacheConfig) triedbConfig() *triedb.Config {
 			DirtyCacheSize: c.TrieDirtyLimit * 1024 * 1024,
 		}.BackendConstructor
 	}
-	if c.StateScheme == customrawdb.FirewoodScheme {
+	if c.StateScheme == firewood.Scheme {
 		// ChainDataDir may not be set during some tests, where this path won't be called.
 		if c.ChainDataDir == "" {
 			log.Crit("Chain data directory must be specified for Firewood")
@@ -258,7 +258,7 @@ func DefaultCacheConfigWithScheme(scheme string) *CacheConfig {
 	config := *DefaultCacheConfig
 	config.StateScheme = scheme
 	// TODO: remove this once if Firewood supports snapshots
-	if config.StateScheme == customrawdb.FirewoodScheme {
+	if config.StateScheme == firewood.Scheme {
 		config.SnapshotLimit = 0 // no snapshot allowed for firewood
 	}
 	return &config
@@ -1776,7 +1776,7 @@ func (bc *BlockChain) commitWithSnap(
 
 	// Because Firewood relies on tracking block hashes in a tree, we need to notify the
 	// database that this block is empty.
-	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme && root == parentRoot {
+	if bc.triedb.Scheme() == firewood.Scheme && root == parentRoot {
 		if err := bc.triedb.Update(root, parentRoot, current.NumberU64(), nil, nil, triedbOpt); err != nil {
 			return common.Hash{}, fmt.Errorf("failed to update trie for block %s: %w", current.Hash(), err)
 		}
@@ -1943,7 +1943,7 @@ func (bc *BlockChain) reprocessState(current *types.Block, reexec uint64) error 
 	log.Info("Historical state regenerated", "block", current.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 
 	// Firewood requires processing each root individually.
-	if bc.CacheConfig().StateScheme == customrawdb.FirewoodScheme {
+	if triedb.Scheme() == firewood.Scheme {
 		for _, root := range roots {
 			if err := triedb.Commit(root, true); err != nil {
 				return err
