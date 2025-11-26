@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"slices"
 
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
@@ -87,16 +86,11 @@ func (utx *UnsignedImportTx) Verify(
 	}
 
 	// Make sure that the tx has a valid peer chain ID
-	if rules.IsApricotPhase5 {
-		// Note that SameSubnet verifies that [tx.SourceChain] isn't this
-		// chain's ID
-		if err := verify.SameSubnet(context.TODO(), ctx, utx.SourceChain); err != nil {
-			return ErrWrongChainID
-		}
-	} else {
-		if utx.SourceChain != ctx.XChainID {
-			return ErrWrongChainID
-		}
+	//
+	// Note that SameSubnet verifies that [tx.SourceChain] isn't this
+	// chain's ID
+	if err := verify.SameSubnet(context.TODO(), ctx, utx.SourceChain); err != nil {
+		return ErrWrongChainID
 	}
 
 	for _, out := range utx.Outs {
@@ -119,15 +113,8 @@ func (utx *UnsignedImportTx) Verify(
 	if !utils.IsSortedAndUnique(utx.ImportedInputs) {
 		return ErrInputsNotSortedUnique
 	}
-
-	if rules.IsApricotPhase2 {
-		if !utils.IsSortedAndUnique(utx.Outs) {
-			return ErrOutputsNotSortedUnique
-		}
-	} else if rules.IsApricotPhase1 {
-		if !slices.IsSortedFunc(utx.Outs, EVMOutput.Compare) {
-			return ErrOutputsNotSorted
-		}
+	if rules.IsApricotPhase2 && !utils.IsSortedAndUnique(utx.Outs) {
+		return ErrOutputsNotSortedUnique
 	}
 
 	return nil
